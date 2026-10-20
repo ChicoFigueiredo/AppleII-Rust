@@ -307,6 +307,59 @@ impl Ay {
     }
 }
 
+impl Ay {
+    /// The chip state in AppleWin's `SaveSnapshot` terms (AY8910.cpp:1098).
+    pub fn snapshot(&self) -> crate::snapshot::AySnapshot {
+        crate::snapshot::AySnapshot {
+            ty: self.ty,
+            tone_tick: self.tone_tick,
+            tone_high: self.tone_high,
+            noise_tick: self.noise_tick,
+            tone_subcycles: self.tone_subcycles,
+            env_subcycles: self.env_subcycles,
+            env_internal_tick: self.env_internal_tick,
+            env_tick: self.env_tick,
+            tick_incr: self.tick_incr,
+            tone_period: self.tone_period,
+            noise_period: self.noise_period,
+            rng: self.rng,
+            noise_toggle: self.noise_toggle,
+            env_first: self.env_first,
+            env_rev: self.env_rev,
+            env_counter: self.env_counter,
+            regs: self.regs,
+        }
+    }
+
+    /// `LoadSnapshot` (AY8910.cpp:1157): the raw state goes in without the register-write side
+    /// effects. `tick_incr` is kept (it follows the clocks, AppleWin re-inits it after loading).
+    pub fn apply_snapshot(&mut self, s: &crate::snapshot::AySnapshot) {
+        self.ty = s.ty;
+        if s.ty == AyType::Empty {
+            return;
+        }
+        self.tone_tick = s.tone_tick;
+        self.tone_high = s.tone_high;
+        self.noise_tick = s.noise_tick;
+        self.tone_subcycles = s.tone_subcycles;
+        self.env_subcycles = s.env_subcycles;
+        self.env_internal_tick = s.env_internal_tick;
+        self.env_tick = s.env_tick;
+        self.tone_period = s.tone_period;
+        self.noise_period = s.noise_period;
+        self.rng = s.rng;
+        self.noise_toggle = s.noise_toggle;
+        self.env_first = s.env_first;
+        self.env_rev = s.env_rev;
+        self.env_counter = s.env_counter;
+        self.regs = s.regs;
+        for r in [1, 3, 5] {
+            self.regs[r] &= 0xF; // the period high bytes keep 4 bits (cpp:1202)
+        }
+        self.env_period = self.regs[11] as u32 | (self.regs[12] as u32) << 8;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

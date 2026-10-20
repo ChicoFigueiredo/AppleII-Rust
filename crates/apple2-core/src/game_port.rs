@@ -64,6 +64,17 @@ impl GamePort {
         (!forced && !self.attached[(n & 2) >> 1]) || now < self.inactive_cycle[n & 3]
     }
 
+    /// AppleWin's `g_paddleInactiveCycle[n]` (the last cycle the timer reads active), for
+    /// save-states.
+    pub fn inactive_cycles(&self) -> [u64; 4] {
+        self.inactive_cycle.map(|c| c.saturating_sub(1))
+    }
+
+    /// Restores [`GamePort::inactive_cycles`].
+    pub fn set_inactive_cycles(&mut self, cycles: [u64; 4]) {
+        self.inactive_cycle = cycles.map(|c| c.saturating_add(1));
+    }
+
     /// `JoyResetPosition` ($C070-$C07F access): arms every timer that is not running.
     pub fn trigger(&mut self, now: u64) {
         self.trigger_with(now, [None; 4]);

@@ -5,7 +5,8 @@ Itens que os agentes deixaram por depender de outro crate ou do núcleo. Serão 
 ## Frontend
 
 - Avisar na tela de configuração que a SSC em modo TCP escuta em todas as interfaces, na porta 1977, como no AppleWin (apple2-hostio).
-- Mapear os estados opacos das cartas (`Card::save`) para o YAML de save-state do AppleWin.
+- Save-state YAML do AppleWin: feito em `apple2-savestate` (`save_aws_yaml` / `load_aws_yaml`). O frontend só precisa fornecer um `LoadHost` (resolver de imagens e fábrica das cartas que dependem do hospedeiro) e a data/versão do cabeçalho.
+- Termos propostos para o glossário: ACIA, Backend, DNS virtual, Barramento de áudio, Mixer, Quadro de áudio.
 
 ## Desempenho
 

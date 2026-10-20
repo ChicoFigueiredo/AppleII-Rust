@@ -181,6 +181,17 @@ impl Default for PrinterOptions {
     }
 }
 
+/// The state AppleWin saves for the printer (`ParallelPrinterCard::SaveSnapshot`,
+/// ParallelPrinter.cpp:223). The file name is the sink's business and is not kept here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PrinterSnapshot {
+    /// `m_inactivity` (cycles since the last access while a job is open).
+    pub inactivity: u64,
+    pub options: PrinterOptions,
+    /// `m_file != NULL`: a job is open.
+    pub is_open: bool,
+}
+
 pub struct ParallelPrinterCard {
     sink: Box<dyn PrinterSink>,
     options: PrinterOptions,
@@ -199,6 +210,25 @@ impl ParallelPrinterCard {
 
     pub fn set_options(&mut self, options: PrinterOptions) {
         self.options = options;
+    }
+
+    pub fn snapshot(&self) -> PrinterSnapshot {
+        PrinterSnapshot { inactivity: self.inactivity, options: self.options, is_open: self.is_open }
+    }
+
+    /// `LoadSnapshot` (:256). The options come from the snapshot except the Pravets encoding
+    /// (AppleWin picks it from the machine type): `convert_encoding` keeps this card's choice,
+    /// or `Pravets82` if it had none. A job that was open is resumed in append mode through
+    /// `CheckPrint`, which also restarts the idle counter.
+    pub fn apply_snapshot(&mut self, s: &PrinterSnapshot) {
+        let encoding = self.options.convert_encoding.unwrap_or(PrinterEncoding::Pravets82);
+        self.options = s.options;
+        self.options.convert_encoding = s.options.convert_encoding.map(|_| encoding);
+        self.inactivity = s.inactivity;
+        if s.is_open {
+            self.options.append = true;
+            self.check_print();
+        }
     }
 
     /// `CheckPrint` (:56-71): opens the job on first use and restarts the idle counter.
@@ -227,6 +257,14 @@ impl ParallelPrinterCard {
 impl Card for ParallelPrinterCard {
     fn name(&self) -> &'static str {
         "Generic Printer"
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     fn io_read(&mut self, _lo: u8, _ctx: &mut CardCtx) -> u8 {

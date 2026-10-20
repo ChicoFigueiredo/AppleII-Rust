@@ -29,6 +29,11 @@ impl Speaker {
         self.toggles.drain(..)
     }
 
+    /// Cycle of the newest logged toggle (AppleWin's `g_nSpkrLastCycle`), if any is pending.
+    pub fn last_toggle(&self) -> Option<u64> {
+        self.toggles.back().copied()
+    }
+
     /// Toggles lost to the cap since power-on.
     pub fn dropped(&self) -> u64 {
         self.dropped

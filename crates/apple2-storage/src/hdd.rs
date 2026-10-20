@@ -697,6 +697,95 @@ impl HardDiskCard {
     }
 }
 
+/// One hard disk unit in an AppleWin save-state (`SaveSnapshotHDDUnit`, Harddisk.cpp:1310).
+#[derive(Clone, Debug, PartialEq)]
+pub struct HddUnitSnapshot {
+    pub filename: String,
+    pub pathname: String,
+    pub error: u8,
+    pub memblock: u16,
+    pub diskblock: u32,
+    pub status_next: u8,
+    pub status_prev: u8,
+    pub buf_ptr: u16,
+    pub buf: Vec<u8>,
+}
+
+/// The controller state AppleWin saves (`HarddiskInterfaceCard::SaveSnapshot`, :1332). Units
+/// that hold an image only, indexed from 0 (AppleWin names them `Unit1`...).
+#[derive(Clone, Debug, PartialEq)]
+pub struct HddSnapshot {
+    pub unit_num: u8,
+    pub command: u8,
+    pub not_busy_cycle: u64,
+    pub status_code: u8,
+    pub fifo_idx: u8,
+    pub firmware: Vec<u8>,
+    pub units: Vec<(usize, HddUnitSnapshot)>,
+}
+
+impl HardDiskCard {
+    /// State in AppleWin's save-state terms.
+    pub fn snapshot(&self) -> HddSnapshot {
+        HddSnapshot {
+            unit_num: self.unit_num,
+            command: self.command,
+            not_busy_cycle: self.not_busy_cycle,
+            status_code: self.status_code,
+            fifo_idx: self.fifo_idx,
+            firmware: self.firmware.to_vec(),
+            units: self
+                .units
+                .iter()
+                .enumerate()
+                .filter_map(|(i, u)| {
+                    let img = u.image.as_ref()?;
+                    Some((
+                        i,
+                        HddUnitSnapshot {
+                            filename: u.full_name.clone(),
+                            pathname: img.pathname().to_string(),
+                            error: u.error,
+                            memblock: u.memblock,
+                            diskblock: u.diskblock,
+                            status_next: u.status_next as u8,
+                            status_prev: u.status_prev as u8,
+                            buf_ptr: u.buf_ptr,
+                            buf: u.buf.to_vec(),
+                        },
+                    ))
+                })
+                .collect(),
+        }
+    }
+
+    /// Applies a [`HddSnapshot`] (`LoadSnapshot`, Harddisk.cpp:1440). Insert the images first;
+    /// units without an image are skipped. The firmware stays the card's own (AppleWin keeps the
+    /// saved one only for old revisions).
+    pub fn apply_snapshot(&mut self, s: &HddSnapshot) {
+        const STATUSES: [DiskStatus; 6] = [DiskStatus::Off, DiskStatus::Read, DiskStatus::Write, DiskStatus::Prot, DiskStatus::Empty, DiskStatus::Spin];
+        self.unit_num = s.unit_num;
+        self.command = s.command;
+        self.not_busy_cycle = s.not_busy_cycle;
+        self.status_code = s.status_code;
+        self.fifo_idx = s.fifo_idx % 7;
+        for (i, us) in &s.units {
+            let Some(u) = self.units.get_mut(*i) else { continue };
+            if u.image.is_none() {
+                continue;
+            }
+            u.error = us.error;
+            u.memblock = us.memblock;
+            u.diskblock = us.diskblock;
+            u.status_next = STATUSES.get(us.status_next as usize).copied().unwrap_or(DiskStatus::Off);
+            u.status_prev = STATUSES.get(us.status_prev as usize).copied().unwrap_or(DiskStatus::Off);
+            u.buf_ptr = us.buf_ptr.min(HD_BLOCK_SIZE as u16 - 1);
+            let n = us.buf.len().min(HD_BLOCK_SIZE);
+            u.buf[..n].copy_from_slice(&us.buf[..n]);
+        }
+    }
+}
+
 impl Card for HardDiskCard {
     fn name(&self) -> &'static str {
         "Hard Disk Controller"

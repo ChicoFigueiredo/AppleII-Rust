@@ -38,6 +38,11 @@ impl Dongle {
         self.kind
     }
 
+    /// Sets CodeWriter's shift register (`codewriterLFSR` on load; 7 bits).
+    pub fn set_lfsr(&mut self, lfsr: u8) {
+        self.lfsr = lfsr & 0x7F;
+    }
+
     /// CodeWriter's shift register (7 bits).
     pub fn lfsr(&self) -> u8 {
         self.lfsr
@@ -110,6 +115,10 @@ impl GameIoDevice for Dongle {
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }
 }
