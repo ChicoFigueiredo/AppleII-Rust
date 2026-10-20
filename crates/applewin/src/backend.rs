@@ -2,7 +2,7 @@
 //! thread (it needs `&mut Machine`), so implementors need not be `Send`; only the
 //! [`BackendFactory`] that creates them does.
 
-use crate::video::{FrameSource, TextPlaceholder};
+use crate::video::{FrameSource, VideoRenderer};
 use apple2_audio::{AudioBus, MockingboardCard, Variant};
 use apple2_config::Settings;
 use apple2_config::SlotCardSpec;
@@ -49,17 +49,34 @@ impl DiskSink for NullDisks {
     }
 }
 
-/// AppleMouse card input. Coordinates are normalised to the Apple viewport (`0.0..=1.0`).
+/// AppleMouse card input. Motion is relative (host pixels).
 pub trait MouseSink {
     fn available(&self) -> bool {
         false
     }
-    fn motion(&mut self, _machine: &mut Machine, _x: f32, _y: f32) {}
+    fn motion(&mut self, _machine: &mut Machine, _dx: i32, _dy: i32) {}
     fn button(&mut self, _machine: &mut Machine, _button: u8, _down: bool) {}
 }
 
 pub struct NullMouse;
 impl MouseSink for NullMouse {}
+
+/// `apple2_cards::MouseCard` in a slot.
+pub struct CardMouse {
+    pub slot: u8,
+}
+
+impl MouseSink for CardMouse {
+    fn available(&self) -> bool {
+        true
+    }
+    fn motion(&mut self, m: &mut Machine, dx: i32, dy: i32) {
+        apple2_cards::mouse::mouse_move(m, self.slot, dx, dy);
+    }
+    fn button(&mut self, m: &mut Machine, button: u8, down: bool) {
+        apple2_cards::mouse::mouse_button(m, self.slot, usize::from(button), down);
+    }
+}
 
 /// UI-less debugger (`apple2-debugger`). F7 toggles it, Ctrl+F11 single-steps.
 pub trait DebuggerHook {
@@ -88,7 +105,7 @@ pub trait Backend {
     fn disks(&mut self) -> Box<dyn DiskSink> {
         Box::new(NullDisks)
     }
-    fn mouse(&mut self) -> Box<dyn MouseSink> {
+    fn mouse(&mut self, _settings: &Settings) -> Box<dyn MouseSink> {
         Box::new(NullMouse)
     }
     fn debugger(&mut self) -> Box<dyn DebuggerHook> {
@@ -111,22 +128,24 @@ impl Backend for DefaultBackend {
             config.custom_rom = Some(std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?);
         }
         let mut m = Machine::try_new(config).map_err(|e| format!("{e:?}"))?;
-        if !settings.sound.disable_sound {
+        {
+            let sound = !settings.sound.disable_sound;
             for (slot, spec) in settings.slots.0.iter().enumerate().skip(1) {
                 let card: Option<Box<dyn apple2_core::Card>> = match spec {
-                    SlotCardSpec::MockingboardC(_) if !settings.sound.disable_mockingboard => {
+                    SlotCardSpec::MouseInterface { .. } => Some(Box::new(apple2_cards::mouse::MouseCard::new())),
+                    SlotCardSpec::MockingboardC(_) if sound && !settings.sound.disable_mockingboard => {
                         Some(Box::new(MockingboardCard::new(Variant::MockingboardC, bus)))
                     }
-                    SlotCardSpec::Phasor(_) if !settings.sound.disable_mockingboard => {
+                    SlotCardSpec::Phasor(_) if sound && !settings.sound.disable_mockingboard => {
                         Some(Box::new(MockingboardCard::new(Variant::Phasor, bus)))
                     }
-                    SlotCardSpec::MegaAudio(_) if !settings.sound.disable_mockingboard => {
+                    SlotCardSpec::MegaAudio(_) if sound && !settings.sound.disable_mockingboard => {
                         Some(Box::new(MockingboardCard::new(Variant::MegaAudio, bus)))
                     }
-                    SlotCardSpec::SdMusic(_) if !settings.sound.disable_mockingboard => {
+                    SlotCardSpec::SdMusic(_) if sound && !settings.sound.disable_mockingboard => {
                         Some(Box::new(MockingboardCard::new(Variant::SdMusic, bus)))
                     }
-                    SlotCardSpec::Sam => Some(Box::new(apple2_audio::SamCard::new(bus))),
+                    SlotCardSpec::Sam if sound => Some(Box::new(apple2_audio::SamCard::new(bus))),
                     _ => None,
                 };
                 if let Some(c) = card {
@@ -138,6 +157,13 @@ impl Backend for DefaultBackend {
     }
 
     fn frame_source(&mut self, settings: &Settings) -> Box<dyn FrameSource> {
-        Box::new(TextPlaceholder::new(settings.machine.model))
+        Box::new(VideoRenderer::from_settings(settings))
+    }
+
+    fn mouse(&mut self, settings: &Settings) -> Box<dyn MouseSink> {
+        match settings.slots.0.iter().position(|s| matches!(s, SlotCardSpec::MouseInterface { .. })) {
+            Some(slot) => Box::new(CardMouse { slot: slot as u8 }),
+            None => Box::new(NullMouse),
+        }
     }
 }

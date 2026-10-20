@@ -1,7 +1,7 @@
 //! Video output seam: [`FrameSource`] turns the machine state into an RGBA framebuffer.
 //!
-//! `apple2-video` plugs in by implementing [`FrameSource`]; until then [`TextPlaceholder`]
-//! draws the text screen (40 and 80 columns) with the embedded video ROM, so BASIC is visible.
+//! [`VideoRenderer`] adapts `apple2-video`; [`TextPlaceholder`] is a minimal text-only fallback
+//! (kept for tests of the shell without the NTSC renderer).
 
 use apple2_core::text_screen::{row_address, COLS, ROWS};
 use apple2_core::{Machine, Model};
@@ -30,9 +30,22 @@ impl Frame {
     }
 }
 
-/// Renders the emulated screen. Runs on the emulation thread (it reads the [`Machine`]).
+/// Runs the machine and renders the screen. Runs on the emulation thread.
+///
+/// The source owns the frame loop because `apple2_video::Renderer` must be fed after every
+/// 6502 instruction (AppleWin's `NTSC_VideoUpdateCycles`) to be exact and deterministic.
 pub trait FrameSource {
-    /// Draws the current screen into `frame` (resizing it if the source changes resolution).
+    /// Runs one video frame; returns the cycles executed.
+    fn run_frame(&mut self, machine: &mut Machine) -> u64 {
+        machine.run_frame()
+    }
+    /// Runs one instruction (debugger single-step); returns its cycles.
+    fn step(&mut self, machine: &mut Machine) -> u32 {
+        machine.step()
+    }
+    /// The machine was reset or power-cycled.
+    fn reset(&mut self) {}
+    /// Copies the current screen into `frame` (resizing it if the source changes resolution).
     fn render(&mut self, machine: &Machine, frame: &mut Frame);
     /// F9 / Shift+F9: next/previous video type (colour, mono, ...).
     fn cycle_video_mode(&mut self, _delta: i32) {}
@@ -40,8 +53,83 @@ pub trait FrameSource {
     fn toggle_scanlines(&mut self) {}
     /// F10 on the //e: video ROM rocker switch.
     fn toggle_rocker_switch(&mut self) {}
-    fn name(&self) -> &'static str {
-        "frame source"
+    /// Human-readable description of the current video type, for the status line.
+    fn description(&self) -> String {
+        String::new()
+    }
+}
+
+/// `apple2-video` as a [`FrameSource`].
+pub struct VideoRenderer {
+    renderer: apple2_video::Renderer,
+}
+
+impl VideoRenderer {
+    pub fn new(cfg: apple2_video::RenderConfig) -> Self {
+        VideoRenderer { renderer: apple2_video::Renderer::new(cfg) }
+    }
+
+    pub fn from_settings(s: &apple2_config::Settings) -> Self {
+        Self::new(render_config(&s.video))
+    }
+
+    fn edit(&mut self, f: impl FnOnce(&mut apple2_video::RenderConfig)) {
+        let mut c = self.renderer.config().clone();
+        f(&mut c);
+        self.renderer.set_config(c);
+    }
+}
+
+/// Settings -> renderer options.
+pub fn render_config(v: &apple2_config::settings::VideoSettings) -> apple2_video::RenderConfig {
+    use apple2_config::settings::RgbCardType;
+    use apple2_video::{RgbCard, VideoType};
+    let m = v.monochrome_rgb;
+    apple2_video::RenderConfig {
+        video_type: VideoType::ALL[(v.mode as usize).min(VideoType::ALL.len() - 1)],
+        half_scanlines: v.half_scanlines,
+        vertical_blend: v.vertical_blend,
+        monochrome_rgb: [(m >> 16) as u8, (m >> 8) as u8, m as u8],
+        rgb_card: match v.rgb_card {
+            RgbCardType::Video7Sl7 => RgbCard::Video7Sl7,
+            RgbCardType::LeChatMauveEve => RgbCard::LeChatMauveEve,
+            RgbCardType::LeChatMauveFeline => RgbCard::LeChatMauveFeline,
+        },
+        rgb_text_fg: v.rgb_card_foreground,
+        rgb_text_bg: v.rgb_card_background,
+        rgb_invert_bit7: v.rgb_card_invert_bit7,
+        rgb_mac_lc_dlgr: v.mac_lc_card_dlgr,
+        video_rom_rocker: false,
+    }
+}
+
+impl FrameSource for VideoRenderer {
+    fn run_frame(&mut self, m: &mut Machine) -> u64 {
+        self.renderer.run_frame(m)
+    }
+    fn step(&mut self, m: &mut Machine) -> u32 {
+        let c = m.step();
+        self.renderer.update(m, c);
+        c
+    }
+    fn reset(&mut self) {
+        self.renderer.reset();
+    }
+    fn render(&mut self, _m: &Machine, frame: &mut Frame) {
+        frame.resize(SCREEN_W, SCREEN_H);
+        frame.rgba = self.renderer.rgba8();
+    }
+    fn cycle_video_mode(&mut self, delta: i32) {
+        self.edit(|c| c.video_type = if delta >= 0 { c.video_type.next() } else { c.video_type.prev() });
+    }
+    fn toggle_scanlines(&mut self) {
+        self.edit(|c| c.half_scanlines = !c.half_scanlines);
+    }
+    fn toggle_rocker_switch(&mut self) {
+        self.edit(|c| c.video_rom_rocker = !c.video_rom_rocker);
+    }
+    fn description(&self) -> String {
+        self.renderer.config().video_type.description().to_string()
     }
 }
 
@@ -143,9 +231,5 @@ impl FrameSource for TextPlaceholder {
                 }
             }
         }
-    }
-
-    fn name(&self) -> &'static str {
-        "text placeholder"
     }
 }
