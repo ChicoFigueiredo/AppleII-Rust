@@ -91,6 +91,10 @@ pub struct Memory {
     initial_memmode: u32,
     is_e: bool,
     is_base64a: bool,
+    /// VidHD on a ][/][+ (`memVidHD`): CPU writes to RAM are mirrored into `vidhd_aux`.
+    dual_write_aux: bool,
+    /// 64K "aux" of the ][ family, allocated on first use (AppleWin always allocates `memaux`).
+    vidhd_aux: Vec<u8>,
     rd: [Page; 256],
     wr: [Page; 256],
 }
@@ -135,6 +139,8 @@ impl Memory {
             initial_memmode,
             is_e,
             is_base64a: model == Model::Base64A,
+            dual_write_aux: false,
+            vidhd_aux: Vec::new(),
             rd: [NONE; 256],
             wr: [NONE; 256],
         };
@@ -273,6 +279,29 @@ impl Memory {
         }
     }
 
+    /// A CPU write: [`Memory::write`], also mirrored into the ][-family aux RAM while
+    /// [`Memory::set_dual_write_aux`] is on (`if (memVidHD) *(memVidHD + addr) = a`, only for pages
+    /// with `memwrite != NULL`, cpu_general.inl:112).
+    #[inline]
+    pub fn cpu_write(&mut self, addr: u16, value: u8) {
+        if self.dual_write_aux && self.is_writable(addr) {
+            self.vidhd_aux[addr as usize] = value;
+        }
+        self.write(addr, value);
+    }
+
+    /// Enables the VidHD dual write (`memVidHD = IsWriteAux() ? memaux : NULL`). Only the ][ family
+    /// has it: a //e has real aux paging, so this is ignored there.
+    pub fn set_dual_write_aux(&mut self, on: bool) {
+        if self.is_e {
+            return;
+        }
+        if on && self.vidhd_aux.is_empty() {
+            self.vidhd_aux = vec![0; 0x10000];
+        }
+        self.dual_write_aux = on;
+    }
+
     #[inline]
     pub fn write(&mut self, addr: u16, value: u8) {
         let p = self.wr[(addr >> 8) as usize];
@@ -320,6 +349,9 @@ impl Memory {
 
     /// Aux RAM of the current bank, ignoring paging (0 / discarded for an empty slot).
     pub fn peek_aux(&self, addr: u16) -> u8 {
+        if !self.is_e && !self.vidhd_aux.is_empty() {
+            return self.vidhd_aux[addr as usize];
+        }
         self.aux_index(addr as u32).map_or(0, |i| self.aux[i])
     }
 

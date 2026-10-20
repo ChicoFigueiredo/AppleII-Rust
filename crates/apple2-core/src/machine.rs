@@ -206,7 +206,7 @@ impl Bus for Board {
             }
             _ => {
                 self.f8_tap(addr, Some(value));
-                self.memory.write(addr, value)
+                self.memory.cpu_write(addr, value)
             }
         }
     }

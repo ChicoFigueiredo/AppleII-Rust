@@ -294,3 +294,31 @@ fn stateless_card_save_load_is_a_noop() {
     let mut c = FourPlay::new();
     assert!(c.load(&c.save()));
 }
+
+#[test]
+fn vidhd_on_the_ii_dual_writes_ram_to_aux_while_auxwrite_is_on() {
+    // Memory.cpp memVidHD / cpu_general.inl:112 (GH#997).
+    let mut m = plus();
+    assert!(m.insert_card(2, Box::new(VidHd::new())));
+    wr(&mut m, 0x2000, 0x11);
+    assert_eq!(m.peek_aux(0x2000), 0, "AUXWRITE off: main only");
+    wr(&mut m, 0xC005, 0); // AUXWRITE on
+    wr(&mut m, 0x2001, 0x5A);
+    assert_eq!((m.peek_main(0x2001), m.peek_aux(0x2001)), (0x5A, 0x5A));
+    wr(&mut m, 0xC004, 0); // off
+    wr(&mut m, 0x2002, 0x77);
+    assert_eq!((m.peek_main(0x2002), m.peek_aux(0x2002)), (0x77, 0));
+    // 80STORE + PAGE2 behaves like AUXWRITE (VidHD.cpp:84)
+    wr(&mut m, 0xC001, 0);
+    rd(&mut m, 0xC055);
+    wr(&mut m, 0x2003, 0x33);
+    assert_eq!(m.peek_aux(0x2003), 0x33);
+}
+
+#[test]
+fn without_a_vidhd_the_ii_has_no_aux() {
+    let mut m = plus();
+    wr(&mut m, 0xC005, 0);
+    wr(&mut m, 0x2001, 0x5A);
+    assert_eq!(m.peek_aux(0x2001), 0);
+}

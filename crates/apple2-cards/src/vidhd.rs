@@ -7,9 +7,10 @@
 //! [`VidHd::is_shr`], the registers, and [`iigs_color_to_rgb`] / [`shr_cell`] (the SHR pixel
 //! decode of `VidHDCard::UpdateSHRCell`). SHR scanlines live in aux memory `$2000-$9FFF`.
 //!
-//! Not modelled (AppleWin neither, or needs core work): dual writes to aux memory on the
-//! ][/][+ (`memVidHD`, see [`VidHd::is_write_aux`]), the 80x45 text modes and border colour
-//! rendering.
+//! On the ][/][+ the card turns on the core's dual write (`memVidHD`: CPU RAM writes are also
+//! stored in aux RAM while [`VidHd::is_write_aux`]) through `CardCtx::set_dual_write_aux`; the
+//! //e with an empty aux slot is not covered. Not modelled: the 80x45 text modes (see the
+//! video crate) and border colour rendering.
 
 use crate::state::{Dec, Enc};
 use apple2_core::memory::mf;
@@ -89,7 +90,7 @@ impl Card for VidHd {
 
     /// `VidHDCard::VideoIOWrite` (:69). The mirrored switches react to any access of
     /// `$C000-$C005` writes and `$C054/$C055`; the IIgs registers to writes only.
-    fn io_snoop(&mut self, addr: u16, write: bool, value: u8, _ctx: &mut CardCtx) {
+    fn io_snoop(&mut self, addr: u16, write: bool, value: u8, ctx: &mut CardCtx) {
         let set = |m: &mut u32, flag: u32, on: bool| *m = if on { *m | flag } else { *m & !flag };
         match (addr as u8, write) {
             (0x00 | 0x01, true) => set(&mut self.mem_mode, mf::STORE80, addr & 1 != 0),
@@ -102,6 +103,7 @@ impl Card for VidHd {
             (0x35, true) => self.shadow = value,
             _ => {}
         }
+        ctx.set_dual_write_aux(self.is_write_aux());
     }
 
     /// `VidHDCard::Reset` (:46): NEWVIDEO cleared (SHR off).

@@ -102,6 +102,12 @@ impl CardCtx<'_> {
         ok
     }
 
+    /// ][/][+ only: mirror CPU writes to RAM into aux RAM (VidHD's `memVidHD`, see
+    /// `Memory::set_dual_write_aux`). Ignored on the //e family.
+    pub fn set_dual_write_aux(&mut self, on: bool) {
+        self.memory.set_dual_write_aux(on);
+    }
+
     /// Asserts or releases the IRQ line for `src`.
     pub fn set_irq(&mut self, src: IrqSource, asserted: bool) {
         self.interrupts.set_irq(src, asserted);
