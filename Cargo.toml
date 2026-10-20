@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/apple2-cpu", "crates/apple2-roms", "crates/apple2-core"]
+members = ["crates/apple2-cpu", "crates/apple2-roms", "crates/apple2-core", "crates/apple2-cards"]
 
 [workspace.package]
 version = "0.1.0"

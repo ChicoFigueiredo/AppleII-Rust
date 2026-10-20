@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "apple2-cards"
+version = "0.1.0"
+dependencies = [
+ "apple2-core",
+ "apple2-cpu",
+ "apple2-roms",
+]
+
+[[package]]
 name = "apple2-core"
 version = "0.1.0"
 dependencies = [
