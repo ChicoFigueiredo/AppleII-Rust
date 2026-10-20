@@ -1,0 +1,12 @@
+# Mesmo conteúdo em todas as plataformas (testes comparam arquivos de texto byte a byte).
+* text=auto eol=lf
+*.rom binary
+*.ROM binary
+*.bin binary
+*.dsk binary
+*.DSK binary
+*.po binary
+*.png binary
+*.bmp binary
+*.BMP binary
+*.ico binary
