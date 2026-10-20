@@ -46,3 +46,6 @@ arboard = "3"
 rfd = "0.15"
 image = { version = "0.25", default-features = false, features = ["png"] }
 pollster = "0.4"
+
+[dev-dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
