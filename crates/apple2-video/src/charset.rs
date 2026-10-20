@@ -63,28 +63,23 @@ fn from_2k(rom: &[u8], kind: Rom2k) -> Glyphs {
 /// `userVideoRom4K` (:109): 4K //e video ROM (US layout) into normal-set and ALTCHARSET tables.
 fn from_4k(rom: &[u8]) -> [Glyphs; 2] {
     let mut s = [[[0u8; 8]; 256]; 2];
-    let inv = |ra: usize, y: usize| rom[ra + y] ^ 0xFF; // UTAIIe:8-11: stored inverted
+    let inv = |ra: usize| -> [u8; 8] { std::array::from_fn(|y| rom[ra + y] ^ 0xFF) }; // UTAIIe:8-11: stored inverted
     for i in 0..64 {
-        for y in 0..8 {
-            s[0][i][y] = inv(i * 8, y); // [00..3F] inverse
-            s[0][i + 64][y] = inv(i * 8, y); // [40..7F] flash (same dots, flipped by the flash mask)
-        }
+        let g = inv(i * 8);
+        s[0][i] = g; // [00..3F] inverse
+        s[0][i + 64] = g; // [40..7F] flash (same dots, flipped by the flash mask)
     }
-    for i in 128..256 {
-        for y in 0..8 {
-            s[0][i][y] = inv(0x400 + (i - 128) * 8, y); // [80..FF] normal
-        }
+    for (i, g) in s[0].iter_mut().enumerate().skip(128) {
+        *g = inv(0x400 + (i - 128) * 8); // [80..FF] normal
     }
-    for i in 0..256 {
-        for y in 0..8 {
-            s[1][i][y] = inv(i * 8, y); // [00..7F] inverse, [80..FF] normal
-        }
+    for (i, g) in s[1].iter_mut().enumerate() {
+        *g = inv(i * 8); // [00..7F] inverse, [80..FF] normal
     }
     s
 }
 
 fn from_bits(data: &[u8]) -> Vec<Glyphs> {
-    data.chunks_exact(2048)
+    data.chunks(2048)
         .map(|c| {
             let mut g = [[0u8; 8]; 256];
             for (i, glyph) in g.iter_mut().enumerate() {
@@ -96,7 +91,7 @@ fn from_bits(data: &[u8]) -> Vec<Glyphs> {
 }
 
 fn one(data: &[u8]) -> [Glyphs; 1] {
-    from_bits(data).try_into().ok().expect("one set")
+    from_bits(data).try_into().expect("one set")
 }
 
 fn build() -> CharSets {
@@ -116,7 +111,7 @@ fn build() -> CharSets {
         // Decoded from AppleWin resource/CHARSET{82,8M,8C}.bmp by tools/gen_pravets_charsets.py.
         pravets82: one(include_bytes!("../data/pravets82.bin")),
         pravets8m: one(include_bytes!("../data/pravets8m.bin")),
-        pravets8c: from_bits(include_bytes!("../data/pravets8c.bin")).try_into().ok().expect("two sets"),
+        pravets8c: from_bits(include_bytes!("../data/pravets8c.bin")).try_into().expect("two sets"),
         base64a: [
             from_2k(&roms::BASE64A_GERMAN_VIDEO[..2048], Rom2k::Base64a),
             from_2k(&roms::BASE64A_GERMAN_VIDEO[2048..], Rom2k::Base64a),

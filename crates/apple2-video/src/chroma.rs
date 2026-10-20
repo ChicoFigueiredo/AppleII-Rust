@@ -2,6 +2,9 @@
 //! (:919). A pixel colour is looked up by the last 12 signal bits (one bit per 14M dot) and the
 //! current colour phase. Colours are `0xAARRGGBB` like AppleWin's `bgra_t` read as a `uint32_t`.
 
+// The filter constants are copied verbatim from NTSC.cpp, digits and all.
+#![allow(clippy::excessive_precision)]
+
 use std::sync::OnceLock;
 
 pub const NUM_SEQUENCES: usize = 4096;
@@ -27,7 +30,7 @@ const Q_TO_R: f64 = 0.621f32 as f64;
 const Q_TO_G: f64 = -0.647f32 as f64;
 const Q_TO_B: f64 = 1.702f32 as f64;
 
-const PI: f32 = 3.1415926535898f32;
+use std::f32::consts::PI; // NTSC.cpp's `3.1415926535898f` is this float
 
 /// Second-order IIR section with the state AppleWin keeps in function-local statics, which
 /// persists across the whole table generation.
