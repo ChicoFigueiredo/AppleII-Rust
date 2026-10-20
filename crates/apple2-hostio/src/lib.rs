@@ -11,9 +11,11 @@ pub mod pcap_backend;
 pub mod printer;
 pub mod serial;
 pub mod ssc;
+pub mod uthernet2;
 pub mod uthernet1;
 
 pub use serial::{LoopbackHandle, LoopbackSerial, SerialBackend, TcpServerSerial};
 pub use printer::{FileSink, MemorySink, ParallelPrinterCard, PrinterOptions, PrinterSink};
 pub use ssc::SuperSerialCard;
 pub use uthernet1::Uthernet1;
+pub use uthernet2::Uthernet2;

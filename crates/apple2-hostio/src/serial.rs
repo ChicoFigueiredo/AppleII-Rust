@@ -447,7 +447,10 @@ mod tests {
         assert_eq!(b[0], b'x');
 
         drop(c);
-        poll_until(&mut s, 1); // sees EOF and drops the client
+        let t = Instant::now();
+        while s.can_send() && t.elapsed() < Duration::from_secs(2) {
+            s.poll_rx(&mut VecDeque::new()); // sees EOF and drops the client
+        }
         assert!(!s.can_send());
     }
 
