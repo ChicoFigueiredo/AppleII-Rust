@@ -15,6 +15,7 @@ mod hdd;
 mod printer;
 mod simple;
 mod ssc;
+mod uthernet1;
 
 /// Loader context handed to [`Mapping::load`].
 pub struct LoadCtx<'a> {
@@ -38,7 +39,7 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, ssc::MAP, printer::MAP];
+pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, ssc::MAP, printer::MAP, uthernet1::MAP];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)

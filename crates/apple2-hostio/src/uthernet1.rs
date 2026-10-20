@@ -56,6 +56,21 @@ const PP_SE_SELFST: u16 = 0x0136;
 pub const PP_SE_BUSST: u16 = 0x0138;
 const PP_SE_TDR: u16 = 0x013C;
 
+/// The state AppleWin saves for the Uthernet I (`Uthernet1::SaveSnapshot`, Uthernet1.cpp:1058).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Uthernet1Snapshot {
+    /// `networkBackend->isValid()` (host side, ignored by [`Uthernet1::apply_snapshot`]).
+    pub enabled: bool,
+    /// `networkBackend->getInterfaceName()` (host side, ignored on apply).
+    pub interface: String,
+    /// `tfe[]`: the 16 I/O registers.
+    pub io: [u8; IO_REGISTERS],
+    /// `tfe_packetpage[]`: 4 KB.
+    pub packet_page: Vec<u8>,
+    pub txcollect_buffer: u16,
+    pub rx_buffer: u16,
+}
+
 pub struct Uthernet1 {
     backend: Box<dyn NetworkBackend>,
     ia_mac: [u8; 6],
@@ -183,6 +198,36 @@ impl Uthernet1 {
     fn set_tfe16(&mut self, a: u8, v: u16) {
         self.tfe[a as usize] = v as u8;
         self.tfe[a as usize + 1] = (v >> 8) as u8;
+    }
+
+    pub fn snapshot(&self) -> Uthernet1Snapshot {
+        Uthernet1Snapshot {
+            enabled: self.backend.is_valid(),
+            interface: self.backend.interface_name().to_string(),
+            io: self.tfe,
+            packet_page: self.pp.to_vec(),
+            txcollect_buffer: self.txcollect_buffer,
+            rx_buffer: self.rx_buffer,
+        }
+    }
+
+    /// `LoadSnapshot` (:1092-1136): the derived filter state is recomputed from the PacketPage.
+    /// A packet page that is not 4 KB is zero-padded or truncated.
+    pub fn apply_snapshot(&mut self, s: &Uthernet1Snapshot) {
+        self.tfe = s.io;
+        self.pp.fill(0);
+        let n = s.packet_page.len().min(PACKETPAGE_SIZE);
+        self.pp[..n].copy_from_slice(&s.packet_page[..n]);
+        self.txcollect_buffer = s.txcollect_buffer;
+        self.rx_buffer = s.rx_buffer;
+        self.pp_ptr = self.tfe16(ADDR_PP_PTR) & !1;
+        self.sideeffects_write_pp(PP_CC_RXCTL, 0);
+        for i in 0..8u16 {
+            self.sideeffects_write_pp((PP_LOG_ADDR_FILTER + i) & !1, (i & 1) as usize);
+        }
+        for i in 0..6u16 {
+            self.sideeffects_write_pp((PP_MAC_ADDR + i) & !1, (i & 1) as usize);
+        }
     }
 
     /// The MAC address the guest programmed.
@@ -443,6 +488,14 @@ impl Uthernet1 {
 impl Card for Uthernet1 {
     fn name(&self) -> &'static str {
         "Uthernet"
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     fn io_read(&mut self, lo: u8, _ctx: &mut CardCtx) -> u8 {
