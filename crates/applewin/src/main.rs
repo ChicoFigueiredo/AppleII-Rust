@@ -1,9 +1,15 @@
+// GUI subsystem on Windows release builds (no console window); see wincon.rs.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
+mod wincon;
+
 use applewin_shell::backend::DefaultBackend;
 use applewin_shell::emu::{Command, Emulator};
 use applewin_shell::headless::{self, HeadlessOptions};
 use apple2_config::{CmdLine, Settings};
 
 fn main() {
+    wincon::attach_parent_console();
     let no_audio = std::env::args().any(|a| a == "--no-audio");
     // Informational flags answer before anything touches a window or the saved settings.
     // `-h` / `-V` are shell conveniences (AppleWin itself has -help / -version).

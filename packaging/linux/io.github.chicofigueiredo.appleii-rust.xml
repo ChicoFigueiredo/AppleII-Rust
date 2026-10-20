@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-apple2-disk-image">
+    <comment>Apple II disk image</comment>
+    <icon name="io.github.chicofigueiredo.appleii-rust-disk"/>
+    <glob pattern="*.dsk"/>
+    <glob pattern="*.do"/>
+    <glob pattern="*.po"/>
+    <glob pattern="*.nib"/>
+    <glob pattern="*.woz"/>
+    <glob pattern="*.2mg"/>
+    <glob pattern="*.hdv"/>
+  </mime-type>
+  <mime-type type="application/x-applewin-savestate">
+    <comment>AppleWin save-state</comment>
+    <sub-class-of type="application/x-yaml"/>
+    <icon name="io.github.chicofigueiredo.appleii-rust"/>
+    <glob pattern="*.aws.yaml" weight="60"/>
+  </mime-type>
+</mime-info>
