@@ -304,12 +304,13 @@ fn ay_idle() -> AySnapshot {
 
 fn ssi_empty_sc01() -> SsiSnapshot {
     SsiSnapshot {
+        // An empty socket keeps the chip's power-on registers (SSI263.cpp:1048).
         ty: SsiType::Empty,
-        duration_phoneme: 0,
+        duration_phoneme: 0xC0,
         inflection: 0,
         rate_inflection: 0,
-        ctrl_art_amp: 0,
-        filter_freq: 0,
+        ctrl_art_amp: 0x80,
+        filter_freq: 0xFF,
         current_mode: 0,
         has_sc01: true,
         votrax_phoneme: 0x15,
@@ -369,14 +370,18 @@ fn golden_mockingboard_c_v15_loads_into_the_card() {
     let mut host = Host::new();
     let (m, warnings) = load_card(&file_with_slots(MB_C_V15), &mut host, 4);
     assert!(warnings.is_empty(), "{warnings:?}");
-    // `Tick Incr` follows the clocks and is not loaded (AY8910_InitClock re-inits it).
-    let mut got = snapshot_in(&m, 4);
-    for u in &mut got.units {
-        for a in &mut u.ay {
-            a.tick_incr = 4321;
-        }
+    // The AY's internal phase (ticks, RNG, envelope) is not part of the card's own state bytes
+    // (`Card::save` keeps type + registers), which is how the loader hands it to the machine.
+    let (mut got, mut want) = (snapshot_in(&m, 4), mb_c_expected());
+    regs_only(&mut got);
+    regs_only(&mut want);
+    assert_eq!(got, want);
+}
+
+fn regs_only(s: &mut MockingboardSnapshot) {
+    for a in s.units.iter_mut().flat_map(|u| u.ay.iter_mut()) {
+        *a = AySnapshot { ty: a.ty, regs: a.regs, ..ay_idle() };
     }
-    assert_eq!(got, mb_c_expected());
 }
 
 #[test]
@@ -387,4 +392,145 @@ fn mockingboard_c_writes_exactly_the_cpp_text() {
     let text = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
     let tick_incr = m.card::<MockingboardCard>(4).unwrap().snapshot().units[0].ay[0].tick_incr;
     assert_eq!(slots_body(&text), MB_C_V15.replace("Tick Incr: 4321", &format!("Tick Incr: {tick_incr}")));
+}
+
+// ---- golden: Phasor, unit version 15 ---------------------------------------------------------
+
+/// Body of a power-on `AY891x` entry, at indent 0.
+const AY_IDLE_BODY: &str = "\
+Type: AY-3-8913
+Tone0 Tick: 0
+Tone1 Tick: 0
+Tone2 Tick: 0
+Tone0 High: 0
+Tone1 High: 0
+Tone2 High: 0
+Noise Tick: 0
+Tone Subcycles: 0
+Env Subcycles: 0
+Env Internal Tick: 0
+Env Tick: 0
+Tick Incr: 4321
+Tone0 Period: 1
+Tone1 Period: 1
+Tone2 Period: 1
+Noise Period: 0
+RNG: 1
+Noise Toggle: 0
+Env First: 1
+Env Rev: 0
+Env Counter: 15
+Registers:
+  Tone0 Period: 0x000
+  Tone1 Period: 0x000
+  Tone2 Period: 0x000
+  Noise Period: 0x00
+  Mixer: 0x00
+  Vol0: 0x00
+  Vol1: 0x00
+  Vol2: 0x00
+  Env Period: 0x0000
+  Env Shape: 0x0
+  PortA: 0x00
+  PortB: 0x00
+";
+
+/// Body of an `SY6522` entry with only the timer-2 latch and IER set.
+const VIA_BODY: &str = "\
+ORB: 0x00
+ORA: 0x00
+DDRB: 0x00
+DDRA: 0x00
+Timer1 Counter: 0x0000
+Timer1 Latch: 0xFFFF
+Timer1 IRQ Delay: 0
+Timer1 Active: false
+Timer2 Counter: 0x0000
+Timer2 Latch: 0x0777
+Timer2 IRQ Delay: 0
+Timer2 Active: false
+Serial Shift: 0x00
+ACR: 0x00
+PCR: 0x00
+IFR: 0x00
+IER: 0x40
+";
+
+fn indent(s: &str, n: usize) -> String {
+    s.lines().map(|l| format!("{}{l}\n", " ".repeat(n))).collect()
+}
+
+fn phasor_v15() -> String {
+    let unit = |ssi: &str, tail: &str| {
+        format!(
+            "SY6522:\n{}AY891x-A:\n{}AY891x-B:\n{}{ssi}{tail}",
+            indent(VIA_BODY, 2),
+            indent(AY_IDLE_BODY, 2),
+            indent(AY_IDLE_BODY, 2)
+        )
+    };
+    let u0 = unit(
+        "SSI263:\n  Type: Empty\nSC01:\n  Type: SC01\n  SC01 Phoneme: 0x15\n  SC01 Active Phoneme: false\n",
+        "Unit State: 0x6\nUnit State-B: 0x7\nAY Current Register: 0x07\nAY Current Register B: 0x09\n\
+Chip Select A: true\nChip Select B: true\nReg Address Latch Valid A: true\nReg Address Latch Valid B: false\n\
+Bus Driven by AY: true\n",
+    );
+    let u1 = unit(
+        "SSI263:\n  Type: SSI263AP\n  Duration / Phoneme: 0x4C\n  Inflection: 0x11\n  Rate / Inflection: 0x22\n  \
+Control / Articulation / Amplitude: 0x8A\n  Filter Frequency: 0x33\n  Current Mode: 0x61\n",
+        "Unit State: 0x2\nUnit State-B: 0x3\nAY Current Register: 0x01\nAY Current Register B: 0x02\n\
+Chip Select A: false\nChip Select B: true\nReg Address Latch Valid A: false\nReg Address Latch Valid B: true\n\
+Bus Driven by AY: false\n",
+    );
+    format!(
+        "4:\n  Card: Phasor\n  Version: 15\n  State:\n    Mode: 5\n    Unit0:\n{}    Unit1:\n{}",
+        indent(&u0, 6),
+        indent(&u1, 6)
+    )
+}
+
+fn phasor_expected() -> MockingboardSnapshot {
+    let via = ViaSnapshot { ora: 0, ifr: 0, t2_latch: 0x777, ier: 0x40, ..via1() };
+    let u0 = UnitSnapshot {
+        via: via.clone(),
+        ay: [ay_idle(), ay_idle()],
+        ssi: SsiSnapshot { is_votrax_phoneme: false, ..ssi_empty_sc01() },
+        state: [6, 7],
+        ay_current_register: [7, 9],
+        chip_selected: [true, true],
+        latch_valid: [true, false],
+        bus_driven: true,
+    };
+    let u1 = UnitSnapshot {
+        via,
+        ay: [ay_idle(), ay_idle()],
+        ssi: ssi_ap(),
+        state: [2, 3],
+        ay_current_register: [1, 2],
+        chip_selected: [false, true],
+        latch_valid: [false, true],
+        bus_driven: false,
+    };
+    MockingboardSnapshot { phasor_mode: 5, units: [u0, u1] }
+}
+
+#[test]
+fn golden_phasor_v15_loads_into_the_card() {
+    let mut host = Host::new();
+    let (m, warnings) = load_card(&file_with_slots(&phasor_v15()), &mut host, 4);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let (mut got, mut want) = (snapshot_in(&m, 4), phasor_expected());
+    regs_only(&mut got);
+    regs_only(&mut want);
+    assert_eq!(got, want);
+}
+
+#[test]
+fn phasor_writes_exactly_the_cpp_text() {
+    let bus = AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc);
+    let mut m = machine_with(Variant::Phasor, 4, &bus);
+    m.card_mut::<MockingboardCard>(4).unwrap().apply_snapshot(&phasor_expected());
+    let text = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    let tick = m.card::<MockingboardCard>(4).unwrap().snapshot().units[0].ay[0].tick_incr;
+    assert_eq!(slots_body(&text), phasor_v15().replace("Tick Incr: 4321", &format!("Tick Incr: {tick}")));
 }
