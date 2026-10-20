@@ -7,6 +7,7 @@ use apple2_hostio::ssc::{DipSwitches, FirmwareMode, SscSnapshot, SuperSerialCard
 use apple2_hostio::printer::{MemorySink, ParallelPrinterCard, PrinterEncoding, PrinterOptions, PrinterSnapshot};
 use apple2_hostio::network::MockNetwork;
 use apple2_hostio::uthernet1::{Uthernet1, Uthernet1Snapshot};
+use apple2_hostio::uthernet2::{Uthernet2, Uthernet2Snapshot};
 use apple2_hostio::LoopbackSerial;
 use apple2_savestate::cards::{self, LoadCtx};
 use apple2_savestate::yaml::{self, Map, Writer};
@@ -29,6 +30,7 @@ impl LoadHost for Host {
             "Super Serial Card" => Some(Box::new(SuperSerialCard::new(Box::new(LoopbackSerial::new().0)))),
             "Generic Printer" => Some(Box::new(ParallelPrinterCard::new(Box::new(self.sink.clone()), PrinterOptions::default()))),
             "Uthernet" => Some(Box::new(Uthernet1::new(Box::new(MockNetwork::new().0)))),
+            "Uthernet II" => Some(Box::new(Uthernet2::new(Box::new(MockNetwork::new().0), true))),
             _ => default_card(name, slot, model),
         }
     }
@@ -405,6 +407,88 @@ fn uthernet1_full_machine_roundtrip() {
     let snap = |m: &Machine| -> Uthernet1Snapshot { m.card::<Uthernet1>(5).unwrap().snapshot() };
     let want = snap(&a);
     assert_eq!(want.packet_page[0x104..0x106], [0x00, 0x0F]);
+    let b = roundtrip(&a);
+    assert_eq!(snap(&b), want);
+    assert_eq!(snap(&no_ext(&a)), want);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Uthernet II
+
+fn u2_memory() -> Vec<u8> {
+    let mut m = vec![0u8; 0x8000];
+    m[0] = 0x02; // mode register shadow
+    m[1..5].copy_from_slice(&[192, 168, 1, 1]); // GAR
+    m[9..15].copy_from_slice(&[0x02, 0x08, 0xDC, 0x11, 0x22, 0x33]); // SHAR
+    m[0x1A] = 0x55; // RMSR
+    m[0x1B] = 0x55; // TMSR
+    m[0x400] = 0x04; // socket 0 mode: MACRAW
+    m[0x403] = 0x42; // socket 0 status
+    m[0x426..0x428].copy_from_slice(&[0x00, 0x40]); // socket 0 RX_RSR
+    m[0x4000] = 0xAB; // TX memory
+    m[0x4010] = 0xCD;
+    m[0x6000..0x6004].copy_from_slice(&[0, 0, 0x00, 0x3E]); // RX memory
+    m[0x7FFF] = 0x99;
+    m
+}
+
+/// The text `Uthernet2::SaveSnapshot` writes (Uthernet2.cpp:1538), with socket 1's status byte.
+fn u2_text(iface: &str, status1: u8) -> String {
+    let m = u2_memory();
+    let mut t = format!(
+        "6:\n  Card: Uthernet II\n  Version: 2\n  State:\n    Network Interface: {iface}\n    Virtual DNS: true\n    Mode Register: 0x02\n    Data Address: 0x4010\n"
+    );
+    for (name, r) in [("Common Registers", 0..0x30), ("Socket Registers", 0x400..0x800), ("TX Memory", 0x4000..0x6000), ("RX Memory", 0x6000..0x8000)] {
+        t += &format!("    {name}:\n{}", dump(&m[r], 6));
+    }
+    for (i, (wr, rsr, sr)) in [(0x0123, 0x0040, 0x42), (0x0010, 0x0002, status1), (0, 0, 0), (0xFFFF, 0, 0)].into_iter().enumerate() {
+        t += &format!("    Socket {i}:\n      RX Write Register: 0x{wr:04X}\n      RX Size Register: 0x{rsr:04X}\n      Socket Register: 0x{sr:02X}\n");
+    }
+    t
+}
+
+#[test]
+fn uthernet2_golden_restores_raw_sockets_and_closes_the_others() {
+    let c = load_entry(&u2_text("Ethernet", 0x22), "Uthernet II"); // socket 1 was UDP
+    let s = c.as_any().unwrap().downcast_ref::<Uthernet2>().unwrap().snapshot();
+    assert!(s.virtual_dns);
+    assert_eq!((s.mode_register, s.data_address), (0x02, 0x4010));
+    assert_eq!(s.memory, u2_memory());
+    assert_eq!(s.sockets, [(0x0123, 0x0040, 0x42), (0x0010, 0x0002, 0x00), (0, 0, 0), (0xFFFF, 0, 0)]);
+}
+
+#[test]
+fn uthernet2_v1_has_no_virtual_dns() {
+    let t = u2_text("x", 0).replace("Version: 2", "Version: 1").replace("    Virtual DNS: true\n", "");
+    let c = load_entry(&t, "Uthernet II");
+    assert!(!c.as_any().unwrap().downcast_ref::<Uthernet2>().unwrap().snapshot().virtual_dns);
+}
+
+#[test]
+fn uthernet2_write_matches_the_cpp_writer() {
+    let c = load_entry(&u2_text("Ethernet", 0x22), "Uthernet II");
+    assert_eq!(save_entry(6, &*c), u2_text("mock", 0x00));
+}
+
+#[test]
+fn uthernet2_full_machine_roundtrip() {
+    let mut a = machine_with(6, Box::new(Uthernet2::new(Box::new(MockNetwork::new().0), true)));
+    a.with_card(6, |c, ctx| {
+        // Socket 0 to MACRAW (mode register at 0x0400), then OPEN (command at 0x0401).
+        for (addr, v) in [(0x0400u16, 0x04u8), (0x0401, 0x01)] {
+            c.io_write(1, (addr >> 8) as u8, ctx);
+            c.io_write(2, addr as u8, ctx);
+            c.io_write(3, v, ctx);
+        }
+        c.io_write(1, 0x40, ctx); // data address into TX memory
+        c.io_write(2, 0x00, ctx);
+        c.io_write(3, 0xAB, ctx);
+    });
+    a.run_frame();
+    let snap = |m: &Machine| -> Uthernet2Snapshot { m.card::<Uthernet2>(6).unwrap().snapshot() };
+    let want = snap(&a);
+    assert_eq!(want.sockets[0].2, 0x42, "socket 0 is open as MACRAW");
+    assert_eq!(want.memory[0x4000], 0xAB);
     let b = roundtrip(&a);
     assert_eq!(snap(&b), want);
     assert_eq!(snap(&no_ext(&a)), want);
