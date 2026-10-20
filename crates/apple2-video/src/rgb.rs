@@ -5,7 +5,7 @@
 
 use crate::config::RgbCard;
 use crate::lookup::{lookup, SRCOFFS_DHIRES, SRCOFFS_HIRES, SRCOFFS_LORES};
-use crate::renderer::{Renderer, FB_W, MAT_H as MAT_H_PUB, MAT_Y as MAT_Y_PUB};
+use crate::renderer::{Renderer, MAT_H as MAT_H_PUB, MAT_Y as MAT_Y_PUB};
 use crate::source::VideoSource;
 
 const HIRES_COLUMN_SUBUNIT_SIZE: usize = 16;
@@ -400,7 +400,7 @@ impl Renderer {
         let doubled = w == 14;
         let base = self.addr;
         for row in 0..h {
-            let dst = base + (row * FB_W) as isize;
+            let dst = base + row as isize * self.fb_w();
             // The C++ counts `h` down, so with 50% scan lines the last row is black.
             if half && row == h - 1 {
                 for i in 0..w as isize {

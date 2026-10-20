@@ -12,13 +12,15 @@
 //!
 //! The framebuffer is AppleWin's: 560x384 visible pixels (each Apple scan line is two rows) inside
 //! a border of 20 pixels left and right and 18 rows above and below (`Video::GetFrameBuffer*`),
-//! stored top-down as `0xAARRGGBB`.
+//! stored top-down as `0xAARRGGBB`. With a VidHD (see [`VideoSource::vidhd`]) it is the IIgs size,
+//! 640x400 inside the same borders, the older modes centred in it (Video.cpp:96-137), and Super
+//! Hi-Res is drawn from aux memory while the card has SHR on (NTSC.cpp `updateScreenSHR`).
 
 use crate::charset::{char_sets, Glyphs};
 use crate::chroma::{chroma, ALPHA, NUM_SEQUENCES};
 use crate::config::{RenderConfig, RgbCard, VideoType};
 use crate::lookup::{lookup, PALETTE_FELINE, PALETTE_SIZE};
-use crate::source::{mode_snapshot, VideoFlags, VideoSource};
+use crate::source::{mode_snapshot, VidHdView, VideoFlags, VideoSource};
 use apple2_core::video_scanner::{Switches, VideoScanner};
 use apple2_core::{Machine, Model, VideoStandard};
 
@@ -31,6 +33,10 @@ pub const FB_H: usize = VISIBLE_H + 2 * BORDER_H;
 
 const MAX_HORZ: u32 = 65;
 const Y_DISPLAY: u32 = 192;
+const Y_DISPLAY_IIGS: u32 = 200;
+/// `kVideoWidthIIgs`/`kVideoHeightIIgs` (Video.h:329-333).
+const VIDHD_W: usize = 640;
+const VIDHD_H: usize = 400;
 const Y_MIXED: u32 = 160;
 const HORZ_START: u32 = 25;
 const COLORBURST_BEG: u32 = 12;
@@ -60,6 +66,8 @@ pub(crate) enum Screen {
     Text40Rgb,
     Text80,
     Text80Rgb,
+    /// `updateScreenSHR` (VidHD): Super Hi-Res, used for text and graphics alike.
+    Shr,
 }
 
 impl Screen {
@@ -87,6 +95,17 @@ pub(crate) struct RgbState {
 pub struct Renderer {
     pub(crate) cfg: RenderConfig,
     fb: Vec<u32>,
+    /// Framebuffer geometry: 560x384 normally, 640x400 with a VidHD.
+    fb_w: usize,
+    fb_h: usize,
+    vis_w: usize,
+    vis_h: usize,
+    /// Centring of the older modes inside the VidHD framebuffer (pixels, rows).
+    cx: usize,
+    cy: usize,
+    vidhd: bool,
+    shr: bool,
+    pseudo_page: Option<u8>,
 
     // Video scanner (NTSC.cpp g_nVideoClockVert/Horz).
     vert: u32,
@@ -162,6 +181,15 @@ impl Renderer {
         let mut r = Renderer {
             cfg,
             fb: vec![OPAQUE_BLACK; FB_W * FB_H],
+            fb_w: FB_W,
+            fb_h: FB_H,
+            vis_w: VISIBLE_W,
+            vis_h: VISIBLE_H,
+            cx: 0,
+            cy: 0,
+            vidhd: false,
+            shr: false,
+            pseudo_page: None,
             vert: 0,
             horz: 0,
             max_vert: 262,
@@ -221,12 +249,12 @@ impl Renderer {
 
     /// Framebuffer width and height in pixels, borders included.
     pub fn size(&self) -> (usize, usize) {
-        (FB_W, FB_H)
+        (self.fb_w, self.fb_h)
     }
 
     /// The borderless visible area: `(x, y, width, height)` inside the framebuffer.
     pub fn visible_rect(&self) -> (usize, usize, usize, usize) {
-        (BORDER_W, BORDER_H, VISIBLE_W, VISIBLE_H)
+        (BORDER_W, BORDER_H, self.vis_w, self.vis_h)
     }
 
     /// The whole framebuffer, top-down, one `0xAARRGGBB` per pixel.
@@ -234,17 +262,17 @@ impl Renderer {
         &self.fb
     }
 
-    /// Pixel `(x, y)` of the visible 560x384 area as `[r, g, b, a]`.
+    /// Pixel `(x, y)` of the visible area (560x384, or 640x400 with a VidHD) as `[r, g, b, a]`.
     pub fn pixel(&self, x: usize, y: usize) -> [u8; 4] {
-        let c = self.fb[(BORDER_H + y) * FB_W + BORDER_W + x];
+        let c = self.fb[(BORDER_H + y) * self.fb_w + BORDER_W + x];
         [(c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8]
     }
 
-    /// The visible 560x384 area as tightly packed RGBA8 (for texture upload or screenshots).
+    /// The visible area as tightly packed RGBA8 (for texture upload or screenshots).
     pub fn rgba8(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(VISIBLE_W * VISIBLE_H * 4);
-        for y in 0..VISIBLE_H {
-            for x in 0..VISIBLE_W {
+        let mut out = Vec::with_capacity(self.vis_w * self.vis_h * 4);
+        for y in 0..self.vis_h {
+            for x in 0..self.vis_w {
                 out.extend_from_slice(&self.pixel(x, y));
             }
         }
@@ -326,6 +354,15 @@ impl Renderer {
 
     /// `NTSC_VideoInitAppleType` + `NTSC_SetRefreshRate`; and mode-change detection.
     fn sync(&mut self, s: &dyn VideoSource) {
+        let hd = s.vidhd();
+        if hd.is_some() != self.vidhd {
+            self.set_vidhd(hd.is_some());
+        }
+        let want_shr = hd.is_some_and(|h| h.is_shr());
+        if want_shr != self.shr {
+            self.set_shr(want_shr);
+        }
+        self.pseudo_page = s.hgr_pseudo_page();
         let key = (s.model(), s.standard());
         if self.configured != Some(key) {
             self.configured = Some(key);
@@ -387,6 +424,10 @@ impl Renderer {
 
     /// `NTSC_SetVideoTextMode`.
     fn reselect_text_mode(&mut self) {
+        if self.shr {
+            self.txt = Screen::Shr;
+            return;
+        }
         let rgb = self.cfg.video_type == VideoType::ColorVideocardRgb;
         self.txt = match (rgb, self.col80_text) {
             (true, false) => Screen::Text40Rgb,
@@ -458,7 +499,7 @@ impl Renderer {
         const SPAN_R: isize = 4;
         const OVERLAP_R: isize = SPAN_R - OFFSET_R;
         const HORZ_PIXELS: isize = (MAX_HORZ - HORZ_START) as isize * 14;
-        let line0 = self.scan_line(0) - FB_W as isize - OFFSET_L;
+        let line0 = self.scan_line(0) - self.fb_w as isize - OFFSET_L;
         for i in 0..(HORZ_PIXELS + (SPAN_L - OVERLAP_L) + (SPAN_R - OVERLAP_R)) {
             self.put(line0 + i, OPAQUE_BLACK);
         }
@@ -520,6 +561,11 @@ impl Renderer {
     }
 
     fn reselect_screen_funcs_for(&mut self, f: VideoFlags) {
+        if self.shr {
+            self.gfx = Screen::Shr;
+            self.txt = Screen::Shr;
+            return;
+        }
         let vt = self.cfg.video_type;
         let rgb_card = vt == VideoType::ColorVideocardRgb;
         let ideal = vt == VideoType::ColorIdealized;
@@ -594,7 +640,38 @@ impl Renderer {
 
     /// `g_pScanLines[k]`: index of pixel 0 of framebuffer scan line `k` (0-383).
     fn scan_line(&self, k: usize) -> isize {
-        ((BORDER_H + k) * FB_W + BORDER_W) as isize
+        ((BORDER_H + self.cy + k) * self.fb_w + BORDER_W + self.cx) as isize
+    }
+
+    /// Line `k` (0-399) of the VidHD framebuffer, uncentred: SHR fills all of it.
+    fn shr_line(&self, k: usize) -> isize {
+        ((BORDER_H + k) * self.fb_w + BORDER_W) as isize
+    }
+
+    /// A VidHD appears or goes away: the framebuffer changes size (`Video::GetFrameBuffer*`).
+    fn set_vidhd(&mut self, on: bool) {
+        self.vidhd = on;
+        (self.vis_w, self.vis_h) = if on { (VIDHD_W, VIDHD_H) } else { (VISIBLE_W, VISIBLE_H) };
+        (self.cx, self.cy) = if on { ((VIDHD_W - VISIBLE_W) / 2, (VIDHD_H - VISIBLE_H) / 2) } else { (0, 0) };
+        self.fb_w = self.vis_w + 2 * BORDER_W;
+        self.fb_h = self.vis_h + 2 * BORDER_H;
+        self.fb = vec![OPAQUE_BLACK; self.fb_w * self.fb_h];
+        self.clear_overscan();
+        self.update_video_scanner_address();
+    }
+
+    /// `VF_SHR` toggled. Leaving SHR clears the framebuffer of its residue (NTSC.cpp:2007-2011).
+    fn set_shr(&mut self, on: bool) {
+        self.shr = on;
+        if on {
+            self.gfx = Screen::Shr;
+            self.txt = Screen::Shr;
+        } else {
+            self.fb.fill(OPAQUE_BLACK);
+            self.reselect_text_mode();
+            self.reselect_screen_funcs_for(self.flags);
+        }
+        self.update_video_scanner_address();
     }
 
     pub(crate) fn put(&mut self, idx: isize, v: u32) {
@@ -618,6 +695,11 @@ impl Renderer {
                 self.color_burst = 1024;
             }
         }
+        if self.gfx == Screen::Shr {
+            // g_pScanLines[2*vert]: returns before the colour-phase reset (NTSC.cpp:758-762).
+            self.addr = self.shr_line(if self.vert < Y_DISPLAY_IIGS { 2 * self.vert as usize } else { 0 });
+            return;
+        }
         self.addr = self.scan_line(if self.vert < Y_DISPLAY { 2 * self.vert as usize } else { 0 });
         if vt == VideoType::MonoTv || vt == VideoType::ColorTv || (vt == VideoType::ColorMonitorNtsc && self.color_burst_on())
         {
@@ -629,6 +711,11 @@ impl Renderer {
             || (self.mixed && self.vert >= Y_MIXED && (self.txt == Screen::Text80 || g == Screen::Text80Rgb));
         if wide && vt != VideoType::ColorIdealized && vt != VideoType::ColorVideocardRgb {
             self.addr -= 1;
+        }
+        if self.vidhd && vt == VideoType::ColorMonitorNtsc {
+            // Two black pixels before each line (NTSC.cpp:792-799).
+            self.put(self.addr - 2, OPAQUE_BLACK);
+            self.put(self.addr - 1, OPAQUE_BLACK);
         }
         self.color_phase = 0;
         self.last_col_pixel = 0;
@@ -653,7 +740,7 @@ impl Renderer {
         if self.horz == MAX_HORZ {
             if self.vert < Y_DISPLAY {
                 self.put(self.addr, OPAQUE_BLACK);
-                self.put(self.addr + FB_W as isize, OPAQUE_BLACK);
+                self.put(self.addr + self.fb_w as isize, OPAQUE_BLACK);
             }
             self.horz = 0;
             self.vert += 1;
@@ -685,7 +772,7 @@ impl Renderer {
                     self.dot(0, self.hue_fn);
                     for _ in 0..2 {
                         self.put(self.addr, OPAQUE_BLACK);
-                        self.put(self.addr + FB_W as isize, OPAQUE_BLACK);
+                        self.put(self.addr + self.fb_w as isize, OPAQUE_BLACK);
                         self.addr += 1;
                     }
                 }
@@ -711,7 +798,16 @@ impl Renderer {
     /// `getVideoScannerAddressHGR`.
     fn addr_hgr(&self) -> u16 {
         let sw = Switches { text: false, mixed: false, hires: true, page2: self.hires_page2 };
-        self.scanner.address_at(self.vert, self.horz, sw)
+        let a = self.scanner.address_at(self.vert, self.horz, sw);
+        match self.pseudo_page {
+            // `aPageAddr[g_nHiresPage]` (NTSC.cpp:870-886): swap the page 1/2 base for the pseudo page's.
+            Some(p) => {
+                const PAGE_ADDR: [u16; 9] = [0x0000, 0x2000, 0x4000, 0x6000, 0x8000, 0xA000, 0xC000, 0xD000, 0xE000];
+                let base = if self.hires_page2 { 0x4000 } else { 0x2000 };
+                a.wrapping_sub(base).wrapping_add(PAGE_ADDR[(p as usize).min(8)])
+            }
+            None => a,
+        }
     }
 
     // ---- Pixel output (NTSC.cpp:511-650). ----
@@ -727,7 +823,7 @@ impl Renderer {
             (true, false) => c.hue_tv[self.color_phase][sb],
         };
         let a = self.addr;
-        let fw = FB_W as isize;
+        let fw = self.fb_w as isize;
         if f.tv {
             let color2 = self.get(a - 2 * fw);
             let mut color1 = blend_half(color0) + blend_half(color2);
@@ -808,6 +904,7 @@ impl Renderer {
             Screen::Text40Rgb => self.text40_rgb(s, cycles),
             Screen::Text80 => self.text80(s, cycles),
             Screen::Text80Rgb => self.text80_rgb(s, cycles),
+            Screen::Shr => self.shr_cycles(s, cycles),
             _ => {
                 if self.mixed && self.vert >= Y_MIXED {
                     let t = self.txt;
@@ -950,7 +1047,7 @@ impl Renderer {
                 let bits = lo >> ((1 - (self.horz & 1)) * 2);
                 self.update_pixels(bits);
             }
-            Screen::Text40 | Screen::Text40Rgb | Screen::Text80 | Screen::Text80Rgb => {}
+            Screen::Text40 | Screen::Text40Rgb | Screen::Text80 | Screen::Text80Rgb | Screen::Shr => {}
         }
     }
 
@@ -1041,6 +1138,55 @@ impl Renderer {
         }
     }
 
+    /// `updateScreenSHR` (NTSC.cpp:1866): one 16-pixel cell (four aux bytes) per cycle from
+    /// `$2000`, with the scan line's control byte (`$9D00+y`: b7 640 mode, b5 colour fill, b3-0
+    /// palette) and palette (`$9E00 + 32*n`) read at that moment. Each IIgs line fills two
+    /// framebuffer rows.
+    fn shr_cycles(&mut self, s: &dyn VideoSource, cycles: i32) {
+        for _ in 0..cycles {
+            if self.vert < Y_DISPLAY_IIGS && self.horz >= HORZ_START {
+                if let Some(v) = s.vidhd() {
+                    self.shr_cell(s, v);
+                }
+            }
+            self.eol_shr();
+        }
+    }
+
+    fn shr_cell(&mut self, s: &dyn VideoSource, v: &dyn VidHdView) {
+        let (y, x) = (self.vert as u16, (self.horz - HORZ_START) as u16);
+        let addr = 0x2000 + 160 * y + 4 * x;
+        let a = (0..4).fold(0u32, |a, i| a | (s.aux(addr.wrapping_add(i)) as u32) << (8 * i));
+        let c = s.aux(0x9D00 + y);
+        let pal = 0x9E00 + (c as u16 & 0xF) * 32;
+        let palette: [u16; 16] = std::array::from_fn(|i| {
+            let p = pal + 2 * i as u16;
+            s.aux(p) as u16 | (s.aux(p + 1) as u16) << 8
+        });
+        let dst = self.shr_line(2 * y as usize) + 16 * x as isize;
+        let left = self.get(dst - 1);
+        let prev = [(left >> 16) as u8, (left >> 8) as u8, left as u8];
+        let cell = v.shr_cell(c & 0x80 != 0, c & 0x20 != 0, &palette, a, prev);
+        let fw = self.fb_w as isize;
+        for (i, p) in cell.iter().enumerate() {
+            let px = ALPHA | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32;
+            self.put(dst + i as isize, px);
+            self.put(dst + fw + i as isize, px);
+        }
+    }
+
+    /// `updateVideoScannerHorzEOL_SHR`.
+    fn eol_shr(&mut self) {
+        self.horz += 1;
+        if self.horz == MAX_HORZ {
+            self.horz = 0;
+            self.vert += 1;
+            if self.vert == self.max_vert {
+                self.vert = 0;
+            }
+        }
+    }
+
     fn text80_rgb(&mut self, s: &dyn VideoSource, cycles: i32) {
         for _ in 0..cycles {
             let a = self.addr_txt();
@@ -1068,7 +1214,7 @@ impl Renderer {
     // ---- Accessors for the cell drawers (rgb.rs). ----
 
     pub(crate) fn fb_w(&self) -> isize {
-        FB_W as isize
+        self.fb_w as isize
     }
 
     pub(crate) fn half_scanlines(&self) -> bool {

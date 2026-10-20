@@ -80,6 +80,17 @@ impl Scheduler {
         self.events.insert(pos, ev);
     }
 
+    /// Sets `can_assert_irq` of a queued event; false if it is not queued.
+    pub fn set_can_assert_irq(&mut self, id: EventId, flag: bool) -> bool {
+        match self.events.iter_mut().find(|e| e.id == id) {
+            Some(e) => {
+                e.can_assert_irq = flag;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// `Remove` (cpp:95-135): the following event inherits the removed delta.
     pub fn remove(&mut self, id: EventId) -> bool {
         match self.events.iter().position(|e| e.id == id) {

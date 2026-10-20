@@ -4,7 +4,7 @@
 
 use apple2_core::memory::mf;
 use apple2_core::{AuxCardKind, Model, VideoMode, VideoStandard};
-use apple2_video::{RenderConfig, Renderer, VideoSource, VideoType};
+use apple2_video::{RenderConfig, Renderer, VidHdView, VideoSource, VideoType};
 
 pub struct Fake {
     pub main: Vec<u8>,
@@ -15,6 +15,22 @@ pub struct Fake {
     pub mode: VideoMode,
     pub memmode: u32,
     pub cycle: u32,
+    pub vidhd: Option<FakeHd>,
+}
+
+/// A VidHD whose cell decoder is a marker: pixel `i` = [byte `i/4` of the cell word, low byte of
+/// palette entry `i`, mode bits (b1 = 640, b0 = fill)].
+pub struct FakeHd {
+    pub shr: bool,
+}
+
+impl VidHdView for FakeHd {
+    fn is_shr(&self) -> bool {
+        self.shr
+    }
+    fn shr_cell(&self, is_640: bool, fill: bool, palette: &[u16; 16], a: u32, _prev: [u8; 3]) -> [[u8; 3]; 16] {
+        std::array::from_fn(|i| [(a >> (8 * (i / 4))) as u8, palette[i] as u8, (is_640 as u8) << 1 | fill as u8])
+    }
 }
 
 impl Fake {
@@ -28,6 +44,7 @@ impl Fake {
             mode: VideoMode::default(),
             memmode: mf::INITIAL,
             cycle: 0,
+            vidhd: None,
         }
     }
 
@@ -88,6 +105,9 @@ impl VideoSource for Fake {
     }
     fn cycles_in_frame(&self) -> u32 {
         self.cycle
+    }
+    fn vidhd(&self) -> Option<&dyn VidHdView> {
+        self.vidhd.as_ref().map(|v| v as &dyn VidHdView)
     }
 }
 

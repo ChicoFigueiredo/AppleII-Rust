@@ -35,9 +35,26 @@ pub fn card_event_id(slot: u8, token: u16) -> EventId {
 /// scheduler may be mid-update).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CardOp {
-    Schedule { slot: u8, token: u16, cycles: i32 },
+    Schedule { slot: u8, token: u16, cycles: i32, can_assert_irq: bool },
+    SetCanAssertIrq { slot: u8, token: u16, can_assert_irq: bool },
     Cancel { slot: u8, token: u16 },
     SetCpuOwner { slot: u8, active: bool },
+}
+
+/// The instruction in execution when a card is called: lets a card model the 6502 false read of
+/// `STA abs,X/Y` and `STA (zp),Y` (Mockingboard.cpp:750-778 peeks `PC-3..PC-1` for this).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OpcodeInfo {
+    /// Address of the opcode byte.
+    pub pc: u16,
+    pub opcode: u8,
+    /// The two bytes after the opcode, little endian (side-effect-free peek; 0 for events).
+    pub operand: u16,
+    /// For `STA abs,X` ($9D), `STA abs,Y` ($99) and `STA (zp),Y` ($91): the address before
+    /// indexing (`operand`, or the pointer read from zero page); 0 for other opcodes.
+    pub indexed_base: u16,
+    /// The CPU is a 65C02.
+    pub cmos: bool,
 }
 
 /// What a card can do to the machine during a callback.
@@ -56,6 +73,8 @@ pub struct CardCtx<'a> {
     /// frame length; enough to derive `NTSC_GetCyclesUntilVBlank` ([`CardCtx::cycles_until_vblank`]).
     pub frame_cycle: u32,
     pub cycles_per_frame: u32,
+    /// The instruction that caused the access ([`OpcodeInfo`]).
+    pub opcode: OpcodeInfo,
     pub(crate) interrupts: &'a mut Interrupts,
     pub(crate) ops: &'a mut Vec<CardOp>,
     pub(crate) memory: &'a mut Memory,
@@ -83,6 +102,12 @@ impl CardCtx<'_> {
         ok
     }
 
+    /// ][/][+ only: mirror CPU writes to RAM into aux RAM (VidHD's `memVidHD`, see
+    /// `Memory::set_dual_write_aux`). Ignored on the //e family.
+    pub fn set_dual_write_aux(&mut self, on: bool) {
+        self.memory.set_dual_write_aux(on);
+    }
+
     /// Asserts or releases the IRQ line for `src`.
     pub fn set_irq(&mut self, src: IrqSource, asserted: bool) {
         self.interrupts.set_irq(src, asserted);
@@ -95,7 +120,18 @@ impl CardCtx<'_> {
     /// Schedules [`Card::on_event`]`(token)` `cycles` from now, replacing a pending event with
     /// the same token.
     pub fn schedule(&mut self, token: u16, cycles: i32) {
-        self.ops.push(CardOp::Schedule { slot: self.slot, token, cycles });
+        self.schedule_gated(token, cycles, true);
+    }
+
+    /// [`CardCtx::schedule`] with `SyncEvent::m_canAssertIRQ`: when false, expiring exactly on
+    /// the last cycle of an opcode does not defer the IRQ by one opcode (6522, IER bit clear).
+    pub fn schedule_gated(&mut self, token: u16, cycles: i32, can_assert_irq: bool) {
+        self.ops.push(CardOp::Schedule { slot: self.slot, token, cycles, can_assert_irq });
+    }
+
+    /// Changes `can_assert_irq` of the pending event `token`, if any (6522.cpp:217-220).
+    pub fn set_can_assert_irq(&mut self, token: u16, can_assert_irq: bool) {
+        self.ops.push(CardOp::SetCanAssertIrq { slot: self.slot, token, can_assert_irq });
     }
 
     pub fn cancel(&mut self, token: u16) {
