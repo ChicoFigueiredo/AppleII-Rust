@@ -11,6 +11,7 @@ use crate::Error;
 use apple2_core::{Card, Model};
 
 mod disk2;
+mod breakpoint;
 mod hdd;
 mod simple;
 mod snesmax;
@@ -38,7 +39,7 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, snesmax::MAP, vidhd::MAP];
+pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, snesmax::MAP, vidhd::MAP, breakpoint::MAP];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)

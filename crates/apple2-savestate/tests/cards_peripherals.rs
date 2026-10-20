@@ -16,7 +16,7 @@ fn parse_state(body: &str) -> Vec<(String, Node)> {
     );
     match yaml::parse(&text).unwrap().remove(0).1 {
         Node::Map(m) => m,
-        Node::Scalar(_) => panic!("State is not a map"),
+        Node::Scalar(_) => Vec::new(), // `State: null`
     }
 }
 
@@ -122,6 +122,31 @@ mod snesmax {
         let t = round_trip(4, Box::new(c), |_| {});
         assert_eq!(t.orig.save_state(), t.exact.save_state());
         assert_eq!(t.plain.card::<SnesMax>(4).unwrap().button_index(), 5);
+    }
+}
+
+mod breakpoint {
+    use super::*;
+    use apple2_cards::BreakpointCard;
+
+    #[test]
+    fn golden_null_state() {
+        let c = golden("Breakpoint", 5, 1, "");
+        assert_eq!(c.name(), "Breakpoint");
+    }
+
+    #[test]
+    fn writes_null_state() {
+        assert_eq!(written(5, &BreakpointCard::new()), "5:\n  Card: Breakpoint\n  Version: 1\n  State: null\n");
+    }
+
+    #[test]
+    fn machine_round_trip() {
+        let t = round_trip(5, Box::new(BreakpointCard::new()), |m| {
+            m.run_frame();
+        });
+        assert_eq!(t.orig.save_state(), t.exact.save_state());
+        assert!(t.plain.card::<BreakpointCard>(5).is_some());
     }
 }
 
