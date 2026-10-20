@@ -84,14 +84,14 @@ impl Board {
         let n = std::mem::take(&mut self.pending) as i32;
         let floating_bus = self.floating_bus();
         let (cif, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
-        let Board { scheduler, interrupts, actions, slots, cycles, .. } = self;
+        let Board { scheduler, interrupts, actions, slots, cycles, memory, .. } = self;
         let irq_on_last_cycle = scheduler.update(n, |id, rem| {
             let fc = (cif as i64 + rem as i64).rem_euclid(cpf as i64) as u32;
             match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
                 Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
                 Some(EventAction::Card { slot, token }) => {
                     if let Some(card) = slots.cards.get_mut(slot as usize).and_then(Option::as_deref_mut) {
-                        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops };
+                        let mut ctx = CardCtx { slot, cycles: *cycles, access_cycle: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops, memory };
                         return card.on_event(token, &mut ctx);
                     }
                 }
@@ -108,9 +108,10 @@ impl Board {
     pub(crate) fn card_call<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
         let floating_bus = self.floating_bus();
         let (fc, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
-        let Board { slots, interrupts, cycles, .. } = self;
+        let access_cycle = self.access_cycle();
+        let Board { slots, interrupts, cycles, memory, .. } = self;
         let card = slots.cards.get_mut(slot as usize)?.as_deref_mut()?;
-        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops };
+        let mut ctx = CardCtx { slot, cycles: *cycles, access_cycle, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops, memory };
         let r = f(card, &mut ctx);
         self.flush_card_ops();
         Some(r)
@@ -414,6 +415,17 @@ impl Machine {
     /// Slot whose card currently owns the CPU instead of the 6502.
     pub fn cpu_owner(&self) -> Option<u8> {
         self.board.cpu_owner
+    }
+
+    /// The card in `slot` as its concrete type `T` (it must implement [`Card::as_any_mut`]), for
+    /// frontends that insert/eject media or read device status. `None` if the slot is empty or
+    /// holds another kind of card.
+    pub fn card_mut<T: Card + 'static>(&mut self, slot: u8) -> Option<&mut T> {
+        self.board.slots.cards.get_mut(slot as usize)?.as_deref_mut()?.as_any_mut()?.downcast_mut::<T>()
+    }
+
+    pub fn card<T: Card + 'static>(&self, slot: u8) -> Option<&T> {
+        self.board.slots.cards.get(slot as usize)?.as_deref()?.as_any()?.downcast_ref::<T>()
     }
 
     // ---- Input and sound (slice 6). Host-key translation is the frontend's job; see

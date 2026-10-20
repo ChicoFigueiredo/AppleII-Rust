@@ -36,7 +36,7 @@ impl Board {
     /// Cycle stamped on timed I/O (speaker, paddles): the count when the instruction began.
     /// AppleWin runs the handler before adding the opcode's cycles to `uExecutedCycles`
     /// (cpu6502.h: `ABS STA CYC(4)`), like the video scanner.
-    fn access_cycle(&self) -> u64 {
+    pub(super) fn access_cycle(&self) -> u64 {
         self.cycles - self.opcode_ticks as u64
     }
 
