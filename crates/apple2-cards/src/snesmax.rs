@@ -54,6 +54,18 @@ impl SnesMax {
     pub fn set_controller(&mut self, n: usize, mask: Option<u32>) {
         self.host[n & 1] = mask.map(|m| m & 0xFFF);
     }
+
+    /// `m_buttonIndex` (SNESMAX.cpp:41): how many bits were clocked out since the last latch.
+    pub fn button_index(&self) -> u32 {
+        self.index
+    }
+
+    /// Sets `m_buttonIndex` and resets both shift registers to "no buttons"
+    /// (`LoadSnapshot`, SNESMAX.cpp:270-274).
+    pub fn restore_button_index(&mut self, index: u32) {
+        self.index = index;
+        self.shift = [IDLE; 2];
+    }
 }
 
 impl Card for SnesMax {
@@ -62,6 +74,10 @@ impl Card for SnesMax {
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }
 
