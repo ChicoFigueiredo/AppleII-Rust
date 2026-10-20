@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>AppleII-Rust</string>
+  <key>CFBundleDisplayName</key><string>AppleII-Rust</string>
+  <key>CFBundleIdentifier</key><string>io.github.chicofigueiredo.appleii-rust</string>
+  <key>CFBundleExecutable</key><string>applewin</string>
+  <key>CFBundleIconFile</key><string>applewin</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>@VERSION@</string>
+  <key>CFBundleVersion</key><string>@VERSION@</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Apple II disk image</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>disk</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>dsk</string><string>do</string><string>po</string><string>nib</string>
+        <string>woz</string><string>2mg</string><string>hdv</string><string>aws.yaml</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

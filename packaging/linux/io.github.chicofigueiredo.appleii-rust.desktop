@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=AppleII-Rust
+GenericName=Apple II Emulator
+Comment=Apple ][, ][+, //e and //c emulator (Rust port of AppleWin)
+Exec=applewin %f
+Icon=io.github.chicofigueiredo.appleii-rust
+Terminal=false
+Categories=Emulator;Game;
+Keywords=Apple;Apple2;AppleWin;emulator;
+MimeType=application/x-apple2-disk-image;application/x-applewin-savestate;
+StartupWMClass=applewin
