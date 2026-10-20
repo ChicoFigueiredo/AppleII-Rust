@@ -5,10 +5,15 @@
 
 #![forbid(unsafe_code)]
 
+pub mod network;
+#[cfg(feature = "pcap")]
+pub mod pcap_backend;
 pub mod printer;
 pub mod serial;
 pub mod ssc;
+pub mod uthernet1;
 
 pub use serial::{LoopbackHandle, LoopbackSerial, SerialBackend, TcpServerSerial};
 pub use printer::{FileSink, MemorySink, ParallelPrinterCard, PrinterOptions, PrinterSink};
 pub use ssc::SuperSerialCard;
+pub use uthernet1::Uthernet1;
