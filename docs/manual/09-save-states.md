@@ -25,7 +25,7 @@ Para o resultado ser exato, o gravador acrescenta ao documento um bloco extra, `
 
 O formato antigo `.aws` (versão 1) não é aceito, como no AppleWin atual. Para convertê-lo, abra-o no AppleWin 1.27.13 e salve de novo.
 
-**Formato JSON interno.** Nesta versão, o frontend ainda usa o formato interno do núcleo (JSON): F11 e F12 gravam e leem `AppleWin.aws.json`, por padrão no diretório de configuração do programa. A ligação do frontend com o módulo YAML é um item pendente; veja "Diferenças em relação ao AppleWin".
+**No programa.** F11 salva e F12 carrega (Ctrl+F12 também), sempre por um seletor de arquivos que começa no arquivo atual, como no AppleWin. Ao salvar, `.aws.yaml` é acrescentado se faltar. O arquivo padrão é `SaveState.aws.yaml` no diretório atual, ou o nome da imagem de disco rígido ou disquete inserida, no diretório dela. Também funcionam `-load-state arquivo`, soltar o arquivo na janela e a opção "Save State On Exit". As imagens de disco são procuradas no diretório do arquivo, no diretório atual e no diretório de discos configurado.
 
 ## Uthernet II
 
