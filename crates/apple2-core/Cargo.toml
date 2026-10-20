@@ -1,0 +1,12 @@
+[package]
+name = "apple2-core"
+description = "Headless, deterministic Apple II machine core (port of AppleWin)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
+apple2-roms = { path = "../apple2-roms" }
+serde.workspace = true

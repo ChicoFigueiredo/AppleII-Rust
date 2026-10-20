@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/apple2-cpu"]
+members = ["crates/apple2-cpu", "crates/apple2-roms", "crates/apple2-core"]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,6 +8,9 @@ edition = "2021"
 license = "GPL-2.0-or-later"
 repository = "https://github.com/ChicoFigueiredo/AppleII-Rust"
 authors = ["Chico Figueiredo", "Contributors of AppleWin (https://github.com/AppleWin/AppleWin)"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
 
 [profile.release]
 opt-level = 3

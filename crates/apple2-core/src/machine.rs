@@ -1,0 +1,388 @@
+//! The [`Machine`]: CPU plus board, advanced cycle by cycle through `Bus::tick`.
+
+use crate::irq::{Interrupts, IrqSource};
+use crate::memory::Memory;
+use crate::scheduler::{EventId, Scheduler, SyncEvent};
+use crate::MachineConfig;
+use apple2_cpu::{Bus, Cpu, FLAG_I};
+
+/// What a synchronous event does when it expires. Later slices add device variants.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventAction {
+    /// Assert the IRQ line for `source` (level; cleared with `Interrupts::set_irq`).
+    RaiseIrq(IrqSource),
+    Noop,
+}
+
+/// Everything except the CPU, so `cpu.step(&mut board)` borrows cleanly.
+pub struct Board {
+    pub memory: Memory,
+    pub scheduler: Scheduler,
+    pub interrupts: Interrupts,
+    actions: Vec<(EventId, EventAction)>,
+    cycles: u64,
+    cycles_in_frame: u32,
+    cycles_per_frame: u32,
+    frames: u64,
+    /// Cycles ticked since the scheduler was last updated (it advances per opcode, as in AppleWin).
+    pending: u32,
+    opcode_pc: u16,
+    opcode: u8,
+}
+
+impl Board {
+    /// Opcode address and byte of the instruction in execution (for slice 3, AppleWin GH#700).
+    pub fn current_opcode(&self) -> (u16, u8) {
+        (self.opcode_pc, self.opcode)
+    }
+
+    /// Advances the scheduler by the cycles ticked since the last call (CPU.cpp
+    /// `CheckSynchronousInterruptSources`). True if an IRQ-capable event expired exactly on the
+    /// opcode's last cycle.
+    fn update_events(&mut self) -> bool {
+        let n = std::mem::take(&mut self.pending) as i32;
+        let Board { scheduler, interrupts, actions, .. } = self;
+        scheduler.update(n, |id, _cycles| {
+            match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
+                Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
+                Some(EventAction::Noop) | None => {}
+            }
+            0
+        })
+    }
+}
+
+impl Bus for Board {
+    fn read(&mut self, addr: u16) -> u8 {
+        self.memory.read(addr)
+    }
+
+    fn write(&mut self, addr: u16, value: u8) {
+        self.memory.write(addr, value);
+    }
+
+    fn tick(&mut self) {
+        self.cycles += 1;
+        self.pending += 1;
+        self.cycles_in_frame += 1;
+        if self.cycles_in_frame == self.cycles_per_frame {
+            self.cycles_in_frame = 0;
+            self.frames += 1;
+        }
+    }
+
+    fn opcode_fetched(&mut self, pc: u16, opcode: u8) {
+        self.opcode_pc = pc;
+        self.opcode = opcode;
+    }
+}
+
+pub struct Machine {
+    config: MachineConfig,
+    cpu: Cpu,
+    board: Board,
+    nmi_line: bool,
+    /// CPU.cpp g_irqOnLastOpcodeCycle / g_irqDefer1Opcode.
+    irq_on_last_opcode_cycle: bool,
+    irq_defer_1_opcode: bool,
+}
+
+impl Machine {
+    pub fn new(config: MachineConfig) -> Self {
+        let rom: &[u8] = match (&config.custom_rom, config.model.system_rom()) {
+            (Some(r), _) => r,
+            (None, Some(r)) => r,
+            (None, None) => &[],
+        };
+        let board = Board {
+            memory: Memory::new(rom),
+            scheduler: Scheduler::new(),
+            interrupts: Interrupts::default(),
+            actions: Vec::new(),
+            cycles: 0,
+            cycles_in_frame: 0,
+            cycles_per_frame: config.video_standard.cycles_per_frame(),
+            frames: 0,
+            pending: 0,
+            opcode_pc: 0,
+            opcode: 0,
+        };
+        let mut m = Machine {
+            cpu: Cpu::new(config.model.cpu_variant()),
+            config,
+            board,
+            nmi_line: false,
+            irq_on_last_opcode_cycle: false,
+            irq_defer_1_opcode: false,
+        };
+        m.reset();
+        m
+    }
+
+    pub fn config(&self) -> &MachineConfig {
+        &self.config
+    }
+
+    pub fn cpu(&self) -> &Cpu {
+        &self.cpu
+    }
+
+    pub fn cpu_mut(&mut self) -> &mut Cpu {
+        &mut self.cpu
+    }
+
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
+
+    pub fn board_mut(&mut self) -> &mut Board {
+        &mut self.board
+    }
+
+    /// Absolute cycle counter since power-on.
+    pub fn cycles(&self) -> u64 {
+        self.board.cycles
+    }
+
+    pub fn cycles_in_frame(&self) -> u32 {
+        self.board.cycles_in_frame
+    }
+
+    /// Completed frames since power-on.
+    pub fn frames(&self) -> u64 {
+        self.board.frames
+    }
+
+    /// Reads memory without side effects on the cycle count (test/debug helper).
+    pub fn peek(&mut self, addr: u16) -> u8 {
+        self.board.memory.read(addr)
+    }
+
+    pub fn poke(&mut self, addr: u16, value: u8) {
+        self.board.memory.ram_mut()[addr as usize] = value;
+    }
+
+    /// Schedules `action` to run `cycles` from now.
+    pub fn schedule(&mut self, id: EventId, cycles: i32, action: EventAction) {
+        self.board.actions.retain(|(i, _)| *i != id);
+        self.board.actions.push((id, action));
+        self.board.scheduler.insert(SyncEvent::new(id, cycles));
+    }
+
+    /// CPU reset (the Reset key): pending events and cycle counters are kept.
+    pub fn reset(&mut self) {
+        self.cpu.reset(&mut self.board);
+        self.irq_on_last_opcode_cycle = false;
+        self.irq_defer_1_opcode = false;
+    }
+
+    /// Power off and on: RAM cleared, counters, events and interrupt lines reset.
+    pub fn power_cycle(&mut self) {
+        let b = &mut self.board;
+        b.memory.clear_ram();
+        b.scheduler.reset();
+        b.actions.clear();
+        b.interrupts.clear();
+        b.cycles = 0;
+        b.cycles_in_frame = 0;
+        b.frames = 0;
+        b.pending = 0;
+        self.cpu.cycles = 0;
+        self.nmi_line = false;
+        self.reset();
+    }
+
+    /// Executes one instruction (or interrupt entry); returns the cycles it took.
+    pub fn step(&mut self) -> u32 {
+        let nmi = self.board.interrupts.nmi_line();
+        if nmi && !self.nmi_line {
+            self.cpu.nmi();
+        }
+        self.nmi_line = nmi;
+
+        // CPU.cpp IRQ(): an IRQ that appeared on the previous opcode's last cycle waits one opcode.
+        let mut irq = self.board.interrupts.irq_line();
+        if irq && self.cpu.p & FLAG_I == 0 {
+            if self.irq_on_last_opcode_cycle && !self.irq_defer_1_opcode {
+                self.irq_defer_1_opcode = true;
+                irq = false;
+            } else {
+                self.irq_defer_1_opcode = false;
+            }
+        }
+        self.irq_on_last_opcode_cycle = false;
+        self.cpu.irq = irq;
+
+        let cycles = self.cpu.step(&mut self.board);
+        // SetIrqOnLastOpcodeCycle only matters while interrupts are enabled.
+        if self.board.update_events() && self.cpu.p & FLAG_I == 0 {
+            self.irq_on_last_opcode_cycle = true;
+        }
+        cycles
+    }
+
+    /// Runs whole instructions until at least `n` cycles passed; returns the cycles executed.
+    pub fn run_cycles(&mut self, n: u64) -> u64 {
+        let mut done = 0;
+        while done < n {
+            done += self.step() as u64;
+        }
+        done
+    }
+
+    /// Runs until the next frame boundary; returns the cycles executed.
+    pub fn run_frame(&mut self) -> u64 {
+        let target = self.board.frames + 1;
+        let mut done = 0;
+        while self.board.frames < target {
+            done += self.step() as u64;
+        }
+        done
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Model, VideoStandard};
+
+    const SRC: IrqSource = IrqSource::Mouse;
+
+    /// Machine with a 12K custom ROM whose vectors are RESET=$0300, IRQ=$0400, NMI=$0500.
+    fn machine(model: Model, std: VideoStandard) -> Machine {
+        let mut rom = vec![0xEAu8; 0x3000];
+        for (vec, target) in [(0xFFFAu16, 0x0500u16), (0xFFFC, 0x0300), (0xFFFE, 0x0400)] {
+            let o = vec as usize - 0xD000;
+            rom[o] = target as u8;
+            rom[o + 1] = (target >> 8) as u8;
+        }
+        let mut cfg = MachineConfig::for_model(model);
+        cfg.video_standard = std;
+        cfg.custom_rom = Some(rom);
+        let mut m = Machine::new(cfg);
+        // $0300: CLI, then NOPs (RAM is zeroed = BRK, so fill).
+        m.poke(0x300, 0x58);
+        for a in 0x301..0x320 {
+            m.poke(a, 0xEA);
+        }
+        m.poke(0x400, 0xE6); // handler: INC $10 ; JMP $0402
+        m.poke(0x401, 0x10);
+        m.poke(0x402, 0x4C);
+        m.poke(0x403, 0x02);
+        m.poke(0x404, 0x04);
+        m.poke(0x500, 0xE6); // NMI handler: INC $11 ; JMP $0502
+        m.poke(0x501, 0x11);
+        m.poke(0x502, 0x4C);
+        m.poke(0x503, 0x02);
+        m.poke(0x504, 0x05);
+        m
+    }
+
+    #[test]
+    fn reset_loads_vector_and_uses_model_cpu() {
+        let m = machine(Model::Apple2Plus, VideoStandard::Ntsc);
+        assert_eq!(m.cpu().pc, 0x0300);
+        assert_eq!(m.cpu().variant, apple2_cpu::Variant::Nmos6502);
+        let m = machine(Model::Apple2eEnhanced, VideoStandard::Ntsc);
+        assert_eq!(m.cpu().variant, apple2_cpu::Variant::Cmos65C02);
+    }
+
+    #[test]
+    fn real_rom_reset_vector_is_in_rom() {
+        for model in [Model::Apple2, Model::Apple2Plus, Model::Apple2e, Model::Apple2eEnhanced, Model::Base64A, Model::Pravets8A] {
+            let m = Machine::new(MachineConfig::for_model(model));
+            assert!(m.cpu().pc >= 0xC000, "{model:?} pc={:#x}", m.cpu().pc);
+        }
+    }
+
+    #[test]
+    fn cycle_counter_follows_executed_cycles() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        assert_eq!(m.cycles(), 0);
+        let done = m.run_cycles(100);
+        assert!((100..107).contains(&done));
+        assert_eq!(m.cycles(), done);
+        assert_eq!(m.cycles_in_frame() as u64, done);
+    }
+
+    #[test]
+    fn run_frame_stops_on_frame_boundary_ntsc_and_pal() {
+        for (std, len) in [(VideoStandard::Ntsc, 17030u64), (VideoStandard::Pal, 20280)] {
+            let mut m = machine(Model::Apple2, std);
+            let done = m.run_frame();
+            assert!(done >= len && done < len + 7, "{done}");
+            assert_eq!(m.frames(), 1);
+            assert!(m.cycles_in_frame() < 7);
+        }
+    }
+
+    #[test]
+    fn power_cycle_clears_counters_and_ram() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.run_frame();
+        m.poke(0x10, 7);
+        m.power_cycle();
+        assert_eq!((m.cycles(), m.frames(), m.peek(0x10)), (0, 0, 0));
+    }
+
+    #[test]
+    fn reset_keeps_cycle_counter() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.run_cycles(50);
+        let c = m.cycles();
+        m.reset();
+        assert_eq!((m.cycles(), m.cpu().pc), (c, 0x300));
+    }
+
+    #[test]
+    fn opcode_is_visible_to_the_board() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.step();
+        assert_eq!(m.board().current_opcode(), (0x300, 0x58));
+    }
+
+    #[test]
+    fn scheduled_irq_is_taken_after_event_expires() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.schedule(EventId(1), 3, EventAction::RaiseIrq(SRC));
+        m.step(); // CLI
+        m.step(); // NOP: event expires mid-opcode (rem -1)
+        m.step(); // IRQ taken
+        assert_eq!(m.cpu().pc, 0x400);
+    }
+
+    #[test]
+    fn irq_from_event_on_last_cycle_of_opcode_is_deferred_one_opcode() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.schedule(EventId(1), 4, EventAction::RaiseIrq(SRC));
+        m.step(); // CLI (2 cycles)
+        m.step(); // NOP (event expires exactly on its last cycle)
+        m.step(); // deferred: runs a NOP
+        assert_eq!(m.cpu().pc, 0x303);
+        m.step(); // now taken
+        assert_eq!(m.cpu().pc, 0x400);
+    }
+
+    #[test]
+    fn irq_masked_by_i_flag_is_not_taken_until_cli() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.board_mut().interrupts.set_irq(SRC, true);
+        m.poke(0x300, 0xEA);
+        m.poke(0x301, 0x58);
+        m.step();
+        m.step(); // CLI
+        assert_eq!(m.cpu().pc, 0x302);
+        m.step();
+        assert_eq!(m.cpu().pc, 0x400);
+    }
+
+    #[test]
+    fn nmi_is_edge_triggered_through_the_interrupt_lines() {
+        let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
+        m.board_mut().interrupts.set_nmi(SRC, true);
+        m.step();
+        assert_eq!(m.cpu().pc, 0x500);
+        m.run_cycles(100); // line stays high: no retrigger, handler loops
+        assert_eq!(m.peek(0x11), 1, "handler entered once, not re-triggered");
+    }
+}

@@ -13,6 +13,10 @@ pub trait Bus {
     fn write(&mut self, addr: u16, value: u8);
     /// Called once for every CPU cycle consumed (bus access or internal).
     fn tick(&mut self) {}
+    /// Called right after the opcode byte is fetched (before operands), with the
+    /// opcode's address. Lets the board know which instruction is executing
+    /// (AppleWin GH#700: RMW abs on Language Card switches).
+    fn opcode_fetched(&mut self, _pc: u16, _opcode: u8) {}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,13 +78,15 @@ pub struct Cpu {
     pub stopped: bool,
     /// WAI executed (65C02): resumes on interrupt.
     pub waiting: bool,
+    /// Opcode of the instruction currently (or last) executed.
+    pub opcode: u8,
 }
 
 impl Cpu {
     pub fn new(variant: Variant) -> Self {
         Cpu {
             a: 0, x: 0, y: 0, sp: 0xFF, pc: 0, p: FLAG_U | FLAG_I, cycles: 0, variant,
-            irq: false, nmi_pending: false, stopped: false, waiting: false,
+            irq: false, nmi_pending: false, stopped: false, waiting: false, opcode: 0,
         }
     }
 
@@ -426,7 +432,10 @@ impl Cpu {
             self.idle(bus);
             return 1;
         }
+        let op_pc = self.pc;
         let opcode = self.fetch(bus);
+        self.opcode = opcode;
+        bus.opcode_fetched(op_pc, opcode);
         self.execute(bus, opcode);
         (self.cycles - start) as u32
     }
@@ -647,10 +656,10 @@ impl Cpu {
             // Full undocumented-instruction behaviour is on the roadmap.
             let (mode, _) = match opcode & 0x1F {
                 0x00 | 0x02 | 0x09 | 0x0B => (Mode::Imm, ()),
-                0x04 | 0x05 | 0x06 | 0x07 => (Mode::Zp, ()),
-                0x0C | 0x0D | 0x0E | 0x0F => (Mode::Abs, ()),
-                0x14 | 0x15 | 0x16 | 0x17 => (Mode::ZpX, ()),
-                0x1C | 0x1D | 0x1E | 0x1F => (Mode::AbsX, ()),
+                0x04..=0x07 => (Mode::Zp, ()),
+                0x0C..=0x0F => (Mode::Abs, ()),
+                0x14..=0x17 => (Mode::ZpX, ()),
+                0x1C..=0x1F => (Mode::AbsX, ()),
                 0x19 | 0x1B => (Mode::AbsY, ()),
                 0x01 | 0x03 => (Mode::IndX, ()),
                 0x11 | 0x13 => (Mode::IndY, ()),
@@ -739,5 +748,23 @@ mod tests {
         let (c, _) = run1(Variant::Nmos6502, &[0xE9, 0x19], |c| { c.a = 0x46; c.p |= FLAG_D | FLAG_C });
         assert_eq!(c.a, 0x27);
         assert!(c.p & FLAG_C != 0);
+    }
+
+    #[test]
+    fn opcode_hook_reports_fetched_opcode() {
+        struct Spy { mem: [u8; 65536], seen: Vec<(u16, u8)> }
+        impl Bus for Spy {
+            fn read(&mut self, a: u16) -> u8 { self.mem[a as usize] }
+            fn write(&mut self, a: u16, v: u8) { self.mem[a as usize] = v }
+            fn opcode_fetched(&mut self, pc: u16, op: u8) { self.seen.push((pc, op)); }
+        }
+        let mut b = Spy { mem: [0; 65536], seen: vec![] };
+        b.mem[0x300..0x305].copy_from_slice(&[0xA9, 0x01, 0xEE, 0x00, 0x04]);
+        let mut c = Cpu::new(Variant::Nmos6502);
+        c.pc = 0x300;
+        c.step(&mut b);
+        c.step(&mut b);
+        assert_eq!(b.seen, vec![(0x300, 0xA9), (0x302, 0xEE)]);
+        assert_eq!(c.opcode, 0xEE);
     }
 }
