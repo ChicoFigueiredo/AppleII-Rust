@@ -138,7 +138,8 @@ impl Chip {
         let t = Instant::now();
         loop {
             let sr = self.sr(s);
-            if sr == want || t.elapsed() > Duration::from_secs(2) {
+            // Windows retries a refused localhost connect for ~2 s before failing.
+            if sr == want || t.elapsed() > Duration::from_secs(10) {
                 return sr;
             }
             self.m.run_cycles(2000);
