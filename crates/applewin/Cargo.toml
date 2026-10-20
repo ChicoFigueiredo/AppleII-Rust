@@ -46,6 +46,8 @@ arboard = "3"
 rfd = "0.15"
 image = { version = "0.25", default-features = false, features = ["png"] }
 pollster = "0.4"
+# SVG toolbar icons (assets/ui/toolbar), rasterised once per scale. No text/fonts/raster images.
+resvg = { version = "0.48", default-features = false }
 
 [dev-dependencies]
 apple2-cpu = { path = "../apple2-cpu" }
