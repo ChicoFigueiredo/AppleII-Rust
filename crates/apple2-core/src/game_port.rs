@@ -55,12 +55,28 @@ impl GamePort {
 
     /// `JoyReadPosition` bit 7 for $C064-$C067 at absolute cycle `now`.
     pub fn paddle_active(&self, n: usize, now: u64) -> bool {
-        !self.attached[(n & 2) >> 1] || now < self.inactive_cycle[n & 3]
+        self.paddle_active_with(n, now, false)
+    }
+
+    /// As [`GamePort::paddle_active`]; `forced`: a dongle drives this paddle, so it times out even
+    /// with no joystick (Joystick.cpp:696).
+    pub fn paddle_active_with(&self, n: usize, now: u64, forced: bool) -> bool {
+        (!forced && !self.attached[(n & 2) >> 1]) || now < self.inactive_cycle[n & 3]
     }
 
     /// `JoyResetPosition` ($C070-$C07F access): arms every timer that is not running.
     pub fn trigger(&mut self, now: u64) {
+        self.trigger_with(now, [None; 4]);
+    }
+
+    /// [`GamePort::trigger`] where a game-connector device may force a paddle's count
+    /// (Joystick.cpp:777-783; it applies even to a running timer).
+    pub fn trigger_with(&mut self, now: u64, forced: [Option<u32>; 4]) {
         for (n, end) in self.inactive_cycle.iter_mut().enumerate() {
+            if let Some(p) = forced[n] {
+                *end = now + (p as f64 * PDL_CNTR_INTERVAL) as u64 + 1;
+                continue;
+            }
             if now < *end {
                 continue; // a running timer ignores the strobe (GH#985)
             }
