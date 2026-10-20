@@ -30,11 +30,11 @@ Mesmo sem a ligação, essas opções são aceitas na linha de comando e na conf
 
 ## Interface
 
-- **Janela de configuração.** É uma versão reduzida: Modelo, padrão de vídeo, velocidade, volume, escala da janela, escala inteira e som. Cartas, discos, joysticks e as demais opções precisam ser editados no arquivo `settings.toml` ou passados na linha de comando. O AppleWin tem uma caixa de diálogo com várias abas.
+- **Janela de configuração.** Reproduz as páginas do AppleWin (Configuration, Input, Slots, Advanced e as opções de cada carta), mais uma aba Sound para os interruptores de som que o AppleWin só tem na linha de comando. Faltam o botão "Benchmark Emulator" (desativado), o volume separado do Mockingboard e a lista de interfaces do Npcap/libpcap (usa os nomes do sistema ou um nome digitado). A lista de portas seriais vem de /dev (ou COM1 a COM9).
 - **Janela única.** A tela, a barra e as janelas de ajuda e configuração são desenhadas dentro da mesma janela, com a biblioteca egui, e não por caixas de diálogo do sistema.
 - **Idioma.** Os textos da interface são em inglês; este manual está em português do Brasil.
 - **Ajuda.** F1 abre este manual dentro do emulador, no lugar do arquivo CHM do AppleWin.
-- **Discos.** O seletor de arquivos só abre imagens existentes; não há "New ProDOS" e "New DOS 3.3" no menu do drive, nem a caixa "Open as Read Only", nem soltar uma imagem diretamente sobre o botão de um drive (um arquivo solto sempre vai ao drive 1 e reinicia). Não há o menu "Send to CiderPress".
+- **Discos.** O menu do drive (Ctrl+F3/F4 ou botão direito) tem inserir, ejetar, proteção contra escrita, imagens recentes, trocar drives e "Create new disk" (em branco, DOS 3.3 ou ProDOS). Os discos rígidos aparecem no mesmo menu, mas trocar uma imagem reinicia a Máquina. Não há a caixa "Open as Read Only", nem soltar uma imagem sobre o botão de um drive (um arquivo solto sempre vai ao drive 1 e reinicia), nem o menu "Send to CiderPress".
 - **Registro de tipos de arquivo.** O AppleWin registra as extensões de disco no Windows; este programa não.
 - **Tela cheia.** Alt+Enter alterna a tela cheia (o `-alt-enter=open-apple-enter` é aceito mas não muda o comportamento nesta versão).
 - **Status de trilha e setor** dos drives (2x) é mostrado na linha de status, não numa dica sobre o LED.
