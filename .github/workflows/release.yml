@@ -1,10 +1,13 @@
 name: Release
 
-# Tag `v*`  -> build all three platforms and publish a GitHub release.
-# Manual run (workflow_dispatch) -> same build, artifacts only (dry run, no release is created).
+# Publicacao: SOMENTE quando um pull request para `main` e MESCLADO (merged), o titulo contem
+# `[release]` (sem distinguir maiusculas) e o autor do PR e o dono do repositorio.
+# O workflow le a versao do Cargo.toml, cria a tag `v<versao>` no commit de merge e publica a release.
+# Execucao manual (workflow_dispatch) = dry run: so compila e envia artefatos; nunca cria tag nem release.
 on:
-  push:
-    tags: ["v*"]
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -14,8 +17,48 @@ permissions:
   contents: read
 
 jobs:
+  # Decide a versao e falha cedo se a tag ja existir. Em PRs que nao sao de release, o job inteiro e pulado.
+  prepare:
+    name: prepare
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       contains(github.event.pull_request.title, '[release]') &&
+       github.event.pull_request.user.login == github.repository_owner)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      sha: ${{ steps.ver.outputs.sha }}
+      release: ${{ steps.ver.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Version
+        id: ver
+        shell: bash
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            # A versao do binario vem de [workspace.package] (crates/applewin usa version.workspace = true).
+            V="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\(.*\)".*/\1/p}' Cargo.toml | head -n1)"
+            if [[ -z "$V" ]]; then echo "::error::Nao foi possivel ler a versao em Cargo.toml ([workspace.package])."; exit 1; fi
+            if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
+              echo "::error::A tag v$V ja existe. Aumente a versao em Cargo.toml no PR antes de publicar."
+              exit 1
+            fi
+            echo "version=$V" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: ${{ matrix.name }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -26,14 +69,10 @@ jobs:
           - { name: windows-x64, os: windows-latest, pkg: windows, ext: zip }
           - { name: macos-universal, os: macos-14, pkg: macos, ext: zip }
     steps:
+      # Sempre o commit de merge (ou o do dispatch), nunca o head do PR.
       - uses: actions/checkout@v4
-
-      - name: Version
-        id: ver
-        shell: bash
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="dev-${GITHUB_SHA::7}"; fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - name: Linux system packages
         if: runner.os == 'Linux'
@@ -80,7 +119,7 @@ jobs:
 
       - name: Package
         shell: bash
-        run: packaging/package.sh "${{ matrix.pkg }}" "${{ steps.ver.outputs.version }}" "$BINDIR"
+        run: packaging/package.sh "${{ matrix.pkg }}" "${{ needs.prepare.outputs.version }}" "$BINDIR"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -89,8 +128,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [prepare, build]
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -99,7 +138,22 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      # Notas: titulo do PR (sem `[release]`) e corpo; titulo/corpo entram por env, nunca interpolados no shell.
+      - name: Release notes
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          TITLE="$(printf '%s' "$PR_TITLE" | sed -E 's/\[release\]//Ig; s/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]{2,}/ /g')"
+          { printf '## %s\n\n' "$TITLE"; printf '%s\n' "$PR_BODY"; } > notes.md
+
+      # A acao cria a tag v<versao> no commit de merge (target_commitish) e publica a release.
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.prepare.outputs.version }}
+          target_commitish: ${{ needs.prepare.outputs.sha }}
+          name: v${{ needs.prepare.outputs.version }}
+          body_path: notes.md
           files: artifacts/*
           generate_release_notes: true
