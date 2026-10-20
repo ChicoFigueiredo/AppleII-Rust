@@ -1332,6 +1332,54 @@ mod tests {
     }
 
     #[test]
+    fn adc_sbc_with_carry_in() {
+        let (c, _, _) = run(&[0xCE, 0xFF, 0x76], |c| {
+            c.a = 0xFF;
+            c.f = FC;
+        }); // ADC A,0xFF
+        assert_eq!((c.a, flags(c.f)), (0xFF, "S-YHX--C".to_string()));
+        let (c, _, _) = run(&[0xDE, 0x00, 0x76], |c| {
+            c.a = 0;
+            c.f = FC;
+        }); // SBC A,0
+        assert_eq!((c.a, flags(c.f)), (0xFF, "S-YHX-NC".to_string()));
+    }
+
+    #[test]
+    fn cpi_flags_and_ld_a_i() {
+        let mut code = vec![0xED, 0xA1, 0x76];
+        code.resize(0x20, 0);
+        code[0x10] = 0x20;
+        let (c, _, t) = run(&code, |c| {
+            c.a = 0x10;
+            c.f = FC;
+            c.set_hl(0x10);
+            c.set_bc(2);
+        });
+        assert_eq!((flags(c.f), c.bc(), c.hl(), t), ("S----VNC".to_string(), 1, 0x11, 16));
+        let (c, _, _) = run(&[0xED, 0x57, 0x76], |c| {
+            c.i = 0x80;
+            c.iff2 = true;
+        });
+        assert_eq!((c.a, flags(c.f & !FC)), (0x80, "S----V--".to_string()));
+    }
+
+    #[test]
+    fn otir_writes_a_block_to_the_port() {
+        let mut code = vec![0xED, 0xB3, 0x76];
+        code.resize(0x20, 0);
+        code[0x10..0x12].copy_from_slice(&[0xAA, 0xBB]);
+        let (c, r, t) = run(&code, |c| {
+            c.set_hl(0x10);
+            c.b = 2;
+            c.c = 0x42;
+        });
+        assert_eq!((c.b, c.hl(), t), (0, 0x12, 21 + 16));
+        assert_eq!(r.1, vec![(0x0142, 0xAA), (0x0042, 0xBB)], "B is decremented before the port address is formed");
+        assert_eq!(c.f & FZ, FZ);
+    }
+
+    #[test]
     fn save_load_roundtrip() {
         let (c, _, _) = run(&[0x3E, 0x42, 0xD9, 0x76], |c| c.ix = 0xABCD);
         let mut e = Enc::default();
