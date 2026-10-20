@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod irq;
+pub mod language_card;
 pub mod machine;
 pub mod memory;
 pub mod model;

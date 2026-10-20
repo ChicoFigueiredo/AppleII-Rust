@@ -1,10 +1,11 @@
 //! The [`Machine`]: CPU plus board, advanced cycle by cycle through `Bus::tick`.
 
 use crate::irq::{Interrupts, IrqSource};
+use crate::language_card::LanguageCards;
 use crate::memory::Memory;
 use crate::video_mode::VideoMode;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
-use crate::MachineConfig;
+use crate::{CardKind, MachineConfig};
 use crate::Model;
 use apple2_cpu::{Bus, Cpu, FLAG_I};
 
@@ -21,6 +22,7 @@ pub enum EventAction {
 /// Everything except the CPU, so `cpu.step(&mut board)` borrows cleanly.
 pub struct Board {
     pub memory: Memory,
+    pub lc: LanguageCards,
     pub video: VideoMode,
     /// AN0-AN3 (Memory.cpp `g_Annunciator`).
     pub annunciators: [bool; 4],
@@ -112,17 +114,18 @@ pub struct Machine {
 
 impl Machine {
     pub fn new(config: MachineConfig) -> Self {
-        let rom: &[u8] = match (&config.custom_rom, config.model.system_rom()) {
-            (Some(r), _) => r,
-            (None, Some(r)) => r,
-            (None, None) => &[],
-        };
+        let rom = Self::rom_image(&config);
+        let is_e = !config.model.is_apple2();
+        let mut memory = Memory::new(config.model, &rom, config.aux_card, config.slots[0].is_some());
+        let mut lc = LanguageCards::new(is_e, &config.slots);
+        lc.attach(&mut memory);
         let board = Board {
-            memory: Memory::new(config.model, rom, config.aux_card, config.slots[0].is_some()),
+            memory,
+            lc,
             video: VideoMode::default(),
             annunciators: [false; 4],
             model: config.model,
-            is_e: !config.model.is_apple2(),
+            is_e,
             scheduler: Scheduler::new(),
             interrupts: Interrupts::default(),
             actions: Vec::new(),
@@ -144,6 +147,29 @@ impl Machine {
         };
         m.reset();
         m
+    }
+
+    /// System ROM with the F8 overrides of `MemInitializeCustomF8ROM` (Memory.cpp:2120-2171), applied
+    /// after a custom ROM: an original ][ with a 16K Language Card gets the ][+ F8 (autostart)
+    /// ROM, and "Freeze's F8" replaces F8 on the ][ family.
+    fn rom_image(config: &MachineConfig) -> Vec<u8> {
+        const F8_SIZE: usize = 0x800;
+        const ROM_SIZE: usize = 0x3000;
+        let mut rom = match (&config.custom_rom, config.model.system_rom()) {
+            (Some(r), _) => r.clone(),
+            (None, Some(r)) => r.to_vec(),
+            (None, None) => Vec::new(),
+        };
+        if rom.len() >= ROM_SIZE {
+            let f8 = ROM_SIZE - F8_SIZE..ROM_SIZE;
+            if config.model == Model::Apple2 && config.slots[0] == Some(CardKind::LanguageCard16K) {
+                rom[f8.clone()].copy_from_slice(&apple2_roms::APPLE2_PLUS[f8.clone()]);
+            }
+            if config.use_freeze_f8 && config.model.is_apple2() {
+                rom[f8].copy_from_slice(apple2_roms::FREEZES_NON_AUTOSTART_F8_ROM);
+            }
+        }
+        rom
     }
 
     pub fn config(&self) -> &MachineConfig {
@@ -229,6 +255,7 @@ impl Machine {
         // are reset on the //e and Base64A only (the Base64A ROM page is reset by the memory).
         let b = &mut self.board;
         b.memory.reset();
+        b.lc.reset(b.is_e);
         if b.is_e {
             b.video = VideoMode::default();
         }
@@ -244,6 +271,7 @@ impl Machine {
     pub fn power_cycle(&mut self) {
         let b = &mut self.board;
         b.memory.power_cycle();
+        b.lc.power_cycle(b.is_e, &mut b.memory);
         b.video = VideoMode::default();
         b.annunciators = [false; 4];
         b.scheduler.reset();

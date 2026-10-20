@@ -3,7 +3,9 @@
 //! the floating bus arrive in slices 4 and 5.
 
 use super::Board;
+use crate::language_card::is_rmw_abs;
 use crate::memory::mf;
+use apple2_cpu::Variant;
 
 impl Board {
     /// Value read from an address nobody drives (slice 5 returns the video scanner byte).
@@ -48,11 +50,27 @@ impl Board {
     // ---- Slice 3/4 seams. ----
 
     /// $C080-$C0FF: Language Card (slice 3) and card I/O (slice 4).
-    fn slot_io_read(&mut self, _addr: u16) -> u8 {
+    fn slot_io_read(&mut self, addr: u16) -> u8 {
+        self.lc_io(addr, false);
         self.floating_bus()
     }
 
-    fn slot_io_write(&mut self, _addr: u16, _value: u8) {}
+    fn slot_io_write(&mut self, addr: u16, _value: u8) {
+        self.lc_io(addr, true);
+    }
+
+    /// Language Card / Saturn access; false if no such card is in the addressed slot.
+    fn lc_io(&mut self, addr: u16, write: bool) -> bool {
+        let rmw = write && {
+            // GH#700: operand bytes of the executing opcode (the CPU does not expose them).
+            let (pc, op) = self.current_opcode();
+            let byte = |a: u16| self.memory.read(a).unwrap_or(0) as u16;
+            let operand = byte(pc.wrapping_add(1)) | byte(pc.wrapping_add(2)) << 8;
+            is_rmw_abs(op, operand, addr, self.model.cpu_variant() == Variant::Cmos65C02)
+        };
+        let slot = ((addr as u8) >> 4) - 8;
+        self.lc.io(slot, addr as u8, write, rmw, &mut self.memory)
+    }
 
     /// $C100-$CFFF owned by a slot card (slice 4): ROM not provided by the internal Cx ROM.
     pub(super) fn slot_rom_read(&mut self, _addr: u16) -> u8 {

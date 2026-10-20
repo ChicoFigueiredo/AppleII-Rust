@@ -66,6 +66,7 @@ pub struct MemoryState {
     pub main: Vec<u8>,
     pub aux: Vec<u8>,
     pub lc: Vec<u8>,
+    pub lc_region: usize,
     pub memmode: u32,
     pub aux_bank: u16,
 }
@@ -74,7 +75,10 @@ pub struct Memory {
     main: Vec<u8>,
     /// All aux RAM: 0 bytes (empty slot), 1K, or `banks` x 64K.
     aux: Vec<u8>,
+    /// 16K regions of Language Card RAM: 0 is the //e built-in / slot-0 card, then Saturn banks.
     lc: Vec<u8>,
+    /// Region currently behind $D000-$FFFF (AppleWin `g_pMemMainLanguageCard`).
+    lc_region: usize,
     /// 12K pages of system ROM (several only on the Base64A).
     rom: Vec<u8>,
     rom_pages: usize,
@@ -120,6 +124,7 @@ impl Memory {
             main: vec![0; BANK_SIZE],
             aux: vec![0; aux_len],
             lc: vec![0; LC_SIZE],
+            lc_region: 0,
             rom_pages: rom.len() / SYS_ROM_SIZE,
             rom,
             cx_rom,
@@ -142,6 +147,7 @@ impl Memory {
         self.main.fill(0);
         self.aux.fill(0);
         self.lc.fill(0);
+        self.lc_region = 0;
         self.aux_bank = 0;
         self.memmode = self.initial_memmode;
         self.update_paging();
@@ -160,6 +166,30 @@ impl Memory {
             return;
         }
         self.update_paging();
+    }
+
+    /// Makes room for `n` 16K Language Card RAM regions (region 0 always exists).
+    pub fn alloc_lc_regions(&mut self, n: usize) {
+        self.lc.resize(n.max(1) * LC_SIZE, 0);
+        self.lc_region = self.lc_region.min(n.max(1) - 1);
+        self.update_paging();
+    }
+
+    pub fn lc_region(&self) -> usize {
+        self.lc_region
+    }
+
+    /// Selects the LC RAM region behind $D000-$FFFF (`SetMemMainLanguageCard`, Memory.cpp:454).
+    pub fn set_lc_region(&mut self, region: usize) {
+        if region != self.lc_region && region * LC_SIZE < self.lc.len() {
+            self.lc_region = region;
+            self.update_paging();
+        }
+    }
+
+    /// Replaces the `LANGCARD_MASK` flags (`SetMemMode` of the LC manager, LanguageCard.cpp:~640).
+    pub fn set_lc_flags(&mut self, bits: u32) {
+        self.set_memmode((self.memmode & !mf::LANGCARD_MASK) | (bits & mf::LANGCARD_MASK));
     }
 
     pub fn memmode(&self) -> u32 {
@@ -292,6 +322,7 @@ impl Memory {
             main: self.main.clone(),
             aux: self.aux.clone(),
             lc: self.lc.clone(),
+            lc_region: self.lc_region,
             memmode: self.memmode,
             aux_bank: self.aux_bank,
         }
@@ -299,12 +330,13 @@ impl Memory {
 
     /// Restores a state taken from a memory of the same configuration; false if sizes differ.
     pub fn restore(&mut self, s: &MemoryState) -> bool {
-        if s.main.len() != self.main.len() || s.aux.len() != self.aux.len() || s.lc.len() != self.lc.len() || s.aux_bank >= self.banks {
+        if s.main.len() != self.main.len() || s.aux.len() != self.aux.len() || s.lc.len() != self.lc.len() || s.aux_bank >= self.banks || s.lc_region * LC_SIZE >= self.lc.len() {
             return false;
         }
         self.main.copy_from_slice(&s.main);
         self.aux.copy_from_slice(&s.aux);
         self.lc.copy_from_slice(&s.lc);
+        self.lc_region = s.lc_region;
         self.memmode = s.memmode;
         self.aux_bank = s.aux_bank;
         self.update_paging();
@@ -376,7 +408,7 @@ impl Memory {
                 if aux {
                     self.aux_page((p << 8) - bank_off, write)
                 } else {
-                    Page { seg: Seg::Lc, base: ((p - 0xC0) << 8) - bank_off }
+                    Page { seg: Seg::Lc, base: (self.lc_region * LC_SIZE) as u32 + ((p - 0xC0) << 8) - bank_off }
                 }
             };
             let altzp = has(mf::ALTZP);
