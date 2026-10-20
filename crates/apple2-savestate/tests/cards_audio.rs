@@ -1,0 +1,390 @@
+//! Mockingboard family (Mockingboard.cpp:1174-1520, 6522.cpp:634, AY8910.cpp:1098,
+//! SSI263.cpp:1005): golden text from the C++ writers, our writer, and full-machine round trips.
+
+mod common;
+use apple2_audio::ay8910::AyType;
+use apple2_audio::ssi263::SsiType;
+use apple2_audio::{
+    AudioBus, AySnapshot, MockingboardCard, MockingboardSnapshot, SsiSnapshot, UnitSnapshot, Variant, ViaSnapshot,
+};
+use apple2_core::{Card, Machine, MachineConfig, Model};
+use apple2_savestate::{default_card, load_aws_yaml, save_aws_yaml, ImageRequest, LoadHost, SaveOptions};
+use apple2_storage::image::DiskImage;
+
+struct Host {
+    bus: AudioBus,
+}
+
+impl Host {
+    fn new() -> Self {
+        Host { bus: AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc) }
+    }
+}
+
+impl LoadHost for Host {
+    fn open_image(&mut self, _req: &ImageRequest) -> Result<DiskImage, String> {
+        Err("no images".into())
+    }
+    fn make_card(&mut self, name: &str, slot: u8, model: Model) -> Option<Box<dyn Card>> {
+        let v = match name {
+            "Mockingboard C" => Variant::MockingboardC,
+            "Phasor" => Variant::Phasor,
+            "MEGA Audio" => Variant::MegaAudio,
+            "SD Music" => Variant::SdMusic,
+            _ => return default_card(name, slot, model),
+        };
+        Some(Box::new(MockingboardCard::new(v, &self.bus)))
+    }
+}
+
+fn machine_with(variant: Variant, slot: u8, bus: &AudioBus) -> Machine {
+    let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
+    assert!(m.insert_card(slot, Box::new(MockingboardCard::new(variant, bus))));
+    m.power_cycle();
+    m
+}
+
+/// A plain machine's file with `slots_body` (entries indented by 4) as its `Slots` unit.
+fn file_with_slots(slots_body: &str) -> String {
+    let m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
+    let base = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    let marker = "\nUnit:\n  Type: Game I/O Connector";
+    let at = base.find(marker).expect("game I/O unit");
+    let mut body = String::new();
+    for l in slots_body.lines() {
+        body.push_str(&format!("    {l}\n"));
+    }
+    format!("{}\nUnit:\n  Type: Slots\n  Version: 1\n  State:\n{}{}", &base[..at], body, &base[at..])
+}
+
+/// The slots body of a saved file (the lines of `Unit: Slots` State, dedented by 4).
+fn slots_body(text: &str) -> String {
+    let start = text.find("  Type: Slots\n  Version: 1\n  State:\n").expect("slots unit");
+    let rest = &text[start + "  Type: Slots\n  Version: 1\n  State:\n".len()..];
+    let end = rest.find("\nUnit:").unwrap_or(rest.len());
+    rest[..end].lines().map(|l| format!("{}\n", l.strip_prefix("    ").unwrap_or(l))).collect()
+}
+
+fn load_card(text: &str, host: &mut Host, slot: u8) -> (Machine, Vec<String>) {
+    let loaded = load_aws_yaml(text, host).unwrap();
+    let _ = slot;
+    (loaded.machine, loaded.warnings)
+}
+
+// ---- golden: Mockingboard C, unit version 15 -------------------------------------------------
+
+const MB_C_V15: &str = "\
+4:
+  Card: Mockingboard C
+  Version: 15
+  State:
+    Unit0:
+      SY6522:
+        ORB: 0x12
+        ORA: 0x34
+        DDRB: 0xFF
+        DDRA: 0xF0
+        Timer1 Counter: 0x1234
+        Timer1 Latch: 0xABCD
+        Timer1 IRQ Delay: 0
+        Timer1 Active: true
+        Timer2 Counter: 0x0042
+        Timer2 Latch: 0x0100
+        Timer2 IRQ Delay: 1
+        Timer2 Active: false
+        Serial Shift: 0x00
+        ACR: 0x40
+        PCR: 0x0C
+        IFR: 0xC0
+        IER: 0xC0
+      AY891x:
+        Type: AY-3-8913
+        Tone0 Tick: 11
+        Tone1 Tick: 22
+        Tone2 Tick: 33
+        Tone0 High: 1
+        Tone1 High: 0
+        Tone2 High: 1
+        Noise Tick: 5
+        Tone Subcycles: 6
+        Env Subcycles: 7
+        Env Internal Tick: 8
+        Env Tick: 9
+        Tick Incr: 4321
+        Tone0 Period: 284
+        Tone1 Period: 213
+        Tone2 Period: 767
+        Noise Period: 10
+        RNG: 123456
+        Noise Toggle: 1
+        Env First: 0
+        Env Rev: 1
+        Env Counter: 12
+        Registers:
+          Tone0 Period: 0x11C
+          Tone1 Period: 0x0D5
+          Tone2 Period: 0x2FF
+          Noise Period: 0x0A
+          Mixer: 0x38
+          Vol0: 0x0F
+          Vol1: 0x0B
+          Vol2: 0x00
+          Env Period: 0x1000
+          Env Shape: 0xA
+          PortA: 0x00
+          PortB: 0x00
+      SSI263:
+        Type: Empty
+      SC01:
+        Type: SC01
+        SC01 Phoneme: 0x15
+        SC01 Active Phoneme: true
+      Unit State: 0x2
+      AY Current Register: 0x07
+      Chip Select A: true
+      Reg Address Latch Valid A: true
+      Bus Driven by AY: false
+    Unit1:
+      SY6522:
+        ORB: 0x00
+        ORA: 0x01
+        DDRB: 0x00
+        DDRA: 0x00
+        Timer1 Counter: 0x0000
+        Timer1 Latch: 0xFFFF
+        Timer1 IRQ Delay: 0
+        Timer1 Active: false
+        Timer2 Counter: 0x0000
+        Timer2 Latch: 0x0000
+        Timer2 IRQ Delay: 0
+        Timer2 Active: false
+        Serial Shift: 0x00
+        ACR: 0x00
+        PCR: 0x00
+        IFR: 0x20
+        IER: 0x40
+      AY891x:
+        Type: AY-3-8913
+        Tone0 Tick: 0
+        Tone1 Tick: 0
+        Tone2 Tick: 0
+        Tone0 High: 0
+        Tone1 High: 0
+        Tone2 High: 0
+        Noise Tick: 0
+        Tone Subcycles: 0
+        Env Subcycles: 0
+        Env Internal Tick: 0
+        Env Tick: 0
+        Tick Incr: 4321
+        Tone0 Period: 1
+        Tone1 Period: 1
+        Tone2 Period: 1
+        Noise Period: 0
+        RNG: 1
+        Noise Toggle: 0
+        Env First: 1
+        Env Rev: 0
+        Env Counter: 15
+        Registers:
+          Tone0 Period: 0x000
+          Tone1 Period: 0x000
+          Tone2 Period: 0x000
+          Noise Period: 0x00
+          Mixer: 0x00
+          Vol0: 0x00
+          Vol1: 0x00
+          Vol2: 0x00
+          Env Period: 0x0000
+          Env Shape: 0x0
+          PortA: 0x00
+          PortB: 0x00
+      SSI263:
+        Type: SSI263AP
+        Duration / Phoneme: 0x4C
+        Inflection: 0x11
+        Rate / Inflection: 0x22
+        Control / Articulation / Amplitude: 0x8A
+        Filter Frequency: 0x33
+        Current Mode: 0x61
+      Unit State: 0x3
+      AY Current Register: 0x0F
+      Chip Select A: false
+      Reg Address Latch Valid A: false
+      Bus Driven by AY: true
+";
+
+fn via0() -> ViaSnapshot {
+    ViaSnapshot {
+        orb: 0x12,
+        ora: 0x34,
+        ddrb: 0xFF,
+        ddra: 0xF0,
+        t1_counter: 0x1234,
+        t1_latch: 0xABCD,
+        t1_irq_delay: false,
+        t1_active: true,
+        t2_counter: 0x42,
+        t2_latch: 0x100,
+        t2_irq_delay: true,
+        t2_active: false,
+        serial_shift: 0,
+        acr: 0x40,
+        pcr: 0x0C,
+        ifr: 0xC0,
+        ier: 0xC0,
+    }
+}
+
+fn via1() -> ViaSnapshot {
+    ViaSnapshot {
+        orb: 0,
+        ora: 1,
+        ddrb: 0,
+        ddra: 0,
+        t1_counter: 0,
+        t1_latch: 0xFFFF,
+        t1_irq_delay: false,
+        t1_active: false,
+        t2_counter: 0,
+        t2_latch: 0,
+        t2_irq_delay: false,
+        t2_active: false,
+        serial_shift: 0,
+        acr: 0,
+        pcr: 0,
+        ifr: 0x20,
+        ier: 0x40,
+    }
+}
+
+fn ay0() -> AySnapshot {
+    AySnapshot {
+        ty: AyType::Ay3_8913,
+        tone_tick: [11, 22, 33],
+        tone_high: [true, false, true],
+        noise_tick: 5,
+        tone_subcycles: 6,
+        env_subcycles: 7,
+        env_internal_tick: 8,
+        env_tick: 9,
+        tick_incr: 4321,
+        tone_period: [284, 213, 767],
+        noise_period: 10,
+        rng: 123456,
+        noise_toggle: true,
+        env_first: false,
+        env_rev: true,
+        env_counter: 12,
+        regs: [0x1C, 0x01, 0xD5, 0x00, 0xFF, 0x02, 0x0A, 0x38, 0x0F, 0x0B, 0x00, 0x00, 0x10, 0x0A, 0, 0],
+    }
+}
+
+fn ay_idle() -> AySnapshot {
+    AySnapshot {
+        ty: AyType::Ay3_8913,
+        tone_tick: [0; 3],
+        tone_high: [false; 3],
+        noise_tick: 0,
+        tone_subcycles: 0,
+        env_subcycles: 0,
+        env_internal_tick: 0,
+        env_tick: 0,
+        tick_incr: 4321,
+        tone_period: [1; 3],
+        noise_period: 0,
+        rng: 1,
+        noise_toggle: false,
+        env_first: true,
+        env_rev: false,
+        env_counter: 15,
+        regs: [0; 16],
+    }
+}
+
+fn ssi_empty_sc01() -> SsiSnapshot {
+    SsiSnapshot {
+        ty: SsiType::Empty,
+        duration_phoneme: 0,
+        inflection: 0,
+        rate_inflection: 0,
+        ctrl_art_amp: 0,
+        filter_freq: 0,
+        current_mode: 0,
+        has_sc01: true,
+        votrax_phoneme: 0x15,
+        is_votrax_phoneme: true,
+    }
+}
+
+fn ssi_ap() -> SsiSnapshot {
+    SsiSnapshot {
+        ty: SsiType::Ap,
+        duration_phoneme: 0x4C,
+        inflection: 0x11,
+        rate_inflection: 0x22,
+        ctrl_art_amp: 0x8A,
+        filter_freq: 0x33,
+        current_mode: 0x61,
+        has_sc01: false,
+        votrax_phoneme: 0,
+        is_votrax_phoneme: false,
+    }
+}
+
+fn mb_c_expected() -> MockingboardSnapshot {
+    MockingboardSnapshot {
+        phasor_mode: 0,
+        units: [
+            UnitSnapshot {
+                via: via0(),
+                ay: [ay0(), ay_idle()],
+                ssi: ssi_empty_sc01(),
+                state: [2, 2],
+                ay_current_register: [7, 0],
+                chip_selected: [true, false],
+                latch_valid: [true, false],
+                bus_driven: false,
+            },
+            UnitSnapshot {
+                via: via1(),
+                ay: [ay_idle(), ay_idle()],
+                ssi: ssi_ap(),
+                state: [3, 2],
+                ay_current_register: [0x0F, 0],
+                chip_selected: [false, false],
+                latch_valid: [false, false],
+                bus_driven: true,
+            },
+        ],
+    }
+}
+
+fn snapshot_in(m: &Machine, slot: u8) -> MockingboardSnapshot {
+    m.card::<MockingboardCard>(slot).expect("mockingboard card").snapshot()
+}
+
+#[test]
+fn golden_mockingboard_c_v15_loads_into_the_card() {
+    let mut host = Host::new();
+    let (m, warnings) = load_card(&file_with_slots(MB_C_V15), &mut host, 4);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // `Tick Incr` follows the clocks and is not loaded (AY8910_InitClock re-inits it).
+    let mut got = snapshot_in(&m, 4);
+    for u in &mut got.units {
+        for a in &mut u.ay {
+            a.tick_incr = 4321;
+        }
+    }
+    assert_eq!(got, mb_c_expected());
+}
+
+#[test]
+fn mockingboard_c_writes_exactly_the_cpp_text() {
+    let bus = AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc);
+    let mut m = machine_with(Variant::MockingboardC, 4, &bus);
+    m.card_mut::<MockingboardCard>(4).unwrap().apply_snapshot(&mb_c_expected());
+    let text = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    let tick_incr = m.card::<MockingboardCard>(4).unwrap().snapshot().units[0].ay[0].tick_incr;
+    assert_eq!(slots_body(&text), MB_C_V15.replace("Tick Incr: 4321", &format!("Tick Incr: {tick_incr}")));
+}

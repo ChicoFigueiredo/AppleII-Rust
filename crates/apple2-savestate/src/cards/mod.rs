@@ -12,6 +12,7 @@ use apple2_core::{Card, Model};
 
 mod disk2;
 mod hdd;
+pub mod mockingboard;
 mod simple;
 
 /// Loader context handed to [`Mapping::load`].
@@ -36,7 +37,7 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM];
+pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, mockingboard::MOCKINGBOARD_C, mockingboard::PHASOR, mockingboard::MEGA_AUDIO, mockingboard::SD_MUSIC];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)
