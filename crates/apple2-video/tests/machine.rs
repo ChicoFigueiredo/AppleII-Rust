@@ -116,6 +116,64 @@ fn mid_frame_mode_change_splits_the_picture_at_the_cycle() {
 }
 
 #[test]
+fn cpu_driven_raster_switch_changes_the_picture_at_the_right_scan_line() {
+    // 6502 code that burns ~1280 cycles (about line 19) and then selects HGR page 1.
+    //   0300 LDX #$00 / 0302 DEX / 0303 BNE 0302 / 0305 LDA $C050 / 0308 LDA $C057 / 030B JMP 030B
+    let code = [0xA2, 0x00, 0xCA, 0xD0, 0xFD, 0xAD, 0x50, 0xC0, 0xAD, 0x57, 0xC0, 0x4C, 0x0B, 0x03];
+    let mut m = Machine::new(MachineConfig::for_model(Model::Apple2Plus));
+    for a in 0x400u16..0x800 {
+        m.poke_main(a, 0xA0);
+    }
+    for a in 0x2000u16..0x4000 {
+        m.poke_main(a, 0x7F);
+    }
+    for (i, b) in code.iter().enumerate() {
+        m.poke_main(0x300 + i as u16, *b);
+    }
+    m.run_frame();
+    m.cpu_mut().pc = 0x300;
+    let mut r = Renderer::new(RenderConfig { video_type: VideoType::MonoWhite, ..Default::default() });
+    r.run_frame(&mut m);
+    assert!(!m.board().video.text, "the program ran");
+    // Text (blank) at the top of the frame, hi-res white below the switch (line ~20).
+    assert!(!lit(&r, 100, 2 * 5));
+    assert!(lit(&r, 100, 2 * 60));
+    let first_lit = (0..192).find(|&y| lit(&r, 100, 2 * y)).expect("hi-res appears");
+    assert!((17..=23).contains(&first_lit), "switch at line {first_lit}");
+}
+
+#[test]
+fn screen_text_handles_80_columns_and_page_2() {
+    let mut s = Fake::new(Model::Apple2e).text();
+    s.poke(0x400, &[0xC2]); // main: 'B'
+    s.poke_aux(0x400, &[0xC1]); // aux: 'A'
+    s.poke(0x800, &[0xC3]);
+    assert!(screen_text(&s)[0].starts_with('B'));
+    assert_eq!(screen_text(&s)[0].len(), 40);
+    s.mode.col80 = true;
+    assert!(screen_text(&s)[0].starts_with("AB"));
+    assert_eq!(screen_text(&s)[0].len(), 80);
+    s.mode.col80 = false;
+    s.memmode |= apple2_core::memory::mf::PAGE2;
+    assert!(screen_text(&s)[0].starts_with('C'));
+    s.memmode |= apple2_core::memory::mf::STORE80;
+    assert!(screen_text(&s)[0].starts_with('B'));
+}
+
+#[test]
+fn changing_the_video_type_restyles_without_losing_the_mode() {
+    let mut s = Fake::new(Model::Apple2Plus).text();
+    s.poke(0x400, &[0xC1]);
+    let mut r = renderer(VideoType::MonoWhite);
+    render(&mut r, &s, 1);
+    assert_eq!(rgb(&r, 6, 2), 0xFEFEFE);
+    r.set_config(RenderConfig { video_type: VideoType::MonoGreen, ..Default::default() });
+    render(&mut r, &s, 1);
+    assert_eq!(rgb(&r, 6, 2), 0x00BF00);
+    assert_eq!(r.config().video_type, VideoType::MonoGreen);
+}
+
+#[test]
 fn pal_machines_render_312_lines() {
     let mut cfg = MachineConfig::for_model(Model::Apple2e);
     cfg.video_standard = VideoStandard::Pal;
