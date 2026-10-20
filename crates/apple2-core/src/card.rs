@@ -16,7 +16,9 @@
 //! manages them jointly (shared region/WRITERAM arbitration) and derives `serde` itself.
 
 use crate::irq::{Interrupts, IrqSource};
+use crate::memory::Memory;
 use crate::scheduler::EventId;
+use std::any::Any;
 
 /// Bytes of a slot ROM (`$Cs00-$CsFF`).
 pub const SLOT_ROM_SIZE: usize = 0x100;
@@ -44,6 +46,10 @@ pub struct CardCtx<'a> {
     pub slot: u8,
     /// Absolute cycle counter at the access.
     pub cycles: u64,
+    /// Cycle count at the start of the executing instruction: what AppleWin hands I/O handlers as
+    /// `g_nCumulativeCycles` (the handler runs before the opcode's cycles are added). Equal to
+    /// `cycles` outside CPU accesses (events, `update`).
+    pub access_cycle: u64,
     /// Value of the floating bus at the access (what an unclaimed read returns).
     pub floating_bus: u8,
     /// Cycle of the video frame at the callback (for events: when the event expired), and the
@@ -52,9 +58,31 @@ pub struct CardCtx<'a> {
     pub cycles_per_frame: u32,
     pub(crate) interrupts: &'a mut Interrupts,
     pub(crate) ops: &'a mut Vec<CardOp>,
+    pub(crate) memory: &'a mut Memory,
 }
 
 impl CardCtx<'_> {
+    /// DMA read as the CPU sees memory under the current paging (AppleWin
+    /// `CopyBytesFromMemoryPage`); I/O space and an empty aux slot read 0.
+    pub fn dma_read(&self, addr: u16) -> u8 {
+        self.memory.read(addr).unwrap_or(0)
+    }
+
+    /// True if a CPU write to `addr` would land in RAM (`memwrite[page] != NULL`).
+    pub fn dma_writable(&self, addr: u16) -> bool {
+        self.memory.is_writable(addr)
+    }
+
+    /// DMA write as the CPU would write (AppleWin `memwrite[]`). False, and nothing written, if
+    /// `addr` is in I/O space or ROM (or a write-protected Language Card).
+    pub fn dma_write(&mut self, addr: u16, value: u8) -> bool {
+        let ok = self.memory.is_writable(addr);
+        if ok {
+            self.memory.write(addr, value);
+        }
+        ok
+    }
+
     /// Asserts or releases the IRQ line for `src`.
     pub fn set_irq(&mut self, src: IrqSource, asserted: bool) {
         self.interrupts.set_irq(src, asserted);
@@ -98,11 +126,6 @@ pub trait AltCpu {
 }
 
 pub trait Card {
-    /// For downcasting from [`Machine::with_card`](crate::Machine::with_card): `Some(self)`.
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        None
-    }
-
     /// The card wants [`Card::io_snoop`] for every `$C000-$C0FF` access outside its own slot
     /// (checked once, when inserted).
     fn wants_io_snoop(&self) -> bool {
@@ -122,6 +145,17 @@ pub trait Card {
 
     /// Card name (AppleWin `Card::GetCardName`).
     fn name(&self) -> &'static str;
+
+    /// Downcast hook so a frontend can reach a concrete card in a slot (insert/eject disks, read
+    /// drive status, host input via [`Machine::with_card`](crate::Machine::with_card)). Implement
+    /// as `Some(self)`; the default hides the card.
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
 
     /// Read of `$C080+slot*16+lo` (`lo` 0-15); unclaimed reads return the floating bus.
     fn io_read(&mut self, _lo: u8, ctx: &mut CardCtx) -> u8 {
