@@ -6,10 +6,16 @@
 #![forbid(unsafe_code)]
 
 pub mod mouse;
+pub mod nsc;
 pub mod pia6821;
 pub mod softcard;
 pub mod state;
+pub mod thunderclock;
+pub mod time;
 pub mod z80;
 
+pub use nsc::NoSlotClock;
 pub use softcard::SoftCard;
+pub use thunderclock::{ClockModel, ThunderClock};
+pub use time::{FixedClock, HostClock, WallTime};
 pub use mouse::{mouse_button, mouse_move, MouseCard};
