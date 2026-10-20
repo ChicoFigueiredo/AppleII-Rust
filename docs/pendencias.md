@@ -11,7 +11,6 @@ Itens que os agentes deixaram por depender de outro crate ou do núcleo. Serão 
 
 - Avisar na tela de configuração que a SSC em modo TCP escuta em todas as interfaces, na porta 1977, como no AppleWin (apple2-hostio).
 - Mapear os estados opacos das cartas (`Card::save`) para o YAML de save-state do AppleWin.
-- Termos propostos para o glossário: ACIA, Backend, DNS virtual, Barramento de áudio, Mixer, Quadro de áudio.
 
 ## Desempenho
 
