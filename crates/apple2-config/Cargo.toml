@@ -1,0 +1,13 @@
+[package]
+name = "apple2-config"
+description = "User settings, persistence, AppleWin importers and command line for AppleII-Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }
+serde.workspace = true
+toml = "0.8"
+directories = "6"
