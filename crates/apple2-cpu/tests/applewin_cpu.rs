@@ -52,6 +52,7 @@ impl T {
     fn reset(&mut self) {
         let v = self.cpu.variant;
         self.cpu = Cpu::new(v);
+        (self.cpu.a, self.cpu.x, self.cpu.y) = (0, 0, 0);
         self.cpu.pc = 0x300;
         self.cpu.sp = 0xFF; // regs.sp = 0x1FF
         self.cpu.p = 0;

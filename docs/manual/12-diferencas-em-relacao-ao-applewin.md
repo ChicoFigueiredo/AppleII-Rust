@@ -60,7 +60,7 @@ Mesmo sem a ligação, essas opções são aceitas na linha de comando e na conf
 
 ## Emulação
 
-- **CPU.** Os opcodes não documentados do NMOS 6502 são tratados como NOP do tamanho correto (o AppleWin implementa alguns). O 65C02 não tem as instruções de bit Rockwell/WDC (BBR, BBS, RMB, SMB), igual ao AppleWin; o teste estendido de Klaus Dormann está marcado como `#[ignore]` por isso.
+- **CPU.** Os opcodes não documentados do NMOS 6502 que o AppleWin implementa (ASO/SLO, RLA, LSE/SRE, RRA, AXS/SAX, LAX, DCM/DCP, INS/ISC, ANC, ALR, ARR, XAA, OAL, SAX, LAS, AXA, SAY, TAS, XAS, os NOP com tamanho e ciclos corretos e o HLT que trava o PC) foram portados com as mesmas fórmulas, inclusive as peculiaridades (por exemplo, DCP de $00 limpa o carry). O 65C02 não tem as instruções Rockwell/WDC (BBR, BBS, RMB, SMB, WAI, STP): $CB e $DB são NOP de 1 ciclo, igual ao AppleWin. O teste estendido de Klaus Dormann roda com essas instruções emuladas pelo próprio teste (a versão pura está `#[ignore]`). O reset segue o `CpuReset` do AppleWin (S desce 3, flags preservadas); a emulação não faz leituras falsas (a única é a do 6522 do Mockingboard, na carta). O NMI do AppleWin não é tratado pela CPU deles; aqui ele existe.
 - **Apple IIc.** Só o esqueleto, igual ao AppleWin.
 - **VidHD.** Os modos de texto 80x45 e a cor da borda não são modelados.
 - **Placas RGB.** O estado da placa AppleColor/RGB não é guardado no save-state.

@@ -36,6 +36,7 @@ fn run(v: Variant, code: &[u8], setup: impl FnOnce(&mut Cpu, &mut Ram)) -> (Cpu,
     let mut r = ram();
     r.mem[0x300..0x300 + code.len()].copy_from_slice(code);
     let mut c = Cpu::new(v);
+    (c.a, c.x, c.y) = (0, 0, 0);
     c.pc = 0x300;
     c.p = 0;
     setup(&mut c, &mut r);

@@ -640,6 +640,8 @@ impl Machine {
         b.pending = 0;
         b.opcode_ticks = 0;
         self.cpu.cycles = 0;
+        // CpuInitialize(): A = X = Y = $FF, S = $1FF; the reset below leaves S at $FC.
+        (self.cpu.a, self.cpu.x, self.cpu.y, self.cpu.sp) = (0xFF, 0xFF, 0xFF, 0xFF);
         self.nmi_line = false;
         self.reset_cpu_and_board(true);
     }

@@ -99,7 +99,8 @@ pub struct Cpu {
 impl Cpu {
     pub fn new(variant: Variant) -> Self {
         Cpu {
-            a: 0, x: 0, y: 0, sp: 0xFF, pc: 0, p: FLAG_U | FLAG_I, cycles: 0, variant,
+            // CpuInitialize(): A = X = Y = $FF, S = $1FF (the reset then leaves S at $FC).
+            a: 0xFF, x: 0xFF, y: 0xFF, sp: 0xFF, pc: 0, p: FLAG_U | FLAG_I, cycles: 0, variant,
             irq: false, nmi_pending: false, stopped: false, waiting: false, opcode: 0, jammed: false,
         }
     }
@@ -123,8 +124,13 @@ impl Cpu {
     }
 
     pub fn reset<B: Bus>(&mut self, bus: &mut B) {
-        self.sp = 0xFF;
-        self.p = FLAG_U | FLAG_I;
+        // CPU.cpp CpuReset(): I set (the 65C02 also clears D), the other flags and A/X/Y are
+        // kept, and S drops by 3 as the three suppressed pushes would have done.
+        self.sp = self.sp.wrapping_sub(3);
+        self.p |= FLAG_U | FLAG_I;
+        if self.is_cmos() {
+            self.p &= !FLAG_D;
+        }
         self.stopped = false;
         self.waiting = false;
         self.jammed = false;

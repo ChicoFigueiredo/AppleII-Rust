@@ -1,17 +1,17 @@
 02EC:00                  BRK                       A  'A'  41 B0PC= 0304
-02ED:00                  BRK                       X  '@'  00
-02EE:00                  BRK                       Y  '@'  00
+02ED:00                  BRK                       X  ''  FF
+02EE:00                  BRK                       Y  ''  FF
 02EF:00                  BRK                       PC    0302
 02F0:00                  BRK                       P NVRBDIZC
 02F1:00                  BRK                       2400100100
-02F2:00                  BRK                       S 00  01FF
-02F3:00                  BRK                       0100:   00
-02F4:00                  BRK                       0101:   00
-02F5:00                  BRK
-02F6:00                  BRK
-02F7:00                  BRK
-02F8:00                  BRK
-02F9:00                  BRK
+02F2:00                  BRK                       S 03  01FC
+02F3:00                  BRK                       01FD:   00
+02F4:00                  BRK                       01FE:   00
+02F5:00                  BRK                       01FF:   00
+02F6:00                  BRK                       0100:   00
+02F7:00                  BRK                       0101:   00
+02F8:00                  BRK                       0102:   00
+02F9:00                  BRK                       0103:   00
 02FA:00                  BRK                       -none-
 02FB:00                  BRK                       0400   00
 02FC:00                  BRK                       Z0         W0 0400:0000(0000)

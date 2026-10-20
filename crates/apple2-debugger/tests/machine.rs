@@ -105,12 +105,12 @@ fn bus_observer_catches_accesses_the_target_prediction_cannot_see() {
     load(&mut m, 0x300, &[0x58, 0xEA, 0xEA, 0xEA]); // CLI
     load(&mut m, 0x400, &[0xEA, 0xEA]);
     let mut d = debugger(&mut m);
-    d.execute(&mut m, "bpmw 1FF");
+    d.execute(&mut m, "bpmw 1FC");
     m.board_mut().interrupts.set_irq(IrqSource::Mouse, true);
     d.execute(&mut m, "g");
     go(&mut d, &mut m, 10_000);
     assert_eq!(d.mode, RunMode::Debug);
-    assert!(console_text(&d).contains("Write access at 01FF"), "{}", console_text(&d));
+    assert!(console_text(&d).contains("Write access at 01FC"), "{}", console_text(&d));
     assert_eq!(m.cpu().pc, 0x400, "stopped right after the interrupt entry");
 }
 
@@ -172,9 +172,9 @@ fn trace_goes_to_a_writer_in_applewin_format() {
     let text = String::from_utf8(out.borrow().clone()).unwrap();
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[0], "Cycles   A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic");
-    assert!(lines[1].ends_with("00 00 00 01FF ..R..I..  0300:A9 41     LDA #$41"), "{}", lines[1]);
-    assert!(lines[2].contains(" 41 00 00 01FF") && lines[2].contains("0302:AA        TAX"), "{}", lines[2]);
-    assert!(lines[3].contains("0303:8D 00 04  STA $0400") && lines[3].contains(" 41 41 00 01FF"), "{}", lines[3]);
+    assert!(lines[1].ends_with("FF FF FF 01FC ..R..I..  0300:A9 41     LDA #$41"), "{}", lines[1]);
+    assert!(lines[2].contains(" 41 FF FF 01FC") && lines[2].contains("0302:AA        TAX"), "{}", lines[2]);
+    assert!(lines[3].contains("0303:8D 00 04  STA $0400") && lines[3].contains(" 41 41 FF 01FC"), "{}", lines[3]);
 }
 
 #[test]
