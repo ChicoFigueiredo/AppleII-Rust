@@ -1,9 +1,8 @@
 name: CI
 
+# Somente manual (Actions > CI > Run workflow): a cota de CI é limitada e só roda com autorização do dono.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always

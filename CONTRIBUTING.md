@@ -36,7 +36,7 @@ cargo fmt --all -- --check      # informativo por enquanto
 ```
 
 - Escreva os testes primeiro sempre que possível (TDD): um teste que falha, a correção mínima, e depois a limpeza.
-- O clippy precisa passar **sem avisos**. O CI roda nos três sistemas (Linux, Windows e macOS).
+- O clippy precisa passar **sem avisos**. Valide localmente (`cargo test --workspace --release` e `cargo clippy --workspace --all-targets -- -D warnings`). A CI (Linux, Windows e macOS no GitHub; Linux no GitLab) é **somente manual**: roda apenas quando o dono do repositório a dispara, porque a cota de minutos é limitada. Pushes e PRs não disparam CI.
 - Os testes de desempenho e de ritmo do frontend (`crates/applewin/tests/threaded.rs`) só são confiáveis com `--release`.
 - Um teste de integração que dá boot numa Máquina e verifica a memória de texto vale mais do que muitos testes unitários isolados. Veja `crates/apple2-core/tests` e `crates/applewin/tests`.
 - Mantenha o determinismo: nada de relógio do computador, de threads nem de E/S de arquivo dentro do núcleo (ADR 0001). O que precisa do computador entra por uma trait.

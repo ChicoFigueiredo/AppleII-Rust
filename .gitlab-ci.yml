@@ -1,3 +1,9 @@
+# Somente manual: o pipeline roda apenas quando disparado pela interface web (Build > Pipelines > Run pipeline).
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - when: never
+
 stages: [check, test, cross]
 
 default:
