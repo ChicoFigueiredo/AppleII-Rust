@@ -125,6 +125,113 @@ mod snesmax {
     }
 }
 
+mod mouse {
+    use super::*;
+    use apple2_cards::pia6821::Pia6821;
+    use apple2_cards::{MouseCard, MouseSnapshot};
+
+    /// MouseInterface.cpp:647-697 field by field; negative `m_nX` is saved through `SaveUint`.
+    const BODY: &str = "MC6821:
+  PRA: 10
+  DDRA: 255
+  CRA: 4
+  PRB: 3
+  DDRB: 62
+  CRB: 4
+  IA: 170
+  IB: 192
+DataLen: 6
+Mode: 0x0F
+6821B: 0x7E
+6821A: 0x55
+Buffer:
+  0000: 1011121314150000
+Buffer Position: 3
+State: 0xA6
+X: 4294967294
+Y: 300
+Btn0: true
+Btn1: false
+VBL: false
+iX: 515
+iMinX: 10
+iMaxX: 900
+iY: 4294967295
+iMinY: 20
+iMaxY: 800
+Button0: false
+Button1: true
+Enabled: true";
+
+    fn expected() -> MouseSnapshot {
+        MouseSnapshot {
+            pia: Pia6821 { pra: 10, ddra: 255, cra: 4, prb: 3, ddrb: 62, crb: 4, ia: 170, ib: 192 },
+            by_a: 0x55,
+            by_b: 0x7E,
+            buff: [0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0, 0],
+            buf_pos: 3,
+            data_len: 6,
+            mode: 0x0F,
+            state: 0xA6,
+            n_x: -2,
+            n_y: 300,
+            i_x: 515,
+            min_x: 10,
+            max_x: 900,
+            i_y: -1,
+            min_y: 20,
+            max_y: 800,
+            btn0: true,
+            btn1: false,
+            buttons: [false, true],
+        }
+    }
+
+    #[test]
+    fn golden_state() {
+        let c = golden("Mouse Card", 4, 1, BODY);
+        assert_eq!(c.as_any().unwrap().downcast_ref::<MouseCard>().unwrap().snapshot(), expected());
+    }
+
+    #[test]
+    fn writes_the_applewin_keys_in_order() {
+        let mut c = MouseCard::new();
+        c.apply_snapshot(&expected());
+        let body: String = BODY.lines().map(|l| format!("    {l}\n")).collect();
+        assert_eq!(written(4, &c), format!("4:\n  Card: Mouse Card\n  Version: 1\n  State:\n{body}"));
+    }
+
+    #[test]
+    fn rejects_other_versions() {
+        let entries = parse_state(BODY);
+        let mut host = TestHost::default();
+        let mut warnings = Vec::new();
+        let mut ctx = LoadCtx { host: &mut host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
+        let map = cards::by_aw_name("Mouse Card").unwrap();
+        assert!((map.load)(&mut ctx, 4, 2, Map { name: "State", entries: &entries }).is_err());
+    }
+
+    #[test]
+    fn machine_round_trip_with_a_pending_interrupt() {
+        let t = round_trip(4, Box::new(MouseCard::new()), |m| {
+            let mut s = m.card::<MouseCard>(4).unwrap().snapshot();
+            s.mode = 0x0F; // mouse on, all interrupts
+            s.i_x = 40;
+            s.i_y = 25;
+            s.n_x = 30;
+            m.card_mut::<MouseCard>(4).unwrap().apply_snapshot(&s);
+            apple2_cards::mouse_move(m, 4, 5, -3); // movement interrupt raised
+            m.run_frame();
+        });
+        let s = t.orig.card::<MouseCard>(4).unwrap().snapshot();
+        assert!(s.state & apple2_cards::mouse::STAT_INT_ALL != 0, "interrupt pending: {s:?}");
+        assert_eq!(t.orig.save_state(), t.exact.save_state());
+        assert_eq!(t.plain.card::<MouseCard>(4).unwrap().snapshot(), s);
+        // GH#677: the loader re-asserts the IRQ line.
+        assert_eq!(t.plain.save_state().interrupts, t.orig.save_state().interrupts);
+    }
+}
+
 mod softcard {
     use super::*;
     use apple2_cards::SoftCard;

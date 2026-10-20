@@ -301,6 +301,12 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     let mut st = machine.save_state();
     // The Z80 SoftCard's `Active: 1` (z80.cpp:6575) makes the Z80 the running CPU.
     st.cpu_owner = (0..8u8).find(|&s| machine.card::<apple2_cards::SoftCard>(s).is_some_and(|c| c.is_active()));
+    // Mouse card: a pending interrupt status asserts the IRQ line (MouseInterface.cpp:754, GH#677).
+    for s in 0..8u8 {
+        if machine.card::<apple2_cards::MouseCard>(s).is_some_and(|c| c.status() & apple2_cards::mouse::STAT_INT_ALL != 0) {
+            st.interrupts.set_irq(apple2_core::IrqSource::Mouse, true);
+        }
+    }
     apple2::apply_apple2(&mut st, &a2, &lc_loads, ctx.warnings)?;
     if let Some(a) = &aux {
         apple2::load_aux_memory(&mut st, a)?;

@@ -28,4 +28,4 @@ pub use vidhd::{VidHd, VidHdSnapshot};
 pub use softcard::SoftCard;
 pub use thunderclock::{ClockModel, ThunderClock};
 pub use time::{FixedClock, HostClock, WallTime};
-pub use mouse::{mouse_button, mouse_move, MouseCard};
+pub use mouse::{mouse_button, mouse_move, MouseCard, MouseSnapshot};
