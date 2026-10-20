@@ -144,6 +144,24 @@ pub fn char_sets(model: Model, jplus_ascii: bool, base64a_rocker: bool) -> &'sta
     }
 }
 
+/// `-videorom`: glyph sets decoded from a user video ROM (`userVideoRomForIIe` /
+/// `userVideoRomForIIPlus`, NTSC_CharSet.cpp:158-247). A 2K ROM replaces the ][/][+ set, a 4K ROM
+/// (or the second 4K of an 8K one) the //e sets (the same ROM serves the original and the
+/// Enhanced //e). `None` when the size does not suit `model`, which keeps the built-in sets.
+///
+/// The decoded sets are leaked: this runs once per ROM change, and the renderer wants `'static`.
+pub fn user_char_sets(model: Model, rom: &[u8]) -> Option<&'static [Glyphs]> {
+    let sets: Vec<Glyphs> = match model {
+        Model::Apple2 | Model::Apple2Plus if rom.len() == 2048 => vec![from_2k(rom, Rom2k::Plain)],
+        Model::Apple2e | Model::Apple2eEnhanced | Model::Tk3000e | Model::Apple2c if rom.len() >= 4096 => {
+            let at = if rom.len() == 4096 { 0 } else { 4096 };
+            from_4k(&rom[at..at + 4096]).to_vec()
+        }
+        _ => return None,
+    };
+    Some(Box::leak(sets.into_boxed_slice()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,6 +184,19 @@ mod tests {
         assert_eq!(art(&g[0x06]), inv);
         // $46 is the flash half: the normal dots (the flash mask inverts them on alternate phases).
         assert_eq!(art(&g[0x46]), F_NORMAL);
+    }
+
+    #[test]
+    fn user_video_rom_sizes() {
+        let rom2k = vec![0xFFu8; 2048];
+        assert_eq!(user_char_sets(Model::Apple2Plus, &rom2k).unwrap().len(), 1);
+        assert!(user_char_sets(Model::Apple2Plus, &[0; 4096]).is_none());
+        let mut rom4k = vec![0u8; 4096];
+        rom4k[8] = 0x55;
+        let s = user_char_sets(Model::Apple2eEnhanced, &rom4k).unwrap();
+        assert_eq!((s.len(), s[1][1][0]), (2, 0x55 ^ 0xFF));
+        assert!(user_char_sets(Model::Apple2eEnhanced, &rom2k).is_none());
+        assert_eq!(user_char_sets(Model::Apple2e, &[0u8; 8192]).unwrap().len(), 2);
     }
 
     #[test]

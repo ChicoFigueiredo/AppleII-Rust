@@ -1,13 +1,31 @@
 //! `Settings` -> `apple2_core::MachineConfig`.
 
 use crate::card::SlotCardSpec;
-use crate::settings::{RefreshRate, Settings};
+use crate::settings::{CpuType, RefreshRate, Settings};
 use apple2_core::{AuxCardKind, CardKind, MachineConfig, VideoStandard};
 
 impl Settings {
     /// The part of the settings the core models: model, video standard, aux card and the RAM cards
     /// (Language Card / Saturn). Other cards are the frontend's business. The custom ROM is read
     /// by the frontend (`machine.custom_rom` is a path here, bytes in the core).
+    /// [`Settings::to_machine_config`] plus the ROM files named by `-rom` and `-f8rom`.
+    pub fn to_machine_config_with_roms(&self) -> Result<MachineConfig, String> {
+        let mut c = self.to_machine_config();
+        let read = |p: &std::path::Path| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()));
+        if let Some(p) = &self.machine.custom_rom {
+            c.custom_rom = Some(read(p)?);
+        }
+        if let Some(p) = &self.machine.custom_f8_rom {
+            c.custom_f8_rom = Some(read(p)?);
+        }
+        Ok(c)
+    }
+
+    /// The `-videorom` file (for the renderer), if one was given.
+    pub fn read_video_rom(&self) -> Result<Option<Vec<u8>>, String> {
+        self.machine.video_rom.as_ref().map(|p| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))).transpose()
+    }
+
     pub fn to_machine_config(&self) -> MachineConfig {
         let mut c = MachineConfig::for_model(self.machine.model);
         c.video_standard = match self.machine.refresh_rate {
@@ -15,6 +33,11 @@ impl Settings {
             RefreshRate::Hz60 => VideoStandard::Ntsc,
         };
         c.use_freeze_f8 = self.machine.freeze_f8_rom;
+        c.cpu_cmos = match self.machine.cpu {
+            CpuType::Auto => None,
+            CpuType::Cpu6502 => Some(false),
+            CpuType::Cpu65C02 => Some(true),
+        };
         let is_e = self.machine.model.is_apple2e_family() || self.machine.model.is_apple2c();
         c.aux_card = if is_e {
             match &self.aux.card {
@@ -47,6 +70,27 @@ mod tests {
     #[test]
     fn default_equals_core_default() {
         assert_eq!(Settings::default().to_machine_config(), MachineConfig::default());
+    }
+
+    #[test]
+    fn cpu_override_and_roms() {
+        use crate::settings::CpuType;
+        let mut s = Settings::default();
+        assert_eq!(s.to_machine_config().cpu_cmos, None);
+        s.machine.cpu = CpuType::Cpu6502;
+        assert_eq!(s.to_machine_config().cpu_cmos, Some(false));
+        s.machine.cpu = CpuType::Cpu65C02;
+        assert_eq!(s.to_machine_config().cpu_cmos, Some(true));
+        let dir = std::env::temp_dir().join(format!("a2cfg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f8 = dir.join("f8.rom");
+        std::fs::write(&f8, vec![1u8; 0x800]).unwrap();
+        s.machine.custom_f8_rom = Some(f8);
+        let c = s.to_machine_config_with_roms().unwrap();
+        assert_eq!(c.custom_f8_rom.as_deref().map(<[u8]>::len), Some(0x800));
+        s.machine.video_rom = Some(dir.join("missing.rom"));
+        assert!(s.read_video_rom().is_err());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

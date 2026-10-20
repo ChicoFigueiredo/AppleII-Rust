@@ -195,3 +195,22 @@ fn dhires_idealized_solid_colours() {
     render(&mut r2, &s2, 1);
     assert_eq!(rgb(&r2, 100, 0), 0);
 }
+
+#[test]
+fn user_video_rom_replaces_the_character_generator() {
+    // A 2K ][+ ROM that draws every character with a solid row 0 (bit 7 set = normal).
+    let mut rom = vec![0u8; 2048];
+    for c in 0..256 {
+        rom[c * 8] = 0x7F;
+    }
+    let mut s = Fake::new(Model::Apple2Plus).text();
+    s.poke(0x400, &[0xC1]);
+    let mut r = apple2_video::Renderer::new(apple2_video::RenderConfig {
+        video_type: VideoType::MonoWhite,
+        user_video_rom: Some(std::sync::Arc::new(rom)),
+        ..Default::default()
+    });
+    render(&mut r, &s, 1);
+    // glyph row 0 of the built-in 'A' is blank; the user's is a full 7-dot bar
+    assert_eq!(art(&r, 0, 0, 14), "##############");
+}

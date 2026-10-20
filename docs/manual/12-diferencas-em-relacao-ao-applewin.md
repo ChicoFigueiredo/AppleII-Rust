@@ -14,19 +14,11 @@ O objetivo do projeto é a paridade com o AppleWin atual nas três plataformas. 
 - O formato YAML dos save-states do AppleWin (módulo `apple2-savestate`).
 - Os atalhos F1 a F12, Pause, Scroll Lock, Print Screen e a colagem.
 
-## Frontend: o que falta ligar
+## Fábrica de cartas
 
-Os crates das Cartas existem e têm testes, mas o frontend ainda precisa criá-las a partir da configuração. No momento da escrita, a "fábrica de cartas" do frontend cria Disk II, mouse, a família Mockingboard e SAM. As seguintes cartas ainda precisam ser ligadas ao frontend (a biblioteca está pronta):
+O frontend cria, a partir da configuração, todas as cartas que o AppleWin aceita: Disk II (inclusive o firmware de 13 setores), controlador de disco rígido (imagens da configuração), Super Serial Card (TCP, porta COM com o recurso `serialport`, ou laço local), impressora paralela (arquivo `Printer.txt` ou o escolhido), Uthernet I e II (rede real exige o recurso `pcap`; sem ele a carta fica sem rede, mas o DNS virtual do Uthernet II funciona), Mockingboard C, Phasor, MegaAudio, SD Music, SAM, mouse, Z80 SoftCard, 4Play, SNES MAX, VidHD (a tela passa a 640x400 e o Super Hi-Res é desenhado), Breakpoint card, No-Slot Clock, dongles da porta de jogos, Language Card, Saturn, RamWorks e a carta AUX. Generic Clock e Echo são cartas "vazias" também no AppleWin.
 
-| Carta | Biblioteca |
-|---|---|
-| Controlador de disco rígido | `apple2-storage` |
-| Super Serial Card (COM e TCP) | `apple2-hostio` (COM exige o recurso `serialport`) |
-| Impressora paralela | `apple2-hostio` |
-| Uthernet I (exige `pcap`) e Uthernet II | `apple2-hostio` |
-| Z80 SoftCard, relógios, 4Play, SNES MAX, VidHD, Breakpoint card, dongles | `apple2-cards` |
-
-Mesmo sem a ligação, essas opções são aceitas na linha de comando e na configuração, e gravadas no arquivo.
+Limitações: a Breakpoint card existe, mas o depurador ainda não lhe entrega os breakpoints; o SNES MAX nasce sem controles ligados e os arquivos `-snes-max-user-joy` ainda não são lidos; o Mockingboard usa um só tipo de AY por carta (os soquetes 2 e 3 do Phasor e as chaves `6522a-bad` não são modelados); o ThunderClock Plus existe na biblioteca, mas não há como escolhê-lo na configuração.
 
 ## Interface
 
@@ -54,9 +46,9 @@ Mesmo sem a ligação, essas opções são aceitas na linha de comando e na conf
 ## Arquivos e configuração
 
 - **Formato de configuração.** O AppleWin guarda a configuração no Registro do Windows (ou num INI no Linux). Este programa usa um arquivo TOML. O módulo `apple2-config` sabe importar um `.reg` e um INI do AppleWin; a interface ainda não oferece um comando de importação.
-- **`-conf arquivo`** é reconhecido pelo analisador, mas o frontend ainda usa o arquivo de configuração padrão.
-- **`--help` e `--version`** são reconhecidos mas ainda não imprimem texto.
-- **Save-state.** F11 e F12 gravam e leem, por enquanto, o formato JSON interno (`AppleWin.aws.json`). O formato YAML já está no módulo `apple2-savestate`; falta ligar o frontend a ele. O AppleWin guarda `SaveState.yaml`.
+- **`-conf arquivo`**: um `.ini` ou `.reg` do AppleWin é importado na partida; qualquer outro arquivo é lido e gravado como `settings.toml` alternativo. `-current-dir`, `-load-state`, `-screenshot-and-exit` (grava um PNG e sai) e `-debugger-auto-run` funcionam. `-power-on` é aceito (o programa já inicia em execução, sem tela de logo).
+- **`--help`, `-h` e `--version`** imprimem o texto e saem.
+- **Save-state.** F11 e F12 abrem o seletor de arquivos, como no AppleWin, e usam o formato `.aws.yaml` do AppleWin (padrão `SaveState.aws.yaml` no diretório atual, ou o nome do disco inserido). "Save State On Exit" é respeitado. Soltar um `.aws.yaml` na janela o carrega. O nome padrão não muda sozinho ao trocar de disco durante a sessão.
 - **`DELREG.INF`.** Não existe; para restaurar os padrões, apague `settings.toml`.
 
 ## Emulação

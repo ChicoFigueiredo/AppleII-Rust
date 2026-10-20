@@ -8,7 +8,6 @@ use crate::language_card::is_rmw_abs;
 use crate::memory::mf;
 use crate::video_scanner::Switches;
 use crate::Model;
-use apple2_cpu::Variant;
 
 impl Board {
     /// Cycle of the frame the video scanner is at for an access now: the start of the executing
@@ -106,7 +105,7 @@ impl Board {
             let (pc, op) = self.current_opcode();
             let byte = |a: u16| self.memory.read(a).unwrap_or(0) as u16;
             let operand = byte(pc.wrapping_add(1)) | byte(pc.wrapping_add(2)) << 8;
-            is_rmw_abs(op, operand, addr, self.model.cpu_variant() == Variant::Cmos65C02)
+            is_rmw_abs(op, operand, addr, self.cmos)
         };
         self.lc.io(slot, addr as u8, write, rmw, &mut self.memory)
     }
