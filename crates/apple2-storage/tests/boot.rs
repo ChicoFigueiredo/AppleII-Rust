@@ -224,3 +224,21 @@ fn a_new_prodos_disk_boots_prodos() {
     run_until(&mut m, 900, "Bitsy Bye on a new ProDOS disk", |m| screen_has(m, "/BLANK"));
     assert!(screen_has(&m, "BASIC.SYSTEM"), "{}", screen(&m));
 }
+
+/// `cargo test --release -p apple2-storage --test boot disk_boot_speed -- --ignored --nocapture`
+#[test]
+#[ignore = "timing"]
+fn disk_boot_speed() {
+    let mut m = machine_with_disk(DiskImage::from_bytes("master.dsk", disk(DOS33)).unwrap());
+    let cpu_ns = || -> Option<f64> {
+        std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+    };
+    let cpu0 = cpu_ns();
+    let t = std::time::Instant::now();
+    let cycles: u64 = (0..600).map(|_| m.run_frame()).sum();
+    let secs = t.elapsed().as_secs_f64();
+    println!("DOS 3.3 boot: {:.1} MHz ({:.0}x real time)", cycles as f64 / secs / 1e6, cycles as f64 / secs / 1_020_484.0);
+    if let (Some(a), Some(b)) = (cpu0, cpu_ns()) {
+        println!("DOS 3.3 boot: {:.1} MHz on-CPU", cycles as f64 / (b - a) * 1e3);
+    }
+}

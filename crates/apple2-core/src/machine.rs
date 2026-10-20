@@ -71,6 +71,9 @@ pub struct Board {
     rom_tap: Option<Box<dyn RomTap>>,
     game_io: Option<Box<dyn GameIoDevice>>,
     observer: Option<Box<dyn AccessObserver>>,
+    /// `observer` or `rom_tap` is installed: the CPU bus takes the slow path. Kept in sync by the
+    /// setters so plain RAM/ROM accesses test a single flag.
+    hooked: bool,
 }
 
 impl Board {
@@ -96,11 +99,21 @@ impl Board {
         OpcodeInfo { pc, opcode, operand, indexed_base, cmos }
     }
 
+    fn refresh_hooked(&mut self) {
+        self.hooked = self.observer.is_some() || self.rom_tap.is_some();
+    }
+
     /// Advances the scheduler by the cycles ticked since the last call (CPU.cpp
     /// `CheckSynchronousInterruptSources`). True if an IRQ-capable event expired exactly on the
     /// opcode's last cycle.
     fn update_events(&mut self) -> bool {
         let n = std::mem::take(&mut self.pending) as i32;
+        // Hot path: every instruction lands here, almost always with nothing due. Then the update
+        // only counts down the head, and the floating bus below is not needed.
+        if !self.scheduler.head_due(n) {
+            self.scheduler.count_down(n);
+            return false;
+        }
         let floating_bus = self.floating_bus();
         let (cif, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
         let cmos = self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02;
@@ -129,8 +142,19 @@ impl Board {
     pub(crate) fn card_call<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
         let floating_bus = self.floating_bus();
         let (fc, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
-        let opcode = self.opcode_info();
         let access_cycle = self.access_cycle();
+        let wants_operands = self.slots.cards.get(slot as usize)?.as_deref()?.wants_opcode_info();
+        let opcode = if wants_operands {
+            self.opcode_info()
+        } else {
+            // Cheap form for cards that ignore the operand peek (Disk II, hard disk).
+            OpcodeInfo {
+                pc: self.opcode_pc,
+                opcode: self.opcode,
+                cmos: self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02,
+                ..Default::default()
+            }
+        };
         let Board { slots, interrupts, cycles, memory, .. } = self;
         let card = slots.cards.get_mut(slot as usize)?.as_deref_mut()?;
         let mut ctx = CardCtx { slot, cycles: *cycles, access_cycle, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, opcode, interrupts, ops: &mut slots.ops, memory };
@@ -189,6 +213,13 @@ impl Board {
 impl Bus for Board {
     #[inline]
     fn read(&mut self, addr: u16) -> u8 {
+        // Fast path: RAM/ROM outside $C000-$CFFF with no observer or ROM tap.
+        if !self.hooked && !(0xC000..0xD000).contains(&addr) {
+            return match self.memory.read(addr) {
+                Some(v) => v,
+                None => self.floating_bus(),
+            };
+        }
         let v = match addr >> 8 {
             0xC0 => self.io_read(addr),
             0xC1..=0xCF => self.cx_access(addr, None),
@@ -205,6 +236,10 @@ impl Bus for Board {
 
     #[inline]
     fn write(&mut self, addr: u16, value: u8) {
+        if !self.hooked && !(0xC000..0xD000).contains(&addr) {
+            self.memory.cpu_write(addr, value);
+            return;
+        }
         if let Some(o) = self.observer.as_mut() {
             o.access(addr, value, AccessKind::Write);
         }
@@ -296,6 +331,7 @@ impl Machine {
             rom_tap: None,
             game_io: None,
             observer: None,
+            hooked: false,
         };
         let mut m = Machine {
             cpu: Cpu::new(config.model.cpu_variant()),
@@ -354,7 +390,9 @@ impl Machine {
 
     /// Installs (or removes, with `None`) the bus-access observer; returns the previous one.
     pub fn set_access_observer(&mut self, o: Option<Box<dyn AccessObserver>>) -> Option<Box<dyn AccessObserver>> {
-        std::mem::replace(&mut self.board.observer, o)
+        let old = std::mem::replace(&mut self.board.observer, o);
+        self.board.refresh_hooked();
+        old
     }
 
     /// Absolute cycle counter since power-on.
@@ -448,6 +486,7 @@ impl Machine {
     /// Installs (or removes) the device under the system ROM (No-Slot Clock).
     pub fn set_rom_tap(&mut self, tap: Option<Box<dyn RomTap>>) {
         self.board.rom_tap = tap;
+        self.board.refresh_hooked();
     }
 
     pub fn rom_tap_mut(&mut self) -> Option<&mut (dyn RomTap + 'static)> {
