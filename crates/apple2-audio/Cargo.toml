@@ -1,0 +1,10 @@
+[package]
+name = "apple2-audio"
+description = "Speaker, Mockingboard/Phasor, SSI263 and SAM audio for AppleII-Rust (port of AppleWin)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }

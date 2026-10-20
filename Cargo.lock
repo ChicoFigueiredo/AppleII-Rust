@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "apple2-audio"
+version = "0.1.0"
+dependencies = [
+ "apple2-core",
+]
+
+[[package]]
 name = "apple2-core"
 version = "0.1.0"
 dependencies = [
