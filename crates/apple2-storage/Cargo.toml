@@ -1,0 +1,16 @@
+[package]
+name = "apple2-storage"
+description = "Disk II, hard disk and disk-image support for the Apple II core (port of AppleWin Disk.cpp, DiskImage*.cpp, Harddisk.cpp)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }
+apple2-roms = { path = "../apple2-roms" }
+flate2 = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
