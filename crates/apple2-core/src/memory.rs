@@ -285,6 +285,12 @@ impl Memory {
         }
     }
 
+    /// True if a CPU write to `addr` lands in RAM (AppleWin `memwrite[page] != NULL`); false for
+    /// ROM, I/O space and the write-protected Language Card.
+    pub fn is_writable(&self, addr: u16) -> bool {
+        matches!(self.wr[(addr >> 8) as usize].seg, Seg::Main | Seg::Aux | Seg::Lc)
+    }
+
     /// Internal Cx ROM at $C100-$CFFF (Memory.cpp:1367-1387): used for everything when INTCXROM,
     /// and for $C3xx unless SLOTC3ROM. `None` when a slot owns the space (see `Board::cx_access`) or the model
     /// has no internal ROM.
