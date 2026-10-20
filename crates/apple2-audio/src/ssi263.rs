@@ -468,6 +468,69 @@ impl Ssi263 {
     }
 }
 
+impl Ssi263 {
+    /// `SaveSnapshot` + `SC01_SaveSnapshot` state (SSI263.cpp:1005, :1122).
+    pub fn snapshot(&self) -> crate::snapshot::SsiSnapshot {
+        crate::snapshot::SsiSnapshot {
+            ty: self.ty,
+            duration_phoneme: self.dur_phon,
+            inflection: self.inflection,
+            rate_inflection: self.rate_inflection,
+            ctrl_art_amp: self.ctrl_art_amp,
+            filter_freq: self.filter_freq,
+            current_mode: self.d7 as u8 | (self.enable_ints as u8) << 5 | self.function << 6,
+            has_sc01: self.has_sc01,
+            votrax_phoneme: self.votrax_phoneme,
+            is_votrax_phoneme: self.is_votrax,
+        }
+    }
+
+    /// `LoadSnapshot` (SSI263.cpp:1032): registers and mode; the play position is not kept. A
+    /// phoneme that was active is left `Idle` for [`restart`](Self::restart) to start again
+    /// (AppleWin's `RepeatPhoneme`).
+    pub fn apply_snapshot(&mut self, s: &crate::snapshot::SsiSnapshot) {
+        self.ty = s.ty;
+        self.has_sc01 = s.has_sc01;
+        self.votrax_phoneme = s.votrax_phoneme;
+        self.is_votrax = s.is_votrax_phoneme;
+        self.phase = Phase::Idle;
+        self.wave.clear();
+        self.leadout = 0;
+        self.current_active = -1;
+        if s.ty != SsiType::Empty {
+            self.dur_phon = s.duration_phoneme;
+            self.inflection = s.inflection;
+            self.rate_inflection = s.rate_inflection;
+            self.ctrl_art_amp = s.ctrl_art_amp;
+            self.filter_freq = s.filter_freq;
+            self.d7 = s.current_mode & 1 != 0;
+            self.enable_ints = s.current_mode & 0x20 != 0;
+            self.function = s.current_mode >> 6;
+            if self.ctrl_art_amp & CONTROL_MASK == 0 {
+                self.current_active = (self.dur_phon & PHONEME_MASK) as i32;
+            }
+        }
+        if self.is_votrax {
+            self.current_active = 0; // IsPhonemeActive() and the SC-01 (cpp:1094)
+        }
+    }
+
+    /// True after [`apply_snapshot`](Self::apply_snapshot) with a phoneme to restart.
+    pub fn needs_restart(&self) -> bool {
+        self.is_phoneme_active() && self.phase == Phase::Idle
+    }
+
+    /// `RepeatPhoneme` after a load: starts the active phoneme from the beginning at `now`.
+    /// Returns the cycles until its end event.
+    pub fn restart(&mut self, now: u64, clk: &SampleClock) -> Option<i32> {
+        if self.is_votrax {
+            self.play(VOTRAX_TO_SSI263[(self.votrax_phoneme & PHONEME_MASK) as usize], now, clk)
+        } else {
+            self.play(self.dur_phon & PHONEME_MASK, now, clk)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

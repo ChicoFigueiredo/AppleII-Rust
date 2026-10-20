@@ -316,6 +316,7 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
 fn rearm_card_events(m: &mut Machine) {
     for slot in 0..8u8 {
         m.with_card(slot, |c, ctx| {
+            cards::mockingboard::rearm(c, ctx);
             if let Some(d) = c.as_any().and_then(|a| a.downcast_ref::<apple2_storage::disk2::Disk2Card>()) {
                 d.rearm_deferred_stepper(ctx);
             }

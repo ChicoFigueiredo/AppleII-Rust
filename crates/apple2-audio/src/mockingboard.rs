@@ -11,6 +11,7 @@ use crate::ay8910::{Ay, AyType};
 use crate::bus::{lock, AudioBus, CardVolume, Source};
 use crate::clock::SampleClock;
 use crate::ssi263::{Ssi263, SsiOut, SsiType, PH_ECHO_PLUS, PH_MOCKINGBOARD, PH_PHASOR};
+use crate::snapshot::{MockingboardSnapshot, UnitSnapshot, ViaSnapshot};
 use crate::via6522::{reg, TimerSched, Via};
 use apple2_core::{Card, CardCtx, IrqSource};
 
@@ -542,6 +543,104 @@ impl MockingboardCard {
     }
 }
 
+impl MockingboardCard {
+    /// The state in AppleWin's `SaveSnapshot` terms (Mockingboard.cpp:1263, :1380).
+    pub fn snapshot(&self) -> MockingboardSnapshot {
+        let unit = |s: &Sub| {
+            let v = &s.via;
+            UnitSnapshot {
+                via: ViaSnapshot {
+                    orb: v.orb,
+                    ora: v.ora,
+                    ddrb: v.ddrb,
+                    ddra: v.ddra,
+                    t1_counter: v.t1_counter,
+                    t1_latch: v.t1_latch,
+                    t1_irq_delay: v.t1_irq_delay,
+                    t1_active: v.t1_active,
+                    t2_counter: v.t2_counter,
+                    t2_latch: v.t2_latch,
+                    t2_irq_delay: v.t2_irq_delay,
+                    t2_active: v.t2_active,
+                    serial_shift: v.sr,
+                    acr: v.acr,
+                    pcr: v.pcr,
+                    ifr: v.ifr,
+                    ier: v.ier,
+                },
+                ay: [s.ay[0].snapshot(), s.ay[1].snapshot()],
+                ssi: s.ssi.snapshot(),
+                state: s.state,
+                ay_current_register: s.cur_reg,
+                chip_selected: s.chip_sel,
+                latch_valid: s.latch_valid,
+                bus_driven: s.bus_driven,
+            }
+        };
+        MockingboardSnapshot { phasor_mode: self.phasor_mode, units: [unit(&self.subs[0]), unit(&self.subs[1])] }
+    }
+
+    /// Applies a [`MockingboardSnapshot`] (`LoadSnapshot`, Mockingboard.cpp:1298, :1413). The
+    /// timer events and a speech phoneme in progress need the scheduler: call
+    /// [`rearm_events`](Self::rearm_events) once the card sits in a machine.
+    pub fn apply_snapshot(&mut self, s: &MockingboardSnapshot) {
+        self.phasor_mode = s.phasor_mode;
+        let phasor = self.is_phasor();
+        for (sub, u) in self.subs.iter_mut().zip(&s.units) {
+            let (v, w) = (&mut sub.via, &u.via);
+            (v.orb, v.ora, v.ddrb, v.ddra) = (w.orb, w.ora, w.ddrb, w.ddra);
+            (v.t1_counter, v.t1_latch, v.t1_irq_delay, v.t1_active) = (w.t1_counter, w.t1_latch, w.t1_irq_delay, w.t1_active);
+            (v.t2_counter, v.t2_latch, v.t2_irq_delay, v.t2_active) = (w.t2_counter, w.t2_latch, w.t2_irq_delay, w.t2_active);
+            (v.sr, v.acr, v.pcr, v.ifr, v.ier) = (w.serial_shift, w.acr, w.pcr, w.ifr, w.ier);
+            // The events' `m_canAssertIRQ` follows IER (cpp:727); IFR bit 7 is re-derived (GH#677).
+            v.t1_gated = v.ier & crate::via6522::IXR_TIMER1 == 0;
+            v.t2_gated = v.ier & crate::via6522::IXR_TIMER2 == 0;
+            v.update_ifr(0, 0);
+            sub.ay[0].apply_snapshot(&u.ay[0]);
+            sub.ay[1].apply_snapshot(&u.ay[1]);
+            sub.ssi.apply_snapshot(&u.ssi);
+            sub.ssi.card_mode = if phasor { s.phasor_mode } else { PH_MOCKINGBOARD };
+            sub.state = u.state;
+            sub.cur_reg = u.ay_current_register;
+            sub.chip_sel = u.chip_selected;
+            sub.latch_valid = u.latch_valid;
+            sub.set_bus(u.bus_driven);
+            // Phasor wires A/!R to the 6502 IRQ as well (SSI263.cpp:1085); Mockingboard goes via IFR.
+            sub.speech_irq = phasor
+                && s.phasor_mode == PH_PHASOR
+                && sub.ssi.is_phoneme_active()
+                && sub.ssi.enable_ints
+                && sub.ssi.d7;
+        }
+        self.set_ay_clocks();
+    }
+
+    /// After [`apply_snapshot`](Self::apply_snapshot) in a machine: re-creates the pending timer
+    /// events (`SetTimersActiveFromSnapshot`, 6522.cpp:724: counter + extra cycles), restarts a
+    /// speech phoneme from its beginning (SSI263.cpp:1104) and updates the IRQ lines.
+    pub fn rearm_events(&mut self, ctx: &mut CardCtx) {
+        self.slot = ctx.slot;
+        let now = ctx.cycles;
+        let clk = self.clock;
+        for u in 0..2 {
+            let v = &mut self.subs[u].via;
+            v.last = now;
+            let extra = if v.mega { crate::via6522::EXTRA_TIMER_CYCLES + 1 } else { crate::via6522::EXTRA_TIMER_CYCLES };
+            if v.t1_active {
+                ctx.schedule_gated((u * 2) as u16, (v.t1_counter as i16 as i32 + extra).max(1), !v.t1_gated);
+            }
+            if v.t2_active {
+                ctx.schedule_gated((u * 2) as u16 + 1, (v.t2_counter as i16 as i32 + extra).max(1), !v.t2_gated);
+            }
+            if self.subs[u].ssi.needs_restart() {
+                let schedule = self.subs[u].ssi.restart(now, &clk);
+                self.apply_ssi(u, SsiOut { schedule, ..Default::default() }, ctx);
+            }
+        }
+        self.sync_irq(ctx);
+    }
+}
+
 impl Card for MockingboardCard {
     fn name(&self) -> &'static str {
         match self.variant {
@@ -550,6 +649,14 @@ impl Card for MockingboardCard {
             Variant::MegaAudio => "MEGA Audio",
             Variant::SdMusic => "SD Music",
         }
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     // The 6522s live in the slot's `$Cs00-$CsFF` page (RegisterIoHandler(..., IORead, IOWrite)).
