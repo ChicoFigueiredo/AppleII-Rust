@@ -5,6 +5,7 @@
 pub mod card;
 pub mod config;
 pub mod game_port;
+pub mod hooks;
 pub mod irq;
 pub mod keyboard;
 pub mod language_card;

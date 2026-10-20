@@ -35,6 +35,7 @@ pub fn card_event_id(slot: u8, token: u16) -> EventId {
 pub(crate) enum CardOp {
     Schedule { slot: u8, token: u16, cycles: i32 },
     Cancel { slot: u8, token: u16 },
+    SetCpuOwner { slot: u8, active: bool },
 }
 
 /// What a card can do to the machine during a callback.
@@ -45,6 +46,10 @@ pub struct CardCtx<'a> {
     pub cycles: u64,
     /// Value of the floating bus at the access (what an unclaimed read returns).
     pub floating_bus: u8,
+    /// Cycle of the video frame at the callback (for events: when the event expired), and the
+    /// frame length; enough to derive `NTSC_GetCyclesUntilVBlank` ([`CardCtx::cycles_until_vblank`]).
+    pub frame_cycle: u32,
+    pub cycles_per_frame: u32,
     pub(crate) interrupts: &'a mut Interrupts,
     pub(crate) ops: &'a mut Vec<CardOp>,
 }
@@ -68,9 +73,51 @@ impl CardCtx<'_> {
     pub fn cancel(&mut self, token: u16) {
         self.ops.push(CardOp::Cancel { slot: self.slot, token });
     }
+
+    /// Hands the CPU to this card's [`AltCpu`] (`true`, e.g. Z80 SoftCard, AppleWin
+    /// `SetActiveCpu(CPU_Z80)`) or back to the 6502 (`false`).
+    pub fn set_cpu_owner(&mut self, active: bool) {
+        self.ops.push(CardOp::SetCpuOwner { slot: self.slot, active });
+    }
+
+    /// `NTSC_GetCyclesUntilVBlank(0)` (NTSC.cpp:2761): cycles from now to line 192.
+    pub fn cycles_until_vblank(&self) -> u32 {
+        let vbl = 192 * 65;
+        let pos = self.frame_cycle % self.cycles_per_frame;
+        if pos < vbl { vbl - pos } else { self.cycles_per_frame - pos + vbl }
+    }
+}
+
+/// A processor that replaces the 6502 while a card owns the CPU (see [`CardCtx::set_cpu_owner`]).
+/// The machine ticks the bus for the returned cycles after each call.
+pub trait AltCpu {
+    /// Executes one instruction against `bus` (without ticking it); returns 6502 cycles used.
+    fn step(&mut self, bus: &mut dyn apple2_cpu::Bus) -> u32;
 }
 
 pub trait Card {
+    /// For downcasting from [`Machine::with_card`](crate::Machine::with_card): `Some(self)`.
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
+
+    /// The card wants [`Card::io_snoop`] for every `$C000-$C0FF` access outside its own slot
+    /// (checked once, when inserted).
+    fn wants_io_snoop(&self) -> bool {
+        false
+    }
+
+    /// Bus snoop of `$C000-$C07F` accesses (VidHD mirrors the //e switches, Memory.cpp:625-650).
+    fn io_snoop(&mut self, _addr: u16, _write: bool, _value: u8, _ctx: &mut CardCtx) {}
+
+    /// Lends the card's CPU for one machine step while it owns the CPU; the machine hands it
+    /// back with [`Card::restore_alt_cpu`] (the card stays in its slot to serve I/O meanwhile).
+    fn take_alt_cpu(&mut self) -> Option<Box<dyn AltCpu>> {
+        None
+    }
+
+    fn restore_alt_cpu(&mut self, _cpu: Box<dyn AltCpu>) {}
+
     /// Card name (AppleWin `Card::GetCardName`).
     fn name(&self) -> &'static str;
 

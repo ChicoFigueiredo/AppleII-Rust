@@ -1,7 +1,8 @@
 //! The [`Machine`]: CPU plus board, advanced cycle by cycle through `Bus::tick`.
 
-use crate::card::{card_event_id, CardCtx, CardOp};
+use crate::card::{card_event_id, AltCpu, CardCtx, CardOp};
 use crate::game_port::GamePort;
+use crate::hooks::{GameIoDevice, RomTap};
 use crate::irq::{Interrupts, IrqSource};
 use crate::keyboard::{Keyboard, NavKey};
 use crate::speaker::Speaker;
@@ -62,6 +63,12 @@ pub struct Board {
     pending: u32,
     opcode_pc: u16,
     opcode: u8,
+    /// Slot whose card's [`AltCpu`] runs instead of the 6502 (Z80 SoftCard).
+    cpu_owner: Option<u8>,
+    /// Slots with cards that want [`Card::io_snoop`].
+    snoop_mask: u8,
+    rom_tap: Option<Box<dyn RomTap>>,
+    game_io: Option<Box<dyn GameIoDevice>>,
 }
 
 impl Board {
@@ -76,13 +83,15 @@ impl Board {
     fn update_events(&mut self) -> bool {
         let n = std::mem::take(&mut self.pending) as i32;
         let floating_bus = self.floating_bus();
+        let (cif, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
         let Board { scheduler, interrupts, actions, slots, cycles, .. } = self;
-        let irq_on_last_cycle = scheduler.update(n, |id, _cycles| {
+        let irq_on_last_cycle = scheduler.update(n, |id, rem| {
+            let fc = (cif as i64 + rem as i64).rem_euclid(cpf as i64) as u32;
             match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
                 Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
                 Some(EventAction::Card { slot, token }) => {
                     if let Some(card) = slots.cards.get_mut(slot as usize).and_then(Option::as_deref_mut) {
-                        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, interrupts, ops: &mut slots.ops };
+                        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops };
                         return card.on_event(token, &mut ctx);
                     }
                 }
@@ -98,9 +107,10 @@ impl Board {
     /// requests it made. No allocation unless the card schedules something.
     pub(crate) fn card_call<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
         let floating_bus = self.floating_bus();
+        let (fc, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
         let Board { slots, interrupts, cycles, .. } = self;
         let card = slots.cards.get_mut(slot as usize)?.as_deref_mut()?;
-        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, interrupts, ops: &mut slots.ops };
+        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops };
         let r = f(card, &mut ctx);
         self.flush_card_ops();
         Some(r)
@@ -127,6 +137,13 @@ impl Board {
                     self.scheduler.remove(id);
                     self.actions.retain(|(i, _)| *i != id);
                 }
+                CardOp::SetCpuOwner { slot, active } => {
+                    if active {
+                        self.cpu_owner = Some(slot);
+                    } else if self.cpu_owner == Some(slot) {
+                        self.cpu_owner = None;
+                    }
+                }
             }
         }
         self.slots.ops = ops;
@@ -147,7 +164,7 @@ impl Bus for Board {
         match addr >> 8 {
             0xC0 => self.io_read(addr),
             0xC1..=0xCF => self.cx_access(addr, None),
-            _ => match self.memory.read(addr) {
+            _ => match self.f8_tap(addr, None).or_else(|| self.memory.read(addr)) {
                 Some(v) => v,
                 None => self.floating_bus(),
             },
@@ -161,7 +178,10 @@ impl Bus for Board {
             0xC1..=0xCF => {
                 self.cx_access(addr, Some(value));
             }
-            _ => self.memory.write(addr, value),
+            _ => {
+                self.f8_tap(addr, Some(value));
+                self.memory.write(addr, value)
+            }
         }
     }
 
@@ -236,6 +256,10 @@ impl Machine {
             pending: 0,
             opcode_pc: 0,
             opcode: 0,
+            cpu_owner: None,
+            snoop_mask: 0,
+            rom_tap: None,
+            game_io: None,
         };
         let mut m = Machine {
             cpu: Cpu::new(config.model.cpu_variant()),
@@ -356,7 +380,40 @@ impl Machine {
             return false;
         }
         self.board.card_call(slot, |c, ctx| c.reset(true, ctx));
+        if self.board.slots.card(slot).is_some_and(|c| c.wants_io_snoop()) {
+            self.board.snoop_mask |= 1 << slot;
+        }
         true
+    }
+
+    /// Runs `f` on the card in `slot` with a [`CardCtx`] (IRQ lines, scheduling), applying what it
+    /// requests. This is how a frontend feeds host input to a card: downcast through
+    /// [`Card::as_any_mut`]. None if the slot has no boxed card.
+    pub fn with_card<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
+        self.board.card_call(slot, f)
+    }
+
+    /// Installs (or removes) the device under the system ROM (No-Slot Clock).
+    pub fn set_rom_tap(&mut self, tap: Option<Box<dyn RomTap>>) {
+        self.board.rom_tap = tap;
+    }
+
+    pub fn rom_tap_mut(&mut self) -> Option<&mut (dyn RomTap + 'static)> {
+        self.board.rom_tap.as_deref_mut()
+    }
+
+    /// Installs (or removes) the game I/O connector device (copy-protection dongle).
+    pub fn set_game_io(&mut self, dev: Option<Box<dyn GameIoDevice>>) {
+        self.board.game_io = dev;
+    }
+
+    pub fn game_io_mut(&mut self) -> Option<&mut (dyn GameIoDevice + 'static)> {
+        self.board.game_io.as_deref_mut()
+    }
+
+    /// Slot whose card currently owns the CPU instead of the 6502.
+    pub fn cpu_owner(&self) -> Option<u8> {
+        self.board.cpu_owner
     }
 
     // ---- Input and sound (slice 6). Host-key translation is the frontend's job; see
@@ -460,6 +517,10 @@ impl Machine {
         b.memory.power_cycle();
         b.lc.power_cycle(b.is_e, &mut b.memory);
         b.slots.power_cycle();
+        b.cpu_owner = None;
+        if let Some(t) = b.rom_tap.as_mut() {
+            t.reset();
+        }
         b.video = VideoMode::default();
         b.annunciators = [false; 4];
         b.speaker.reset();
@@ -479,6 +540,9 @@ impl Machine {
 
     /// Executes one instruction (or interrupt entry); returns the cycles it took.
     pub fn step(&mut self) -> u32 {
+        if let Some(n) = self.step_alt_cpu() {
+            return n;
+        }
         self.board.opcode_ticks = 0;
         let nmi = self.board.interrupts.nmi_line();
         if nmi && !self.nmi_line {
@@ -506,6 +570,23 @@ impl Machine {
         }
         self.board.opcode_ticks = 0; // the scanner catches up (CPU.cpp after CheckSynchronousInterruptSources)
         cycles
+    }
+
+    /// One instruction of the card that owns the CPU, if any (IRQ/NMI are not delivered to it,
+    /// as in AppleWin's Z80 support).
+    fn step_alt_cpu(&mut self) -> Option<u32> {
+        let slot = self.board.cpu_owner?;
+        let mut cpu: Box<dyn AltCpu> = self.board.slots.cards[slot as usize].as_deref_mut()?.take_alt_cpu()?;
+        self.board.opcode_ticks = 0;
+        let n = cpu.step(&mut self.board);
+        self.board.slots.cards[slot as usize].as_deref_mut()?.restore_alt_cpu(cpu);
+        for _ in 0..n {
+            self.board.tick();
+        }
+        self.board.flush_card_ops();
+        self.board.update_events();
+        self.board.opcode_ticks = 0;
+        Some(n)
     }
 
     /// Runs whole instructions until at least `n` cycles passed; returns the cycles executed.
