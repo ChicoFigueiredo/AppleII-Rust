@@ -14,8 +14,9 @@
 //! | F10 | //e video-ROM rocker switch (Pravets 8A: caps lock) | [`Action::RockerSwitch`] |
 //! | F11 / F12 | save / load state | |
 //! | Pause | pause / resume | [`Action::TogglePause`] |
-//! | Scroll Lock | full speed | [`Action::ToggleFullSpeed`] |
-//! | Print Screen | screenshot | [`Action::Screenshot`] |
+//! | Scroll Lock | full speed (held, or toggled by the setting); TK3000 //e |Mode| key | `app` |
+//! | Print Screen | screenshot; Shift = 280x192; Ctrl = copy the text screen | [`Action::Screenshot`] |
+//! | Ctrl+0 / Ctrl+1 / Ctrl+3 | custom<->max / 1 MHz / max speed | [`Action::SpeedToggleMax`] |
 //!
 //! Ctrl+Break (Ctrl+Pause) is the keyboard reset and is handled in [`crate::keymap`].
 
@@ -42,6 +43,16 @@ pub enum Action {
     TogglePause,
     ToggleFullSpeed,
     Screenshot,
+    /// Shift+Print Screen: 280x192 instead of 560x384.
+    ScreenshotSmall,
+    /// Ctrl+Print Screen: the text screen to the clipboard.
+    CopyScreenText,
+    /// Ctrl+0: custom speed <-> full speed (GH#678).
+    SpeedToggleMax,
+    /// Ctrl+1: 1 MHz.
+    Speed1Mhz,
+    /// Ctrl+3: full speed.
+    SpeedMax,
     /// Debugger single-step (F11 in AppleWin's debugger is "step into"; here Ctrl+F11).
     Step,
 }
@@ -68,8 +79,12 @@ pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
         HostKey::F(11) => Action::SaveState,
         HostKey::F(12) => Action::LoadState,
         HostKey::Pause if !mods.ctrl => Action::TogglePause,
-        HostKey::ScrollLock => Action::ToggleFullSpeed,
+        HostKey::PrintScreen if mods.ctrl => Action::CopyScreenText,
+        HostKey::PrintScreen if mods.shift => Action::ScreenshotSmall,
         HostKey::PrintScreen => Action::Screenshot,
+        HostKey::Char('0') if mods.ctrl && !mods.alt => Action::SpeedToggleMax,
+        HostKey::Char('1') if mods.ctrl && !mods.alt => Action::Speed1Mhz,
+        HostKey::Char('3') if mods.ctrl && !mods.alt => Action::SpeedMax,
         _ => return None,
     })
 }
@@ -93,7 +108,25 @@ mod tests {
         assert_eq!(action_for(HostKey::F(9), SHIFT), Some(Action::PrevVideoMode));
         assert_eq!(action_for(HostKey::F(11), NONE), Some(Action::SaveState));
         assert_eq!(action_for(HostKey::F(12), NONE), Some(Action::LoadState));
-        assert_eq!(action_for(HostKey::ScrollLock, NONE), Some(Action::ToggleFullSpeed));
+        assert_eq!(action_for(HostKey::PrintScreen, NONE), Some(Action::Screenshot));
+        assert_eq!(action_for(HostKey::PrintScreen, SHIFT), Some(Action::ScreenshotSmall));
+        assert_eq!(action_for(HostKey::PrintScreen, CTRL), Some(Action::CopyScreenText));
+    }
+
+    #[test]
+    fn speed_hotkeys_need_ctrl_without_alt() {
+        assert_eq!(action_for(HostKey::Char('0'), CTRL), Some(Action::SpeedToggleMax));
+        assert_eq!(action_for(HostKey::Char('1'), CTRL), Some(Action::Speed1Mhz));
+        assert_eq!(action_for(HostKey::Char('3'), CTRL), Some(Action::SpeedMax));
+        assert_eq!(action_for(HostKey::Char('2'), CTRL), None);
+        assert_eq!(action_for(HostKey::Char('0'), NONE), None);
+        // AltGr also fakes Ctrl (GH#749)
+        assert_eq!(action_for(HostKey::Char('0'), Mods { alt: true, ..CTRL }), None);
+    }
+
+    #[test]
+    fn scroll_lock_is_handled_by_the_shell() {
+        assert_eq!(action_for(HostKey::ScrollLock, NONE), None);
     }
 
     #[test]

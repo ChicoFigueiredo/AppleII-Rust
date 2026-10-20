@@ -71,13 +71,13 @@ pub fn led(d: &DriveStatus) -> Led {
     }
 }
 
-/// "Drive 1: T$11 DOS33.dsk".
+/// "Drive 1: T17 DOS33.dsk" (AppleWin shows the track in decimal).
 pub fn drive_text(n: usize, d: &DriveStatus) -> String {
     if !d.present {
         return format!("Drive {}: -", n + 1);
     }
     let image = d.image.as_deref().unwrap_or("(empty)");
-    format!("Drive {}: T${:02X} {}{}", n + 1, d.track, image, if d.write_protected { " [WP]" } else { "" })
+    format!("Drive {}: T{} {}{}", n + 1, d.track, image, if d.write_protected { " [WP]" } else { "" })
 }
 
 /// Window title, like AppleWin's `GetAppModeTitle` text: model, mode, speed.
@@ -97,7 +97,7 @@ pub fn title(s: &EmuStatus) -> String {
 
 /// One-line status bar text.
 pub fn status_line(s: &EmuStatus) -> String {
-    let caps = if s.caps_lock { "CAPS  " } else { "" };
+    let caps = crate::overlay::caps_indicator(s).map_or(String::new(), |c| format!("{c}  "));
     let audio = if s.underruns > 0 { format!("  audio underruns: {}", s.underruns) } else { String::new() };
     format!("{caps}{:.2} MHz  {}{audio}", s.mhz, s.video)
 }
@@ -123,7 +123,7 @@ mod tests {
     fn led_and_drive_text() {
         let d = DriveStatus { present: true, image: Some("DOS33.dsk".into()), track: 17, activity: DriveActivity::Write, write_protected: true };
         assert_eq!(led(&d), Led::Red);
-        assert_eq!(drive_text(0, &d), "Drive 1: T$11 DOS33.dsk [WP]");
+        assert_eq!(drive_text(0, &d), "Drive 1: T17 DOS33.dsk [WP]");
         assert_eq!(drive_text(1, &DriveStatus::default()), "Drive 2: -");
     }
 

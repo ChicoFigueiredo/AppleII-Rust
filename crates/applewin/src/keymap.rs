@@ -2,7 +2,9 @@
 //! `KeybAnyKeyDown`, WinFrame.cpp `WM_KEYDOWN`).
 //!
 //! The winit-specific conversion lives in [`crate::host`]; everything here works on the
-//! framework-neutral [`HostKey`] so it can be tested.
+//! framework-neutral [`HostKey`] so it can be tested. Keys are mapped by *character* (what
+//! `WM_CHAR` carries on the user's layout), never by scancode; the per-model rules (case, which
+//! characters exist, Pravets / TK3000 remaps) live in `apple2_core::Keyboard`.
 
 use apple2_core::NavKey;
 use std::collections::HashSet;
@@ -37,7 +39,8 @@ pub enum HostKey {
     /// Right Alt (AltGr) = Closed Apple (joystick button 1).
     AltRight,
     Shift,
-    Control,
+    ControlLeft,
+    ControlRight,
     Other,
 }
 
@@ -47,14 +50,33 @@ pub enum HostKey {
 pub struct KeyInput {
     pub key: HostKey,
     pub numpad: bool,
+    /// Identity of the physical key (0 = unknown). Press and release of one key can carry
+    /// different characters (Shift released first), so AKD tracking goes by this when known.
+    pub phys: u32,
 }
 
 impl KeyInput {
     pub fn new(key: HostKey) -> Self {
-        KeyInput { key, numpad: false }
+        KeyInput { key, numpad: false, phys: 0 }
     }
     pub fn numpad(key: HostKey) -> Self {
-        KeyInput { key, numpad: true }
+        KeyInput { key, numpad: true, phys: 0 }
+    }
+    pub fn with_phys(mut self, phys: u32) -> Self {
+        self.phys = phys;
+        self
+    }
+
+    /// What identifies this key between its press and its release.
+    fn id(self) -> (u32, bool, HostKey) {
+        if self.phys != 0 {
+            return (self.phys, self.numpad, HostKey::Other);
+        }
+        let key = match self.key {
+            HostKey::Char(c) => HostKey::Char(c.to_ascii_lowercase()),
+            k => k,
+        };
+        (0, self.numpad, key)
     }
 }
 
@@ -70,6 +92,8 @@ pub struct Mods {
 pub enum KeyEvent {
     Ascii(u8),
     Nav(NavKey),
+    /// Open/Closed Apple are game-port buttons: [`crate::joy::JoySystem`] owns the Alt keys, so
+    /// [`KeyboardState`] never produces these two (the machine still understands them).
     OpenApple(bool),
     ClosedApple(bool),
     /// "Any key down" line (AKD, $C010 bit 7 on the //e) changed.
@@ -77,18 +101,21 @@ pub enum KeyEvent {
     CapsLock(bool),
     /// Ctrl+Break (Ctrl+Pause): soft reset.
     Reset,
-    /// Shift+Insert or Ctrl+V.
+    /// Shift+Insert or Ctrl+Shift+V (plain Ctrl+V is ^V for the Apple, as in AppleWin).
     Paste,
+    /// Scroll Lock flipped: the TK3000 //e |Mode| key (accented characters) follows it.
+    ScrollLock(bool),
 }
 
 /// Maps a layout-translated character plus modifiers to the Apple ASCII byte `WM_CHAR` would
-/// carry: Ctrl+letter gives the control code, characters above Latin-1 are dropped.
+/// carry: Ctrl+letter gives the control code, characters above Latin-1 are dropped. Ctrl with
+/// Alt is AltGr on Windows (GH#749: "AltGr also fakes Ctrl") and types the plain character.
 pub fn char_to_ascii(c: char, mods: Mods) -> Option<u8> {
-    if mods.ctrl {
+    if mods.ctrl && !mods.alt {
         let u = c.to_ascii_uppercase();
         return match u {
             '@'..='_' => Some(u as u8 & 0x1F),
-            ' ' => Some(0),
+            ' ' => Some(b' '), // Ctrl+Space stays a plain space through TranslateMessage
             _ => None,
         };
     }
@@ -127,12 +154,22 @@ pub fn debug_key(key: HostKey, mods: Mods) -> Option<DebugKey> {
     })
 }
 
-/// Stateful translator: tracks held keys (for AKD) and the caps-lock toggle.
-#[derive(Debug, Default)]
+/// Stateful translator: tracks held keys (for AKD), the Caps Lock and Scroll Lock toggles.
+#[derive(Debug)]
 pub struct KeyboardState {
-    held: HashSet<KeyInput>,
+    held: HashSet<(u32, bool, HostKey)>,
+    /// The Apple's Caps Lock (starts on regardless of the host, AppleWin keyboard.html).
     caps: bool,
+    /// The host's Caps Lock as far as we can know: assumed off at start-up.
+    host_caps: bool,
+    scroll: bool,
     any_down: bool,
+}
+
+impl Default for KeyboardState {
+    fn default() -> Self {
+        KeyboardState::with_caps(true)
+    }
 }
 
 impl KeyboardState {
@@ -140,44 +177,57 @@ impl KeyboardState {
         Self::default()
     }
 
+    /// `caps`: the Apple's initial Caps Lock (`-capslock=off` starts it off).
+    pub fn with_caps(caps: bool) -> Self {
+        KeyboardState { held: HashSet::new(), caps, host_caps: false, scroll: false, any_down: false }
+    }
+
     pub fn caps_lock(&self) -> bool {
         self.caps
     }
 
-    /// Releases everything (window lost focus): keeps stuck keys and buttons from lingering.
+    /// Releases everything (window lost focus): keeps stuck keys from lingering.
     pub fn release_all(&mut self) -> Vec<KeyEvent> {
-        let mut out = vec![KeyEvent::OpenApple(false), KeyEvent::ClosedApple(false)];
         self.held.clear();
         if self.any_down {
             self.any_down = false;
-            out.push(KeyEvent::AnyKeyDown(false));
+            return vec![KeyEvent::AnyKeyDown(false)];
         }
-        out
+        Vec::new()
     }
 
     /// Processes one key transition. `repeat` is the OS auto-repeat flag.
     pub fn handle(&mut self, input: KeyInput, pressed: bool, repeat: bool, mods: Mods) -> Vec<KeyEvent> {
         let mut out = Vec::new();
         match input.key {
-            HostKey::AltLeft => out.push(KeyEvent::OpenApple(pressed)),
-            HostKey::AltRight => out.push(KeyEvent::ClosedApple(pressed)),
+            // Game-port buttons and modifiers produce no Apple key (see `joy`).
+            HostKey::AltLeft | HostKey::AltRight | HostKey::Shift | HostKey::ControlLeft | HostKey::ControlRight => {}
             HostKey::CapsLock => {
+                // AppleWin copies the host's toggle (`GetKeyState(VK_CAPITAL) & 1`): the first
+                // press with the host's lock off turns the host's on and leaves the Apple's on.
                 if pressed && !repeat {
-                    self.caps = !self.caps;
+                    self.host_caps = !self.host_caps;
+                    self.caps = self.host_caps;
                     out.push(KeyEvent::CapsLock(self.caps));
+                }
+            }
+            HostKey::ScrollLock => {
+                if pressed && !repeat {
+                    self.scroll = !self.scroll;
+                    out.push(KeyEvent::ScrollLock(self.scroll));
                 }
             }
             HostKey::Pause if pressed && mods.ctrl => out.push(KeyEvent::Reset),
             HostKey::Insert if pressed && mods.shift => out.push(KeyEvent::Paste),
-            HostKey::Char('v' | 'V') if pressed && mods.ctrl && !mods.alt => out.push(KeyEvent::Paste),
+            HostKey::Char('v' | 'V') if pressed && mods.ctrl && mods.shift && !mods.alt => out.push(KeyEvent::Paste),
             _ if pressed => {
                 if let Some(ev) = self.press_event(input.key, mods) {
                     out.push(ev);
-                    self.held.insert(input);
+                    self.held.insert(input.id());
                 }
             }
             _ => {
-                self.held.remove(&input);
+                self.held.remove(&input.id());
             }
         }
         let any = !self.held.is_empty();
@@ -189,9 +239,12 @@ impl KeyboardState {
     }
 
     fn press_event(&self, key: HostKey, mods: Mods) -> Option<KeyEvent> {
+        let ctrl = mods.ctrl && !mods.alt;
         Some(match key {
             HostKey::Char(c) => KeyEvent::Ascii(char_to_ascii(c, mods)?),
+            HostKey::Enter if ctrl => KeyEvent::Ascii(0x0A), // Ctrl+Enter is LF
             HostKey::Enter => KeyEvent::Ascii(0x0D),
+            HostKey::Backspace if ctrl => KeyEvent::Ascii(0x7F), // Ctrl+Backspace is DEL
             HostKey::Backspace => KeyEvent::Ascii(0x08),
             HostKey::Tab => KeyEvent::Ascii(0x09),
             HostKey::Escape => KeyEvent::Ascii(0x1B),
@@ -208,6 +261,12 @@ impl KeyboardState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apple2_core::keyboard::Keyboard;
+    use apple2_core::Model;
+
+    const NONE: Mods = Mods { shift: false, ctrl: false, alt: false };
+    const CTRL: Mods = Mods { shift: false, ctrl: true, alt: false };
+    const SHIFT: Mods = Mods { shift: true, ctrl: false, alt: false };
 
     fn press(k: &mut KeyboardState, key: HostKey, mods: Mods) -> Vec<KeyEvent> {
         k.handle(KeyInput::new(key), true, false, mods)
@@ -216,85 +275,242 @@ mod tests {
     #[test]
     fn plain_and_shifted_characters_pass_through() {
         let mut k = KeyboardState::new();
-        let ev = press(&mut k, HostKey::Char('A'), Mods { shift: true, ..Mods::default() });
+        let ev = press(&mut k, HostKey::Char('A'), SHIFT);
         assert_eq!(ev, vec![KeyEvent::Ascii(b'A'), KeyEvent::AnyKeyDown(true)]);
     }
 
     #[test]
     fn ctrl_letters_become_control_codes() {
-        let ctrl = Mods { ctrl: true, ..Mods::default() };
-        assert_eq!(char_to_ascii('c', ctrl), Some(3));
-        assert_eq!(char_to_ascii('G', ctrl), Some(7));
-        assert_eq!(char_to_ascii('[', ctrl), Some(0x1B));
-        assert_eq!(char_to_ascii('é', Mods::default()), Some(0xE9));
-        assert_eq!(char_to_ascii('€', Mods::default()), None);
+        assert_eq!(char_to_ascii('c', CTRL), Some(3));
+        assert_eq!(char_to_ascii('G', CTRL), Some(7));
+        assert_eq!(char_to_ascii('[', CTRL), Some(0x1B));
+        assert_eq!(char_to_ascii('\\', CTRL), Some(0x1C));
+        assert_eq!(char_to_ascii(']', CTRL), Some(0x1D));
+        assert_eq!(char_to_ascii('^', CTRL), Some(0x1E));
+        assert_eq!(char_to_ascii('_', CTRL), Some(0x1F));
+        assert_eq!(char_to_ascii('@', CTRL), Some(0));
+        assert_eq!(char_to_ascii('5', CTRL), None);
+        assert_eq!(char_to_ascii('é', NONE), Some(0xE9));
+        assert_eq!(char_to_ascii('€', NONE), None);
+        assert_eq!(char_to_ascii(' ', CTRL), Some(b' '));
+    }
+
+    #[test]
+    fn every_ctrl_letter_maps_to_1_through_26() {
+        for (i, c) in ('a'..='z').enumerate() {
+            assert_eq!(char_to_ascii(c, CTRL), Some(i as u8 + 1), "Ctrl+{c}");
+            assert_eq!(char_to_ascii(c.to_ascii_uppercase(), CTRL), Some(i as u8 + 1));
+        }
+    }
+
+    #[test]
+    fn altgr_is_not_ctrl() {
+        // Windows reports AltGr as Ctrl+Alt: a layout character such as '@' must stay '@'.
+        let altgr = Mods { shift: false, ctrl: true, alt: true };
+        assert_eq!(char_to_ascii('@', altgr), Some(b'@'));
+        assert_eq!(char_to_ascii('q', altgr), Some(b'q'));
+    }
+
+    #[test]
+    fn every_printable_ascii_reaches_the_machine_unchanged() {
+        for b in 0x20u8..=0x7E {
+            let mut k = KeyboardState::new();
+            let m = if b.is_ascii_uppercase() || b"~!@#$%^&*()_+{}|:\"<>?".contains(&b) { SHIFT } else { NONE };
+            let ev = press(&mut k, HostKey::Char(b as char), m);
+            assert_eq!(ev[0], KeyEvent::Ascii(b), "{:?}", b as char);
+        }
     }
 
     #[test]
     fn special_keys() {
         let mut k = KeyboardState::new();
-        let m = Mods::default();
-        assert!(press(&mut k, HostKey::Enter, m).contains(&KeyEvent::Ascii(0x0D)));
-        assert!(press(&mut k, HostKey::Escape, m).contains(&KeyEvent::Ascii(0x1B)));
-        assert!(press(&mut k, HostKey::Left, m).contains(&KeyEvent::Nav(NavKey::Left)));
-        assert!(press(&mut k, HostKey::Delete, m).contains(&KeyEvent::Nav(NavKey::Delete)));
+        assert!(press(&mut k, HostKey::Enter, NONE).contains(&KeyEvent::Ascii(0x0D)));
+        assert!(press(&mut k, HostKey::Escape, NONE).contains(&KeyEvent::Ascii(0x1B)));
+        assert!(press(&mut k, HostKey::Tab, NONE).contains(&KeyEvent::Ascii(0x09)));
+        assert!(press(&mut k, HostKey::Backspace, NONE).contains(&KeyEvent::Ascii(0x08)));
+        assert!(press(&mut k, HostKey::Left, NONE).contains(&KeyEvent::Nav(NavKey::Left)));
+        assert!(press(&mut k, HostKey::Delete, NONE).contains(&KeyEvent::Nav(NavKey::Delete)));
+        assert!(press(&mut k, HostKey::Enter, CTRL).contains(&KeyEvent::Ascii(0x0A)));
+        assert!(press(&mut k, HostKey::Backspace, CTRL).contains(&KeyEvent::Ascii(0x7F)));
     }
 
     #[test]
-    fn alt_keys_are_open_and_closed_apple() {
+    fn keys_the_apple_does_not_have_are_dropped() {
         let mut k = KeyboardState::new();
-        let m = Mods { alt: true, ..Mods::default() };
-        assert_eq!(press(&mut k, HostKey::AltLeft, m), vec![KeyEvent::OpenApple(true)]);
-        assert_eq!(k.handle(KeyInput::new(HostKey::AltRight), true, false, m), vec![KeyEvent::ClosedApple(true)]);
-        assert_eq!(k.handle(KeyInput::new(HostKey::AltLeft), false, false, m), vec![KeyEvent::OpenApple(false)]);
+        for key in [HostKey::Home, HostKey::End, HostKey::PageUp, HostKey::PageDown, HostKey::Insert, HostKey::F(5), HostKey::Clear] {
+            assert_eq!(press(&mut k, key, NONE), vec![], "{key:?}");
+        }
+    }
+
+    #[test]
+    fn alt_and_modifier_keys_are_not_apple_keys() {
+        let mut k = KeyboardState::new();
+        let alt = Mods { alt: true, ..NONE };
+        for key in [HostKey::AltLeft, HostKey::AltRight, HostKey::Shift, HostKey::ControlLeft, HostKey::ControlRight] {
+            assert_eq!(press(&mut k, key, alt), vec![], "{key:?}");
+        }
     }
 
     #[test]
     fn ctrl_break_resets_and_paste_shortcuts() {
         let mut k = KeyboardState::new();
-        let ctrl = Mods { ctrl: true, ..Mods::default() };
-        assert_eq!(press(&mut k, HostKey::Pause, ctrl), vec![KeyEvent::Reset]);
-        assert_eq!(press(&mut k, HostKey::Char('v'), ctrl), vec![KeyEvent::Paste]);
-        let shift = Mods { shift: true, ..Mods::default() };
-        assert_eq!(press(&mut k, HostKey::Insert, shift), vec![KeyEvent::Paste]);
+        assert_eq!(press(&mut k, HostKey::Pause, CTRL), vec![KeyEvent::Reset]);
+        assert_eq!(press(&mut k, HostKey::Insert, SHIFT), vec![KeyEvent::Paste]);
+        let both = Mods { shift: true, ctrl: true, alt: false };
+        assert_eq!(press(&mut k, HostKey::Char('V'), both), vec![KeyEvent::Paste]);
+        // plain Ctrl+V is ^V for the Apple
+        assert_eq!(press(&mut k, HostKey::Char('v'), CTRL)[0], KeyEvent::Ascii(0x16));
     }
 
     #[test]
     fn akd_follows_the_held_keys() {
         let mut k = KeyboardState::new();
-        let m = Mods::default();
         let a = KeyInput::new(HostKey::Char('a'));
         let b = KeyInput::new(HostKey::Char('b'));
-        assert!(k.handle(a, true, false, m).contains(&KeyEvent::AnyKeyDown(true)));
-        assert_eq!(k.handle(b, true, false, m), vec![KeyEvent::Ascii(b'b')]);
-        assert_eq!(k.handle(a, false, false, m), vec![]);
-        assert_eq!(k.handle(b, false, false, m), vec![KeyEvent::AnyKeyDown(false)]);
+        assert!(k.handle(a, true, false, NONE).contains(&KeyEvent::AnyKeyDown(true)));
+        assert_eq!(k.handle(b, true, false, NONE), vec![KeyEvent::Ascii(b'b')]);
+        assert_eq!(k.handle(a, false, false, NONE), vec![]);
+        assert_eq!(k.handle(b, false, false, NONE), vec![KeyEvent::AnyKeyDown(false)]);
     }
 
     #[test]
-    fn caps_lock_toggles() {
+    fn akd_survives_shift_released_before_the_key() {
+        // Press Shift+A, release Shift, release A: the release carries 'a', not 'A'.
         let mut k = KeyboardState::new();
-        let m = Mods::default();
-        assert_eq!(press(&mut k, HostKey::CapsLock, m), vec![KeyEvent::CapsLock(true)]);
-        k.handle(KeyInput::new(HostKey::CapsLock), false, false, m);
-        assert_eq!(press(&mut k, HostKey::CapsLock, m), vec![KeyEvent::CapsLock(false)]);
+        let down = KeyInput::new(HostKey::Char('A')).with_phys(30);
+        let up = KeyInput::new(HostKey::Char('a')).with_phys(30);
+        assert!(k.handle(down, true, false, SHIFT).contains(&KeyEvent::AnyKeyDown(true)));
+        assert_eq!(k.handle(up, false, false, NONE), vec![KeyEvent::AnyKeyDown(false)]);
+        // Without a physical id the letter case is folded.
+        let down = KeyInput::new(HostKey::Char('B'));
+        k.handle(down, true, false, SHIFT);
+        assert_eq!(k.handle(KeyInput::new(HostKey::Char('b')), false, false, NONE), vec![KeyEvent::AnyKeyDown(false)]);
+    }
+
+    #[test]
+    fn autorepeat_keeps_typing_without_changing_akd() {
+        let mut k = KeyboardState::new();
+        let a = KeyInput::new(HostKey::Char('a'));
+        k.handle(a, true, false, NONE);
+        assert_eq!(k.handle(a, true, true, NONE), vec![KeyEvent::Ascii(b'a')]);
+    }
+
+    #[test]
+    fn caps_lock_follows_the_host_toggle() {
+        // AppleWin starts with the Apple's caps on; the first host press (host lock off -> on)
+        // keeps it on, the second turns it off.
+        let mut k = KeyboardState::new();
+        assert!(k.caps_lock());
+        assert_eq!(press(&mut k, HostKey::CapsLock, NONE), vec![KeyEvent::CapsLock(true)]);
+        k.handle(KeyInput::new(HostKey::CapsLock), false, false, NONE);
+        assert_eq!(press(&mut k, HostKey::CapsLock, NONE), vec![KeyEvent::CapsLock(false)]);
+        // held key does not toggle again
+        assert_eq!(k.handle(KeyInput::new(HostKey::CapsLock), true, true, NONE), vec![]);
+        let off = KeyboardState::with_caps(false);
+        assert!(!off.caps_lock());
+    }
+
+    #[test]
+    fn scroll_lock_is_the_tk3000_mode_key() {
+        let mut k = KeyboardState::new();
+        assert_eq!(press(&mut k, HostKey::ScrollLock, NONE), vec![KeyEvent::ScrollLock(true)]);
+        k.handle(KeyInput::new(HostKey::ScrollLock), false, false, NONE);
+        assert_eq!(press(&mut k, HostKey::ScrollLock, NONE), vec![KeyEvent::ScrollLock(false)]);
     }
 
     #[test]
     fn debugger_console_keys() {
-        let m = Mods::default();
-        assert_eq!(debug_key(HostKey::Char('g'), m), Some(DebugKey::Char('g')));
-        assert_eq!(debug_key(HostKey::Enter, m), Some(DebugKey::Enter));
-        assert_eq!(debug_key(HostKey::Up, m), Some(DebugKey::HistoryPrev));
-        assert_eq!(debug_key(HostKey::F(3), m), None);
-        assert_eq!(debug_key(HostKey::Char('c'), Mods { ctrl: true, ..m }), None);
+        assert_eq!(debug_key(HostKey::Char('g'), NONE), Some(DebugKey::Char('g')));
+        assert_eq!(debug_key(HostKey::Enter, NONE), Some(DebugKey::Enter));
+        assert_eq!(debug_key(HostKey::Up, NONE), Some(DebugKey::HistoryPrev));
+        assert_eq!(debug_key(HostKey::F(3), NONE), None);
+        assert_eq!(debug_key(HostKey::Char('c'), CTRL), None);
     }
 
     #[test]
     fn focus_loss_releases_everything() {
         let mut k = KeyboardState::new();
-        press(&mut k, HostKey::Char('a'), Mods::default());
-        let ev = k.release_all();
-        assert!(ev.contains(&KeyEvent::AnyKeyDown(false)) && ev.contains(&KeyEvent::OpenApple(false)));
+        press(&mut k, HostKey::Char('a'), NONE);
+        assert_eq!(k.release_all(), vec![KeyEvent::AnyKeyDown(false)]);
+        assert_eq!(k.release_all(), vec![]);
+    }
+
+    // ---- per-model table: shell translation + the core's model rules ----
+
+    /// Types `key` through the shell and the core and returns the Apple keycode, if any.
+    fn typed(model: Model, caps: bool, ev: KeyEvent) -> Option<u8> {
+        let mut kb = Keyboard::default();
+        kb.set_caps_lock(caps);
+        let ok = match ev {
+            KeyEvent::Ascii(c) => kb.press(model, c),
+            KeyEvent::Nav(n) => kb.press_nav(model, n),
+            _ => return None,
+        };
+        ok.then(|| kb.keycode())
+    }
+
+    /// Independent statement of AppleWin's rules for the unmodified models (Keyboard.cpp:104-200).
+    fn expected_plain(model: Model, caps: bool, key: u8) -> Option<u8> {
+        match model {
+            Model::Apple2 | Model::Apple2Plus | Model::Apple2JPlus => {
+                if key == b'`' || key >= b'{' {
+                    None
+                } else {
+                    Some(key.to_ascii_uppercase())
+                }
+            }
+            Model::Apple2e | Model::Apple2eEnhanced => {
+                if key > 0x7F {
+                    None
+                } else if caps && key.is_ascii_lowercase() {
+                    Some(key - 32)
+                } else {
+                    Some(key)
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn printable_ascii_per_model_matches_applewin() {
+        let models = [Model::Apple2, Model::Apple2Plus, Model::Apple2JPlus, Model::Apple2e, Model::Apple2eEnhanced];
+        for model in models {
+            for caps in [true, false] {
+                for key in 0x20u8..=0x7E {
+                    let mods = if key.is_ascii_uppercase() { SHIFT } else { NONE };
+                    let mut k = KeyboardState::new();
+                    let ev = press(&mut k, HostKey::Char(key as char), mods)[0];
+                    assert_eq!(typed(model, caps, ev), expected_plain(model, caps, key), "{model:?} caps={caps} {:?}", key as char);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn navigation_keys_per_model() {
+        // (key, Apple ][ family, //e family) from AppleWin's `asciicode` table.
+        let table = [(NavKey::Left, Some(0x08), Some(0x08)), (NavKey::Right, Some(0x15), Some(0x15)), (NavKey::Up, None, Some(0x0B)), (NavKey::Down, None, Some(0x0A)), (NavKey::Delete, None, Some(0x7F))];
+        for (nav, ii, iie) in table {
+            assert_eq!(typed(Model::Apple2Plus, true, KeyEvent::Nav(nav)), ii, "{nav:?} on ][+");
+            assert_eq!(typed(Model::Apple2e, true, KeyEvent::Nav(nav)), iie, "{nav:?} on //e");
+            assert_eq!(typed(Model::Apple2eEnhanced, true, KeyEvent::Nav(nav)), iie, "{nav:?} on enhanced //e");
+        }
+    }
+
+    #[test]
+    fn accented_characters_only_exist_on_clones() {
+        // 'é' (0xE9): rejected on the //e, accepted (masked to 7 bits) on a Pravets clone.
+        let ev = KeyEvent::Ascii(char_to_ascii('é', NONE).unwrap());
+        assert_eq!(typed(Model::Apple2e, true, ev), None);
+        assert!(typed(Model::Pravets82, true, ev).is_some());
+    }
+
+    #[test]
+    fn control_codes_reach_every_model() {
+        for model in [Model::Apple2Plus, Model::Apple2e, Model::Apple2eEnhanced, Model::Pravets82] {
+            let ev = press(&mut KeyboardState::new(), HostKey::Char('c'), CTRL)[0];
+            assert_eq!(typed(model, true, ev), Some(3), "{model:?}");
+        }
     }
 }

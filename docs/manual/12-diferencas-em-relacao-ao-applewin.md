@@ -41,8 +41,9 @@ Mesmo sem a ligação, essas opções são aceitas na linha de comando e na conf
 
 ## Teclado
 
-- Os atalhos de velocidade **Ctrl+0**, **Ctrl+1** e **Ctrl+3** do AppleWin não existem. Use o controle de velocidade da configuração e o Scroll Lock.
-- **Shift+Print Screen** (imagem 280x192) e **Ctrl+Print Screen** (copiar o texto da tela para a área de transferência) não existem. Print Screen salva sempre a imagem de 560x384, no diretório atual, como `AppleWin_NNNN.png`.
+- **Ctrl+V** não cola (envia ^V ao Apple, como no AppleWin); a colagem extra é Ctrl+Shift+V. O AppleWin não toca sons de drive, e este programa também não.
+- A imagem de Print Screen vai para o diretório atual como `AppleWin_NNNN.png`. Ctrl+Print Screen copia só a página de texto de 40 colunas (80 colunas e página 2 ainda não).
+- O "SHIFT key mod" liga o Shift ao botão 2, mas a temporização dos paddles 2 e 3 é a de um joystick presente. A leitura do setor ("S??") ao lado da trilha dos drives não existe.
 - As opções de captura de teclas do sistema (`-hook-alt-tab`, `-no-hook-system-key` e outras) são aceitas, mas só fazem sentido no AppleWin para Windows e não têm efeito aqui.
 
 ## Depurador

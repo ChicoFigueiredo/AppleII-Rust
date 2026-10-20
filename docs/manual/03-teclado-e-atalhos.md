@@ -19,7 +19,7 @@ Num Apple II real você liga o equipamento com um disco no drive. Sem disco, o m
 
 O teclado numérico só chega ao Apple se a emulação de joystick não estiver usando o teclado (veja "Joystick e mouse").
 
-**Caps Lock.** Ao iniciar, o Caps Lock do Apple começa ligado, qualquer que seja o estado do PC. O programa acompanha as alternâncias seguintes da tecla do PC. Minúsculas só existem em Modelos //e, //e Enhanced e clones do //e, não no ][ nem no ][+.
+**Caps Lock.** Ao iniciar, o Caps Lock do Apple começa ligado (desligado com `-capslock=off`), qualquer que seja o estado do PC. O programa supõe o Caps Lock do PC desligado ao iniciar: o primeiro toque deixa o do Apple ligado e o segundo o desliga, como no AppleWin. O indicador "A" (ligado) ou "a" aparece na linha de status (não existe no ][ e no ][+). Minúsculas só existem em Modelos //e, //e Enhanced e clones do //e, não no ][ nem no ][+.
 
 ## Atalhos do emulador
 
@@ -44,9 +44,14 @@ O teclado numérico só chega ao Apple se a emulação de joystick não estiver 
 | F11 | Salva o estado (save-state) |
 | F12 | Carrega o estado |
 | Pause | Pausa e retoma a emulação |
-| Scroll Lock | Velocidade máxima (veja abaixo) |
-| Print Screen | Salva a tela em um arquivo PNG |
-| Shift+Insert ou Ctrl+V | Cola o texto da área de transferência |
+| Scroll Lock | Velocidade máxima (veja abaixo). No TK3000 //e é também a tecla Mode |
+| Ctrl+0 | Alterna entre a velocidade configurada e a máxima |
+| Ctrl+1 | Velocidade de 1 MHz |
+| Ctrl+3 | Velocidade máxima |
+| Print Screen | Salva a tela em um arquivo PNG de 560x384 |
+| Shift+Print Screen | Salva a imagem de 280x192 |
+| Ctrl+Print Screen | Copia o texto da tela (40 colunas) para a área de transferência |
+| Shift+Insert ou Ctrl+Shift+V | Cola o texto da área de transferência (Ctrl+V sozinho envia ^V ao Apple) |
 
 Os atalhos F1 a F8 são os mesmos botões da barra. As teclas com auto-repetição do sistema não disparam o atalho de novo.
 
@@ -56,11 +61,11 @@ F9 percorre os tipos de vídeo: monocromático (cor própria), Color (Composite 
 
 ### Velocidade máxima
 
-Scroll Lock liga e desliga a velocidade máxima (sem limite de ritmo). Nesse modo o som fica mudo e o vídeo é atualizado apenas uma vez por Quadro do relógio real; efeitos que mudam o modo de vídeo no meio do Quadro (demos com "split screen") não aparecem direito. Com a opção "Enhanced Speed" de acesso ao disco (padrão), a emulação também acelera sozinha enquanto o motor do Disk II está ligado.
+Scroll Lock mantém a velocidade máxima enquanto está pressionado, ou liga e desliga se a opção "ScrollLock Toggle" estiver marcada (sem limite de ritmo). Nesse modo o som fica mudo e o vídeo é atualizado apenas uma vez por Quadro do relógio real; efeitos que mudam o modo de vídeo no meio do Quadro (demos com "split screen") não aparecem direito. Com a opção "Enhanced Speed" de acesso ao disco (padrão), a emulação também acelera sozinha enquanto o motor do Disk II está ligado.
 
 ### Colar texto
 
-Shift+Insert ou Ctrl+V entregam o texto da área de transferência ao teclado do Apple, um caractere por vez (a Fila de colagem). Quebras de linha viram Return. Caracteres acima de Latin-1 são descartados.
+Shift+Insert ou Ctrl+Shift+V entregam o texto da área de transferência ao teclado do Apple, um caractere por vez (a Fila de colagem). Quebras de linha viram Return. Caracteres acima de Latin-1 são descartados.
 
 ### Captura de tela
 
