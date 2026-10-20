@@ -42,6 +42,16 @@ cargo fmt --all -- --check      # informativo por enquanto
 - Mantenha o determinismo: nada de relógio do computador, de threads nem de E/S de arquivo dentro do núcleo (ADR 0001). O que precisa do computador entra por uma trait.
 - O núcleo deve continuar sem alocações por passo (`tests/no_alloc.rs`).
 
+## Publicando uma versão
+
+Só o dono do repositório publica. O procedimento:
+
+1. Aumente a versão em `[workspace.package]` do `Cargo.toml` da raiz.
+2. Abra um pull request para `main` com `[release]` no título.
+3. Ao mesclar, o workflow `Release` cria a tag `v<versão>` no commit de merge e publica a release com os pacotes de Linux, Windows e macOS.
+
+PRs sem `[release]` (ou de outros autores) nunca publicam. Se a tag `v<versão>` já existe, o workflow falha: aumente a versão. A execução manual do workflow é um dry run (só artefatos, sem tag nem release). O GitLab CI nunca publica releases.
+
 ## ADRs e glossário
 
 - **Decisão de arquitetura difícil de reverter, surpreendente sem contexto e resultado de uma escolha real entre alternativas?** Registre um ADR em `docs/adr/NNNN-titulo.md`, curto: o contexto, a decisão e o motivo.

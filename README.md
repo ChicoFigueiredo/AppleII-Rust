@@ -73,9 +73,17 @@ Instale as ferramentas de linha de comando (`xcode-select --install`) e o Rust. 
 cargo build --release
 ```
 
-O executável é `target/release/applewin` (`applewin.exe` no Windows). As versões publicadas (tags `v*`) trazem arquivos prontos para as três plataformas, gerados pelo CI.
+O executável é `target/release/applewin` (`applewin.exe` no Windows). As versões publicadas (releases do GitHub) trazem arquivos prontos para as três plataformas, gerados pelo CI.
 
 Recursos opcionais, para quem compila: `apple2-hostio` tem `serialport` (porta COM da Super Serial Card) e `pcap` (Ethernet bruta do Uthernet I), desligados por padrão.
+
+### Como publicar uma versão
+
+1. Aumente a versão em `[workspace.package]` do `Cargo.toml` da raiz.
+2. Abra um pull request para `main` com `[release]` no título (sem distinguir maiúsculas), feito pelo dono do repositório.
+3. Ao mesclar o PR, o workflow `Release` cria a tag `v<versão>` no commit de merge, gera os pacotes das três plataformas e publica a release (título e corpo do PR entram nas notas).
+
+Pull requests sem `[release]` nunca publicam. Se a tag já existir, o workflow falha: aumente a versão. A execução manual (Actions > Release > Run workflow) é um dry run: só compila e guarda os artefatos.
 
 ## Executando
 

@@ -8,4 +8,4 @@
 
 Windows release builds use the GUI subsystem (no console window); `wincon.rs` attaches to the parent console so `--help`/`--dump-text` still print from cmd/PowerShell, but the shell prompt does not wait for the program.
 
-Cutting a release: `git tag v0.1.0 && git push origin v0.1.0`. Dry run: Actions > Release > Run workflow (artifacts only, no GitHub release).
+Cutting a release: bump `[workspace.package] version` in the root `Cargo.toml`, open a PR to `main` titled with `[release]` (by the repo owner) and merge it; the workflow tags `v<version>` on the merge commit and publishes. Dry run: Actions > Release > Run workflow (artifacts only, no GitHub release).
