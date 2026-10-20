@@ -288,3 +288,21 @@ fn screen_grid_snapshot() {
     assert_eq!(g.cell(INFO_COL_1 + 3, 3).bg, d.colors.get(BG_DATA_1));
     assert_eq!(g.cell(62 + 6, 0).bg, d.colors.get(BG_DISASM_BP_S_C));
 }
+
+#[test]
+fn io_breakpoint_on_the_speaker_during_a_real_boot() {
+    // The autostart ROM beeps (BELL1, $FBDD) before showing the banner: an LDA $C030.
+    let mut m = Machine::new(MachineConfig::for_model(Model::Apple2Plus));
+    let mut d = debugger(&mut m);
+    d.execute(&mut m, "bpio C030");
+    d.execute(&mut m, "g");
+    go(&mut d, &mut m, 3_000_000);
+    assert_eq!(d.mode, RunMode::Debug, "{}", console_text(&d));
+    let op = m.peek(m.cpu().pc);
+    assert_eq!(op, 0xAD, "LDA abs");
+    assert_eq!(m.peek(m.cpu().pc + 1) as u16 | (m.peek(m.cpu().pc + 2) as u16) << 8, 0xC030);
+    assert!(console_text(&d).contains("Memory access at") && console_text(&d).contains("C030"), "{}", console_text(&d));
+    assert_eq!(m.drain_speaker_toggles().count(), 0, "stops before the toggle");
+    d.execute(&mut m, "t");
+    assert_eq!(m.drain_speaker_toggles().count(), 1);
+}

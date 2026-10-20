@@ -280,7 +280,6 @@ pub fn cook(raw: &[Arg], ctx: &CookCtx) -> Result<Vec<Arg>, String> {
                         r.value_set = true;
                         r.no_reg = true;
                         r.no_sym = true;
-                        r.kind = Kind::Text;
                         a[i] = r;
                     }
                     "#" => {

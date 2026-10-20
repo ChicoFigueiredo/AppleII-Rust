@@ -120,9 +120,8 @@ impl Host for MemHost {
     }
 
     fn create(&mut self, name: &str) -> io::Result<Box<dyn Write>> {
-        // Trace output lands in `files[name]` when the writer is flushed on drop is not needed:
-        // the cell is shared through a leak-free Rc held by the returned writer only, so tests
-        // that need the content should use `Debugger::set_trace_writer` with their own sink.
+        // The written bytes are discarded; tests that need trace content pass their own sink to
+        // `Debugger::set_trace_writer`.
         self.files.insert(name.to_string(), Vec::new());
         Ok(Box::new(SharedWriter(Default::default())))
     }

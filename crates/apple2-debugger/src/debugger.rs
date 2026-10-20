@@ -377,7 +377,7 @@ impl Debugger {
     /// single-stepped under [`Debugger::run`], otherwise it runs free.
     pub fn exit(&mut self, m: &mut Machine) {
         self.breakpoints.clear_temp();
-        if self.breakpoints.count == 0 && self.trace.is_none() && self.watches_none_hot() {
+        if self.breakpoints.count == 0 && self.trace.is_none() {
             self.mode = RunMode::Running;
             self.steps = 0;
             if let Some(mut t) = self.trace.take() {
@@ -388,10 +388,6 @@ impl Debugger {
         }
         let full = self.last_go_full_speed;
         self.begin_go(m.cpu().pc, None, None, full);
-    }
-
-    fn watches_none_hot(&self) -> bool {
-        true
     }
 
     /// True if the frontend must call [`Debugger::run`] instead of running the machine itself.
@@ -650,12 +646,12 @@ impl Debugger {
         let mark = m.cycles();
         m.step();
         let cyc = m.cycles() - mark;
+        self.cycle_delta = cyc;
         if self.profile.active {
             let info = table(cmos)[op as usize];
             self.profile.opcodes[op as usize] += 1;
             self.profile.modes[mode_index(info.mode)] += 1;
         }
-        let _ = cyc;
         // An interrupt entry lands on a vector without a BRK/JSR/JMP having been executed.
         let newpc = m.cpu().pc;
         let irq_v = m.peek(0xFFFE) as u16 | (m.peek(0xFFFF) as u16) << 8;

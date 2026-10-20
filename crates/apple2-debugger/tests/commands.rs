@@ -246,3 +246,75 @@ fn input_line_editing_and_history() {
     d.console.history_prev();
     assert_eq!(d.console.input(), "r a 99");
 }
+
+#[test]
+fn profile_cycles_and_exit() {
+    let mut m = machine();
+    for (i, b) in [0xA9u8, 0x01, 0xAA, 0xE8, 0xE8, 0xEA, 0x4C, 0x00, 0x03].iter().enumerate() {
+        m.poke(0x300 + i as u16, *b);
+    }
+    let mut d = Debugger::new();
+    d.enter(&mut m);
+    d.execute(&mut m, "r pc 300");
+    d.execute(&mut m, "profile");
+    d.execute(&mut m, "t 7");
+    d.run(&mut m, 1000);
+    d.console.clear();
+    d.execute(&mut m, "profile list");
+    let t = console_text(&d);
+    assert!(t.contains("Immediate") && t.contains("Total:"), "{t}");
+    assert!(t.contains("INX") && t.contains("(implied)"), "{t}");
+    // CYCLES REL shows the last instruction; the video scanner moves with the machine.
+    d.execute(&mut m, "cycles rel");
+    let before = m.cycles();
+    d.execute(&mut m, "t");
+    let g = d.render(&m);
+    let last = m.cycles() - before;
+    assert!(g.text().contains(&format!("cycles:{last:08X}")), "last instruction took {last} cycles:\n{}", g.text());
+    // Leaving the debugger with no breakpoints runs free; with one it keeps stepping.
+    d.exit(&mut m);
+    assert_eq!(d.mode, RunMode::Running);
+    d.enter(&mut m);
+    d.execute(&mut m, "bpx 305");
+    d.exit(&mut m);
+    assert_eq!(d.mode, RunMode::Stepping);
+    d.run(&mut m, 100);
+    assert_eq!((d.mode, m.cpu().pc), (RunMode::Debug, 0x305));
+    // `ADDRG` leaves the debugger at an address.
+    d.execute(&mut m, "bpc *");
+    d.execute(&mut m, "400G");
+    assert_eq!((d.mode, m.cpu().pc), (RunMode::Running, 0x400));
+}
+
+#[test]
+fn auto_named_symbols_and_video_breakpoints() {
+    let mut m = machine();
+    let mut d = Debugger::new();
+    d.enter(&mut m);
+    d.execute(&mut m, "sym @ = 1234");
+    assert_eq!(d.symbols.find_address("_1234").map(|x| x.1), Some(apple2_debugger::symbols::Table::User2));
+    d.execute(&mut m, "bpv 40");
+    d.execute(&mut m, "g");
+    d.run(&mut m, 100_000);
+    assert_eq!(d.mode, RunMode::Debug);
+    assert_eq!(m.video_position().0, 0x40, "{}", console_text(&d));
+    assert!(console_text(&d).contains("Video scanner position matches"));
+}
+
+#[test]
+fn data_size_variants_and_word_rounding() {
+    let mut m = machine();
+    let mut d = Debugger::new();
+    d.enter(&mut m);
+    for (i, b) in [1u8, 2, 3, 4, 5, 6, 7, 8, 9].iter().enumerate() {
+        m.poke(0x2000 + i as u16, *b);
+    }
+    d.execute(&mut m, "db4 tbl = 2000:2007");
+    d.execute(&mut m, "u 2000");
+    let t = d.render(&m).text();
+    assert!(t.contains("2000:01 02 03") && t.contains("tbl") && t.contains("db"), "{t}");
+    d.execute(&mut m, "dw 2000");
+    assert_eq!(d.data.find(0x2001).map(|x| x.end), Some(0x2001), "DW rounds the length up to a word");
+    d.execute(&mut m, "b");
+    assert!(console_text(&d).contains("word1"), "{}", console_text(&d));
+}
