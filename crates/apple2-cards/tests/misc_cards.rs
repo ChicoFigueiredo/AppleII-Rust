@@ -322,3 +322,24 @@ fn without_a_vidhd_the_ii_has_no_aux() {
     wr(&mut m, 0x2001, 0x5A);
     assert_eq!(m.peek_aux(0x2001), 0);
 }
+
+#[test]
+fn vidhd_shr_renders_through_the_video_crate() {
+    use apple2_video::{RenderConfig, Renderer, VideoType, WithVidHd};
+    let mut m = plus();
+    assert!(m.insert_card(2, Box::new(VidHd::new())));
+    wr(&mut m, 0xC005, 0); // AUXWRITE: CPU writes land in aux too
+    wr(&mut m, 0x2000, 0x12); // line 0: pixels 1,1,2,2 then index 0
+    for (a, v) in [(0x9E02, 0x00), (0x9E03, 0x0F), (0x9E04, 0xF0), (0x9E05, 0x00)] {
+        wr(&mut m, a, v); // palette 0: entry 1 = $0F00 (red), entry 2 = $00F0 (green)
+    }
+    wr(&mut m, 0xC029, 0xC1); // NEWVIDEO: SHR
+    let mut r = Renderer::new(RenderConfig { video_type: VideoType::MonoWhite, ..Default::default() });
+    let card = m.card::<VidHd>(2).unwrap();
+    let src = WithVidHd { source: &m, vidhd: card };
+    r.redraw(&src);
+    assert_eq!(r.pixel(0, 0), [0xF0, 0, 0, 255]);
+    assert_eq!(r.pixel(2, 1), [0, 0xF0, 0, 255]);
+    assert_eq!(r.pixel(4, 0), [0, 0, 0, 255]);
+    assert_eq!(r.size(), (680, 436));
+}

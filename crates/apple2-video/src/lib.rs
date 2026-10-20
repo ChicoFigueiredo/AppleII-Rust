@@ -26,4 +26,4 @@ pub mod source;
 
 pub use config::{RenderConfig, RgbCard, VideoType};
 pub use renderer::{Renderer, BORDER_H, BORDER_W, FB_H, FB_W, VISIBLE_H, VISIBLE_W};
-pub use source::VideoSource;
+pub use source::{DebugView, VidHdView, VideoSource, WithVidHd};

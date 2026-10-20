@@ -74,6 +74,10 @@ impl Card for VidHd {
         Some(self)
     }
 
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+
     /// `VidHDCard::IORead` (:56): the Cn00 ROM is just the detection bytes.
     fn slot_rom_read(&mut self, offset: u8, ctx: &mut CardCtx) -> u8 {
         match offset {
@@ -126,6 +130,17 @@ impl Card for VidHd {
             }
             _ => false,
         }
+    }
+}
+
+/// The renderer's view of the card (the video crate defines the trait so it need not depend on
+/// this one): hand it over with `apple2_video::WithVidHd`.
+impl apple2_video::VidHdView for VidHd {
+    fn is_shr(&self) -> bool {
+        VidHd::is_shr(self)
+    }
+    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+        shr_cell(is_640, color_fill, palette, a, prev)
     }
 }
 
