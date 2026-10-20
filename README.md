@@ -25,12 +25,12 @@ Repositórios: [GitHub](https://github.com/ChicoFigueiredo/AppleII-Rust) · [Git
 | 3 | `apple2-video`: todos os modos e monitores | feito |
 | 4 | `apple2-storage`: Disk II, imagens, HDD/SmartPort | feito |
 | 5 | `apple2-audio`: alto-falante, Mockingboard/Phasor, SSI263, SAM | feito |
-| 6 | `apple2-cards` e `apple2-hostio`: mouse, Z80, relógios, 4Play, SNES MAX, VidHD, SSC, impressora, Uthernet | feito (bibliotecas) |
-| 7 | `apple2-config` e `apple2-savestate`: configuração, linha de comando, YAML do AppleWin | feito (bibliotecas) |
+| 6 | `apple2-cards` e `apple2-hostio`: mouse, Z80, relógios, 4Play, SNES MAX, VidHD, SSC, impressora, Uthernet | feito |
+| 7 | `apple2-config` e `apple2-savestate`: configuração, linha de comando, YAML do AppleWin | feito |
 | 8 | `apple2-debugger`: depurador completo sem interface | feito |
-| 9 | `applewin`: frontend (janela, barra, som, joystick, depurador na tela) | em integração: nem todas as Cartas estão ligadas |
+| 9 | `applewin`: frontend (janela, barra, som, joystick, depurador na tela) | feito: todas as Cartas do AppleWin ligadas; diferenças em [docs/manual/12](docs/manual/12-diferencas-em-relacao-ao-applewin.md) |
 | 10 | Manual em português, ajuda no programa (F1), CONTRIBUTING | feito |
-| 11 | CI e empacotamento nas três plataformas | CI feito; pacotes de release em andamento |
+| 11 | CI e empacotamento nas três plataformas | feito: CI e pacotes de release validados no Windows, Linux e macOS |
 
 A lista honesta do que falta em relação ao AppleWin está em [docs/manual/12-diferencas-em-relacao-ao-applewin.md](docs/manual/12-diferencas-em-relacao-ao-applewin.md); o histórico de decisões fica em [docs/plano-final.md](docs/plano-final.md), [docs/pendencias.md](docs/pendencias.md) e [docs/adr](docs/adr).
 
@@ -111,7 +111,7 @@ Todas as opções de linha de comando estão em [docs/manual/08-linha-de-comando
 | Pause | Pausa |
 | Scroll Lock | Velocidade máxima |
 | Print Screen | Captura a tela em PNG |
-| Shift+Insert, Ctrl+V | Cola o texto da área de transferência |
+| Shift+Insert, Ctrl+Shift+V | Cola o texto da área de transferência (Ctrl+V vai para o Apple, como no AppleWin) |
 | Alt esquerdo, Alt direito | Open Apple e Solid Apple (botões 0 e 1) |
 
 O manual completo está em [docs/manual](docs/manual/00-indice.md) (em português), e também dentro do programa com F1.

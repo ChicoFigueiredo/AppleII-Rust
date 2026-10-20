@@ -1,13 +1,31 @@
-# Pendências de integração
+# Pendências
 
-Itens que os agentes deixaram por depender de outro crate ou do núcleo. Serão resolvidos na integração.
+Estado em 2026-10-20, depois da onda final. As diferenças em relação ao AppleWin que o usuário percebe estão em [manual/12-diferencas-em-relacao-ao-applewin.md](manual/12-diferencas-em-relacao-ao-applewin.md). Aqui ficam só as pendências técnicas.
 
-## Frontend
+## Cartas e emulação
 
-- Avisar na tela de configuração que a SSC em modo TCP escuta em todas as interfaces, na porta 1977, como no AppleWin (apple2-hostio).
-- Save-state YAML do AppleWin: feito em `apple2-savestate` (`save_aws_yaml` / `load_aws_yaml`). O frontend só precisa fornecer um `LoadHost` (resolver de imagens e fábrica das cartas que dependem do hospedeiro) e a data/versão do cabeçalho.
-- Termos propostos para o glossário: ACIA, Backend, DNS virtual, Barramento de áudio, Mixer, Quadro de áudio.
+- Breakpoint card: existe, mas o depurador ainda não lhe entrega os breakpoints.
+- Mockingboard: um tipo de AY por carta. Os soquetes 3 e 4 do Phasor e as chaves `6522*-bad` não são modelados.
+- SNES MAX: os arquivos `-snes-max-user-joy` não são lidos.
+- ThunderClock Plus: emulado na biblioteca, mas sem tipo de carta para escolher na configuração.
+- Disk II e HDD: trocar a imagem pela tela de configuração só vale depois de reiniciar. O menu do drive insere na hora.
+- Z80: sem interrupções. Os efeitos colaterais do MEMPTR em INIR/OTIR não são modelados.
+
+## Interface
+
+- Os atalhos de teclado do depurador (setas, Tab, Espaço) não existem. Os mesmos efeitos estão nos comandos.
+- Ctrl+Print Screen copia só texto de 40 colunas (`text_screen` do núcleo).
+- Falta o indicador de setor ("S??") ao lado da trilha.
+- Falta importar o `.reg`/INI do AppleWin pela interface. Já funciona via `-conf`.
 
 ## Desempenho
 
-- Resolvido: o custo estava em `update_events` (calculava `floating_bus()` a cada instrução) e nos testes de observer/rom_tap por acesso. Agora `emulated_speed` ~90 MHz e o boot do DOS 3.3 ~88 MHz (CPU time). `tests/no_alloc.rs` garante zero alocações por passo. Resta: `Renderer::update` domina o laço completo (~15 MHz com ColorTv); `CardCtx` ainda calcula `floating_bus` de forma eager por chamada de cartão.
+- `emulated_speed` está em ~90 MHz e o boot do DOS 3.3 em ~88 MHz (tempo de CPU). `tests/no_alloc.rs` garante zero alocações por passo.
+- O laço completo com `Renderer::update` fica em ~15 MHz com Color TV (15× o tempo real). O custo está no renderizador.
+- `CardCtx` ainda calcula `floating_bus` de forma eager a cada chamada de carta.
+
+## Verificação
+
+- Nenhum arquivo de save-state real do AppleWin foi testado. Os fixtures foram transcritos do código C++.
+- As cores NTSC foram conferidas por plausibilidade, não comparadas pixel a pixel com o AppleWin.
+- Gamepad, captura de mouse e áudio só foram testados por testes unitários e em Xvfb, sem hardware real.
