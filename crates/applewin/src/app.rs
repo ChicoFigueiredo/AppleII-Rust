@@ -494,7 +494,7 @@ impl ApplicationHandler<UserEvent> for App {
         if self.window.is_some() {
             return;
         }
-        let attrs = Window::default_attributes().with_title("AppleII-Rust").with_inner_size(window_size(self.settings.video.window_scale, true));
+        let attrs = Window::default_attributes().with_title("AppleII-Rust").with_window_icon(crate::icon::window_icon()).with_inner_size(window_size(self.settings.video.window_scale, true));
         let window = match el.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {

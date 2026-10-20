@@ -39,3 +39,18 @@ check-windows:
     - apt-get install -y -qq gcc-mingw-w64-x86-64
     - cargo check --workspace --target x86_64-pc-windows-gnu
   allow_failure: true # crates that bind native Linux audio/input libs may not cross-check without a Windows sysroot
+
+# Release build + headless smoke test (no display needed) + Linux tarball as a pipeline artifact.
+build-linux:
+  stage: test
+  <<: *linux_deps
+  script:
+    - cargo build -p applewin --release
+    - target/release/applewin --headless-frames 300 --dump-screen out.png
+    - test -s out.png
+    - apt-get install -y -qq zip
+    - packaging/package.sh linux "${CI_COMMIT_TAG:-dev-$CI_COMMIT_SHORT_SHA}" target/release
+  artifacts:
+    paths:
+      - dist/*.tar.gz
+    expire_in: 2 weeks
