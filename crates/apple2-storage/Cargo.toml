@@ -11,3 +11,6 @@ apple2-core = { path = "../apple2-core" }
 apple2-roms = { path = "../apple2-roms" }
 flate2 = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+apple2-cpu = { path = "../apple2-cpu" }

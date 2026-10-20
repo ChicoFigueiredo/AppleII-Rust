@@ -31,6 +31,7 @@ name = "apple2-storage"
 version = "0.1.0"
 dependencies = [
  "apple2-core",
+ "apple2-cpu",
  "apple2-roms",
  "flate2",
  "zip",

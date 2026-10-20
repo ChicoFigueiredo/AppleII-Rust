@@ -63,6 +63,11 @@ impl CardCtx<'_> {
         self.memory.read(addr).unwrap_or(0)
     }
 
+    /// True if a CPU write to `addr` would land in RAM (`memwrite[page] != NULL`).
+    pub fn dma_writable(&self, addr: u16) -> bool {
+        self.memory.is_writable(addr)
+    }
+
     /// DMA write as the CPU would write (AppleWin `memwrite[]`). False, and nothing written, if
     /// `addr` is in I/O space or ROM (or a write-protected Language Card).
     pub fn dma_write(&mut self, addr: u16, value: u8) -> bool {

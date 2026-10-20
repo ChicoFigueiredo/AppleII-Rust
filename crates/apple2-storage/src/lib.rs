@@ -5,6 +5,7 @@
 
 pub mod disk2;
 pub mod format_track;
+pub mod hdd;
 pub mod image;
 pub mod nibble;
 pub mod store;

@@ -56,3 +56,63 @@ pub fn type_text(m: &mut Machine, text: &str) {
         }
     }
 }
+
+/// Builds a WOZ2 file from a 140K image: each nibble track becomes a bit stream with 10-bit
+/// sync bytes (an FF nibble followed by two zero bits), tracks mapped to quarter tracks `4t-1..=4t+1`.
+pub fn woz2_from_dsk(dsk: Vec<u8>, boot_sector_format: u8) -> Vec<u8> {
+    use apple2_storage::image::DiskImage;
+    let mut img = DiskImage::from_bytes("src.dsk", dsk).unwrap();
+    let mut tracks: Vec<(Vec<u8>, u32)> = Vec::new();
+    for t in 0..35 {
+        let mut buf = vec![0u8; 0x1A18];
+        let (n, _) = img.read_track((t * 2) as f32, &mut buf, true);
+        let mut bits: Vec<bool> = Vec::new();
+        for (i, &b) in buf[..n].iter().enumerate() {
+            bits.extend((0..8).rev().map(|i| b >> i & 1 != 0));
+            // Self-sync bytes (gaps) are FF + two zero bits; an isolated FF (volume 254, a checksum)
+            // is a plain nibble.
+            if b == 0xFF && matches!(buf.get(i + 1), Some(0xFF | 0xD5)) {
+                bits.extend([false, false]);
+            }
+        }
+        let count = bits.len() as u32;
+        let mut bytes = vec![0u8; bits.len().div_ceil(8)];
+        for (i, bit) in bits.iter().enumerate() {
+            if *bit {
+                bytes[i / 8] |= 0x80 >> (i % 8);
+            }
+        }
+        tracks.push((bytes, count));
+    }
+    let mut f = apple2_storage::woz::create_empty_woz2();
+    f[20 + 38] = boot_sector_format;
+    for t in 0..35usize {
+        for q in [4 * t, 4 * t + 1] {
+            f[88 + q] = t as u8;
+        }
+        if t > 0 {
+            f[88 + 4 * t - 1] = t as u8;
+        }
+    }
+    f.truncate(256 + 1280);
+    let mut next_block = 3u16;
+    let mut data = Vec::new();
+    for (i, (bytes, count)) in tracks.iter().enumerate() {
+        let blocks = bytes.len().div_ceil(512) as u16;
+        let rec = 256 + i * 8;
+        f[rec..rec + 2].copy_from_slice(&next_block.to_le_bytes());
+        f[rec + 2..rec + 4].copy_from_slice(&blocks.to_le_bytes());
+        f[rec + 4..rec + 8].copy_from_slice(&count.to_le_bytes());
+        let mut padded = bytes.clone();
+        padded.resize(blocks as usize * 512, 0);
+        data.extend(padded);
+        next_block += blocks;
+    }
+    f.extend(&data);
+    let size = (f.len() - 256) as u32;
+    f[252..256].copy_from_slice(&size.to_le_bytes());
+    let largest = tracks.iter().map(|(b, _)| b.len().div_ceil(512)).max().unwrap() as u16;
+    f[20 + 44..20 + 46].copy_from_slice(&largest.to_le_bytes());
+    apple2_storage::woz::update_crc(&mut f);
+    f
+}
