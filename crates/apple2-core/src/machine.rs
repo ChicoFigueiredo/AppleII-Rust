@@ -17,9 +17,12 @@ use crate::Model;
 use apple2_cpu::{Bus, Cpu, FLAG_I};
 
 mod io;
+mod state;
+
+pub use state::{CpuState, MachineState, StateError};
 
 /// What a synchronous event does when it expires. Later slices add device variants.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum EventAction {
     /// Assert the IRQ line for `source` (level; cleared with `Interrupts::set_irq`).
     RaiseIrq(IrqSource),
@@ -190,7 +193,15 @@ pub struct Machine {
 }
 
 impl Machine {
+    /// Builds a powered-on machine. Panics on an invalid configuration; use [`Machine::try_new`]
+    /// for user-supplied ones (the built-in [`MachineConfig::for_model`] defaults are always valid).
     pub fn new(config: MachineConfig) -> Self {
+        Self::try_new(config).expect("invalid MachineConfig")
+    }
+
+    /// [`Machine::new`] after [`MachineConfig::validate`].
+    pub fn try_new(config: MachineConfig) -> Result<Self, crate::ConfigError> {
+        config.validate()?;
         let rom = Self::rom_image(&config);
         let is_e = !config.model.is_apple2();
         let mut memory = Memory::new(config.model, &rom, config.aux_card, config.slots[0].is_some());
@@ -235,7 +246,7 @@ impl Machine {
             irq_defer_1_opcode: false,
         };
         m.reset();
-        m
+        Ok(m)
     }
 
     /// System ROM with the F8 overrides of `MemInitializeCustomF8ROM` (Memory.cpp:2120-2171), applied

@@ -10,3 +10,6 @@ repository.workspace = true
 apple2-cpu = { path = "../apple2-cpu" }
 apple2-roms = { path = "../apple2-roms" }
 serde.workspace = true
+
+[dev-dependencies]
+serde_json = "1"

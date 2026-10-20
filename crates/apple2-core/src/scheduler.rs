@@ -6,10 +6,12 @@
 //! closure keyed by [`EventId`], so later slices can route ids to cards/devices without this
 //! module knowing about them.
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncEvent {
     pub id: EventId,
     /// While queued: cycles relative to the previous event in the list.
@@ -32,6 +34,15 @@ pub struct Scheduler {
 impl Scheduler {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The delta list, head first (save-states).
+    pub fn events(&self) -> &[SyncEvent] {
+        &self.events
+    }
+
+    pub fn set_events(&mut self, events: Vec<SyncEvent>) {
+        self.events = events;
     }
 
     pub fn reset(&mut self) {

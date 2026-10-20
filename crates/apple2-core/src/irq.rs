@@ -1,7 +1,9 @@
 //! IRQ/NMI line aggregation: the line is active while any source is asserting it.
 
+use serde::{Deserialize, Serialize};
+
 /// Devices that can hold the IRQ (or NMI) line (AppleWin CPU.h `eIRQSRC`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IrqSource {
     Mockingboard6522 = 1 << 0,
     Speech = 1 << 1,
@@ -9,7 +11,7 @@ pub enum IrqSource {
     Mouse = 1 << 3,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Interrupts {
     irq: u32,
     nmi: u32,

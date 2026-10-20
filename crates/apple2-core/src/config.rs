@@ -35,7 +35,35 @@ pub struct MachineConfig {
     pub use_freeze_f8: bool,
 }
 
+/// Invalid [`MachineConfig`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfigError {
+    /// `custom_rom` length (bytes) is not 16K (//e: 4K internal Cx ROM + 12K) or 1-4 whole pages
+    /// of 12K (Memory.cpp:2105-2118; `MaxRomPages` is 4).
+    BadRomSize(usize),
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigError::BadRomSize(n) => write!(f, "custom ROM of {n} bytes: expected 16K or 12K x 1-4"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
 impl MachineConfig {
+    /// Checks what `Machine::new` cannot handle (currently the custom ROM size).
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        match &self.custom_rom {
+            Some(r) if r.len() != 0x4000 && !(r.len().is_multiple_of(0x3000) && (1..=4).contains(&(r.len() / 0x3000))) => {
+                Err(ConfigError::BadRomSize(r.len()))
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// Defaults per model: no Language Card on the ][ but one in slot 0 on the other
     /// ][-family models (the //e has it built in); Extended 80col on the //e family.
     pub fn for_model(model: Model) -> Self {

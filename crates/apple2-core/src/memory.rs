@@ -334,9 +334,18 @@ impl Memory {
         }
     }
 
+    /// Whether `s` was taken from a memory of the same sizes.
+    pub fn fits(&self, s: &MemoryState) -> bool {
+        s.main.len() == self.main.len()
+            && s.aux.len() == self.aux.len()
+            && s.lc.len() == self.lc.len()
+            && s.aux_bank < self.banks
+            && s.lc_region * LC_SIZE < self.lc.len()
+    }
+
     /// Restores a state taken from a memory of the same configuration; false if sizes differ.
     pub fn restore(&mut self, s: &MemoryState) -> bool {
-        if s.main.len() != self.main.len() || s.aux.len() != self.aux.len() || s.lc.len() != self.lc.len() || s.aux_bank >= self.banks || s.lc_region * LC_SIZE >= self.lc.len() {
+        if !self.fits(s) {
             return false;
         }
         self.main.copy_from_slice(&s.main);

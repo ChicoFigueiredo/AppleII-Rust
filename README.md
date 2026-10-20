@@ -21,7 +21,7 @@ Repositórios: [GitHub](https://github.com/ChicoFigueiredo/AppleII-Rust) ·
 |------|----------|--------|
 | 0 | Repositório, workspace, licença, ROMs, remotes GitHub/GitLab | feito |
 | 1 | `apple2-cpu`: 6502 NMOS + 65C02, tempo por ciclo, IRQ/NMI, decimal | feito (testes funcionais passam) |
-| 2 | `apple2-core`: mapa de memória (II/II+/IIe/Enhanced/IIc), soft switches, Language Card, 80col/AUX, teclado, alto-falante | pendente |
+| 2 | `apple2-core`: mapa de memória (II/II+/J-Plus/IIe/Enhanced e clones), soft switches, Language Card, 80col/AUX, teclado, alto-falante, porta de jogos, save-state; todos os Modelos com ROM dão boot até o prompt `]`/`*` nos testes. O IIc é só um esqueleto de porta (sem ROM), como no AppleWin | feito |
 | 3 | Vídeo: texto/lo-res/hi-res/double, NTSC e monitores RGB, charsets | pendente |
 | 4 | Disk II (DSK/DO/PO/NIB/WOZ/2MG), HDD/SmartPort, fita | pendente |
 | 5 | Áudio: alto-falante, Mockingboard (AY8910/6522), SSI263, SAM | pendente |

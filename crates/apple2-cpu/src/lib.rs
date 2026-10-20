@@ -90,6 +90,15 @@ impl Cpu {
         }
     }
 
+    /// NMI edge latched but not yet taken (save-states).
+    pub fn nmi_pending(&self) -> bool {
+        self.nmi_pending
+    }
+
+    pub fn set_nmi_pending(&mut self, pending: bool) {
+        self.nmi_pending = pending;
+    }
+
     pub fn is_cmos(&self) -> bool {
         self.variant == Variant::Cmos65C02
     }

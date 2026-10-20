@@ -14,15 +14,16 @@ pub mod model;
 pub mod scheduler;
 pub mod slots;
 pub mod speaker;
+pub mod text_screen;
 pub mod video_mode;
 pub mod video_scanner;
 pub mod video_standard;
 
 pub use card::{Card, CardCtx};
-pub use config::{AuxCardKind, CardKind, MachineConfig};
+pub use config::{AuxCardKind, CardKind, ConfigError, MachineConfig};
 pub use irq::{Interrupts, IrqSource};
 pub use keyboard::NavKey;
-pub use machine::Machine;
+pub use machine::{Machine, MachineState, StateError};
 pub use model::Model;
 pub use scheduler::{EventId, Scheduler, SyncEvent};
 pub use video_mode::VideoMode;
