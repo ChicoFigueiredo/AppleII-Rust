@@ -224,12 +224,12 @@ fn flags_and_stack_commands() {
     d.execute(&mut m, "cl n");
     assert_eq!(m.cpu().p & 0x80, 0);
     d.execute(&mut m, "push 12 34");
-    assert_eq!(m.cpu().sp, 0xFD);
+    assert_eq!(m.cpu().sp, 0xFA);
     d.execute(&mut m, "pop a");
-    assert_eq!((m.cpu().a, m.cpu().sp), (0x34, 0xFE));
+    assert_eq!((m.cpu().a, m.cpu().sp), (0x34, 0xFB));
     d.execute(&mut m, "jsr 300");
     assert_eq!(m.cpu().pc, 0x300);
-    assert_eq!(m.cpu().sp, 0xFC);
+    assert_eq!(m.cpu().sp, 0xF9);
 }
 
 #[test]

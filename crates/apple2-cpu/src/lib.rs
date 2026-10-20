@@ -3,7 +3,14 @@
 //! Behaviour follows AppleWin's `CPU/` sources: every bus access costs one cycle
 //! and calls [`Bus::tick`]; "internal" cycles do not touch the bus (so they never
 //! trigger Apple II soft switches); invalid 65C02 opcodes are NOPs with the same
-//! sizes/cycle counts as AppleWin; the Rockwell/WDC bit opcodes are not present.
+//! sizes/cycle counts as AppleWin; the Rockwell/WDC opcodes (RMB/SMB/BBR/BBS, WAI, STP) are not
+//! present, exactly as in AppleWin's `cpu65C02.h` ($CB and $DB are 1-cycle NOPs).
+//!
+//! Like AppleWin, the core performs *no* false reads: an indexed store never reads the
+//! unindexed address, a read-modify-write is one read plus one write (no double write), and
+//! the NMOS undocumented NOPs do not touch their operand address. (The only false read in
+//! AppleWin is the Mockingboard 6522 hack of GH#52, which lives in the card.) The undocumented
+//! NMOS opcodes are ported from `cpu_instructions.inl`/`cpu6502.h`, quirks included.
 
 #![forbid(unsafe_code)]
 
@@ -42,7 +49,6 @@ pub const VEC_IRQ: u16 = 0xFFFE;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mode {
-    Imp,
     Imm,
     Zp,
     ZpX,
@@ -59,6 +65,11 @@ enum Mode {
 enum Op {
     Adc, And, Asl, Bit, Cmp, Cpx, Cpy, Dec, Eor, Inc, Lda, Ldx, Ldy, Lsr, Ora, Rol, Ror, Sbc,
     Sta, Stx, Sty, Stz, Trb, Tsb,
+    // NMOS undocumented (AppleWin names)
+    Aso, Rla, Lse, Rra, Dcm, Ins, Axs, Lax, Anc, Alr, Arr, Xaa, Oal, Sax, Las, Nop,
+    Axa, Say, Tas, Xas,
+    // 65C02 undocumented "LoaD and Discard" (reads, result thrown away)
+    Ldd,
 }
 
 #[derive(Clone, Debug)]
@@ -74,19 +85,23 @@ pub struct Cpu {
     /// Level-triggered IRQ line.
     pub irq: bool,
     nmi_pending: bool,
-    /// STP executed (65C02): only reset recovers.
+    /// STP state (never entered: AppleWin's 65C02 has no STP). Kept for snapshots.
     pub stopped: bool,
-    /// WAI executed (65C02): resumes on interrupt.
+    /// WAI state (never entered: AppleWin's 65C02 has no WAI). Kept for snapshots.
     pub waiting: bool,
     /// Opcode of the instruction currently (or last) executed.
     pub opcode: u8,
+    /// An NMOS HLT/KIL opcode was executed (AppleWin `regs.bJammed`): the PC is left on the
+    /// opcode, so it re-executes (2 cycles) until reset; interrupts are still serviced.
+    pub jammed: bool,
 }
 
 impl Cpu {
     pub fn new(variant: Variant) -> Self {
         Cpu {
-            a: 0, x: 0, y: 0, sp: 0xFF, pc: 0, p: FLAG_U | FLAG_I, cycles: 0, variant,
-            irq: false, nmi_pending: false, stopped: false, waiting: false, opcode: 0,
+            // CpuInitialize(): A = X = Y = $FF, S = $1FF (the reset then leaves S at $FC).
+            a: 0xFF, x: 0xFF, y: 0xFF, sp: 0xFF, pc: 0, p: FLAG_U | FLAG_I, cycles: 0, variant,
+            irq: false, nmi_pending: false, stopped: false, waiting: false, opcode: 0, jammed: false,
         }
     }
 
@@ -109,10 +124,16 @@ impl Cpu {
     }
 
     pub fn reset<B: Bus>(&mut self, bus: &mut B) {
-        self.sp = 0xFF;
-        self.p = FLAG_U | FLAG_I;
+        // CPU.cpp CpuReset(): I set (the 65C02 also clears D), the other flags and A/X/Y are
+        // kept, and S drops by 3 as the three suppressed pushes would have done.
+        self.sp = self.sp.wrapping_sub(3);
+        self.p |= FLAG_U | FLAG_I;
+        if self.is_cmos() {
+            self.p &= !FLAG_D;
+        }
         self.stopped = false;
         self.waiting = false;
+        self.jammed = false;
         self.nmi_pending = false;
         let lo = bus.read(VEC_RESET) as u16;
         let hi = bus.read(VEC_RESET + 1) as u16;
@@ -230,80 +251,249 @@ impl Cpu {
                 let hi = self.rd(bus, z.wrapping_add(1) as u16) as u16;
                 lo | (hi << 8)
             }
-            Mode::Imp => unreachable!(),
         }
+    }
+
+    /// `ADC_NMOS` of cpu_instructions.inl. `temp` is a WORD in AppleWin (INS/RRA can pass 0x100).
+    fn adc_nmos(&mut self, temp: u16) {
+        let a = self.a as u16;
+        let c = (self.p & FLAG_C) as u16;
+        if self.p & FLAG_D != 0 {
+            let mut val = (a & 0x0F) + (temp & 0x0F) + c;
+            if val > 0x09 {
+                val += 0x06;
+            }
+            if val <= 0x0F {
+                val = (val & 0x0F) + (a & 0xF0) + (temp & 0xF0);
+            } else {
+                val = (val & 0x0F) + (a & 0xF0) + (temp & 0xF0) + 0x10;
+            }
+            let flagz = (a + temp + c) & 0xFF == 0;
+            let flagn = val & 0x80 != 0;
+            let flagv = ((a ^ val) & 0x80) != 0 && ((a ^ temp) & 0x80) == 0;
+            if (val & 0x1F0) > 0x90 {
+                val += 0x60;
+            }
+            self.set_flag(FLAG_C, (val & 0xFF0) > 0xF0);
+            self.set_flag(FLAG_Z, flagz);
+            self.set_flag(FLAG_N, flagn);
+            self.set_flag(FLAG_V, flagv);
+            self.a = val as u8;
+        } else {
+            let val = a + temp + c;
+            self.set_flag(FLAG_C, val > 0xFF);
+            self.set_flag(FLAG_V, (a & 0x80) == (temp & 0x80) && (a & 0x80) != (val & 0x80));
+            self.a = val as u8;
+            self.set_nz(self.a);
+        }
+    }
+
+    /// `SBC_NMOS` of cpu_instructions.inl (WORD arithmetic, wrapping like the C++ casts).
+    fn sbc_nmos(&mut self, temp: u16) {
+        let a = self.a as u16;
+        let nc = ((self.p & FLAG_C) ^ FLAG_C) as u16; // !flagc
+        let temp2 = a.wrapping_sub(temp).wrapping_sub(nc);
+        if self.p & FLAG_D != 0 {
+            let mut val = (a & 0x0F).wrapping_sub(temp & 0x0F).wrapping_sub(nc);
+            if val & 0x10 != 0 {
+                val = (val.wrapping_sub(0x06) & 0x0F)
+                    | (a & 0xF0).wrapping_sub(temp & 0xF0).wrapping_sub(0x10);
+            } else {
+                val = (val & 0x0F) | (a & 0xF0).wrapping_sub(temp & 0xF0);
+            }
+            if val & 0x100 != 0 {
+                val = val.wrapping_sub(0x60);
+            }
+            self.set_flag(FLAG_C, temp2 < 0x100);
+            self.set_nz(temp2 as u8);
+            self.set_flag(FLAG_V, ((a ^ temp2) & 0x80) != 0 && ((a ^ temp) & 0x80) != 0);
+            self.a = val as u8;
+        } else {
+            self.set_flag(FLAG_C, temp2 < 0x100);
+            self.set_flag(FLAG_V, (a & 0x80) != (temp & 0x80) && (a & 0x80) != (temp2 & 0x80));
+            self.a = temp2 as u8;
+            self.set_nz(self.a);
+        }
+    }
+
+    /// `ADC_CMOS` of cpu_instructions.inl.
+    fn adc_cmos(&mut self, temp: u8) {
+        let a = self.a as u32;
+        let t = temp as u32;
+        let c = (self.p & FLAG_C) as u32;
+        let mut flagv = (a ^ t) & 0x80 == 0;
+        let flagc;
+        let mut val;
+        if self.p & FLAG_D != 0 {
+            val = (a & 0x0F) + (t & 0x0F) + c;
+            if val >= 0x0A {
+                val = 0x10 | ((val + 6) & 0x0F);
+            }
+            val += (a & 0xF0) + (t & 0xF0);
+            if val >= 0xA0 {
+                flagc = true;
+                if val >= 0x180 {
+                    flagv = false;
+                }
+                val += 0x60;
+            } else {
+                flagc = false;
+                if val < 0x80 {
+                    flagv = false;
+                }
+            }
+        } else {
+            val = a + t + c;
+            if val >= 0x100 {
+                flagc = true;
+                if val >= 0x180 {
+                    flagv = false;
+                }
+            } else {
+                flagc = false;
+                if val < 0x80 {
+                    flagv = false;
+                }
+            }
+        }
+        self.set_flag(FLAG_C, flagc);
+        self.set_flag(FLAG_V, flagv);
+        self.a = val as u8;
+        self.set_nz(self.a);
+    }
+
+    /// `SBC_CMOS` of cpu_instructions.inl.
+    fn sbc_cmos(&mut self, temp: u8) {
+        let a = self.a as i32;
+        let t = temp as i32;
+        let c = (self.p & FLAG_C) as i32;
+        let mut flagv = (a ^ t) & 0x80 != 0;
+        let flagc;
+        let mut val: i32;
+        if self.p & FLAG_D != 0 {
+            let mut temp2 = 0x0F + (a & 0x0F) - (t & 0x0F) + c;
+            if temp2 < 0x10 {
+                val = 0;
+                temp2 -= 0x06;
+            } else {
+                val = 0x10;
+                temp2 -= 0x10;
+            }
+            val += 0xF0 + (a & 0xF0) - (t & 0xF0);
+            if val < 0x100 {
+                flagc = false;
+                if val < 0x80 {
+                    flagv = false;
+                }
+                val -= 0x60;
+            } else {
+                flagc = true;
+                if val >= 0x180 {
+                    flagv = false;
+                }
+            }
+            val += temp2;
+        } else {
+            val = 0xFF + a - t + c;
+            if val < 0x100 {
+                flagc = false;
+                if val < 0x80 {
+                    flagv = false;
+                }
+            } else {
+                flagc = true;
+                if val >= 0x180 {
+                    flagv = false;
+                }
+            }
+        }
+        self.set_flag(FLAG_C, flagc);
+        self.set_flag(FLAG_V, flagv);
+        self.a = val as u8;
+        self.set_nz(self.a);
     }
 
     fn adc(&mut self, m: u8) {
-        let a = self.a;
-        let c = (self.p & FLAG_C) as u32;
-        if self.p & FLAG_D == 0 {
-            let sum = a as u32 + m as u32 + c;
-            let r = sum as u8;
-            self.set_flag(FLAG_C, sum > 0xFF);
-            self.set_flag(FLAG_V, (!(a ^ m) & (a ^ r) & 0x80) != 0);
-            self.a = r;
-            self.set_nz(r);
-        } else {
-            let mut al = (a & 0xF) as u32 + (m & 0xF) as u32 + c;
-            if al >= 0xA {
-                al = ((al + 6) & 0xF) + 0x10;
-            }
-            let mut sum = (a & 0xF0) as u32 + (m & 0xF0) as u32 + al;
-            let bin = (a as u32 + m as u32 + c) as u8;
-            self.set_flag(FLAG_V, (!(a ^ m) & (a ^ sum as u8) & 0x80) != 0);
-            if sum >= 0xA0 {
-                sum += 0x60;
-            }
-            self.set_flag(FLAG_C, sum >= 0x100);
-            self.a = sum as u8;
-            if self.is_cmos() {
-                self.set_nz(self.a);
-            } else {
-                // NMOS: Z from the binary result, N from the pre-correction sum.
-                self.set_flag(FLAG_Z, bin == 0);
-                let pre = (a & 0xF0) as u32 + (m & 0xF0) as u32 + al;
-                self.set_flag(FLAG_N, pre & 0x80 != 0);
-            }
-        }
+        if self.is_cmos() { self.adc_cmos(m) } else { self.adc_nmos(m as u16) }
     }
 
     fn sbc(&mut self, m: u8) {
-        let a = self.a;
-        let c = (self.p & FLAG_C) as i32;
-        let bin = a as i32 - m as i32 - (1 - c);
-        let binr = bin as u8;
-        if self.p & FLAG_D == 0 {
-            self.set_flag(FLAG_C, bin >= 0);
-            self.set_flag(FLAG_V, ((a ^ m) & (a ^ binr) & 0x80) != 0);
-            self.a = binr;
-            self.set_nz(binr);
-        } else {
-            let al = (a & 0xF) as i32 - (m & 0xF) as i32 + c - 1;
-            self.set_flag(FLAG_C, bin >= 0);
-            self.set_flag(FLAG_V, ((a ^ m) & (a ^ binr) & 0x80) != 0);
-            if self.is_cmos() {
-                let mut d = bin;
-                if d < 0 {
-                    d -= 0x60;
-                }
-                if al < 0 {
-                    d -= 0x06;
-                }
-                self.a = d as u8;
-                self.set_nz(self.a);
-            } else {
-                let mut al2 = al;
-                if al2 < 0 {
-                    al2 = ((al2 - 6) & 0xF) - 0x10;
-                }
-                let mut r = (a & 0xF0) as i32 - (m & 0xF0) as i32 + al2;
-                if r < 0 {
-                    r -= 0x60;
-                }
-                self.a = r as u8;
-                self.set_nz(binr);
+        if self.is_cmos() { self.sbc_cmos(m) } else { self.sbc_nmos(m as u16) }
+    }
+
+    /// `ARR` (immediate, NMOS undocumented), cpu_instructions.inl.
+    fn arr(&mut self, m: u8) {
+        let temp = (self.a & m) as u16;
+        let c = self.p & FLAG_C != 0;
+        let mut val = temp | if c { 0x100 } else { 0 };
+        val >>= 1;
+        if self.p & FLAG_D != 0 {
+            self.set_flag(FLAG_N, c);
+            self.set_flag(FLAG_Z, val & 0xFF == 0);
+            self.set_flag(FLAG_V, (val ^ temp) & 0x40 != 0);
+            if (val & 0x0F) + (val & 0x01) > 0x05 {
+                val = (val & 0xF0) | ((val + 0x06) & 0x0F);
             }
+            if (val & 0xF0) + (val & 0x10) > 0x50 {
+                val = (val & 0x0F) | ((val + 0x60) & 0xF0);
+                self.set_flag(FLAG_C, true);
+            } else {
+                self.set_flag(FLAG_C, false);
+            }
+            self.a = val as u8;
+        } else {
+            self.set_nz(val as u8);
+            self.set_flag(FLAG_C, val & 0x40 != 0);
+            self.set_flag(FLAG_V, ((val & 0x40) ^ ((val & 0x20) << 1)) != 0);
+            self.a = val as u8;
+        }
+    }
+
+    /// Read-modify-write undocumented NMOS ops (ASO/RLA/LSE/RRA/DCM/INS); returns the byte
+    /// written back. The `u16` wrap-around of AppleWin's `WORD val` is kept (DCM of 0, INS of $FF).
+    fn undoc_rmw(&mut self, op: Op, v: u8) -> u8 {
+        let c = (self.p & FLAG_C) as u16;
+        match op {
+            Op::Aso => {
+                let val = (v as u16) << 1;
+                self.set_flag(FLAG_C, val > 0xFF);
+                self.a |= val as u8;
+                self.set_nz(self.a);
+                val as u8
+            }
+            Op::Rla => {
+                let val = ((v as u16) << 1) | c;
+                self.set_flag(FLAG_C, val > 0xFF);
+                self.a &= val as u8;
+                self.set_nz(self.a);
+                val as u8
+            }
+            Op::Lse => {
+                self.set_flag(FLAG_C, v & 1 != 0);
+                let val = v >> 1;
+                self.a ^= val;
+                self.set_nz(self.a);
+                val
+            }
+            Op::Rra => {
+                let val = (v >> 1) | if c != 0 { 0x80 } else { 0 };
+                self.set_flag(FLAG_C, v & 1 != 0);
+                self.adc_nmos(val as u16);
+                val
+            }
+            Op::Dcm => {
+                let val = (v as u16).wrapping_sub(1);
+                let a = self.a as u16;
+                self.set_flag(FLAG_C, a >= val);
+                self.set_nz(a.wrapping_sub(val) as u8);
+                val as u8
+            }
+            Op::Ins => {
+                let val = v as u16 + 1;
+                self.sbc_nmos(val);
+                val as u8
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -382,6 +572,38 @@ impl Cpu {
                 if !imm {
                     self.p = (self.p & !(FLAG_N | FLAG_V)) | (m & (FLAG_N | FLAG_V));
                 }
+            }
+            Op::Lax => { self.a = m; self.x = m; self.set_nz(m) }
+            Op::Anc => {
+                self.a &= m;
+                self.set_nz(self.a);
+                self.set_flag(FLAG_C, self.a & 0x80 != 0);
+            }
+            Op::Alr => {
+                self.a &= m;
+                self.set_flag(FLAG_C, self.a & 1 != 0);
+                self.a >>= 1;
+                self.set_nz(self.a); // N is 0 after the shift
+            }
+            Op::Arr => self.arr(m),
+            Op::Xaa => { self.a = self.x & m; self.set_nz(self.a) }
+            Op::Oal => {
+                self.a = (self.a | 0xEE) & m;
+                self.x = self.a;
+                self.set_nz(self.a);
+            }
+            Op::Sax => {
+                let t = self.a & self.x;
+                self.set_flag(FLAG_C, t >= m);
+                self.x = t.wrapping_sub(m);
+                self.set_nz(self.x);
+            }
+            Op::Las => {
+                let v = m & self.sp;
+                self.a = v;
+                self.x = v;
+                self.sp = v;
+                self.set_nz(v);
             }
             _ => unreachable!(),
         }
@@ -511,16 +733,23 @@ impl Cpu {
             0xC6 => Some((Dec, Zp)), 0xD6 => Some((Dec, ZpX)), 0xCE => Some((Dec, Abs)), 0xDE => Some((Dec, AbsX)),
             0x14 if cmos => Some((Trb, Zp)), 0x1C if cmos => Some((Trb, Abs)),
             0x04 if cmos => Some((Tsb, Zp)), 0x0C if cmos => Some((Tsb, Abs)),
+            // 65C02 undocumented NOPs that do touch the bus / consume a data cycle
+            0x02 | 0x22 | 0x42 | 0x62 | 0x82 | 0xC2 | 0xE2 if cmos => Some((Nop, Imm)),
+            0x44 if cmos => Some((Nop, Zp)),
+            0x54 | 0xD4 | 0xF4 if cmos => Some((Nop, ZpX)),
+            0xDC | 0xFC if cmos => Some((Ldd, Abs)),
+            _ if !cmos => nmos_undocumented(opcode),
             _ => None,
         };
         if let Some((op, mode)) = m {
             match op {
-                Sta | Stx | Sty | Stz => {
+                Sta | Stx | Sty | Stz | Axs => {
                     let ea = self.ea(bus, mode, true);
                     let v = match op {
                         Sta => self.a,
                         Stx => self.x,
                         Sty => self.y,
+                        Axs => self.a & self.x,
                         _ => 0,
                     };
                     self.wr(bus, ea, v);
@@ -534,10 +763,30 @@ impl Cpu {
                     let r = self.rmw(op, v);
                     self.wr(bus, ea, r);
                 }
+                Aso | Rla | Lse | Rra | Dcm | Ins => {
+                    let ea = self.ea(bus, mode, true);
+                    let v = self.rd(bus, ea);
+                    self.idle(bus);
+                    let r = self.undoc_rmw(op, v);
+                    self.wr(bus, ea, r);
+                }
+                // NOPs consume the data cycle but, as in AppleWin, never access the operand address.
+                Nop => {
+                    self.ea(bus, mode, false);
+                    self.idle(bus);
+                }
+                Ldd => {
+                    let ea = self.ea(bus, mode, false);
+                    self.rd(bus, ea);
+                }
+                Axa | Say | Tas | Xas => self.store_and_high(bus, op, mode),
                 _ => {
                     let ea = self.ea(bus, mode, false);
                     let v = self.rd(bus, ea);
                     self.read_op(op, v, mode == Imm);
+                    if cmos && matches!(op, Adc | Sbc) && self.p & FLAG_D != 0 {
+                        self.idle(bus); // 65C02 decimal-mode ADC/SBC: +1 cycle
+                    }
                 }
             }
             return;
@@ -595,6 +844,9 @@ impl Cpu {
                 let lo = self.rd(bus, ptr) as u16;
                 let hi_addr = if cmos {
                     self.idle(bus);
+                    if ptr & 0xFF == 0xFF {
+                        self.idle(bus); // IABS_CMOS: +1 cycle when the pointer straddles a page
+                    }
                     ptr.wrapping_add(1)
                 } else {
                     (ptr & 0xFF00) | (ptr.wrapping_add(1) & 0x00FF)
@@ -640,49 +892,102 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(1);
                 self.interrupt(bus, VEC_IRQ, true);
             }
-            0xCB if cmos => { self.waiting = true; self.idle(bus); self.idle(bus) }
-            0xDB if cmos => { self.stopped = true; self.idle(bus); self.idle(bus) }
+            // NMOS HLT/KIL (AppleWin: jam flag, PC stays on the opcode, 2 cycles)
+            0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2
+                if !cmos =>
+            {
+                self.idle(bus);
+                self.jammed = true;
+                self.pc = self.pc.wrapping_sub(1);
+            }
+            // NMOS 2-cycle implied NOPs
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA if !cmos => self.idle(bus),
             _ => self.invalid(bus, opcode),
         }
     }
 
-    /// Undefined opcodes: sizes/cycles as in AppleWin (NOP variants).
+    /// Remaining 65C02 undefined opcodes: $x3/$x7/$xB/$xF are 1-cycle 1-byte NOPs (AppleWin
+    /// `NOP CYC(1)`, GH#292) and $5C is an 8-cycle 3-byte NOP; the rest was handled by the table.
     fn invalid<B: Bus>(&mut self, bus: &mut B, opcode: u8) {
-        if self.is_cmos() {
-            match opcode {
-                0x02 | 0x22 | 0x42 | 0x62 | 0x82 | 0xC2 | 0xE2 => { self.fetch(bus); }
-                0x44 => { self.ea(bus, Mode::Zp, false); self.idle(bus); }
-                0x54 | 0xD4 | 0xF4 => { let a = self.ea(bus, Mode::ZpX, false); self.rd(bus, a); }
-                0x5C => {
-                    self.fetch16(bus);
-                    for _ in 0..5 { self.idle(bus); }
-                }
-                0xDC | 0xFC => { let a = self.fetch16(bus); self.rd(bus, a); }
-                _ => {}
-            }
-        } else {
-            // NMOS undocumented opcodes: modelled as NOPs of the correct length.
-            // Full undocumented-instruction behaviour is on the roadmap.
-            let (mode, _) = match opcode & 0x1F {
-                0x00 | 0x02 | 0x09 | 0x0B => (Mode::Imm, ()),
-                0x04..=0x07 => (Mode::Zp, ()),
-                0x0C..=0x0F => (Mode::Abs, ()),
-                0x14..=0x17 => (Mode::ZpX, ()),
-                0x1C..=0x1F => (Mode::AbsX, ()),
-                0x19 | 0x1B => (Mode::AbsY, ()),
-                0x01 | 0x03 => (Mode::IndX, ()),
-                0x11 | 0x13 => (Mode::IndY, ()),
-                0x12 | 0x1A | 0x0A => (Mode::Imp, ()),
-                _ => (Mode::Imp, ()),
-            };
-            if mode == Mode::Imp {
+        if opcode == 0x5C {
+            self.fetch16(bus);
+            for _ in 0..5 {
                 self.idle(bus);
-            } else {
-                let a = self.ea(bus, mode, false);
-                self.rd(bus, a);
             }
         }
     }
+
+    /// `AXA`/`SAY`/`TAS`/`XAS` (GH#282): store `reg & (high byte of base + 1)`; when the index
+    /// crosses a page the value also replaces the high byte of the effective address.
+    fn store_and_high<B: Bus>(&mut self, bus: &mut B, op: Op, mode: Mode) {
+        let base = match mode {
+            Mode::IndY => {
+                let z = self.fetch(bus);
+                let lo = self.rd(bus, z as u16) as u16;
+                let hi = self.rd(bus, z.wrapping_add(1) as u16) as u16;
+                lo | (hi << 8)
+            }
+            _ => self.fetch16(bus),
+        };
+        let idx = if mode == Mode::AbsX { self.x } else { self.y } as u16;
+        let mut addr = base.wrapping_add(idx);
+        self.idle(bus);
+        let hi1 = ((base >> 8) as u8).wrapping_add(1);
+        let val = match op {
+            Op::Axa => self.a & self.x & hi1,
+            Op::Say => self.y & hi1,
+            Op::Tas => {
+                self.sp = self.a & self.x;
+                self.sp & hi1
+            }
+            _ => self.x & hi1, // Xas
+        };
+        if (base ^ addr) >> 8 != 0 {
+            addr = ((val as u16) << 8) | (addr & 0xFF);
+        }
+        self.wr(bus, addr, val);
+    }
+}
+
+/// NMOS undocumented opcodes implemented by AppleWin's `cpu6502.h` as (operation, mode).
+/// Page-crossing "const" variants (fixed cycle count) vs "opt" ones is decided by the operation.
+fn nmos_undocumented(opcode: u8) -> Option<(Op, Mode)> {
+    use Mode::*;
+    use Op::*;
+    Some(match opcode {
+        0x03 => (Aso, IndX), 0x07 => (Aso, Zp), 0x0F => (Aso, Abs), 0x13 => (Aso, IndY),
+        0x17 => (Aso, ZpX), 0x1B => (Aso, AbsY), 0x1F => (Aso, AbsX),
+        0x23 => (Rla, IndX), 0x27 => (Rla, Zp), 0x2F => (Rla, Abs), 0x33 => (Rla, IndY),
+        0x37 => (Rla, ZpX), 0x3B => (Rla, AbsY), 0x3F => (Rla, AbsX),
+        0x43 => (Lse, IndX), 0x47 => (Lse, Zp), 0x4F => (Lse, Abs), 0x53 => (Lse, IndY),
+        0x57 => (Lse, ZpX), 0x5B => (Lse, AbsY), 0x5F => (Lse, AbsX),
+        0x63 => (Rra, IndX), 0x67 => (Rra, Zp), 0x6F => (Rra, Abs), 0x73 => (Rra, IndY),
+        0x77 => (Rra, ZpX), 0x7B => (Rra, AbsY), 0x7F => (Rra, AbsX),
+        0xC3 => (Dcm, IndX), 0xC7 => (Dcm, Zp), 0xCF => (Dcm, Abs), 0xD3 => (Dcm, IndY),
+        0xD7 => (Dcm, ZpX), 0xDB => (Dcm, AbsY), 0xDF => (Dcm, AbsX),
+        0xE3 => (Ins, IndX), 0xE7 => (Ins, Zp), 0xEF => (Ins, Abs), 0xF3 => (Ins, IndY),
+        0xF7 => (Ins, ZpX), 0xFB => (Ins, AbsY), 0xFF => (Ins, AbsX),
+        0x83 => (Axs, IndX), 0x87 => (Axs, Zp), 0x8F => (Axs, Abs), 0x97 => (Axs, ZpY),
+        0xA3 => (Lax, IndX), 0xA7 => (Lax, Zp), 0xAF => (Lax, Abs), 0xB3 => (Lax, IndY),
+        0xB7 => (Lax, ZpY), 0xBF => (Lax, AbsY),
+        0x0B | 0x2B => (Anc, Imm),
+        0x4B => (Alr, Imm),
+        0x6B => (Arr, Imm),
+        0x8B => (Xaa, Imm),
+        0xAB => (Oal, Imm),
+        0xCB => (Sax, Imm),
+        0xEB => (Sbc, Imm),
+        0xBB => (Las, AbsY),
+        0x93 => (Axa, IndY), 0x9F => (Axa, AbsY), 0x9C => (Say, AbsX),
+        0x9B => (Tas, AbsY), 0x9E => (Xas, AbsY),
+        // NOPs
+        0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => (Nop, Imm),
+        0x04 | 0x44 | 0x64 => (Nop, Zp),
+        0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => (Nop, ZpX),
+        0x0C => (Nop, Abs),
+        0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => (Nop, AbsX),
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -737,7 +1042,7 @@ mod tests {
         assert_eq!(n.pc, 0x1234);
         let mut c = Cpu::new(Variant::Cmos65C02);
         c.pc = 0x300;
-        assert_eq!(c.step(&mut m), 6);
+        assert_eq!(c.step(&mut m), 7); // AppleWin IABS_CMOS: +1 when the pointer straddles a page
         assert_eq!(c.pc, 0x5634);
     }
 
