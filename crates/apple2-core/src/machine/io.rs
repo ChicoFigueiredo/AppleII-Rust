@@ -1,17 +1,33 @@
 //! $C000-$CFFF dispatch of the [`Board`] (AppleWin Memory.cpp `IORead_C0xx`/`IOWrite_C0xx`
 //! tables, :540-870). Keyboard, speaker and game I/O are stubs until slice 6; slot cards and
-//! the floating bus value arrives in slice 5. Slot cards are dispatched through [`crate::card::Card`].
+//! the floating bus is the video scanner byte. Slot cards are dispatched through [`crate::card::Card`].
 
 use super::Board;
 use crate::slots::{expansion_offset, ExpansionRom};
 use crate::language_card::is_rmw_abs;
 use crate::memory::mf;
+use crate::video_scanner::Switches;
 use apple2_cpu::Variant;
 
 impl Board {
-    /// Value read from an address nobody drives (slice 5 returns the video scanner byte).
+    /// Cycle of the frame the video scanner is at for an access now: the start of the executing
+    /// instruction (AppleWin advances the scanner after each opcode, cpu6502.h:385).
+    fn scan_cycle(&self) -> u32 {
+        (self.cycles_in_frame + self.cycles_per_frame - self.opcode_ticks) % self.cycles_per_frame
+    }
+
+    /// Value read from an address nobody drives: the byte the video generator is fetching from
+    /// main RAM (`MemReadFloatingBus`, Memory.cpp:2458-2476). AppleWin's special case for an empty
+    /// aux slot only matters because it reads `mem`, which may show aux; we always read main.
     pub fn floating_bus(&self) -> u8 {
-        0
+        let m = self.memory.memmode();
+        let sw = Switches {
+            text: self.video.text,
+            mixed: self.video.mixed,
+            hires: m & mf::HIRES != 0,
+            page2: m & mf::PAGE2 != 0 && m & mf::STORE80 == 0,
+        };
+        self.memory.peek_main(self.scanner.address(self.scan_cycle(), sw))
     }
 
     // ---- Slice 6 stubs: keyboard, speaker, game port. ----
@@ -41,11 +57,9 @@ impl Board {
         self.floating_bus()
     }
 
-    // ---- Slice 5 stub. ----
-
-    /// `VideoGetVblBar`: true outside the vertical blank.
+    /// `VideoGetVblBar` (Video.cpp:483): true outside the vertical blank.
     fn vbl_bar(&self) -> bool {
-        true
+        self.scanner.vbl_bar(self.scan_cycle())
     }
 
     // ---- Slice 3/4 seams. ----

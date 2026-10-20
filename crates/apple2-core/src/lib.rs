@@ -12,6 +12,7 @@ pub mod model;
 pub mod scheduler;
 pub mod slots;
 pub mod video_mode;
+pub mod video_scanner;
 pub mod video_standard;
 
 pub use card::{Card, CardCtx};

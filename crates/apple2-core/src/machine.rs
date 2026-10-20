@@ -5,6 +5,7 @@ use crate::irq::{Interrupts, IrqSource};
 use crate::language_card::LanguageCards;
 use crate::memory::Memory;
 use crate::video_mode::VideoMode;
+use crate::video_scanner::VideoScanner;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
 use crate::slots::Slots;
 use crate::Card;
@@ -43,6 +44,10 @@ pub struct Board {
     cycles: u64,
     cycles_in_frame: u32,
     cycles_per_frame: u32,
+    scanner: VideoScanner,
+    /// Cycles ticked by the instruction in execution. AppleWin advances the video scanner after
+    /// each opcode (cpu6502.h:385), so I/O during it sees the scanner at the opcode's start.
+    opcode_ticks: u32,
     frames: u64,
     /// Cycles ticked since the scheduler was last updated (it advances per opcode, as in AppleWin).
     pending: u32,
@@ -154,6 +159,7 @@ impl Bus for Board {
     fn tick(&mut self) {
         self.cycles += 1;
         self.pending += 1;
+        self.opcode_ticks += 1;
         self.cycles_in_frame += 1;
         if self.cycles_in_frame == self.cycles_per_frame {
             self.cycles_in_frame = 0;
@@ -204,6 +210,8 @@ impl Machine {
             cycles: 0,
             cycles_in_frame: 0,
             cycles_per_frame: config.video_standard.cycles_per_frame(),
+            scanner: VideoScanner::new(config.video_standard, config.model.value() & 0xFFFE == 0),
+            opcode_ticks: 0,
             frames: 0,
             pending: 0,
             opcode_pc: 0,
@@ -352,6 +360,7 @@ impl Machine {
         self.cpu.reset(&mut self.board);
         self.irq_on_last_opcode_cycle = false;
         self.irq_defer_1_opcode = false;
+        self.board.opcode_ticks = 0;
     }
 
     /// Power off and on: RAM cleared, counters, events and interrupt lines reset.
@@ -369,6 +378,7 @@ impl Machine {
         b.cycles_in_frame = 0;
         b.frames = 0;
         b.pending = 0;
+        b.opcode_ticks = 0;
         self.cpu.cycles = 0;
         self.nmi_line = false;
         self.reset_cpu_and_board(true);
@@ -376,6 +386,7 @@ impl Machine {
 
     /// Executes one instruction (or interrupt entry); returns the cycles it took.
     pub fn step(&mut self) -> u32 {
+        self.board.opcode_ticks = 0;
         let nmi = self.board.interrupts.nmi_line();
         if nmi && !self.nmi_line {
             self.cpu.nmi();
@@ -400,6 +411,7 @@ impl Machine {
         if self.board.update_events() && self.cpu.p & FLAG_I == 0 {
             self.irq_on_last_opcode_cycle = true;
         }
+        self.board.opcode_ticks = 0; // the scanner catches up (CPU.cpp after CheckSynchronousInterruptSources)
         cycles
     }
 

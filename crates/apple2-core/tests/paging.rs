@@ -230,7 +230,7 @@ fn video_flag_switches_and_status() {
 }
 
 #[test]
-fn vbl_status_bit_is_outside_vbl_stub_and_key_bits_are_zero() {
+fn vbl_status_bit_is_set_on_the_visible_lines_and_key_bits_are_zero() {
     let mut m = e(AuxCardKind::Extended80Col);
     assert_eq!(rd(&mut m, 0xC019), 0x80);
 }
