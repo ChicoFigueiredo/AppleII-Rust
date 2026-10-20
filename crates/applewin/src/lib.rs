@@ -10,6 +10,7 @@ pub mod emu;
 pub mod gfx;
 pub mod headless;
 pub mod host;
+pub mod icon;
 pub mod joy;
 pub mod keymap;
 pub mod pacing;
