@@ -230,12 +230,13 @@ mod tests {
 
     #[test]
     fn extension_rules() {
-        let e = |s: &str| ensure_aws_yaml_ext(Path::new(s)).to_string_lossy().into_owned();
-        assert_eq!(e("/x/file"), "/x/file.aws.yaml");
-        assert_eq!(e("/x/file.aws"), "/x/file.aws.yaml");
-        assert_eq!(e("/x/file.yaml"), "/x/file.aws.yaml");
-        assert_eq!(e("/x/file.aws.yaml"), "/x/file.aws.yaml");
-        assert_eq!(e("/x/file.dsk"), "/x/file.dsk.aws.yaml");
+        // Compare as paths: on Windows the joined separator is `\`.
+        let e = |s: &str| ensure_aws_yaml_ext(Path::new(s));
+        assert_eq!(e("/x/file"), Path::new("/x/file.aws.yaml"));
+        assert_eq!(e("/x/file.aws"), Path::new("/x/file.aws.yaml"));
+        assert_eq!(e("/x/file.yaml"), Path::new("/x/file.aws.yaml"));
+        assert_eq!(e("/x/file.aws.yaml"), Path::new("/x/file.aws.yaml"));
+        assert_eq!(e("/x/file.dsk"), Path::new("/x/file.dsk.aws.yaml"));
     }
 
     #[test]
