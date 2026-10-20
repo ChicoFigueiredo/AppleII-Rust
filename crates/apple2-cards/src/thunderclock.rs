@@ -25,7 +25,7 @@ const CMD_SHIFT: u8 = 1;
 const CMD_TIME_READ: u8 = 3;
 
 fn bcd(v: u8) -> u64 {
-    u64::from((v / 10) << 4 | v % 10)
+    u64::from(((v / 10) << 4) | (v % 10))
 }
 
 /// The uPD1990AC 40-bit register for `t`.

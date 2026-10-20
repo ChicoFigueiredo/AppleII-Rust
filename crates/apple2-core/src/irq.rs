@@ -9,6 +9,7 @@ pub enum IrqSource {
     Speech = 1 << 1,
     Ssc = 1 << 2,
     Mouse = 1 << 3,
+    BreakpointCard = 1 << 4,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

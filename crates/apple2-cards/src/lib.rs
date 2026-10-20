@@ -5,16 +5,26 @@
 
 #![forbid(unsafe_code)]
 
+pub mod breakpoint;
+pub mod dongles;
+pub mod fourplay;
 pub mod mouse;
 pub mod nsc;
 pub mod pia6821;
+pub mod snesmax;
 pub mod softcard;
 pub mod state;
 pub mod thunderclock;
 pub mod time;
+pub mod vidhd;
 pub mod z80;
 
+pub use breakpoint::BreakpointCard;
+pub use dongles::{Dongle, DongleKind};
+pub use fourplay::FourPlay;
 pub use nsc::NoSlotClock;
+pub use snesmax::SnesMax;
+pub use vidhd::VidHd;
 pub use softcard::SoftCard;
 pub use thunderclock::{ClockModel, ThunderClock};
 pub use time::{FixedClock, HostClock, WallTime};
