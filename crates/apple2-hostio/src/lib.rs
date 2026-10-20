@@ -5,8 +5,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod printer;
 pub mod serial;
 pub mod ssc;
 
 pub use serial::{LoopbackHandle, LoopbackSerial, SerialBackend, TcpServerSerial};
+pub use printer::{FileSink, MemorySink, ParallelPrinterCard, PrinterOptions, PrinterSink};
 pub use ssc::SuperSerialCard;
