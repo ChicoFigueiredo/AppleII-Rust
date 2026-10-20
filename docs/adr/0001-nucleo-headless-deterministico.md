@@ -1,0 +1,3 @@
+# Núcleo da Máquina headless e determinístico
+
+O AppleWin executa a CPU em lotes (`CpuExecute(N)`), e os dispositivos se atualizam por eventos sincronizados, presos ao loop de mensagens do Windows. Aqui, o núcleo (`apple2-core`) não depende de janela, áudio nem relógio do hospedeiro: ele avança a Máquina Ciclo a Ciclo via `Bus::tick`. O frontend apenas pede "rode N ciclos" e consome o Quadro e os eventos de áudio. O motivo é ter o mesmo comportamento nas três plataformas, testes de boot sem interface e reprodutibilidade (save-states, depuração). Por isso, portes literais de trechos do AppleWin que leem o tempo real precisam ser reescritos em termos de Ciclos.
