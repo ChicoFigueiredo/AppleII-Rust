@@ -261,6 +261,7 @@ impl Debugger {
     fn draw_register(&self, g: &mut Grid, y: usize, name: &str, bytes: u8, value: u16, source_reg: bool, sp: bool) {
         let c = |id: DebugColor| self.colors.get(id);
         let bg = c(DebugColor::BG_DATA_1);
+        g.fill(INFO_COL_1, y, 10, bg);
         let mut x = INFO_COL_1;
         if !source_reg {
             x += 1;

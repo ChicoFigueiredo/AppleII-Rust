@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(line_string(l[0]), "red green");
         assert_eq!(l[0][0].color, 1);
         assert_eq!(l[0][4].color, 2);
-        assert_eq!(l[1][0].color, 0);
+        assert_eq!(l[1][0].color, 2, "the color carries over to the next line");
         c.print(&"x".repeat(100));
         assert_eq!(c.len(), 4);
     }

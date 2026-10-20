@@ -493,7 +493,7 @@ impl Debugger {
 
     pub(crate) fn cmd_motd(&mut self, m: &mut Machine) -> Update {
         let _ = m;
-        self.console.print("`9`A`7 Apple `9][ ][+ //e `7Emulator `9`@");
+        self.console.print("`9 Apple ][ ][+ //e `7Emulator`9 (Rust)");
         self.cmd_version();
         self.cmd_symbols_info(&Args::default(), None);
         self.console.print(&format!(
