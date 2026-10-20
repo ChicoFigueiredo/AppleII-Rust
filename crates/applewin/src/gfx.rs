@@ -1,0 +1,156 @@
+//! wgpu surface + egui renderer. The Apple screen is an egui texture (nearest filtering), so the
+//! whole window is one egui pass.
+
+use std::sync::Arc;
+use winit::window::Window;
+
+pub struct Gfx {
+    surface: wgpu::Surface<'static>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    renderer: egui_wgpu::Renderer,
+    capture: Option<std::path::PathBuf>,
+    pub captured: bool,
+}
+
+impl Gfx {
+    pub fn new(window: Arc<Window>) -> Result<Gfx, String> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let surface = instance.create_surface(window.clone()).map_err(|e| e.to_string())?;
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        }))
+        .or_else(|| {
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: true,
+                ..Default::default()
+            }))
+        })
+        .ok_or("no suitable GPU adapter")?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).map_err(|e| e.to_string())?;
+        let size = window.inner_size();
+        let caps = surface.get_capabilities(&adapter);
+        // egui wants a non-sRGB target
+        let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
+        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) { wgpu::PresentMode::Fifo } else { caps.present_modes[0] };
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            format,
+            width: size.width.max(1),
+            height: size.height.max(1),
+            present_mode,
+            alpha_mode: caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &config);
+        let renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
+        Ok(Gfx { surface, device, queue, config, renderer, capture: None, captured: false })
+    }
+
+    /// Saves the next presented frame (window contents, toolbar included) as a PNG.
+    pub fn request_capture(&mut self, path: std::path::PathBuf) {
+        self.capture = Some(path);
+    }
+
+    fn capture_texture(&self, encoder: &mut wgpu::CommandEncoder, texture: &wgpu::Texture) -> wgpu::Buffer {
+        let (w, h) = (self.config.width, self.config.height);
+        let row = (w * 4).div_ceil(256) * 256;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("capture"),
+            size: u64::from(row * h),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            wgpu::TexelCopyBufferInfo { buffer: &buffer, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row), rows_per_image: Some(h) } },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
+        buffer
+    }
+
+    fn save_capture(&self, buffer: &wgpu::Buffer, path: &std::path::Path) -> Result<(), String> {
+        let (w, h) = (self.config.width as usize, self.config.height as usize);
+        let row = (w * 4).div_ceil(256) * 256;
+        let slice = buffer.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |r| drop(tx.send(r)));
+        self.device.poll(wgpu::Maintain::Wait);
+        rx.recv().map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+        let data = slice.get_mapped_range();
+        let bgra = matches!(self.config.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
+        let mut rgba = Vec::with_capacity(w * h * 4);
+        for y in 0..h {
+            for x in 0..w {
+                let o = y * row + x * 4;
+                let px = &data[o..o + 3];
+                if bgra {
+                    rgba.extend_from_slice(&[px[2], px[1], px[0], 255]);
+                } else {
+                    rgba.extend_from_slice(&[px[0], px[1], px[2], 255]);
+                }
+            }
+        }
+        drop(data);
+        buffer.unmap();
+        image::save_buffer(path, &rgba, w as u32, h as u32, image::ColorType::Rgba8).map_err(|e| e.to_string())
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.config.width = width;
+            self.config.height = height;
+            self.surface.configure(&self.device, &self.config);
+        }
+    }
+
+    pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
+        for (id, delta) in &output.textures_delta.set {
+            self.renderer.update_texture(&self.device, &self.queue, *id, delta);
+        }
+        let jobs = ctx.tessellate(output.shapes, output.pixels_per_point);
+        let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [self.config.width, self.config.height], pixels_per_point: output.pixels_per_point };
+        let frame = match self.surface.get_current_texture() {
+            Ok(f) => f,
+            Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => {
+                self.surface.configure(&self.device, &self.config);
+                return;
+            }
+            Err(_) => return,
+        };
+        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("egui") });
+        self.renderer.update_buffers(&self.device, &self.queue, &mut encoder, &jobs, &screen);
+        {
+            let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            self.renderer.render(&mut pass.forget_lifetime(), &jobs, &screen);
+        }
+        let capture = self.capture.take().map(|p| (self.capture_texture(&mut encoder, &frame.texture), p));
+        self.queue.submit(Some(encoder.finish()));
+        if let Some((buffer, path)) = capture {
+            match self.save_capture(&buffer, &path) {
+                Ok(()) => self.captured = true,
+                Err(e) => eprintln!("window capture failed: {e}"),
+            }
+        }
+        frame.present();
+        for id in &output.textures_delta.free {
+            self.renderer.free_texture(id);
+        }
+    }
+}
