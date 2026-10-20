@@ -335,6 +335,14 @@ impl App {
         } else if action_for(input.key, mods).is_some() {
             return; // repeats and releases of bound keys
         }
+        if self.status.debugger_active {
+            if pressed {
+                if let Some(k) = crate::keymap::debug_key(input.key, mods) {
+                    self.emu.send(Command::Debug(k));
+                }
+            }
+            return;
+        }
         // keyboard-as-joystick takes its keys first (AppleWin JoyProcessKey)
         for i in 0..2 {
             if self.keyjoy[i].process(input, pressed) {

@@ -85,24 +85,6 @@ impl MouseSink for CardMouse {
     }
 }
 
-/// UI-less debugger (`apple2-debugger`). F7 toggles it, Ctrl+F11 single-steps.
-pub trait DebuggerHook {
-    fn available(&self) -> bool {
-        false
-    }
-    fn active(&self) -> bool {
-        false
-    }
-    fn toggle(&mut self, _machine: &mut Machine) {}
-    /// Called after every executed instruction while the debugger is active; true = stay halted.
-    fn halt_after_step(&mut self, _machine: &mut Machine) -> bool {
-        true
-    }
-}
-
-pub struct NullDebugger;
-impl DebuggerHook for NullDebugger {}
-
 /// Everything the emulation thread needs from the rest of the workspace.
 pub trait Backend {
     /// Builds the machine from the settings (model, cards, ROMs...). `bus` must be given to
@@ -114,9 +96,6 @@ pub trait Backend {
     }
     fn mouse(&mut self, _settings: &Settings) -> Box<dyn MouseSink> {
         Box::new(NullMouse)
-    }
-    fn debugger(&mut self) -> Box<dyn DebuggerHook> {
-        Box::new(NullDebugger)
     }
 }
 

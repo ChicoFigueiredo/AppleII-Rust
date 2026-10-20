@@ -192,6 +192,7 @@ dependencies = [
  "apple2-cards",
  "apple2-config",
  "apple2-core",
+ "apple2-debugger",
  "apple2-roms",
  "apple2-storage",
  "apple2-video",

@@ -3,13 +3,15 @@
 //! it against the audio ring or a timer and talks to the UI through [`Shared`] and [`Command`]s.
 
 use crate::audio::AudioRing;
-use crate::backend::{Backend, BackendFactory, DebuggerHook, DiskSink, DriveStatus, MouseSink};
+use crate::backend::{Backend, BackendFactory, DiskSink, DriveStatus, MouseSink};
 use crate::joy::JoyOutput;
-use crate::keymap::KeyEvent;
+use crate::debug_view::render_grid;
+use crate::keymap::{DebugKey, KeyEvent};
 use crate::pacing::{audio_frames_due, Speed, TimerPacer};
 use crate::video::{Frame, FrameSource};
 use apple2_audio::{volume_gain, AudioBus, Mixer};
 use apple2_config::Settings;
+use apple2_debugger::{Debugger, RunMode};
 use apple2_core::{Machine, StateError};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -50,6 +52,8 @@ pub enum Command {
     MouseMove { dx: i32, dy: i32 },
     MouseButton { button: u8, down: bool },
     ToggleDebugger,
+    /// Console input while the debugger is on screen.
+    Debug(DebugKey),
     Shutdown,
 }
 
@@ -146,6 +150,13 @@ pub fn speed_from_settings(s: &Settings) -> Speed {
     }
 }
 
+fn new_debugger(m: &mut Machine) -> Debugger {
+    let mut d = Debugger::new();
+    d.set_host(Box::new(apple2_debugger::host::FsHost::new(std::env::current_dir().unwrap_or_default())));
+    d.initialize(m);
+    d
+}
+
 /// Machine + everything driven synchronously. No threads, no clocks: tests and the headless
 /// mode use it directly.
 pub struct Emulator {
@@ -157,7 +168,7 @@ pub struct Emulator {
     video: Box<dyn FrameSource>,
     disks: Box<dyn DiskSink>,
     mouse: Box<dyn MouseSink>,
-    debugger: Box<dyn DebuggerHook>,
+    debugger: Debugger,
     audio_rate: u32,
     frame: Frame,
     pub paused: bool,
@@ -173,12 +184,12 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(settings: Settings, mut backend: Box<dyn Backend>, audio_rate: u32) -> Result<Self, String> {
         let bus = AudioBus::new(audio_rate, settings.to_machine_config().video_standard);
-        let machine = backend.build_machine(&settings, &bus)?;
+        let mut machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
         let video = backend.frame_source(&settings);
         let disks = backend.disks(&settings);
         let mouse = backend.mouse(&settings);
-        let debugger = backend.debugger();
+        let debugger = new_debugger(&mut machine);
         let speed = speed_from_settings(&settings);
         Ok(Emulator {
             settings,
@@ -205,7 +216,7 @@ impl Emulator {
 
     /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
     pub fn effective_full_speed(&self) -> bool {
-        self.full_speed || self.disks.wants_full_speed(&self.machine)
+        self.full_speed || self.disks.wants_full_speed(&self.machine) || (self.debugger.is_stepping() && self.debugger.full_speed)
     }
 
     pub fn clock_hz(&self) -> f64 {
@@ -233,13 +244,32 @@ impl Emulator {
 
     /// Runs one video frame and returns the audio it produced (interleaved stereo).
     pub fn run_frame(&mut self) -> (u64, Vec<f32>) {
-        let cycles = self.video.run_frame(&mut self.machine);
+        let cpf = self.cycles_per_frame();
+        let cycles = match self.debugger.mode {
+            RunMode::Running => self.video.run_frame(&mut self.machine),
+            RunMode::Stepping => self.debugger.run(&mut self.machine, cpf),
+            RunMode::Debug => 0,
+        };
         let audio = self.mixer.produce_machine(&mut self.machine);
         (cycles, audio)
     }
 
+    /// True while the debugger owns the machine (stopped at the prompt).
+    pub fn debugger_halted(&self) -> bool {
+        self.debugger.mode == RunMode::Debug
+    }
+
     pub fn render(&mut self) -> &Frame {
-        self.video.render(&self.machine, &mut self.frame);
+        if self.debugger.mode != RunMode::Running && self.debugger.output_view.is_none() {
+            let grid = self.debugger.render(&self.machine);
+            let blink = (self.machine.frames() / 16).is_multiple_of(2) || self.debugger.mode == RunMode::Debug;
+            render_grid(&grid, blink, &mut self.frame);
+        } else {
+            if self.debugger.mode != RunMode::Running {
+                self.video.redraw(&self.machine);
+            }
+            self.video.render(&self.machine, &mut self.frame);
+        }
         &self.frame
     }
 
@@ -266,8 +296,8 @@ impl Emulator {
             model: format!("{:?}", self.settings.machine.model),
             video: self.video.description(),
             underruns: self.underruns,
-            debugger_active: self.debugger.active(),
-            debugger_available: self.debugger.available(),
+            debugger_active: self.debugger.mode != RunMode::Running,
+            debugger_available: true,
             mouse_available: self.mouse.available(),
             message: self.message.clone(),
             message_seq: self.message_seq,
@@ -285,7 +315,7 @@ impl Emulator {
                 self.video = self.backend.frame_source(&settings);
                 self.disks = self.backend.disks(&settings);
                 self.mouse = self.backend.mouse(&settings);
-                self.debugger = self.backend.debugger();
+                self.debugger = new_debugger(&mut self.machine);
                 let sp = speed_from_settings(&settings);
                 self.full_speed = sp == Speed::Max;
                 if let Speed::Multiplier(_) = sp {
@@ -378,8 +408,12 @@ impl Emulator {
             },
             Command::ToggleFullSpeed => self.full_speed = !self.full_speed,
             Command::Step => {
-                self.video.step(&mut self.machine);
-                self.mixer.produce_machine(&mut self.machine);
+                if self.debugger.mode == RunMode::Debug {
+                    self.debugger.execute(&mut self.machine, "T");
+                } else {
+                    self.video.step(&mut self.machine);
+                    self.mixer.produce_machine(&mut self.machine);
+                }
             }
             Command::SaveState(p) => self.save_state(&p),
             Command::LoadState(p) => self.load_state(&p),
@@ -403,11 +437,31 @@ impl Emulator {
             Command::MouseMove { dx, dy } => self.mouse.motion(&mut self.machine, dx, dy),
             Command::MouseButton { button, down } => self.mouse.button(&mut self.machine, button, down),
             Command::ToggleDebugger => {
-                if self.debugger.available() {
-                    self.debugger.toggle(&mut self.machine);
-                    self.paused = self.debugger.active();
+                if self.debugger.mode == RunMode::Running {
+                    self.debugger.enter(&mut self.machine);
+                } else if self.debugger.mode == RunMode::Stepping {
+                    self.debugger.stop_stepping();
                 } else {
-                    self.say("Debugger not available in this build");
+                    self.debugger.exit(&mut self.machine);
+                }
+            }
+            Command::Debug(k) => {
+                let d = &mut self.debugger;
+                match k {
+                    DebugKey::Char(c) => {
+                        d.console.input_char(c);
+                    }
+                    DebugKey::Backspace => {
+                        d.console.backspace();
+                    }
+                    DebugKey::Enter => {
+                        d.input_enter(&mut self.machine);
+                    }
+                    DebugKey::HistoryPrev => d.console.history_prev(),
+                    DebugKey::HistoryNext => d.console.history_next(),
+                    DebugKey::ClearInput => d.console.clear_input(),
+                    DebugKey::ScrollUp => d.console.scroll_up(4),
+                    DebugKey::ScrollDown => d.console.scroll_down(4),
                 }
             }
             Command::Shutdown => {
@@ -529,7 +583,7 @@ fn drive(mut emu: Emulator, rx: Receiver<Command>, shared: &Shared, ring: Option
         }
 
         // 2. pick the pacing mode
-        let new_mode = if emu.paused {
+        let new_mode = if emu.paused || emu.debugger_halted() {
             Mode::Paused
         } else if emu.effective_full_speed() {
             Mode::Max

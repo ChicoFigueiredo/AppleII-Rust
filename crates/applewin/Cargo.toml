@@ -21,6 +21,7 @@ apple2-video = { path = "../apple2-video" }
 apple2-cards = { path = "../apple2-cards" }
 apple2-config ={ path = "../apple2-config" }
 apple2-storage = { path = "../apple2-storage" }
+apple2-debugger = { path = "../apple2-debugger" }
 apple2-roms = { path = "../apple2-roms" }
 serde.workspace = true
 serde_json = "1"

@@ -45,6 +45,9 @@ pub trait FrameSource {
     }
     /// The machine was reset or power-cycled.
     fn reset(&mut self) {}
+    /// Re-renders the whole screen from the current state (used while the debugger, not the
+    /// frame loop, advances the machine).
+    fn redraw(&mut self, _machine: &Machine) {}
     /// Copies the current screen into `frame` (resizing it if the source changes resolution).
     fn render(&mut self, machine: &Machine, frame: &mut Frame);
     /// F9 / Shift+F9: next/previous video type (colour, mono, ...).
@@ -114,6 +117,9 @@ impl FrameSource for VideoRenderer {
     }
     fn reset(&mut self) {
         self.renderer.reset();
+    }
+    fn redraw(&mut self, m: &Machine) {
+        self.renderer.redraw(m);
     }
     fn render(&mut self, _m: &Machine, frame: &mut Frame) {
         frame.resize(SCREEN_W, SCREEN_H);

@@ -5,6 +5,7 @@ pub mod actions;
 pub mod app;
 pub mod audio;
 pub mod backend;
+pub mod debug_view;
 pub mod emu;
 pub mod gfx;
 pub mod headless;

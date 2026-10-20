@@ -96,6 +96,37 @@ pub fn char_to_ascii(c: char, mods: Mods) -> Option<u8> {
     (code != 0 && code <= 0xFF).then_some(code as u8)
 }
 
+/// Keys the debugger console understands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DebugKey {
+    Char(char),
+    Enter,
+    Backspace,
+    HistoryPrev,
+    HistoryNext,
+    ClearInput,
+    ScrollUp,
+    ScrollDown,
+}
+
+/// Console input for a key press while the debugger is on screen.
+pub fn debug_key(key: HostKey, mods: Mods) -> Option<DebugKey> {
+    if mods.ctrl {
+        return None;
+    }
+    Some(match key {
+        HostKey::Char(c) if !c.is_control() => DebugKey::Char(c),
+        HostKey::Enter => DebugKey::Enter,
+        HostKey::Backspace | HostKey::Delete => DebugKey::Backspace,
+        HostKey::Up => DebugKey::HistoryPrev,
+        HostKey::Down => DebugKey::HistoryNext,
+        HostKey::Escape => DebugKey::ClearInput,
+        HostKey::PageUp => DebugKey::ScrollUp,
+        HostKey::PageDown => DebugKey::ScrollDown,
+        _ => return None,
+    })
+}
+
 /// Stateful translator: tracks held keys (for AKD) and the caps-lock toggle.
 #[derive(Debug, Default)]
 pub struct KeyboardState {
@@ -247,6 +278,16 @@ mod tests {
         assert_eq!(press(&mut k, HostKey::CapsLock, m), vec![KeyEvent::CapsLock(true)]);
         k.handle(KeyInput::new(HostKey::CapsLock), false, false, m);
         assert_eq!(press(&mut k, HostKey::CapsLock, m), vec![KeyEvent::CapsLock(false)]);
+    }
+
+    #[test]
+    fn debugger_console_keys() {
+        let m = Mods::default();
+        assert_eq!(debug_key(HostKey::Char('g'), m), Some(DebugKey::Char('g')));
+        assert_eq!(debug_key(HostKey::Enter, m), Some(DebugKey::Enter));
+        assert_eq!(debug_key(HostKey::Up, m), Some(DebugKey::HistoryPrev));
+        assert_eq!(debug_key(HostKey::F(3), m), None);
+        assert_eq!(debug_key(HostKey::Char('c'), Mods { ctrl: true, ..m }), None);
     }
 
     #[test]
