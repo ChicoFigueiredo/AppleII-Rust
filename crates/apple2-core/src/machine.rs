@@ -1,6 +1,6 @@
 //! The [`Machine`]: CPU plus board, advanced cycle by cycle through `Bus::tick`.
 
-use crate::card::{card_event_id, AltCpu, CardCtx, CardOp};
+use crate::card::{card_event_id, AltCpu, CardCtx, CardOp, OpcodeInfo};
 use crate::game_port::GamePort;
 use crate::hooks::{GameIoDevice, RomTap};
 use crate::irq::{Interrupts, IrqSource};
@@ -77,6 +77,23 @@ impl Board {
         (self.opcode_pc, self.opcode)
     }
 
+    /// The executing instruction as seen by cards ([`OpcodeInfo`]).
+    pub fn opcode_info(&self) -> OpcodeInfo {
+        let (pc, opcode) = (self.opcode_pc, self.opcode);
+        let byte = |a: u16| self.memory.read(a).unwrap_or(0) as u16;
+        let operand = byte(pc.wrapping_add(1)) | byte(pc.wrapping_add(2)) << 8;
+        let indexed_base = match opcode {
+            0x99 | 0x9D => operand,
+            0x91 => {
+                let zp = operand & 0xFF;
+                byte(zp) | byte((zp + 1) & 0xFF) << 8
+            }
+            _ => 0,
+        };
+        let cmos = self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02;
+        OpcodeInfo { pc, opcode, operand, indexed_base, cmos }
+    }
+
     /// Advances the scheduler by the cycles ticked since the last call (CPU.cpp
     /// `CheckSynchronousInterruptSources`). True if an IRQ-capable event expired exactly on the
     /// opcode's last cycle.
@@ -84,14 +101,15 @@ impl Board {
         let n = std::mem::take(&mut self.pending) as i32;
         let floating_bus = self.floating_bus();
         let (cif, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
-        let Board { scheduler, interrupts, actions, slots, cycles, .. } = self;
+        let cmos = self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02;
+        let Board { scheduler, interrupts, actions, slots, cycles, opcode_pc, opcode, .. } = self;
         let irq_on_last_cycle = scheduler.update(n, |id, rem| {
             let fc = (cif as i64 + rem as i64).rem_euclid(cpf as i64) as u32;
             match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
                 Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
                 Some(EventAction::Card { slot, token }) => {
                     if let Some(card) = slots.cards.get_mut(slot as usize).and_then(Option::as_deref_mut) {
-                        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops };
+                        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, opcode: OpcodeInfo { pc: *opcode_pc, opcode: *opcode, cmos, ..Default::default() }, interrupts, ops: &mut slots.ops };
                         return card.on_event(token, &mut ctx);
                     }
                 }
@@ -108,9 +126,10 @@ impl Board {
     pub(crate) fn card_call<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
         let floating_bus = self.floating_bus();
         let (fc, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
+        let opcode = self.opcode_info();
         let Board { slots, interrupts, cycles, .. } = self;
         let card = slots.cards.get_mut(slot as usize)?.as_deref_mut()?;
-        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, interrupts, ops: &mut slots.ops };
+        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, opcode, interrupts, ops: &mut slots.ops };
         let r = f(card, &mut ctx);
         self.flush_card_ops();
         Some(r)
@@ -125,12 +144,17 @@ impl Board {
         let ops = std::mem::take(&mut self.slots.ops);
         for op in &ops {
             match *op {
-                CardOp::Schedule { slot, token, cycles } => {
+                CardOp::Schedule { slot, token, cycles, can_assert_irq } => {
                     let id = card_event_id(slot, token);
                     self.scheduler.remove(id);
                     self.actions.retain(|(i, _)| *i != id);
                     self.actions.push((id, EventAction::Card { slot, token }));
-                    self.scheduler.insert(SyncEvent::new(id, cycles + self.pending as i32));
+                    let mut ev = SyncEvent::new(id, cycles + self.pending as i32);
+                    ev.can_assert_irq = can_assert_irq;
+                    self.scheduler.insert(ev);
+                }
+                CardOp::SetCanAssertIrq { slot, token, can_assert_irq } => {
+                    self.scheduler.set_can_assert_irq(card_event_id(slot, token), can_assert_irq);
                 }
                 CardOp::Cancel { slot, token } => {
                     let id = card_event_id(slot, token);
@@ -744,6 +768,76 @@ mod tests {
         assert_eq!(m.cpu().pc, 0x302);
         m.step();
         assert_eq!(m.cpu().pc, 0x400);
+    }
+
+    /// Card that records the opcode context of its writes and schedules gated events.
+    #[derive(Default)]
+    struct Spy {
+        seen: std::rc::Rc<std::cell::RefCell<Vec<crate::card::OpcodeInfo>>>,
+    }
+
+    impl Card for Spy {
+        fn name(&self) -> &'static str {
+            "spy"
+        }
+        fn slot_rom_write(&mut self, _o: u8, _v: u8, ctx: &mut CardCtx) {
+            self.seen.borrow_mut().push(ctx.opcode);
+        }
+        fn io_write(&mut self, lo: u8, _v: u8, ctx: &mut CardCtx) {
+            match lo {
+                0 => ctx.schedule_gated(1, 40, false),
+                1 => ctx.schedule(1, 40),
+                _ => ctx.set_can_assert_irq(1, false),
+            }
+        }
+    }
+
+    fn run_code(m: &mut Machine, code: &[u8], steps: usize) {
+        for (i, b) in code.iter().enumerate() {
+            m.poke(0x300 + i as u16, *b);
+        }
+        for _ in 0..steps {
+            m.step();
+        }
+    }
+
+    #[test]
+    fn card_ctx_exposes_opcode_operand_and_indexed_base() {
+        let mut m = machine(Model::Apple2Plus, VideoStandard::Ntsc);
+        let spy = Spy::default();
+        let seen = spy.seen.clone();
+        m.insert_card(4, Box::new(spy));
+        m.poke(0x06, 0xF8);
+        m.poke(0x07, 0xC3);
+        // LDX #$10 ; STA $C400,X ; LDY #8 ; STA ($06),Y
+        run_code(&mut m, &[0xA2, 0x10, 0x9D, 0x00, 0xC4, 0xA0, 0x08, 0x91, 0x06], 4);
+        let v = seen.borrow().clone();
+        assert_eq!(v.len(), 2);
+        assert_eq!((v[0].pc, v[0].opcode, v[0].operand, v[0].indexed_base), (0x302, 0x9D, 0xC400, 0xC400));
+        assert!(!v[0].cmos);
+        assert_eq!((v[1].pc, v[1].opcode, v[1].indexed_base), (0x307, 0x91, 0xC3F8));
+    }
+
+    #[test]
+    fn card_events_can_be_gated_from_asserting_irq() {
+        let mut m = machine(Model::Apple2Plus, VideoStandard::Ntsc);
+        m.insert_card(4, Box::new(Spy::default()));
+        let flag = |m: &Machine| m.board().scheduler.events()[0].can_assert_irq;
+        // STA $C0C0 : gated schedule
+        run_code(&mut m, &[0x8D, 0xC0, 0xC0], 1);
+        assert!(!flag(&m));
+        // plain schedule replaces it with an IRQ-capable event
+        run_code(&mut m, &[0x8D, 0xC1, 0xC0], 0);
+        m.cpu_mut().pc = 0x300;
+        m.poke(0x301, 0xC1);
+        m.step();
+        assert!(flag(&m));
+        // set_can_assert_irq changes the pending event in place
+        m.cpu_mut().pc = 0x300;
+        m.poke(0x301, 0xC2);
+        m.step();
+        assert!(!flag(&m));
+        assert_eq!(m.board().scheduler.len(), 1);
     }
 
     #[test]

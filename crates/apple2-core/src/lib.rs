@@ -20,7 +20,7 @@ pub mod video_mode;
 pub mod video_scanner;
 pub mod video_standard;
 
-pub use card::{Card, CardCtx};
+pub use card::{Card, CardCtx, OpcodeInfo};
 pub use config::{AuxCardKind, CardKind, ConfigError, MachineConfig};
 pub use irq::{Interrupts, IrqSource};
 pub use keyboard::NavKey;
