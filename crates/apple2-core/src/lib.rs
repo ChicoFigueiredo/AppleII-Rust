@@ -8,6 +8,7 @@ pub mod machine;
 pub mod memory;
 pub mod model;
 pub mod scheduler;
+pub mod video_mode;
 pub mod video_standard;
 
 pub use config::{AuxCardKind, CardKind, MachineConfig};
@@ -15,4 +16,5 @@ pub use irq::{Interrupts, IrqSource};
 pub use machine::Machine;
 pub use model::Model;
 pub use scheduler::{EventId, Scheduler, SyncEvent};
+pub use video_mode::VideoMode;
 pub use video_standard::VideoStandard;

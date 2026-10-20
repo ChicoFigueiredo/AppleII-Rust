@@ -2,9 +2,13 @@
 
 use crate::irq::{Interrupts, IrqSource};
 use crate::memory::Memory;
+use crate::video_mode::VideoMode;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
 use crate::MachineConfig;
+use crate::Model;
 use apple2_cpu::{Bus, Cpu, FLAG_I};
+
+mod io;
 
 /// What a synchronous event does when it expires. Later slices add device variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +21,12 @@ pub enum EventAction {
 /// Everything except the CPU, so `cpu.step(&mut board)` borrows cleanly.
 pub struct Board {
     pub memory: Memory,
+    pub video: VideoMode,
+    /// AN0-AN3 (Memory.cpp `g_Annunciator`).
+    pub annunciators: [bool; 4],
+    model: Model,
+    /// `IsAppleIIeOrAbove`: the //e family and the //c.
+    is_e: bool,
     pub scheduler: Scheduler,
     pub interrupts: Interrupts,
     actions: Vec<(EventId, EventAction)>,
@@ -53,12 +63,25 @@ impl Board {
 }
 
 impl Bus for Board {
+    #[inline]
     fn read(&mut self, addr: u16) -> u8 {
-        self.memory.read(addr)
+        match addr >> 8 {
+            0xC0 => self.io_read(addr),
+            page => match self.memory.read(addr) {
+                Some(v) => v,
+                None if page < 0xD0 => self.slot_rom_read(addr),
+                None => self.floating_bus(),
+            },
+        }
     }
 
+    #[inline]
     fn write(&mut self, addr: u16, value: u8) {
-        self.memory.write(addr, value);
+        match addr >> 8 {
+            0xC0 => self.io_write(addr, value),
+            0xC1..=0xCF => self.slot_rom_write(addr, value),
+            _ => self.memory.write(addr, value),
+        }
     }
 
     fn tick(&mut self) {
@@ -95,7 +118,11 @@ impl Machine {
             (None, None) => &[],
         };
         let board = Board {
-            memory: Memory::new(rom),
+            memory: Memory::new(config.model, rom, config.aux_card, config.slots[0].is_some()),
+            video: VideoMode::default(),
+            annunciators: [false; 4],
+            model: config.model,
+            is_e: !config.model.is_apple2(),
             scheduler: Scheduler::new(),
             interrupts: Interrupts::default(),
             actions: Vec::new(),
@@ -153,13 +180,40 @@ impl Machine {
         self.board.frames
     }
 
-    /// Reads memory without side effects on the cycle count (test/debug helper).
-    pub fn peek(&mut self, addr: u16) -> u8 {
-        self.board.memory.read(addr)
+    /// Current `MF_*` paging flags (see [`crate::memory::mf`]).
+    pub fn memmode(&self) -> u32 {
+        self.board.memory.memmode()
     }
 
+    /// Reads as the CPU would under the current paging, without touching soft switches
+    /// ($C000-$C0FF reads the floating bus) or the cycle count (test/debug helper).
+    pub fn peek(&self, addr: u16) -> u8 {
+        self.board.memory.read(addr).unwrap_or_else(|| self.board.floating_bus())
+    }
+
+    /// Writes as the CPU would under the current paging (ROM and I/O ignore it).
     pub fn poke(&mut self, addr: u16, value: u8) {
-        self.board.memory.ram_mut()[addr as usize] = value;
+        if !(0xC000..0xD000).contains(&addr) {
+            self.board.memory.write(addr, value);
+        }
+    }
+
+    /// Main RAM, ignoring paging.
+    pub fn peek_main(&self, addr: u16) -> u8 {
+        self.board.memory.peek_main(addr)
+    }
+
+    pub fn poke_main(&mut self, addr: u16, value: u8) {
+        self.board.memory.poke_main(addr, value);
+    }
+
+    /// Aux RAM of the current RamWorks bank, ignoring paging.
+    pub fn peek_aux(&self, addr: u16) -> u8 {
+        self.board.memory.peek_aux(addr)
+    }
+
+    pub fn poke_aux(&mut self, addr: u16, value: u8) {
+        self.board.memory.poke_aux(addr, value);
     }
 
     /// Schedules `action` to run `cycles` from now.
@@ -171,6 +225,16 @@ impl Machine {
 
     /// CPU reset (the Reset key): pending events and cycle counters are kept.
     pub fn reset(&mut self) {
+        // Utilities.cpp CtrlReset(): the //e resets paging and the video mode; the annunciators
+        // are reset on the //e and Base64A only (the Base64A ROM page is reset by the memory).
+        let b = &mut self.board;
+        b.memory.reset();
+        if b.is_e {
+            b.video = VideoMode::default();
+        }
+        if b.is_e || b.model == Model::Base64A {
+            b.annunciators = [false; 4];
+        }
         self.cpu.reset(&mut self.board);
         self.irq_on_last_opcode_cycle = false;
         self.irq_defer_1_opcode = false;
@@ -179,7 +243,9 @@ impl Machine {
     /// Power off and on: RAM cleared, counters, events and interrupt lines reset.
     pub fn power_cycle(&mut self) {
         let b = &mut self.board;
-        b.memory.clear_ram();
+        b.memory.power_cycle();
+        b.video = VideoMode::default();
+        b.annunciators = [false; 4];
         b.scheduler.reset();
         b.actions.clear();
         b.interrupts.clear();
