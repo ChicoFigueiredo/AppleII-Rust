@@ -150,6 +150,33 @@ fn custom_rom_size_is_validated() {
     }
 }
 
+#[test]
+fn cpu_override_forces_variant() {
+    use apple2_cpu::Variant;
+    let mut cfg = MachineConfig::for_model(Model::Apple2eEnhanced);
+    assert_eq!(Machine::new(cfg.clone()).cpu().variant, Variant::Cmos65C02);
+    cfg.cpu_cmos = Some(false);
+    assert_eq!(Machine::new(cfg).cpu().variant, Variant::Nmos6502);
+    let mut cfg = MachineConfig::for_model(Model::Apple2Plus);
+    cfg.cpu_cmos = Some(true);
+    let mut m = Machine::new(cfg);
+    assert_eq!(m.cpu().variant, Variant::Cmos65C02);
+    // it keeps booting with the other CPU
+    run_until(&mut m, |m| screen_code(m, 0) != 0xA0, BOOT_FRAMES).expect("boots as 65C02");
+}
+
+#[test]
+fn custom_f8_rom_replaces_last_2k() {
+    let mut cfg = MachineConfig::for_model(Model::Apple2Plus);
+    cfg.custom_f8_rom = Some(vec![0xAB; 0x800]);
+    let m = Machine::new(cfg.clone());
+    assert_eq!(m.peek(0xF800), 0xAB);
+    assert_eq!(m.peek(0xFFFF), 0xAB);
+    assert_ne!(m.peek(0xF7FF), 0xAB);
+    cfg.custom_f8_rom = Some(vec![0; 10]);
+    assert_eq!(cfg.validate(), Err(ConfigError::BadF8RomSize(10)));
+}
+
 /// Everything observable that a deterministic continuation must reproduce.
 fn fingerprint(m: &Machine) -> (Vec<u8>, Vec<u8>, [u8; 5], u16, u64, u64) {
     let c = m.cpu();

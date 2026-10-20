@@ -33,6 +33,13 @@ pub struct MachineConfig {
     pub custom_rom: Option<Vec<u8>>,
     /// Use "Freeze's F8" non-autostart ROM instead of the ][ F8.
     pub use_freeze_f8: bool,
+    /// `-f8rom`: replaces the 2K at `$F800` (applied before Freeze's F8, as in Memory.cpp:2139).
+    #[serde(default)]
+    pub custom_f8_rom: Option<Vec<u8>>,
+    /// "CPU Type" override: `Some(true)` forces a 65C02, `Some(false)` an NMOS 6502, `None`
+    /// follows the model (Utilities.cpp:145, `SetMainCpu`).
+    #[serde(default)]
+    pub cpu_cmos: Option<bool>,
 }
 
 /// Invalid [`MachineConfig`].
@@ -41,12 +48,15 @@ pub enum ConfigError {
     /// `custom_rom` length (bytes) is not 16K (//e: 4K internal Cx ROM + 12K) or 1-4 whole pages
     /// of 12K (Memory.cpp:2105-2118; `MaxRomPages` is 4).
     BadRomSize(usize),
+    /// `custom_f8_rom` is not exactly 2K.
+    BadF8RomSize(usize),
 }
 
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConfigError::BadRomSize(n) => write!(f, "custom ROM of {n} bytes: expected 16K or 12K x 1-4"),
+            ConfigError::BadF8RomSize(n) => write!(f, "custom F8 ROM of {n} bytes: expected 2K"),
         }
     }
 }
@@ -57,6 +67,7 @@ impl MachineConfig {
     /// Checks what `Machine::new` cannot handle (currently the custom ROM size).
     pub fn validate(&self) -> Result<(), ConfigError> {
         match &self.custom_rom {
+            _ if matches!(&self.custom_f8_rom, Some(r) if r.len() != 0x800) => Err(ConfigError::BadF8RomSize(self.custom_f8_rom.as_ref().map_or(0, Vec::len))),
             Some(r) if r.len() != 0x4000 && !(r.len().is_multiple_of(0x3000) && (1..=4).contains(&(r.len() / 0x3000))) => {
                 Err(ConfigError::BadRomSize(r.len()))
             }
@@ -83,7 +94,14 @@ impl MachineConfig {
             slots,
             custom_rom: None,
             use_freeze_f8: false,
+            custom_f8_rom: None,
+            cpu_cmos: None,
         }
+    }
+
+    /// Whether the main CPU is a 65C02 (the override, else the model's).
+    pub fn is_cmos(&self) -> bool {
+        self.cpu_cmos.unwrap_or(self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02)
     }
 }
 

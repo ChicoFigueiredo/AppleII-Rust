@@ -47,6 +47,8 @@ pub struct Board {
     pub speaker: Speaker,
     pub game: GamePort,
     model: Model,
+    /// The main CPU is a 65C02 (model default or the `MachineConfig::cpu_cmos` override).
+    cmos: bool,
     /// `IsAppleIIeOrAbove`: the //e family and the //c.
     is_e: bool,
     pub scheduler: Scheduler,
@@ -95,7 +97,7 @@ impl Board {
             }
             _ => 0,
         };
-        let cmos = self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02;
+        let cmos = self.cmos;
         OpcodeInfo { pc, opcode, operand, indexed_base, cmos }
     }
 
@@ -116,7 +118,7 @@ impl Board {
         }
         let floating_bus = self.floating_bus();
         let (cif, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
-        let cmos = self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02;
+        let cmos = self.cmos;
         let Board { scheduler, interrupts, actions, slots, cycles, memory, opcode_pc, opcode, .. } = self;
         let irq_on_last_cycle = scheduler.update(n, |id, rem| {
             let fc = (cif as i64 + rem as i64).rem_euclid(cpf as i64) as u32;
@@ -313,6 +315,7 @@ impl Machine {
             speaker: Speaker::default(),
             game: GamePort::default(),
             model: config.model,
+            cmos: config.is_cmos(),
             is_e,
             scheduler: Scheduler::new(),
             interrupts: Interrupts::default(),
@@ -334,7 +337,7 @@ impl Machine {
             hooked: false,
         };
         let mut m = Machine {
-            cpu: Cpu::new(config.model.cpu_variant()),
+            cpu: Cpu::new(if config.is_cmos() { apple2_cpu::Variant::Cmos65C02 } else { apple2_cpu::Variant::Nmos6502 }),
             config,
             board,
             nmi_line: false,
@@ -360,6 +363,9 @@ impl Machine {
             let f8 = ROM_SIZE - F8_SIZE..ROM_SIZE;
             if config.model == Model::Apple2 && config.slots[0] == Some(CardKind::LanguageCard16K) {
                 rom[f8.clone()].copy_from_slice(&apple2_roms::APPLE2_PLUS[f8.clone()]);
+            }
+            if let Some(f8r) = &config.custom_f8_rom {
+                rom[f8.clone()].copy_from_slice(f8r);
             }
             if config.use_freeze_f8 && config.model.is_apple2() {
                 rom[f8].copy_from_slice(apple2_roms::FREEZES_NON_AUTOSTART_F8_ROM);

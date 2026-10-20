@@ -96,6 +96,8 @@ pub struct RenderConfig {
     pub rgb_mac_lc_dlgr: bool,
     /// Base64A video ROM rocker switch (`GetVideoRomRockerSwitch`; AppleWin default off).
     pub video_rom_rocker: bool,
+    /// `-videorom`: the user's video ROM (2K for the ][/][+, 4K or 8K for the //e family).
+    pub user_video_rom: Option<std::sync::Arc<Vec<u8>>>,
 }
 
 impl Default for RenderConfig {
@@ -111,6 +113,7 @@ impl Default for RenderConfig {
             rgb_invert_bit7: false,
             rgb_mac_lc_dlgr: false,
             video_rom_rocker: false,
+            user_video_rom: None,
         }
     }
 }

@@ -16,7 +16,7 @@
 //! 640x400 inside the same borders, the older modes centred in it (Video.cpp:96-137), and Super
 //! Hi-Res is drawn from aux memory while the card has SHR on (NTSC.cpp `updateScreenSHR`).
 
-use crate::charset::{char_sets, Glyphs};
+use crate::charset::{char_sets, user_char_sets, Glyphs};
 use crate::chroma::{chroma, ALPHA, NUM_SEQUENCES};
 use crate::config::{RenderConfig, RgbCard, VideoType};
 use crate::lookup::{lookup, PALETTE_FELINE, PALETTE_SIZE};
@@ -129,6 +129,8 @@ pub struct Renderer {
     txt: Screen,
     pub(crate) char_set: usize,
     csets: &'static [Glyphs],
+    /// Decoded `-videorom` for `(rom pointer, model)`.
+    user_sets: Option<(usize, Model, Option<&'static [Glyphs]>)>,
     pub(crate) mixed: bool,
     text_page2: bool,
     hires_page2: bool,
@@ -207,6 +209,7 @@ impl Renderer {
             txt: Screen::Text40,
             char_set: 0,
             csets: char_sets(Model::Apple2e, false, false),
+            user_sets: None,
             mixed: false,
             text_page2: false,
             hires_page2: false,
@@ -240,7 +243,16 @@ impl Renderer {
     /// Changes the rendering options (video type, scan lines, monochrome colour, RGB card).
     pub fn set_config(&mut self, cfg: RenderConfig) {
         let reinit = cfg.video_type != self.cfg.video_type || cfg.rgb_card != self.cfg.rgb_card;
+        let rom_changed = match (&cfg.user_video_rom, &self.cfg.user_video_rom) {
+            (Some(a), Some(b)) => !std::sync::Arc::ptr_eq(a, b),
+            (a, b) => a.is_some() != b.is_some(),
+        };
         self.cfg = cfg;
+        if rom_changed {
+            let sets = self.sets_for(self.flags.jplus_ascii);
+            self.csets = sets;
+            self.char_set = self.char_set.min(sets.len() - 1);
+        }
         self.set_style();
         if reinit {
             self.reselect_screen_funcs();
@@ -517,10 +529,25 @@ impl Renderer {
 
     // ---- Mode selection (NTSC_SetVideoMode, NTSC.cpp:1996). ----
 
+    /// The glyph sets in force: the user's video ROM when it suits the model, else the built-in.
+    fn sets_for(&mut self, jplus_ascii: bool) -> &'static [Glyphs] {
+        if let Some(rom) = &self.cfg.user_video_rom {
+            let key = std::sync::Arc::as_ptr(rom) as usize;
+            let cached = matches!(&self.user_sets, Some((k, m, _)) if *k == key && *m == self.model);
+            if !cached {
+                self.user_sets = Some((key, self.model, user_char_sets(self.model, rom)));
+            }
+            if let Some((_, _, Some(sets))) = self.user_sets {
+                return sets;
+            }
+        }
+        char_sets(self.model, jplus_ascii, self.cfg.video_rom_rocker)
+    }
+
     fn apply_mode(&mut self, f: VideoFlags, fixups: bool) {
         self.new_flags = f;
         self.mixed = f.mixed;
-        let sets = char_sets(self.model, f.jplus_ascii, self.cfg.video_rom_rocker);
+        let sets = self.sets_for(f.jplus_ascii);
         self.csets = sets;
         self.char_set = (f.altcharset as usize).min(sets.len() - 1);
         self.rgb.text_fb = false;
