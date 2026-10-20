@@ -1,0 +1,23 @@
+[package]
+name = "apple2-hostio"
+description = "Host-connected Apple II cards: Super Serial Card, parallel printer, Uthernet I and II"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Real host serial ports for the Super Serial Card (AppleWin's COMx mode).
+serialport = ["dep:serialport"]
+# Raw Ethernet frames for the Uthernet cards through libpcap/Npcap (AppleWin's PCapBackend).
+pcap = ["dep:pcap"]
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }
+apple2-roms = { path = "../apple2-roms" }
+serialport = { version = "4", default-features = false, optional = true }
+pcap = { version = "2", optional = true }
+
+[dev-dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
