@@ -203,3 +203,100 @@ fn hard_disk_images_need_the_hdv_extension_or_800k() {
     assert_eq!(big.kind(), ImageKind::Hdv);
     let _ = Class::Floppy;
 }
+
+
+/// WOZ1 file with one track (track 0, quarter tracks 0 and 1): a 6656-byte TRK record.
+fn woz1_with_track0(bits: &[u8], bit_count: u16) -> Vec<u8> {
+    let mut f = vec![0u8; 12];
+    f[0..4].copy_from_slice(b"WOZ1");
+    f[4..8].copy_from_slice(&[0xFF, 0x0A, 0x0D, 0x0A]);
+    f.extend(b"INFO");
+    f.extend(60u32.to_le_bytes());
+    let mut info = vec![0u8; 60];
+    info[0] = 1;
+    info[1] = 1;
+    f.extend(info);
+    f.extend(b"TMAP");
+    f.extend(160u32.to_le_bytes());
+    let mut tmap = vec![0xFFu8; 160];
+    tmap[0] = 0;
+    tmap[1] = 0;
+    f.extend(tmap);
+    f.extend(b"TRKS");
+    f.extend(6656u32.to_le_bytes());
+    let mut trk = vec![0u8; 6656];
+    trk[..bits.len()].copy_from_slice(bits);
+    trk[6646..6648].copy_from_slice(&(bits.len() as u16).to_le_bytes());
+    trk[6648..6650].copy_from_slice(&bit_count.to_le_bytes());
+    f.extend(trk);
+    apple2_storage::woz::update_crc(&mut f);
+    f
+}
+
+#[test]
+fn woz1_tracks_read_and_new_tracks_append() {
+    let store = MemStore::new(Vec::new());
+    let bits = [0xD5, 0xAA, 0x96, 0xFF];
+    let mut w = DiskImage::from_bytes("one.woz", woz1_with_track0(&bits, 30)).unwrap().with_store(Box::new(store.clone()));
+    assert_eq!((w.kind(), w.optimal_bit_timing(), w.max_nibbles_per_track()), (ImageKind::Woz1, 32, 6656));
+    let mut buf = vec![0u8; NIBBLES_PER_TRACK.max(6656)];
+    assert_eq!(w.read_track(0.0, &mut buf, true), (4, 30));
+    assert_eq!(&buf[..4], &bits);
+    assert_eq!(w.read_track(2.0, &mut buf, true).0, 6400, "track 1 is unmapped: the empty track");
+    // Writing track 1 appends a 6656-byte record and maps it.
+    buf[..3].copy_from_slice(&[1, 2, 3]);
+    w.write_track(2.0, &buf, 3);
+    assert_eq!(w.read_track(2.0, &mut buf, true), (3, 24));
+    assert_eq!(&buf[..3], &[1, 2, 3]);
+    assert_eq!(w.data().len(), 12 + 8 + 60 + 8 + 160 + 8 + 2 * 6656);
+    assert_eq!(DiskImage::from_bytes("one.woz", store.bytes()).unwrap().data(), w.data());
+    // The CRC in the header is current.
+    assert_eq!(u32::from_le_bytes(w.data()[8..12].try_into().unwrap()), apple2_storage::woz::body_crc(w.data()));
+}
+
+#[test]
+fn simsystem_iie_images_apl_and_prg_programs() {
+    // SimSystem IIe: "SIMSYSTEM_IIE", type 0 (sector data), identity sector order, 30-byte header.
+    let mut iie = vec![0u8; 30 + 35 * 4096];
+    iie[..13].copy_from_slice(b"SIMSYSTEM_IIE");
+    for i in 0..16 {
+        iie[14 + i] = i as u8;
+    }
+    iie[30 + 5] = 0x42; // track 0, sector 0, byte 5
+    let mut img = DiskImage::from_bytes("x.iie", iie).unwrap();
+    assert_eq!((img.kind(), img.num_tracks()), (ImageKind::Iie, 35));
+    let mut buf = vec![0u8; NIBBLES_PER_TRACK];
+    assert_eq!(img.read_track(0.0, &mut buf, true).0, 6384);
+
+    // APL: load address, length, then the bytes; booting write-protects it.
+    let mut apl = DiskImage::from_bytes("x.apl", vec![0x00, 0x20, 0x03, 0x00, 0xA9, 0x01, 0x60]).unwrap();
+    assert_eq!(apl.kind(), ImageKind::Apl);
+    assert_eq!(apl.boot_program(), Some((0x2000, vec![0xA9, 0x01, 0x60])));
+    assert!(apl.is_write_protected());
+    // PRG: "!LG" header, address at 5, half-length at 7, data at 128.
+    let mut prg = vec![0u8; 128 + 4];
+    prg[..4].copy_from_slice(&[0x0A, 0x47, 0x4C, 0x21]);
+    prg[5..7].copy_from_slice(&0x0800u16.to_le_bytes());
+    prg[7..9].copy_from_slice(&2u16.to_le_bytes());
+    prg[128..].copy_from_slice(&[1, 2, 3, 4]);
+    let mut prg = DiskImage::from_bytes("x.prg", prg).unwrap();
+    assert_eq!(prg.boot_program(), Some((0x0800, vec![1, 2, 3, 4])));
+    // Programs cannot be inserted in compressed form.
+    assert!(DiskImage::from_bytes("x.apl.gz", vec![1, 2, 3]).is_err());
+}
+
+#[test]
+fn macbinary_headers_are_skipped() {
+    let mut f = vec![0u8; 128];
+    f[0x7A] = 0x81;
+    f[0x7B] = 0x81;
+    f.extend(disk(DOS33));
+    let d = DiskImage::from_bytes("m.dsk", f).unwrap();
+    assert_eq!((d.kind(), d.image_size()), (ImageKind::Do, 143360));
+    let mut d = d;
+    let mut buf = vec![0u8; NIBBLES_PER_TRACK];
+    let mut plain = DiskImage::from_bytes("m.dsk", disk(DOS33)).unwrap();
+    let mut buf2 = vec![0u8; NIBBLES_PER_TRACK];
+    assert_eq!(d.read_track(0.0, &mut buf, true), plain.read_track(0.0, &mut buf2, true));
+    assert_eq!(buf, buf2);
+}

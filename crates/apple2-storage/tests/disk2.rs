@@ -207,3 +207,24 @@ fn authentic_mode_skews_the_sectors_and_enhanced_does_not() {
     let skew = (3 * 768) % n1;
     assert_eq!(s[..n1 - skew], e[skew..n1]);
 }
+
+
+#[test]
+fn several_cards_are_independent_and_the_manager_sees_all_of_them() {
+    use apple2_storage::disk2::manager;
+    let mut m = bare();
+    let mut second = Disk2Card::new();
+    second.insert_disk(0, DiskImage::from_bytes("b.dsk", disk(DOS33)).unwrap());
+    assert!(m.insert_card(5, Box::new(second)));
+    rd(&mut m, 0xC0D9); // slot 5 motor on
+    assert!(m.card::<Disk2Card>(5).unwrap().is_motor_on() && !m.card::<Disk2Card>(6).unwrap().is_motor_on());
+    assert!(manager::is_condition_for_full_speed(&m));
+    manager::set_enhance_disk(&mut m, false);
+    assert!(!manager::enhance_disk(&m) && !m.card::<Disk2Card>(6).unwrap().enhance_disk());
+    assert!(!manager::is_condition_for_full_speed(&m));
+    assert!(!manager::is_any_firmware_13_sector(&m));
+    // Each card answers from its own slot registers.
+    rd(&mut m, 0xC0DB);
+    assert_eq!((m.card::<Disk2Card>(5).unwrap().current_drive(), m.card::<Disk2Card>(6).unwrap().current_drive()), (1, 0));
+    manager::flush_all(&mut m);
+}

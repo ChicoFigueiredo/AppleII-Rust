@@ -163,3 +163,64 @@ fn woz_boot_sector_format_selects_the_13_sector_firmware_at_reset() {
     m.reset();
     assert_eq!(m.card::<Disk2Card>(6).unwrap().current_firmware(), 13);
 }
+
+/// DOS 3.3 `INIT` formats a whole disk in drive 2 (every track written through the format-track
+/// monitor), after which `CATALOG,D2` works.
+fn init_blank_disk(enhance: bool) {
+    let store = MemStore::new(Vec::new());
+    let blank = DiskImage::from_bytes("new.dsk", Vec::new()).unwrap().with_store(Box::new(store.clone()));
+    let mut m = machine_with_disk(DiskImage::from_bytes("master.dsk", disk(DOS33)).unwrap());
+    {
+        let c = m.card_mut::<Disk2Card>(6).unwrap();
+        c.insert_disk(1, blank);
+        c.set_enhance_disk(enhance);
+    }
+    run_until(&mut m, 1500, "DOS 3.3 prompt", |m| screen_has(m, "DOS VERSION 3.3") && at_prompt(m));
+    command(&mut m, "NEW");
+    command(&mut m, "10 PRINT \"X\"");
+    type_text(&mut m, "INIT HELLO,D2\n");
+    let mut started = false;
+    run_until(&mut m, 6000, "INIT to finish", |m| {
+        let c = m.card::<Disk2Card>(6).unwrap();
+        started |= c.is_motor_on() && c.current_drive() == 1;
+        started && !c.is_motor_on() && screen(m).lines().filter(|l| l.starts_with(']')).count() >= 4
+    });
+    for _ in 0..120 {
+        m.run_frame();
+    }
+    command(&mut m, "CATALOG,D2");
+    assert!(screen_has(&m, "DISK VOLUME 254"), "{}", screen(&m));
+    assert!(screen_has(&m, "HELLO"), "{}", screen(&m));
+    let formatted = store.bytes();
+    assert_eq!(formatted.len(), 143360);
+    assert!(formatted.iter().any(|&b| b != 0), "sectors were written");
+}
+
+#[test]
+fn dos33_init_formats_a_new_disk_in_enhanced_mode() {
+    init_blank_disk(true);
+}
+
+#[test]
+fn dos33_init_formats_a_new_disk_in_authentic_mode() {
+    init_blank_disk(false);
+}
+
+#[test]
+fn a_new_dos33_disk_boots_and_catalogs_empty() {
+    use apple2_storage::new_disk::new_dos33_disk;
+    let mut m = machine_with_disk(DiskImage::from_bytes("new.dsk", new_dos33_disk(143360)).unwrap());
+    // No HELLO program on the new disk: DOS says so, then waits at the prompt.
+    run_until(&mut m, 900, "DOS prompt from a new DOS 3.3 disk", |m| screen_has(m, "FILE NOT FOUND") && at_prompt(m));
+    command(&mut m, "CATALOG");
+    assert!(screen_has(&m, "DISK VOLUME 254"), "{}", screen(&m));
+}
+
+#[test]
+fn a_new_prodos_disk_boots_prodos() {
+    use apple2_storage::new_disk::{new_prodos_disk, ProDosFiles};
+    let files = ProDosFiles { bitsy_boot: true, bitsy_bye: true, basic: true, prodos: true };
+    let mut m = machine_with_disk(DiskImage::from_bytes("new.po", new_prodos_disk(143360, files)).unwrap());
+    run_until(&mut m, 900, "Bitsy Bye on a new ProDOS disk", |m| screen_has(m, "/BLANK"));
+    assert!(screen_has(&m, "BASIC.SYSTEM"), "{}", screen(&m));
+}

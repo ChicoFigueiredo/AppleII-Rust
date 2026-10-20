@@ -28,7 +28,7 @@ pub fn screen(m: &Machine) -> String {
 }
 
 /// Runs frames until `done`, panicking with the screen after `max` frames.
-pub fn run_until(m: &mut Machine, max: u32, what: &str, done: impl Fn(&Machine) -> bool) -> u32 {
+pub fn run_until(m: &mut Machine, max: u32, what: &str, mut done: impl FnMut(&Machine) -> bool) -> u32 {
     for f in 0..=max {
         if done(m) {
             return f;

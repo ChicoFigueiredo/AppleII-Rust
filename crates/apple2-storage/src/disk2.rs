@@ -1351,3 +1351,41 @@ impl Card for Disk2Card {
         self.decode(state).is_some()
     }
 }
+
+/// `Disk2CardManager` (Disk2CardManager.cpp): queries and settings over every Disk II card of a
+/// machine. Slots 0-7 are scanned; non-Disk II cards are ignored.
+pub mod manager {
+    use super::Disk2Card;
+    use apple2_core::Machine;
+
+    /// True if any card has its motor on in enhanced speed (`IsConditionForFullSpeed`).
+    pub fn is_condition_for_full_speed(m: &Machine) -> bool {
+        (0..8).any(|s| m.card::<Disk2Card>(s).is_some_and(Disk2Card::is_condition_for_full_speed))
+    }
+
+    /// All cards share one setting; the first card's is reported (`GetEnhanceDisk`).
+    pub fn enhance_disk(m: &Machine) -> bool {
+        (0..8).find_map(|s| m.card::<Disk2Card>(s)).is_some_and(Disk2Card::enhance_disk)
+    }
+
+    pub fn set_enhance_disk(m: &mut Machine, enhance: bool) {
+        for s in 0..8 {
+            if let Some(c) = m.card_mut::<Disk2Card>(s) {
+                c.set_enhance_disk(enhance);
+            }
+        }
+    }
+
+    pub fn is_any_firmware_13_sector(m: &Machine) -> bool {
+        (0..8).any(|s| m.card::<Disk2Card>(s).is_some_and(|c| c.current_firmware() == 13))
+    }
+
+    /// Writes back the dirty tracks of every card (before saving or quitting).
+    pub fn flush_all(m: &mut Machine) {
+        for s in 0..8 {
+            if let Some(c) = m.card_mut::<Disk2Card>(s) {
+                c.flush();
+            }
+        }
+    }
+}
