@@ -11,12 +11,15 @@ pub struct VideoMode {
     pub col80: bool,
     pub altcharset: bool,
     pub dhires: bool,
+    /// J-Plus only: AN2 on selects the ASCII half of the character ROM, off the Katakana half
+    /// (NTSC_CharSet.cpp:189, GH#773). Not reset by RESET (the ][ family keeps its switches).
+    pub jplus_ascii: bool,
 }
 
 impl Default for VideoMode {
     /// `VideoResetState`: text mode, everything else off.
     fn default() -> Self {
-        VideoMode { text: true, mixed: false, col80: false, altcharset: false, dhires: false }
+        VideoMode { text: true, mixed: false, col80: false, altcharset: false, dhires: false, jplus_ascii: false }
     }
 }
 

@@ -4,13 +4,16 @@
 
 pub mod card;
 pub mod config;
+pub mod game_port;
 pub mod irq;
+pub mod keyboard;
 pub mod language_card;
 pub mod machine;
 pub mod memory;
 pub mod model;
 pub mod scheduler;
 pub mod slots;
+pub mod speaker;
 pub mod video_mode;
 pub mod video_scanner;
 pub mod video_standard;
@@ -18,6 +21,7 @@ pub mod video_standard;
 pub use card::{Card, CardCtx};
 pub use config::{AuxCardKind, CardKind, MachineConfig};
 pub use irq::{Interrupts, IrqSource};
+pub use keyboard::NavKey;
 pub use machine::Machine;
 pub use model::Model;
 pub use scheduler::{EventId, Scheduler, SyncEvent};

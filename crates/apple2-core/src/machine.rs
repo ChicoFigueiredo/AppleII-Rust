@@ -1,7 +1,10 @@
 //! The [`Machine`]: CPU plus board, advanced cycle by cycle through `Bus::tick`.
 
 use crate::card::{card_event_id, CardCtx, CardOp};
+use crate::game_port::GamePort;
 use crate::irq::{Interrupts, IrqSource};
+use crate::keyboard::{Keyboard, NavKey};
+use crate::speaker::Speaker;
 use crate::language_card::LanguageCards;
 use crate::memory::Memory;
 use crate::video_mode::VideoMode;
@@ -35,6 +38,9 @@ pub struct Board {
     pub video: VideoMode,
     /// AN0-AN3 (Memory.cpp `g_Annunciator`).
     pub annunciators: [bool; 4],
+    pub keyboard: Keyboard,
+    pub speaker: Speaker,
+    pub game: GamePort,
     model: Model,
     /// `IsAppleIIeOrAbove`: the //e family and the //c.
     is_e: bool,
@@ -202,6 +208,9 @@ impl Machine {
             slots: Slots::default(),
             video: VideoMode::default(),
             annunciators: [false; 4],
+            keyboard: Keyboard::default(),
+            speaker: Speaker::default(),
+            game: GamePort::default(),
             model: config.model,
             is_e,
             scheduler: Scheduler::new(),
@@ -339,6 +348,76 @@ impl Machine {
         true
     }
 
+    // ---- Input and sound (slice 6). Host-key translation is the frontend's job; see
+    // [`crate::keyboard`]. ----
+
+    /// Types a character as AppleWin's `WM_CHAR` path sees it (ANSI/Latin-1). Applies the model's
+    /// case and remap rules; false if the model has no such key.
+    pub fn key_press(&mut self, key: u8) -> bool {
+        self.board.keyboard.press(self.config.model, key)
+    }
+
+    /// Cursor/edit keys; false if the model lacks the key.
+    pub fn key_press_nav(&mut self, key: NavKey) -> bool {
+        self.board.keyboard.press_nav(self.config.model, key)
+    }
+
+    /// Queues `text` for pasting, one character per strobe clear; false if one is pending.
+    pub fn paste(&mut self, text: &str) -> bool {
+        self.board.keyboard.paste(text)
+    }
+
+    /// Whether any Apple key is held (AKD, $C010 bit 7 on the //e).
+    pub fn set_any_key_down(&mut self, down: bool) {
+        self.board.keyboard.set_any_key_down(down);
+    }
+
+    /// Caps lock (Latin/Cyrillic lock on the Pravets). Has no effect on the ][/][+ itself.
+    pub fn set_caps_lock(&mut self, on: bool) {
+        self.board.keyboard.set_caps_lock(on);
+    }
+
+    /// TK3000 //e |Mode| key (accented-character mode).
+    pub fn set_tk3000_mode(&mut self, on: bool) {
+        self.board.keyboard.set_tk3000_mode(on);
+    }
+
+    pub fn set_open_apple(&mut self, down: bool) {
+        self.board.game.open_apple = down;
+    }
+
+    pub fn set_closed_apple(&mut self, down: bool) {
+        self.board.game.closed_apple = down;
+    }
+
+    /// Pushbutton `n` (0-2).
+    pub fn set_button(&mut self, n: usize, down: bool) {
+        self.board.game.buttons[n] = down;
+    }
+
+    /// Paddle `n` (0-3) position, 0-255; read when a $C07x strobe starts its timer.
+    pub fn set_paddle(&mut self, n: u8, pos: u8) {
+        self.board.game.paddles[usize::from(n)] = pos;
+    }
+
+    /// Whether joystick `n` (0 or 1) is plugged in; the default is joystick 0 only. Without
+    /// joystick 0 the ][ family reads PB0/PB1 pressed and paddles 0-1 never time out; without
+    /// joystick 1 PB2 reads pressed and paddles 2-3 never time out.
+    pub fn set_joystick_attached(&mut self, n: usize, attached: bool) {
+        self.board.game.attached[n] = attached;
+    }
+
+    /// Removes the speaker toggles recorded so far (absolute cycles, oldest first). If the
+    /// frontend never drains, only the newest [`crate::speaker::CAPACITY`] are kept.
+    pub fn drain_speaker_toggles(&mut self) -> impl Iterator<Item = u64> + '_ {
+        self.board.speaker.drain()
+    }
+
+    /// Toggles discarded because the log was full.
+    pub fn speaker_toggles_dropped(&self) -> u64 {
+        self.board.speaker.dropped()
+    }
+
     /// CPU reset (the Reset key): pending events and cycle counters are kept.
     pub fn reset(&mut self) {
         self.reset_cpu_and_board(false);
@@ -356,6 +435,7 @@ impl Machine {
         if b.is_e || b.model == Model::Base64A {
             b.annunciators = [false; 4];
         }
+        b.keyboard.reset();
         b.for_each_card(|c, ctx| c.reset(power_cycle, ctx));
         self.cpu.reset(&mut self.board);
         self.irq_on_last_opcode_cycle = false;
@@ -371,6 +451,8 @@ impl Machine {
         b.slots.power_cycle();
         b.video = VideoMode::default();
         b.annunciators = [false; 4];
+        b.speaker.reset();
+        b.game.reset();
         b.scheduler.reset();
         b.actions.clear();
         b.interrupts.clear();

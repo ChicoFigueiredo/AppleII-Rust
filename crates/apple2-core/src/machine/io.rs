@@ -1,12 +1,13 @@
 //! $C000-$CFFF dispatch of the [`Board`] (AppleWin Memory.cpp `IORead_C0xx`/`IOWrite_C0xx`
-//! tables, :540-870). Keyboard, speaker and game I/O are stubs until slice 6; slot cards and
-//! the floating bus is the video scanner byte. Slot cards are dispatched through [`crate::card::Card`].
+//! tables, :540-870): keyboard, speaker, game port, video/paging switches and, through
+//! [`crate::card::Card`], slot cards. The floating bus is the video scanner byte.
 
 use super::Board;
 use crate::slots::{expansion_offset, ExpansionRom};
 use crate::language_card::is_rmw_abs;
 use crate::memory::mf;
 use crate::video_scanner::Switches;
+use crate::Model;
 use apple2_cpu::Variant;
 
 impl Board {
@@ -30,31 +31,34 @@ impl Board {
         self.memory.peek_main(self.scanner.address(self.scan_cycle(), sw))
     }
 
-    // ---- Slice 6 stubs: keyboard, speaker, game port. ----
+    // ---- Keyboard, speaker, game port. ----
 
-    /// `KeybReadData` ($C000-$C00F read).
-    fn keyboard_read_data(&mut self) -> u8 {
-        0
+    /// Cycle stamped on timed I/O (speaker, paddles): the count when the instruction began.
+    /// AppleWin runs the handler before adding the opcode's cycles to `uExecutedCycles`
+    /// (cpu6502.h: `ABS STA CYC(4)`), like the video scanner.
+    fn access_cycle(&self) -> u64 {
+        self.cycles - self.opcode_ticks as u64
     }
 
-    /// `KeybReadFlag` ($C010 read on the //e): AKD in bit 7, then clears the strobe.
-    fn keyboard_read_flag(&mut self) -> u8 {
-        0
-    }
-
-    /// `KeybGetKeycode`: bits 0-6 of the $C011-$C01F status reads.
-    fn keyboard_keycode(&self) -> u8 {
-        0
-    }
-
-    fn keyboard_clear_strobe(&mut self) {}
-
-    fn speaker_toggle(&mut self, _addr: u16) -> u8 {
+    /// `SpkrToggle` ($C030-$C03F, read or write, Speaker.cpp:372).
+    fn speaker_toggle(&mut self) -> u8 {
+        let now = self.access_cycle();
+        self.speaker.toggle(now);
         self.floating_bus()
     }
 
-    fn game_io_read(&mut self, _addr: u16) -> u8 {
-        self.floating_bus()
+    /// `IORead_C06x` (Memory.cpp:834): $C060 tape/Pravets 8A keyboard, buttons, paddles. Address
+    /// bit 3 is ignored (UTAIIe:7-5).
+    fn game_io_read(&mut self, addr: u16) -> u8 {
+        let fb = self.floating_bus();
+        let bit7 = |on: bool| (fb & 0x7F) | if on { 0x80 } else { 0 };
+        match addr & 7 {
+            // TAPEIN reads high when unconnected (tape is out of scope).
+            0 if self.model == Model::Pravets8A => self.keyboard.pravets_c060(fb),
+            0 => bit7(true),
+            n @ 1..=3 => bit7(self.game.button(n as usize - 1, self.model.is_apple2())),
+            n => bit7(self.game.paddle_active(n as usize - 4, self.access_cycle())),
+        }
     }
 
     /// `VideoGetVblBar` (Video.cpp:483): true outside the vertical blank.
@@ -146,9 +150,10 @@ impl Board {
     pub(super) fn io_read(&mut self, addr: u16) -> u8 {
         let lo = addr as u8;
         match lo >> 4 {
-            0 => self.keyboard_read_data(),
+            0 => self.keyboard.read_data(),
             1 => self.read_c01x(lo, addr),
-            3 => self.speaker_toggle(addr),
+            3 => self.speaker_toggle(),
+            7 => self.c07x_read(lo),
             5 => self.c05x(lo),
             6 => self.game_io_read(addr),
             0x8.. => self.slot_io_read(addr),
@@ -172,25 +177,32 @@ impl Board {
                     self.video.set(lo, self.is_e);
                 }
             }
-            1 => self.keyboard_clear_strobe(),
+            1 => {
+                self.keyboard.clear_strobe();
+            }
             3 => {
-                self.speaker_toggle(addr);
+                self.speaker_toggle();
             }
             5 => {
                 self.c05x(lo);
             }
-            7 => match lo & 0xF {
-                // RamWorks bank select (the //e only; `set_paging` checks).
-                1 | 3 => self.memory.set_paging(lo, value),
-                // //c: IOUDIS on/off (Memory.cpp:808-818).
-                0xE | 0xF if self.model.is_apple2c() => {
-                    let m = self.memory.memmode();
-                    self.memory.set_memmode(if lo & 1 == 0 { m | mf::IOUDIS } else { m & !mf::IOUDIS });
+            7 => {
+                self.game.trigger(self.access_cycle());
+                match lo & 0xF {
+                    // RamWorks bank select (the //e only; `set_paging` checks).
+                    1 | 3 => self.memory.set_paging(lo, value),
+                    // //c: IOUDIS on/off (Memory.cpp:808-818).
+                    0xE | 0xF if self.model.is_apple2c() => {
+                        let m = self.memory.memmode();
+                        self.memory.set_memmode(if lo & 1 == 0 { m | mf::IOUDIS } else { m & !mf::IOUDIS });
+                    }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             0x8.. => self.slot_io_write(addr, value),
-            _ => {} // C02x tape, C04x, C06x (slice 6)
+            // $C060 on the Pravets 8A selects 8-bit keyboard mode (Memory.cpp:719).
+            6 if lo == 0x60 && self.model == Model::Pravets8A => self.keyboard.set_pravets_8bit(value),
+            _ => {} // C02x tape, C04x, other C06x
         }
     }
 
@@ -198,14 +210,14 @@ impl Board {
     /// ][ family the read only clears the strobe and returns the floating bus.
     fn read_c01x(&mut self, lo: u8, _addr: u16) -> u8 {
         if !self.is_e {
-            self.keyboard_clear_strobe();
+            self.keyboard.clear_strobe();
             return self.floating_bus();
         }
         let m = self.memory.memmode();
         let flag = |f: u32| m & f != 0;
         let v = &self.video;
         let set = match lo & 0xF {
-            0x0 => return self.keyboard_read_flag(),
+            0x0 => return self.keyboard.read_flag(),
             0x1 => flag(mf::BANK2),
             0x2 => flag(mf::HIGHRAM),
             0x3 => flag(mf::AUXREAD),
@@ -222,7 +234,21 @@ impl Board {
             0xE => v.altcharset,
             _ => v.col80,
         };
-        self.keyboard_keycode() | if set { 0x80 } else { 0 }
+        self.keyboard.keycode() | if set { 0x80 } else { 0 }
+    }
+
+    /// $C070-$C07F read: triggers the paddle timers (Memory.cpp:745); $C07E/$C07F expose IOUDIS
+    /// and DHIRES in bit 7 on the //c and Enhanced //e (GH#636).
+    fn c07x_read(&mut self, lo: u8) -> u8 {
+        self.game.trigger(self.access_cycle());
+        let fb = self.floating_bus();
+        let bit7 = |on: bool| (fb & 0x7F) | if on { 0x80 } else { 0 };
+        let enhanced = matches!(self.model, Model::Apple2eEnhanced | Model::Tk3000e);
+        match lo & 0xF {
+            0xE if self.model.is_apple2c() => bit7(self.memory.memmode() & mf::IOUDIS != 0),
+            0xF if enhanced || self.model.is_apple2c() => bit7(self.video.dhires),
+            _ => fb,
+        }
     }
 
     /// $C050-$C05F, same for reads and writes: video switches, PAGE2/HIRES, annunciators.
@@ -239,6 +265,9 @@ impl Board {
                     return 0;
                 }
                 self.annunciators[(lo as usize >> 1) & 3] = lo & 1 != 0;
+                if self.model == Model::Apple2JPlus && lo >> 1 == 0x2E {
+                    self.video.jplus_ascii = lo & 1 != 0; // AN2 picks the Katakana/ASCII ROM half
+                }
                 self.memory.set_paging(lo, 0); // Base64A ALTROM0/1
             }
         }
