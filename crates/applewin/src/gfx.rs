@@ -5,32 +5,29 @@ use std::sync::Arc;
 use winit::window::Window;
 
 pub struct Gfx {
+    // Field order is drop order: everything that borrows from the instance goes first, the instance
+    // last. It is kept alive explicitly because dropping it may terminate EGL, which needs the
+    // display connection to still be alive (see `App::release_gpu`).
+    renderer: egui_wgpu::Renderer,
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    renderer: egui_wgpu::Renderer,
     capture: Option<std::path::PathBuf>,
     pub captured: bool,
+    _instance: wgpu::Instance,
 }
 
 impl Gfx {
     pub fn new(window: Arc<Window>) -> Result<Gfx, String> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-        let surface = instance.create_surface(window.clone()).map_err(|e| e.to_string())?;
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        }))
-        .or_else(|| {
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: true,
-                ..Default::default()
-            }))
-        })
-        .ok_or("no suitable GPU adapter")?;
+        // PRIMARY = Vulkan/Metal/DX12. GL is only a fallback: initialising (and later terminating)
+        // an EGL instance on Wayland+NVIDIA crashes, so avoid creating it when not needed.
+        let backends = wgpu::Backends::from_env().unwrap_or(wgpu::Backends::PRIMARY);
+        let (instance, surface, adapter) = match Self::pick(&window, backends) {
+            Some(x) => x,
+            None if backends != wgpu::Backends::GL => Self::pick(&window, wgpu::Backends::GL).ok_or("no suitable GPU adapter")?,
+            None => return Err("no suitable GPU adapter".into()),
+        };
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).map_err(|e| e.to_string())?;
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
@@ -49,7 +46,26 @@ impl Gfx {
         };
         surface.configure(&device, &config);
         let renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
-        Ok(Gfx { surface, device, queue, config, renderer, capture: None, captured: false })
+        Ok(Gfx { surface, device, queue, config, renderer, capture: None, captured: false, _instance: instance })
+    }
+
+    fn pick(window: &Arc<Window>, backends: wgpu::Backends) -> Option<(wgpu::Instance, wgpu::Surface<'static>, wgpu::Adapter)> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor { backends, ..Default::default() });
+        let surface = instance.create_surface(window.clone()).ok()?;
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        }))
+        .or_else(|| {
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: true,
+                ..Default::default()
+            }))
+        })?;
+        eprintln!("graphics: using {:?} ({})", adapter.get_info().backend, adapter.get_info().name);
+        Some((instance, surface, adapter))
     }
 
     /// Saves the next presented frame (window contents, toolbar included) as a PNG.

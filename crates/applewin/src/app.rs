@@ -48,7 +48,10 @@ pub fn run(opts: Options) -> Result<(), String> {
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
     let mut app = App::new(opts, proxy)?;
-    event_loop.run_app(&mut app).map_err(|e| e.to_string())
+    let result = event_loop.run_app(&mut app).map_err(|e| e.to_string());
+    // Normally already done in `exiting()`; harmless if so.
+    app.release_gpu();
+    result
 }
 
 struct App {
@@ -57,6 +60,7 @@ struct App {
     _audio: Option<crate::audio::AudioOut>,
     window: Option<Arc<Window>>,
     gfx: Option<Gfx>,
+    quit: bool,
     egui_ctx: egui::Context,
     egui_state: Option<egui_winit::State>,
     ui: UiState,
@@ -126,6 +130,7 @@ impl App {
             _audio: audio,
             window: None,
             gfx: None,
+            quit: false,
             egui_ctx: egui::Context::default(),
             egui_state: None,
             frame: Frame::new(0, 0),
@@ -567,7 +572,8 @@ impl App {
         gfx.render(&self.egui_ctx, output);
         if self.exit_after_capture && gfx.captured {
             self.emu.shutdown();
-            std::process::exit(0);
+            self.quit = true;
+            return;
         }
         if self.exit_after_capture || self.dump_window.is_some() {
             window.request_redraw();
@@ -606,7 +612,22 @@ fn window_size(scale: u32, toolbar: bool) -> LogicalSize<f64> {
     LogicalSize::new(560.0 * s + if toolbar { 92.0 + 17.0 } else { 0.0 }, 384.0 * s + if toolbar { 34.0 } else { 0.0 })
 }
 
+impl App {
+    /// Releases GPU and window resources in dependency order: Gfx (renderer, surface, device, queue,
+    /// instance), then the egui winit state, then the window. Must run while the event loop (and so
+    /// the display connection) is still alive: terminating EGL on Wayland afterwards segfaults.
+    fn release_gpu(&mut self) {
+        self.gfx = None;
+        self.egui_state = None;
+        self.window = None;
+    }
+}
+
 impl ApplicationHandler<UserEvent> for App {
+    fn exiting(&mut self, _el: &ActiveEventLoop) {
+        self.release_gpu();
+    }
+
     fn resumed(&mut self, el: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
@@ -624,6 +645,7 @@ impl ApplicationHandler<UserEvent> for App {
             Ok(g) => self.gfx = Some(g),
             Err(e) => {
                 eprintln!("graphics init failed: {e}");
+                self.release_gpu();
                 el.exit();
                 return;
             }
@@ -661,6 +683,7 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             WindowEvent::CloseRequested => {
                 self.emu.shutdown();
+                self.release_gpu();
                 el.exit();
             }
             WindowEvent::Resized(s) => {
@@ -668,7 +691,13 @@ impl ApplicationHandler<UserEvent> for App {
                     g.resize(s.width, s.height);
                 }
             }
-            WindowEvent::RedrawRequested => self.redraw(),
+            WindowEvent::RedrawRequested => {
+                self.redraw();
+                if self.quit {
+                    self.release_gpu();
+                    el.exit();
+                }
+            }
             WindowEvent::ModifiersChanged(m) => {
                 self.mods = m.state();
                 self.joy.set_shift(self.mods.shift_key());
