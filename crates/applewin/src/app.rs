@@ -467,7 +467,8 @@ impl App {
         state.handle_platform_output(&window, output.platform_output.clone());
         let repaint = output.viewport_output.values().any(|v| v.repaint_delay.is_zero());
         if let Some((path, frames)) = &self.dump_window {
-            if self.status.frames >= *frames {
+            // egui windows are invisible during their first (sizing) pass: wait a few passes
+            if self.status.frames >= *frames && self.egui_ctx.cumulative_pass_nr() > 6 {
                 gfx.request_capture(path.clone());
                 self.dump_window = None;
                 self.exit_after_capture = true;

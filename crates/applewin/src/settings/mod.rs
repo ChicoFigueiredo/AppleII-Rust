@@ -153,6 +153,25 @@ impl SettingsDialog {
         self.open = true;
     }
 
+    /// Opens straight on a page / card dialog: `"slots"`, `"slots:2"` (options of slot 2, `aux` for the
+    /// aux slot). Used by `APPLEWIN_OPEN_DIALOG` to take screenshots of every dialog.
+    pub fn open_at(&mut self, settings: &Settings, spec: &str) {
+        self.open_with(settings);
+        let (page, slot) = spec.split_once(':').unwrap_or((spec, ""));
+        if let Some(p) = Page::ALL.iter().find(|p| p.title().eq_ignore_ascii_case(page)) {
+            self.page = *p;
+        }
+        match slot {
+            "" => {}
+            "aux" => self.open_sub(AUX),
+            n => {
+                if let Some(n) = n.parse::<usize>().ok().filter(|n| *n < 8) {
+                    self.open_sub(n);
+                }
+            }
+        }
+    }
+
     pub fn set_page(&mut self, page: Page) {
         self.page = page;
     }
@@ -210,7 +229,7 @@ impl SettingsDialog {
             return;
         }
         let mut open = true;
-        let max_h = (ctx.screen_rect().height() - 40.0).max(240.0);
+        let max_h = (ctx.available_rect().height() - 60.0).max(240.0);
         egui::Window::new("Configuration")
             .open(&mut open)
             .collapsible(false)
@@ -226,7 +245,7 @@ impl SettingsDialog {
                     }
                 });
                 ui.separator();
-                egui::ScrollArea::vertical().max_height((max_h - 130.0).max(160.0)).auto_shrink([false, true]).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height((max_h - 240.0).max(160.0)).auto_shrink([false, true]).show(ui, |ui| {
                     self.draw_page(ui, integer_scale, ev);
                 });
                 ui.separator();

@@ -32,6 +32,15 @@ pub const DONGLES: [(DongleType, &str); 7] = [
     (DongleType::HaydenCompiler, "Hayden - Applesoft Compiler"),
 ];
 
+/// Framed group spanning the full width.
+pub fn group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        add(ui)
+    })
+    .inner
+}
+
 pub fn label_of<T: PartialEq + Copy>(items: &[(T, &'static str)], v: T) -> &'static str {
     items.iter().find(|(t, _)| *t == v).map_or("?", |(_, n)| *n)
 }
@@ -121,7 +130,7 @@ impl SettingsDialog {
         });
         ui.add_space(4.0);
 
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Video");
             ui.horizontal(|ui| {
                 ui.label("Mode:");
@@ -148,7 +157,7 @@ impl SettingsDialog {
             ui.checkbox(&mut self.draft.video.show_disk_leds, "Show Disk II status in the toolbar");
         });
 
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Window and full screen");
             ui.horizontal(|ui| {
                 ui.label("Window scale");
@@ -161,7 +170,7 @@ impl SettingsDialog {
             ui.checkbox(&mut self.draft.video.alt_enter_toggles_fullscreen, "Alt+Enter toggles full-screen");
         });
 
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Emulation Speed Control");
             ui.checkbox(&mut self.draft.storage.enhance_disk_speed, "Enhanced floppy disk access speed (all drives)");
             ui.checkbox(&mut self.draft.keyboard.scroll_lock_toggle, "Scroll Lock acts as toggle for full-speed CPU");
@@ -191,7 +200,7 @@ impl SettingsDialog {
 
     fn page_input(&mut self, ui: &mut Ui, ev: &mut Vec<UiEvent>) {
         let mouse_card = model::has_mouse_card(&self.draft);
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Joystick Control");
             let j0: Vec<(Joystick0Kind, &'static str)> =
                 model::joystick0_choices(self.draft.joystick.joystick1, mouse_card).into_iter().map(|k| (k, model::joystick0_label(k))).collect();
@@ -223,7 +232,7 @@ impl SettingsDialog {
             ui.checkbox(&mut self.draft.joystick.shift_key_mod, "SHIFT key mod");
             ui.checkbox(&mut self.draft.joystick.hook_alt_keys, "Alt keys are joystick buttons 0 and 1");
         });
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Keyboard");
             ui.checkbox(&mut self.draft.keyboard.caps_lock, "Caps Lock on at start");
             ui.checkbox(&mut self.draft.keyboard.altgr_sends_char, "AltGr sends characters");
@@ -262,7 +271,7 @@ impl SettingsDialog {
 
     fn page_slots(&mut self, ui: &mut Ui) {
         let m = self.draft.machine.model;
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Slots");
             egui::Grid::new("slots").num_columns(3).spacing([8.0, 6.0]).show(ui, |ui| {
                 for slot in 0..8 {
@@ -327,7 +336,7 @@ impl SettingsDialog {
     // ---- Advanced ------------------------------------------------------------------------
 
     fn page_advanced(&mut self, ui: &mut Ui, ev: &mut Vec<UiEvent>) {
-        ui.group(|ui| {
+        group(ui, |ui| {
             ui.strong("Save State");
             ui.horizontal(|ui| {
                 ui.label("Filename:");

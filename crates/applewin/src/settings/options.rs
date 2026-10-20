@@ -3,7 +3,7 @@
 //! `IDD_RAMWORKS3`, `IDD_MOCKINGBOARD`, `IDD_TFE_SETTINGS_DIALOG`).
 
 use super::model::{self, SscForm};
-use super::pages::{browse_save, combo, path_row};
+use super::pages::{browse_save, combo, group, path_row};
 use super::{HostLists, SettingsDialog, AUX};
 use apple2_config::card::{AyChip, HdcFirmware, SlotCardSpec, SoundSockets, Ssi263Chip};
 use egui::{Context, Ui};
@@ -68,7 +68,7 @@ impl SettingsDialog {
 fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, hosts: &HostLists, show_leds: &mut bool) {
     match spec {
         SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("Floppy Disk Drives");
                 if ui.button("Swap").clicked() {
                     let a = drives[0].image.take();
@@ -96,7 +96,7 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
             });
         }
         SlotCardSpec::GenericHdd { firmware, images } => {
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("Hard Disk Drives");
                 if ui.button("Swap 1 and 2").clicked() {
                     images.swap(0, 1);
@@ -115,7 +115,7 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
         }
         SlotCardSpec::Ssc { .. } => {
             let Some(form) = ssc else { return };
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("SSC");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut form.tcp, false, "Serial port");
@@ -163,7 +163,7 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                     }
                 }
             });
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("Advanced");
                 ui.checkbox(&mut p.dump_to_printer, "Dump to printer (use with caution)");
                 ui.checkbox(&mut p.convert_encoding, "Encoding conversion for clones");
@@ -176,14 +176,14 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
             });
         }
         SlotCardSpec::MouseInterface { show_crosshair, restrict_to_window } => {
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("UI");
                 ui.checkbox(show_crosshair, "Show crosshairs in window's frame");
                 ui.checkbox(restrict_to_window, "Restrict mouse to Apple window");
             });
         }
         SlotCardSpec::Saturn128K { banks } => {
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("RAM Size (KB)");
                 let mut idx = model::SATURN_BANK_STEPS.iter().position(|b| b == banks).unwrap_or(3);
                 let steps = model::SATURN_BANK_STEPS;
@@ -196,7 +196,7 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
             });
         }
         SlotCardSpec::RamWorksIII { banks } => {
-            ui.group(|ui| {
+            group(ui, |ui| {
                 ui.strong("RAM Size");
                 let steps = model::RW3_BANK_STEPS;
                 let mut idx = steps.iter().position(|b| b == banks).unwrap_or(4);
@@ -222,7 +222,7 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
 }
 
 fn sockets_ui(ui: &mut Ui, s: &mut SoundSockets, ay_count: usize) {
-    ui.group(|ui| {
+    group(ui, |ui| {
         ui.strong("Speech");
         ui.horizontal(|ui| {
             ui.label("SSI263  $Cs40 (main):");
@@ -234,7 +234,7 @@ fn sockets_ui(ui: &mut Ui, s: &mut SoundSockets, ay_count: usize) {
         });
         ui.checkbox(&mut s.sc01, "SC-01");
     });
-    ui.group(|ui| {
+    group(ui, |ui| {
         ui.strong("Sound chips");
         for i in 0..ay_count {
             ui.horizontal(|ui| {
@@ -264,7 +264,7 @@ fn ethernet_ui(ui: &mut Ui, interface: &mut String, virtual_dns: Option<&mut boo
     if let Some(dns) = virtual_dns {
         ui.checkbox(dns, "Virtual DNS");
     }
-    ui.group(|ui| {
+    group(ui, |ui| {
         ui.strong("Npcap / libpcap");
         ui.label(
             "The Uthernet cards send raw Ethernet frames through Npcap (Windows) or libpcap (Linux, macOS). \

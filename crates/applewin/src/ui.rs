@@ -42,6 +42,18 @@ pub struct UiState {
 
 impl UiState {
     pub fn new(settings: &Settings) -> Self {
+        let mut ui = Self::blank(settings);
+        // developer hook for screenshots: APPLEWIN_OPEN_DIALOG=slots:2 or drive:0
+        if let Ok(spec) = std::env::var("APPLEWIN_OPEN_DIALOG") {
+            match spec.strip_prefix("drive:").and_then(|d| d.parse::<usize>().ok()) {
+                Some(d) => ui.drive_menu = Some(d.min(1)),
+                None => ui.settings.open_at(settings, &spec),
+            }
+        }
+        ui
+    }
+
+    fn blank(settings: &Settings) -> Self {
         UiState {
             texture: None,
             settings: SettingsDialog::new(settings),
