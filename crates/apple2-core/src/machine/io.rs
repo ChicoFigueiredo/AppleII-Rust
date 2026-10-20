@@ -56,8 +56,16 @@ impl Board {
             // TAPEIN reads high when unconnected (tape is out of scope).
             0 if self.model == Model::Pravets8A => self.keyboard.pravets_c060(fb),
             0 => bit7(true),
-            n @ 1..=3 => bit7(self.game.button(n as usize - 1, self.model.is_apple2())),
-            n => bit7(self.game.paddle_active(n as usize - 4, self.access_cycle())),
+            n @ 1..=3 => {
+                let n = n as usize - 1;
+                let forced = self.game_io.as_ref().and_then(|d| d.button(n, &self.annunciators));
+                bit7(forced.unwrap_or_else(|| self.game.button(n, self.model.is_apple2())))
+            }
+            n => {
+                let n = n as usize - 4;
+                let forced = self.game_io.as_ref().is_some_and(|d| d.paddle(n, &self.annunciators).is_some());
+                bit7(self.game.paddle_active_with(n, self.access_cycle(), forced))
+            }
         }
     }
 
@@ -110,6 +118,18 @@ impl Board {
         let m = self.memory.memmode();
         let (intcxrom, slotc3rom) = (m & mf::INTCXROM != 0, m & mf::SLOTC3ROM != 0);
         self.slots.select(addr, self.is_e, intcxrom, slotc3rom);
+        if self.is_e && self.rom_tap.is_some() {
+            // IsPotentialNoSlotClockAccess (Memory.cpp:903, UTAIIe:5-28).
+            let hi = (addr >> 8) as u8;
+            if ((intcxrom || !slotc3rom) && hi == 0xC3) || (intcxrom && hi == 0xC8) {
+                let mut data = write.unwrap_or(0);
+                if let Some(tap) = self.rom_tap.as_mut() {
+                    if tap.access(addr, write.is_some(), &mut data) && write.is_none() {
+                        return data;
+                    }
+                }
+            }
+        }
         if addr < 0xC800 {
             let slot = (addr >> 8) as u8 & 7;
             // Peripheral ROM unless the internal one is switched in (UTAIIe:5-28).
@@ -144,11 +164,47 @@ impl Board {
         }
     }
 
+    /// `IO_F8xx` (Memory.cpp:1089, GH#827): the No-Slot Clock under the ][/][+ ROM sees accesses
+    /// to `$F800-$FFFF` while the Language Card is not mapped. Returns the replaced read value.
+    #[inline]
+    pub(super) fn f8_tap(&mut self, addr: u16, write: Option<u8>) -> Option<u8> {
+        if addr < 0xF800 || self.is_e || self.rom_tap.is_none() {
+            return None;
+        }
+        if self.memory.memmode() & (mf::HIGHRAM | mf::WRITERAM) != 0 {
+            return None;
+        }
+        let mut data = write.unwrap_or(0);
+        let replaced = self.rom_tap.as_mut()?.access(addr, write.is_some(), &mut data);
+        (replaced && write.is_none()).then_some(data)
+    }
+
+    /// Annunciator/dongle-aware paddle strobe ($C070-$C07F).
+    fn trigger_paddles(&mut self) {
+        let forced = match &self.game_io {
+            Some(d) => std::array::from_fn(|n| d.paddle(n, &self.annunciators)),
+            None => [None; 4],
+        };
+        self.game.trigger_with(self.access_cycle(), forced);
+    }
+
+    /// `$C000-$C07F` bus snoop for cards that asked for it.
+    fn snoop(&mut self, addr: u16, write: bool, value: u8) {
+        for slot in 0..8u8 {
+            if self.snoop_mask & (1 << slot) != 0 {
+                self.card_call(slot, |c, x| c.io_snoop(addr, write, value, x));
+            }
+        }
+    }
+
     // ---- Dispatch. ----
 
     /// Read of $C000-$C0FF.
     pub(super) fn io_read(&mut self, addr: u16) -> u8 {
         let lo = addr as u8;
+        if self.snoop_mask != 0 && lo < 0x80 {
+            self.snoop(addr, false, 0);
+        }
         match lo >> 4 {
             0 => self.keyboard.read_data(),
             1 => self.read_c01x(lo, addr),
@@ -164,6 +220,9 @@ impl Board {
     /// Write to $C000-$C0FF.
     pub(super) fn io_write(&mut self, addr: u16, value: u8) {
         let lo = addr as u8;
+        if self.snoop_mask != 0 && lo < 0x80 {
+            self.snoop(addr, true, value);
+        }
         match lo >> 4 {
             0 => {
                 if lo <= 0x0B {
@@ -187,7 +246,7 @@ impl Board {
                 self.c05x(lo);
             }
             7 => {
-                self.game.trigger(self.access_cycle());
+                self.trigger_paddles();
                 match lo & 0xF {
                     // RamWorks bank select (the //e only; `set_paging` checks).
                     1 | 3 => self.memory.set_paging(lo, value),
@@ -240,7 +299,7 @@ impl Board {
     /// $C070-$C07F read: triggers the paddle timers (Memory.cpp:745); $C07E/$C07F expose IOUDIS
     /// and DHIRES in bit 7 on the //c and Enhanced //e (GH#636).
     fn c07x_read(&mut self, lo: u8) -> u8 {
-        self.game.trigger(self.access_cycle());
+        self.trigger_paddles();
         let fb = self.floating_bus();
         let bit7 = |on: bool| (fb & 0x7F) | if on { 0x80 } else { 0 };
         let enhanced = matches!(self.model, Model::Apple2eEnhanced | Model::Tk3000e);
@@ -264,7 +323,11 @@ impl Board {
                 if self.model.is_apple2c() {
                     return 0;
                 }
-                self.annunciators[(lo as usize >> 1) & 3] = lo & 1 != 0;
+                let n = (lo as usize >> 1) & 3;
+                if let Some(d) = self.game_io.as_mut() {
+                    d.annunciator(n, lo & 1 != 0, &self.annunciators); // before the update (Memory.cpp:884)
+                }
+                self.annunciators[n] = lo & 1 != 0;
                 if self.model == Model::Apple2JPlus && lo >> 1 == 0x2E {
                     self.video.jplus_ascii = lo & 1 != 0; // AN2 picks the Katakana/ASCII ROM half
                 }

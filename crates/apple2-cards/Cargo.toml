@@ -1,0 +1,12 @@
+[package]
+name = "apple2-cards"
+description = "Non-network peripheral cards: AppleMouse, Z80 SoftCard, clocks, 4Play, SNES MAX, VidHD, Breakpoint card, dongles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
+apple2-core = { path = "../apple2-core" }
+apple2-roms = { path = "../apple2-roms" }

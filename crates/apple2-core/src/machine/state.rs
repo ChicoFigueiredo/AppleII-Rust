@@ -58,6 +58,14 @@ pub struct MachineState {
     pub nmi_line: bool,
     pub irq_on_last_opcode_cycle: bool,
     pub irq_defer_1_opcode: bool,
+    /// Slot whose card owns the CPU (Z80 SoftCard active).
+    #[serde(default)]
+    pub cpu_owner: Option<u8>,
+    /// [`RomTap`](crate::hooks::RomTap) / [`GameIoDevice`](crate::hooks::GameIoDevice) bytes.
+    #[serde(default)]
+    pub rom_tap: Option<Vec<u8>>,
+    #[serde(default)]
+    pub game_io: Option<Vec<u8>>,
 }
 
 /// Why [`Machine::load_state`] refused a state (the machine is left untouched).
@@ -112,6 +120,9 @@ impl Machine {
             nmi_line: self.nmi_line,
             irq_on_last_opcode_cycle: self.irq_on_last_opcode_cycle,
             irq_defer_1_opcode: self.irq_defer_1_opcode,
+            cpu_owner: b.cpu_owner,
+            rom_tap: b.rom_tap.as_ref().map(|t| t.save()),
+            game_io: b.game_io.as_ref().map(|t| t.save()),
         }
     }
 
@@ -124,9 +135,21 @@ impl Machine {
         let b = &mut self.board;
         // Memory and Language Card sizes are checked first so a mismatch changes nothing; a card
         // that rejects its own bytes can still leave earlier slots loaded.
-        if !b.memory.fits(&s.memory) || s.lc.regions() != b.lc.regions() || !b.slots.load(&s.slots) {
+        if !b.memory.fits(&s.memory)
+            || s.lc.regions() != b.lc.regions()
+            || s.rom_tap.is_some() != b.rom_tap.is_some()
+            || s.game_io.is_some() != b.game_io.is_some()
+            || !b.slots.load(&s.slots)
+        {
             return Err(StateError::Incompatible);
         }
+        if let (Some(t), Some(st)) = (b.rom_tap.as_mut(), &s.rom_tap) {
+            t.load(st);
+        }
+        if let (Some(t), Some(st)) = (b.game_io.as_mut(), &s.game_io) {
+            t.load(st);
+        }
+        b.cpu_owner = s.cpu_owner;
         b.memory.restore(&s.memory);
         b.lc = s.lc.clone();
         b.video = s.video;
