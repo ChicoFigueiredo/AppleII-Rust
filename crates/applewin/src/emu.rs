@@ -30,6 +30,8 @@ pub enum Command {
     Joy { index: usize, out: JoyOutput },
     JoyAttached { index: usize, attached: bool },
     Paste(String),
+    /// Ctrl+Print Screen: publish the text screen for the clipboard ([`EmuStatus::copied_text`]).
+    CopyScreenText,
     Reset,
     PowerCycle,
     SetPaused(bool),
@@ -44,6 +46,10 @@ pub enum Command {
     SetStatePath(PathBuf),
     /// Rebuilds the machine (power cycle) with new settings.
     ApplySettings(Box<Settings>),
+    /// New settings that need no machine rebuild (video, speed, input...): swaps the settings and
+    /// the renderer, keeps the machine running.
+    UpdateSettings(Box<Settings>),
+    SetWriteProtect { drive: usize, on: bool },
     SetVolume(u32),
     InsertDisk { drive: usize, path: PathBuf },
     EjectDisk { drive: usize },
@@ -80,6 +86,9 @@ pub struct EmuStatus {
     /// Last user-visible message and a counter that changes whenever it does.
     pub message: String,
     pub message_seq: u64,
+    /// Text screen from the last [`Command::CopyScreenText`] and a counter that changes with it.
+    pub copied_text: String,
+    pub copied_seq: u64,
 }
 
 /// State shared with the UI thread.
@@ -207,6 +216,8 @@ pub struct Emulator {
     caps: bool,
     message: String,
     message_seq: u64,
+    copied_text: String,
+    copied_seq: u64,
     mhz: f32,
     underruns: u64,
 }
@@ -221,6 +232,8 @@ impl Emulator {
         let mouse = backend.mouse_for(&machine, &settings);
         let debugger = new_debugger(&mut machine, settings.debugger.auto_run_script.as_deref());
         let speed = speed_from_settings(&settings);
+        let settings_caps = settings.keyboard.caps_lock; // `-capslock=off`
+        machine.set_caps_lock(settings_caps);
         Ok(Emulator {
             settings,
             backend,
@@ -236,9 +249,11 @@ impl Emulator {
             paused: false,
             speed: if speed == Speed::Max { Speed::NORMAL } else { speed },
             full_speed: speed == Speed::Max,
-            caps: false,
+            caps: settings_caps,
             message: String::new(),
             message_seq: 0,
+            copied_text: String::new(),
+            copied_seq: 0,
             mhz: 0.0,
             underruns: 0,
         })
@@ -338,6 +353,8 @@ impl Emulator {
             mouse_available: self.mouse.available(),
             message: self.message.clone(),
             message_seq: self.message_seq,
+            copied_text: self.copied_text.clone(),
+            copied_seq: self.copied_seq,
         }
     }
 
@@ -347,6 +364,7 @@ impl Emulator {
         match self.backend.build_machine(&settings, &bus) {
             Ok(m) => {
                 self.machine = m;
+                self.machine.set_caps_lock(self.caps);
                 self.mixer = Mixer::new(&bus);
                 self.bus = bus;
                 self.video = self.backend.frame_source(&settings);
@@ -450,6 +468,7 @@ impl Emulator {
                     self.caps = on;
                     self.machine.set_caps_lock(on);
                 }
+                KeyEvent::ScrollLock(on) => self.machine.set_tk3000_mode(on),
                 KeyEvent::Reset => self.soft_reset(),
                 KeyEvent::Paste => {}
             },
@@ -465,6 +484,11 @@ impl Emulator {
                 }
             }
             Command::JoyAttached { index, attached } => self.machine.set_joystick_attached(index.min(1), attached),
+            Command::CopyScreenText => {
+                self.copied_text = apple2_core::text_screen::text_screen(&self.machine).join("\n") + "\n";
+                self.copied_seq += 1;
+                self.say("Text screen copied to the clipboard");
+            }
             Command::Paste(t) => {
                 self.machine.paste(&t);
             }
@@ -497,6 +521,17 @@ impl Emulator {
             Command::LoadState(p) => self.load_state(&p),
             Command::SetStatePath(p) => self.settings.storage.savestate_filename = Some(p),
             Command::ApplySettings(s) => self.rebuild(*s),
+            Command::UpdateSettings(s) => {
+                self.video = self.backend.frame_source(&s);
+                let sp = speed_from_settings(&s);
+                self.full_speed = sp == Speed::Max;
+                if let Speed::Multiplier(_) = sp {
+                    self.speed = sp;
+                }
+                apple2_storage::disk2::manager::set_enhance_disk(&mut self.machine, s.storage.enhance_disk_speed);
+                self.settings = *s;
+            }
+            Command::SetWriteProtect { drive, on } => self.disks.set_write_protect(&mut self.machine, drive, on),
             Command::SetVolume(v) => {
                 self.settings.sound.master_volume = v;
             }
@@ -681,10 +716,8 @@ fn drive(mut emu: Emulator, rx: Receiver<Command>, shared: &Shared, ring: Option
                 pacer.set_multiplier(now, m);
             }
             if let Some(r) = &ring {
+                // Leaving audio pacing fades the output out and then empties the ring.
                 r.set_active(mode == Mode::AudioPaced);
-                if mode != Mode::AudioPaced {
-                    r.clear();
-                }
             }
         }
 

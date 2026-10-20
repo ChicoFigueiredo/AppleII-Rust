@@ -22,19 +22,20 @@ Limitações: a Breakpoint card existe, mas o depurador ainda não lhe entrega o
 
 ## Interface
 
-- **Janela de configuração.** É uma versão reduzida: Modelo, padrão de vídeo, velocidade, volume, escala da janela, escala inteira e som. Cartas, discos, joysticks e as demais opções precisam ser editados no arquivo `settings.toml` ou passados na linha de comando. O AppleWin tem uma caixa de diálogo com várias abas.
+- **Janela de configuração.** Reproduz as páginas do AppleWin (Configuration, Input, Slots, Advanced e as opções de cada carta), mais uma aba Sound para os interruptores de som que o AppleWin só tem na linha de comando. Faltam o botão "Benchmark Emulator" (desativado), o volume separado do Mockingboard e a lista de interfaces do Npcap/libpcap (usa os nomes do sistema ou um nome digitado). A lista de portas seriais vem de /dev (ou COM1 a COM9).
 - **Janela única.** A tela, a barra e as janelas de ajuda e configuração são desenhadas dentro da mesma janela, com a biblioteca egui, e não por caixas de diálogo do sistema.
 - **Idioma.** Os textos da interface são em inglês; este manual está em português do Brasil.
 - **Ajuda.** F1 abre este manual dentro do emulador, no lugar do arquivo CHM do AppleWin.
-- **Discos.** O seletor de arquivos só abre imagens existentes; não há "New ProDOS" e "New DOS 3.3" no menu do drive, nem a caixa "Open as Read Only", nem soltar uma imagem diretamente sobre o botão de um drive (um arquivo solto sempre vai ao drive 1 e reinicia). Não há o menu "Send to CiderPress".
+- **Discos.** O menu do drive (Ctrl+F3/F4 ou botão direito) tem inserir, ejetar, proteção contra escrita, imagens recentes, trocar drives e "Create new disk" (em branco, DOS 3.3 ou ProDOS). Os discos rígidos aparecem no mesmo menu, mas trocar uma imagem reinicia a Máquina. Não há a caixa "Open as Read Only", nem soltar uma imagem sobre o botão de um drive (um arquivo solto sempre vai ao drive 1 e reinicia), nem o menu "Send to CiderPress".
 - **Registro de tipos de arquivo.** O AppleWin registra as extensões de disco no Windows; este programa não.
 - **Tela cheia.** Alt+Enter alterna a tela cheia (o `-alt-enter=open-apple-enter` é aceito mas não muda o comportamento nesta versão).
 - **Status de trilha e setor** dos drives (2x) é mostrado na linha de status, não numa dica sobre o LED.
 
 ## Teclado
 
-- Os atalhos de velocidade **Ctrl+0**, **Ctrl+1** e **Ctrl+3** do AppleWin não existem. Use o controle de velocidade da configuração e o Scroll Lock.
-- **Shift+Print Screen** (imagem 280x192) e **Ctrl+Print Screen** (copiar o texto da tela para a área de transferência) não existem. Print Screen salva sempre a imagem de 560x384, no diretório atual, como `AppleWin_NNNN.png`.
+- **Ctrl+V** não cola (envia ^V ao Apple, como no AppleWin); a colagem extra é Ctrl+Shift+V. O AppleWin não toca sons de drive, e este programa também não.
+- A imagem de Print Screen vai para o diretório atual como `AppleWin_NNNN.png`. Ctrl+Print Screen copia só a página de texto de 40 colunas (80 colunas e página 2 ainda não).
+- O "SHIFT key mod" liga o Shift ao botão 2, mas a temporização dos paddles 2 e 3 é a de um joystick presente. A leitura do setor ("S??") ao lado da trilha dos drives não existe.
 - As opções de captura de teclas do sistema (`-hook-alt-tab`, `-no-hook-system-key` e outras) são aceitas, mas só fazem sentido no AppleWin para Windows e não têm efeito aqui.
 
 ## Depurador

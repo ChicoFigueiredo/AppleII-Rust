@@ -6,13 +6,14 @@ use crate::backend::BackendFactory;
 use crate::emu::{self, default_state_path, Command, EmuHandle, EmuStatus};
 use crate::gfx::Gfx;
 use crate::host;
-use crate::joy::{axis_to_paddle, mouse_to_paddle, JoyMode, JoyOutput, KeyJoy, CENTRE};
-use crate::keymap::{KeyEvent as AppleKey, KeyboardState, Mods};
+use crate::joy::{mouse_to_paddle, JoyConfig, JoyFinal, JoySystem, KeyUse};
+use crate::keymap::{HostKey, KeyEvent as AppleKey, KeyboardState, Mods};
+use crate::overlay::MouseState;
+use crate::pacing::Speed;
 use crate::screenshot::{next_screenshot_path, save_png};
 use crate::toolbar;
 use crate::ui::{UiEvent, UiState};
 use crate::video::Frame;
-use apple2_config::settings::{Joystick0Kind, Joystick1Kind};
 use apple2_config::Settings;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,15 +51,6 @@ pub fn run(opts: Options) -> Result<(), String> {
     event_loop.run_app(&mut app).map_err(|e| e.to_string())
 }
 
-#[derive(Default)]
-struct Pad {
-    lx: f32,
-    ly: f32,
-    rx: f32,
-    ry: f32,
-    buttons: [bool; 2],
-}
-
 struct App {
     settings: Settings,
     emu: EmuHandle,
@@ -76,41 +68,29 @@ struct App {
     last_message_seq: u64,
     mods: ModifiersState,
     kbd: KeyboardState,
-    keyjoy: [KeyJoy; 2],
-    joy_kinds: [JoyMode; 2],
+    joy: JoySystem,
+    /// What the machine was last told about the joysticks.
+    last_joy: Option<JoyFinal>,
+    started: std::time::Instant,
     gilrs: Option<gilrs::Gilrs>,
-    pads: [Pad; 2],
     pad_ids: Vec<gilrs::GamepadId>,
     clipboard: Option<arboard::Clipboard>,
     cursor: Option<(f32, f32)>,
+    /// AppleMouse card capture (relative motion, cursor locked).
     mouse_captured: bool,
-    mouse_joy_buttons: [bool; 2],
+    /// Mouse-as-joystick capture (absolute position, cursor confined and hidden).
+    joy_cursor: bool,
+    last_copied_seq: u64,
     scale_toggle: bool,
     dump_window: Option<(PathBuf, u64)>,
     exit_after_capture: bool,
 }
 
-fn joy_modes(s: &Settings) -> [JoyMode; 2] {
-    let j0 = match s.joystick.joystick0 {
-        Joystick0Kind::Disabled => JoyMode::Disabled,
-        Joystick0Kind::HostJoystick1 => JoyMode::Gamepad,
-        Joystick0Kind::KeyboardCursors => JoyMode::KeyboardCursors,
-        Joystick0Kind::KeyboardNumpad => JoyMode::KeyboardNumpad,
-        Joystick0Kind::Mouse => JoyMode::Mouse,
-    };
-    let j1 = match s.joystick.joystick1 {
-        Joystick1Kind::Disabled => JoyMode::Disabled,
-        Joystick1Kind::HostJoystick2 | Joystick1Kind::HostJoystick1Thumbstick2 => JoyMode::Gamepad,
-        Joystick1Kind::KeyboardCursors => JoyMode::KeyboardCursors,
-        Joystick1Kind::KeyboardNumpad => JoyMode::KeyboardNumpad,
-        Joystick1Kind::Mouse => JoyMode::Mouse,
-    };
-    [j0, j1]
-}
-
 impl App {
     fn new(opts: Options, proxy: EventLoopProxy<UserEvent>) -> Result<App, String> {
         let Options { settings, factory, no_audio, load_state, open, dump_window, type_text } = opts;
+        let settings_caps = settings.keyboard.caps_lock;
+        let settings_for_joy = settings.clone();
         let audio = if no_audio || settings.sound.disable_sound {
             None
         } else {
@@ -127,10 +107,6 @@ impl App {
             None => (None, 48_000),
         };
         let emu = emu::spawn(settings.clone(), factory, ring, rate, Box::new(move || drop(proxy.send_event(UserEvent::Frame))))?;
-        let modes = joy_modes(&settings);
-        for (i, m) in modes.iter().enumerate() {
-            emu.send(Command::JoyAttached { index: i, attached: *m != JoyMode::Disabled });
-        }
         if let Some(p) = load_state {
             emu.send(Command::LoadState(p));
         }
@@ -158,16 +134,17 @@ impl App {
             last_title: String::new(),
             last_message_seq: 0,
             mods: ModifiersState::empty(),
-            kbd: KeyboardState::new(),
-            keyjoy: [KeyJoy::new(modes[0]), KeyJoy::new(modes[1])],
-            joy_kinds: modes,
+            kbd: KeyboardState::with_caps(settings_caps),
+            joy: JoySystem::new(JoyConfig::from_settings(&settings_for_joy)),
+            last_joy: None,
+            started: std::time::Instant::now(),
             gilrs: gilrs::Gilrs::new().map_err(|e| eprintln!("gamepads unavailable: {e}")).ok(),
-            pads: Default::default(),
             pad_ids: Vec::new(),
             clipboard: None,
             cursor: None,
             mouse_captured: false,
-            mouse_joy_buttons: [false; 2],
+            joy_cursor: false,
+            last_copied_seq: 0,
             scale_toggle: false,
         })
     }
@@ -205,8 +182,7 @@ impl App {
             }
             Action::ToggleDebugger => self.emu.send(Command::ToggleDebugger),
             Action::Settings => {
-                self.ui.draft = self.settings.clone();
-                self.ui.show_settings = !self.ui.show_settings;
+                self.ui.toggle_settings(&self.settings);
             }
             Action::NextVideoMode => self.emu.send(Command::VideoMode(1)),
             Action::PrevVideoMode => self.emu.send(Command::VideoMode(-1)),
@@ -217,7 +193,12 @@ impl App {
             Action::TogglePause => self.emu.send(Command::TogglePause),
             Action::ToggleFullSpeed => self.emu.send(Command::ToggleFullSpeed),
             Action::Step => self.emu.send(Command::Step),
-            Action::Screenshot => self.screenshot(),
+            Action::Screenshot => self.screenshot(false),
+            Action::ScreenshotSmall => self.screenshot(true),
+            Action::CopyScreenText => self.emu.send(Command::CopyScreenText),
+            Action::SpeedToggleMax => self.toggle_max_speed(),
+            Action::Speed1Mhz => self.emu.send(Command::SetSpeed(Speed::NORMAL)),
+            Action::SpeedMax => self.emu.send(Command::SetSpeed(Speed::Max)),
         }
     }
 
@@ -250,13 +231,17 @@ impl App {
         let picked = dialog.pick_file();
         self.emu.send(Command::SetPaused(was_paused));
         if let Some(path) = picked {
+            self.ui.disk.note_inserted(&path);
             self.emu.send(Command::InsertDisk { drive, path });
         }
     }
 
-    fn screenshot(&mut self) {
+    fn screenshot(&mut self, small: bool) {
         let mut f = Frame::new(0, 0);
         self.emu.shared.copy_frame(&mut f);
+        if small {
+            f = halve(&f);
+        }
         let dir = std::env::current_dir().unwrap_or_default();
         let path = next_screenshot_path(&dir);
         self.ui.message = match save_png(&path, &f) {
@@ -265,78 +250,101 @@ impl App {
         };
     }
 
-    fn paste(&mut self) {
+    fn clipboard(&mut self) -> Option<&mut arboard::Clipboard> {
         if self.clipboard.is_none() {
             self.clipboard = arboard::Clipboard::new().ok();
         }
-        if let Some(text) = self.clipboard.as_mut().and_then(|c| c.get_text().ok()) {
+        self.clipboard.as_mut()
+    }
+
+    fn paste(&mut self) {
+        if let Some(text) = self.clipboard().and_then(|c| c.get_text().ok()) {
             self.emu.send(Command::Paste(text.replace("\r\n", "\r").replace('\n', "\r")));
         }
     }
 
+    /// Ctrl+0: custom speed <-> full speed.
+    fn toggle_max_speed(&mut self) {
+        let custom = match emu::speed_from_settings(&self.settings) {
+            Speed::Max => Speed::NORMAL,
+            s => s,
+        };
+        self.emu.send(Command::SetSpeed(if self.status.full_speed { custom } else { Speed::Max }));
+    }
+
     // ---- input ----
 
-    fn send_joy(&self, index: usize) {
-        let out = match self.joy_kinds[index] {
-            JoyMode::Disabled => return,
-            JoyMode::KeyboardNumpad | JoyMode::KeyboardCursors => self.keyjoy[index].output(),
-            JoyMode::Gamepad => {
-                let (x, y, b) = if index == 0 {
-                    (self.pads[0].lx, self.pads[0].ly, self.pads[0].buttons)
-                } else if self.settings.joystick.joystick1 == Joystick1Kind::HostJoystick1Thumbstick2 {
-                    (self.pads[0].rx, self.pads[0].ry, self.pads[0].buttons)
-                } else {
-                    (self.pads[1].lx, self.pads[1].ly, self.pads[1].buttons)
-                };
-                JoyOutput { x: axis_to_paddle(x, 0.1), y: axis_to_paddle(y, 0.1), buttons: b }
+    /// Sends the machine whatever changed in the joystick state (also advances autofire).
+    fn update_joy(&mut self) {
+        let now = self.started.elapsed().as_micros() as u64;
+        let f = self.joy.output(now);
+        let prev = self.last_joy;
+        if prev == Some(f) {
+            return;
+        }
+        for i in 0..2 {
+            if prev.is_none_or(|p| p.attached[i] != f.attached[i]) {
+                self.emu.send(Command::JoyAttached { index: i, attached: f.attached[i] });
             }
-            JoyMode::Mouse => {
-                let (x, y) = match (self.cursor, self.ui.screen_rect) {
-                    (Some((cx, cy)), Some(r)) => {
-                        (mouse_to_paddle(cx - r.min.x, r.width()), mouse_to_paddle(cy - r.min.y, r.height()))
-                    }
-                    _ => (CENTRE, CENTRE),
-                };
-                JoyOutput { x, y, buttons: self.mouse_joy_buttons }
+            if prev.is_none_or(|p| p.out[i] != f.out[i]) {
+                self.emu.send(Command::Joy { index: i, out: f.out[i] });
             }
-        };
-        self.emu.send(Command::Joy { index, out });
+        }
+        self.last_joy = Some(f);
     }
 
     fn poll_gamepads(&mut self) {
         use gilrs::{Axis, Button, EventType};
-        let Some(g) = self.gilrs.as_mut() else { return };
-        let mut changed = false;
-        while let Some(ev) = g.next_event() {
-            if !self.pad_ids.contains(&ev.id) && self.pad_ids.len() < 2 {
-                self.pad_ids.push(ev.id);
-            }
-            let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) else { continue };
-            let p = &mut self.pads[slot];
-            match ev.event {
-                EventType::AxisChanged(Axis::LeftStickX, v, _) => p.lx = v,
-                EventType::AxisChanged(Axis::LeftStickY, v, _) => p.ly = -v,
-                EventType::AxisChanged(Axis::RightStickX, v, _) => p.rx = v,
-                EventType::AxisChanged(Axis::RightStickY, v, _) => p.ry = -v,
-                EventType::ButtonPressed(b, _) | EventType::ButtonReleased(b, _) => {
-                    let down = matches!(ev.event, EventType::ButtonPressed(..));
-                    match b {
-                        Button::South | Button::West => p.buttons[0] = down,
-                        Button::East | Button::North => p.buttons[1] = down,
-                        Button::DPadLeft => p.lx = if down { -1.0 } else { 0.0 },
-                        Button::DPadRight => p.lx = if down { 1.0 } else { 0.0 },
-                        Button::DPadUp => p.ly = if down { -1.0 } else { 0.0 },
-                        Button::DPadDown => p.ly = if down { 1.0 } else { 0.0 },
-                        _ => {}
+        if let Some(g) = self.gilrs.as_mut() {
+            while let Some(ev) = g.next_event() {
+                if let EventType::Disconnected = ev.event {
+                    if let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) {
+                        self.pad_ids.remove(slot);
+                        if slot == 0 {
+                            self.joy.pads[0] = self.joy.pads[1];
+                        }
+                        self.joy.pads[1] = Default::default();
+                        self.joy.set_pads_connected(self.pad_ids.len());
                     }
+                    continue;
                 }
-                _ => continue,
+                if !self.pad_ids.contains(&ev.id) && self.pad_ids.len() < 2 {
+                    self.pad_ids.push(ev.id);
+                    self.joy.set_pads_connected(self.pad_ids.len());
+                }
+                let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) else { continue };
+                let p = &mut self.joy.pads[slot];
+                match ev.event {
+                    EventType::AxisChanged(Axis::LeftStickX, v, _) => p.lx = v,
+                    EventType::AxisChanged(Axis::LeftStickY, v, _) => p.ly = -v,
+                    EventType::AxisChanged(Axis::RightStickX, v, _) => p.rx = v,
+                    EventType::AxisChanged(Axis::RightStickY, v, _) => p.ry = -v,
+                    EventType::ButtonPressed(b, _) | EventType::ButtonReleased(b, _) => {
+                        let down = matches!(ev.event, EventType::ButtonPressed(..));
+                        match b {
+                            Button::South | Button::West => p.buttons[0] = down,
+                            Button::East | Button::North => p.buttons[1] = down,
+                            Button::DPadLeft => p.lx = if down { -1.0 } else { 0.0 },
+                            Button::DPadRight => p.lx = if down { 1.0 } else { 0.0 },
+                            Button::DPadUp => p.ly = if down { -1.0 } else { 0.0 },
+                            Button::DPadDown => p.ly = if down { 1.0 } else { 0.0 },
+                            _ => {}
+                        }
+                    }
+                    _ => continue,
+                }
             }
-            changed = true;
         }
-        if changed {
-            self.send_joy(0);
-            self.send_joy(1);
+        self.update_joy();
+    }
+
+    /// Scroll Lock: full speed while held, or toggled when "ScrollLock Toggle" is set.
+    fn scroll_lock(&mut self, pressed: bool, repeat: bool) {
+        if repeat {
+            return;
+        }
+        if pressed || !self.settings.keyboard.scroll_lock_toggle {
+            self.emu.send(Command::ToggleFullSpeed);
         }
     }
 
@@ -360,12 +368,17 @@ impl App {
             }
             return;
         }
-        // keyboard-as-joystick takes its keys first (AppleWin JoyProcessKey)
-        for i in 0..2 {
-            if self.keyjoy[i].process(input, pressed) {
-                self.send_joy(i);
+        if input.key == HostKey::ScrollLock {
+            self.scroll_lock(pressed, ev.repeat);
+        }
+        // the game port takes its keys first (AppleWin JoyProcessKey)
+        match self.joy.process_key(input, pressed, ev.repeat) {
+            KeyUse::Joystick => {
+                self.update_joy();
                 return;
             }
+            KeyUse::JoystickAndApple => self.update_joy(),
+            KeyUse::Ignored => {}
         }
         for e in self.kbd.handle(input, pressed, ev.repeat, mods) {
             match e {
@@ -379,11 +392,10 @@ impl App {
         for e in self.kbd.release_all() {
             self.emu.send(Command::Key(e));
         }
-        for i in 0..2 {
-            self.keyjoy[i].release_all();
-            self.send_joy(i);
-        }
+        self.joy.release_all();
+        self.update_joy();
         self.set_mouse_capture(false);
+        self.set_joy_cursor(false);
     }
 
     fn set_mouse_capture(&mut self, on: bool) {
@@ -401,26 +413,63 @@ impl App {
         }
     }
 
+    /// Mouse as joystick: the pointer is confined to the window and hidden while it is "in".
+    fn set_joy_cursor(&mut self, on: bool) {
+        if self.joy_cursor == on {
+            return;
+        }
+        self.joy_cursor = on;
+        if let Some(w) = &self.window {
+            let _ = w.set_cursor_grab(if on { CursorGrabMode::Confined } else { CursorGrabMode::None });
+            w.set_cursor_visible(!on);
+        }
+        if !on {
+            self.joy.set_mouse_button(0, false);
+            self.joy.set_mouse_button(1, false);
+            self.update_joy();
+        }
+    }
+
+    /// Pointer position inside the Apple screen as paddle values.
+    fn mouse_joy_position(&mut self) {
+        if let (Some((cx, cy)), Some(r)) = (self.cursor, self.ui.screen_rect) {
+            self.joy.set_mouse_position(mouse_to_paddle(cx - r.min.x, r.width()), mouse_to_paddle(cy - r.min.y, r.height()));
+            self.update_joy();
+        }
+    }
+
+    fn cursor_over_screen(&self) -> bool {
+        matches!((self.cursor, self.ui.screen_rect), (Some((x, y)), Some(r)) if r.contains(egui::pos2(x, y)))
+    }
+
     fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
         let idx = match button {
             MouseButton::Left => 0u8,
             MouseButton::Right => 1,
             _ => return,
         };
-        let over_screen = matches!((self.cursor, self.ui.screen_rect), (Some((x, y)), Some(r)) if r.contains(egui::pos2(x, y)));
+        let over_screen = self.cursor_over_screen();
+        let release = self.mods.control_key() || self.mods.shift_key();
         if self.mouse_captured {
-            if pressed && (self.mods.control_key() || self.mods.shift_key()) {
+            if pressed && release {
                 self.set_mouse_capture(false); // AppleWin: Ctrl/Shift+click releases the mouse
             } else {
                 self.emu.send(Command::MouseButton { button: idx, down: pressed });
             }
-        } else if pressed && over_screen && self.status.mouse_available && !self.mods.control_key() {
-            self.set_mouse_capture(true);
-        }
-        if self.joy_kinds.contains(&JoyMode::Mouse) && over_screen {
-            self.mouse_joy_buttons[usize::from(idx)] = pressed;
-            for i in 0..2 {
-                self.send_joy(i);
+        } else if self.joy_cursor {
+            if pressed && release {
+                self.set_joy_cursor(false);
+            } else {
+                self.joy.set_mouse_button(usize::from(idx), pressed);
+                self.update_joy();
+            }
+        } else if pressed && over_screen && !self.mods.control_key() {
+            // The AppleMouse card takes the mouse before the joystick does.
+            if self.status.mouse_available {
+                self.set_mouse_capture(true);
+            } else if self.joy.using_mouse() {
+                self.set_joy_cursor(true); // this click only captures, as in AppleWin
+                self.mouse_joy_position();
             }
         }
     }
@@ -433,13 +482,31 @@ impl App {
                 UiEvent::Action(a) => self.do_action(a),
                 UiEvent::Apply(s) => {
                     self.settings = (*s).clone();
+                    self.joy.set_config(JoyConfig::from_settings(&self.settings));
+                    if !self.joy.using_mouse() {
+                        self.set_joy_cursor(false);
+                    }
+                    self.update_joy();
                     if let Err(e) = self.settings.save_default() {
                         self.ui.message = format!("Could not save settings: {e}");
                     }
                     self.emu.send(Command::ApplySettings(s));
                 }
+                UiEvent::ApplyLive(s) => {
+                    self.settings = (*s).clone();
+                    if let Err(e) = self.settings.save_default() {
+                        self.ui.message = format!("Could not save settings: {e}");
+                    }
+                    self.emu.send(Command::UpdateSettings(s));
+                }
                 UiEvent::Volume(v) => self.emu.send(Command::SetVolume(v)),
                 UiEvent::EjectDisk(d) => self.emu.send(Command::EjectDisk { drive: d }),
+                UiEvent::InsertDisk { drive, path } => {
+                    self.ui.disk.note_inserted(&path);
+                    self.emu.send(Command::InsertDisk { drive, path });
+                }
+                UiEvent::SetWriteProtect { drive, on } => self.emu.send(Command::SetWriteProtect { drive, on }),
+                UiEvent::Paste => self.paste(),
             }
         }
     }
@@ -452,6 +519,16 @@ impl App {
             self.emu.shared.copy_frame(&mut self.frame);
             self.status = self.emu.shared.status();
             self.ui.upload(&self.egui_ctx, &self.frame);
+            if self.status.copied_seq != self.last_copied_seq {
+                self.last_copied_seq = self.status.copied_seq;
+                let text = self.status.copied_text.clone();
+                if self.clipboard.is_none() {
+                    self.clipboard = arboard::Clipboard::new().ok();
+                }
+                if let Some(c) = self.clipboard.as_mut() {
+                    let _ = c.set_text(text);
+                }
+            }
             if self.status.message_seq != self.last_message_seq {
                 self.last_message_seq = self.status.message_seq;
                 self.ui.message = self.status.message.clone();
@@ -462,6 +539,11 @@ impl App {
                 self.last_title = t;
             }
         }
+        self.ui.mouse = MouseState {
+            usable: self.status.mouse_available || self.joy.using_mouse(),
+            captured: self.mouse_captured || self.joy_cursor,
+            over_screen: matches!((self.cursor, self.ui.screen_rect), (Some((x, y)), Some(r)) if r.contains(egui::pos2(x, y))),
+        };
         let input = state.take_egui_input(&window);
         let fullscreen = window.fullscreen().is_some();
         let mut events = Vec::new();
@@ -475,7 +557,8 @@ impl App {
         state.handle_platform_output(&window, output.platform_output.clone());
         let repaint = output.viewport_output.values().any(|v| v.repaint_delay.is_zero());
         if let Some((path, frames)) = &self.dump_window {
-            if self.status.frames >= *frames {
+            // egui windows are invisible during their first (sizing) pass: wait a few passes
+            if self.status.frames >= *frames && self.egui_ctx.cumulative_pass_nr() > 6 {
                 gfx.request_capture(path.clone());
                 self.dump_window = None;
                 self.exit_after_capture = true;
@@ -494,6 +577,20 @@ impl App {
         }
         self.handle_ui_events(events);
     }
+}
+
+/// 560x384 to 280x192 (Shift+Print Screen): every second pixel of every second line.
+fn halve(f: &Frame) -> Frame {
+    let (w, h) = (f.width / 2, f.height / 2);
+    let mut out = Frame::new(w, h);
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let src = ((y * 2) * f.width as usize + x * 2) * 4;
+            let dst = (y * w as usize + x) * 4;
+            out.rgba[dst..dst + 4].copy_from_slice(&f.rgba[src..src + 4]);
+        }
+    }
+    out
 }
 
 fn open_command(p: &std::path::Path) -> Command {
@@ -572,15 +669,17 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::RedrawRequested => self.redraw(),
-            WindowEvent::ModifiersChanged(m) => self.mods = m.state(),
+            WindowEvent::ModifiersChanged(m) => {
+                self.mods = m.state();
+                self.joy.set_shift(self.mods.shift_key());
+                self.update_joy();
+            }
             WindowEvent::Focused(false) => self.release_inputs(),
             WindowEvent::KeyboardInput { event, .. } if !egui_wants_keys => self.keyboard(&event),
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = Some((position.x as f32 / self.egui_ctx.pixels_per_point(), position.y as f32 / self.egui_ctx.pixels_per_point()));
-                if self.joy_kinds.contains(&JoyMode::Mouse) {
-                    for i in 0..2 {
-                        self.send_joy(i);
-                    }
+                if self.joy_cursor {
+                    self.mouse_joy_position();
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => self.mouse_button(button, state == ElementState::Pressed),
