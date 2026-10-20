@@ -1,0 +1,41 @@
+stages: [check, test, cross]
+
+default:
+  image: rust:latest
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cargo/registry
+      - target/
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TERM_COLOR: always
+
+.linux_deps: &linux_deps
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev pkg-config
+
+clippy:
+  stage: check
+  <<: *linux_deps
+  script:
+    - rustup component add clippy
+    - cargo clippy --workspace --all-targets -- -D warnings
+
+test:
+  stage: test
+  <<: *linux_deps
+  script:
+    - cargo test --workspace --release
+
+# Windows: type/borrow check only (no linking, no Windows runner needed).
+check-windows:
+  stage: cross
+  <<: *linux_deps
+  script:
+    - rustup target add x86_64-pc-windows-gnu
+    - apt-get install -y -qq gcc-mingw-w64-x86-64
+    - cargo check --workspace --target x86_64-pc-windows-gnu
+  allow_failure: true # crates that bind native Linux audio/input libs may not cross-check without a Windows sysroot

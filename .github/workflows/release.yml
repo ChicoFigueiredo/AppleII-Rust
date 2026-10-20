@@ -1,0 +1,104 @@
+name: Release
+
+# Builds every workspace binary (the future `applewin` frontend, tools...) for the three OSes
+# when a tag `v*` is pushed. While no binary crate exists the archives only hold LICENSE/README,
+# so the pipeline stays green.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest, ext: tar.gz }
+          - { name: windows-x86_64, os: windows-latest, ext: zip }
+          - { name: macos-universal, os: macos-latest, ext: tar.gz }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (native)
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          cargo build --workspace --bins --release
+          echo "OUT=target/release" >> "$GITHUB_ENV"
+
+      # macOS: build both architectures and merge them with lipo.
+      - name: Build (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --workspace --bins --release --target aarch64-apple-darwin
+          cargo build --workspace --bins --release --target x86_64-apple-darwin
+          mkdir -p target/universal
+          for f in target/aarch64-apple-darwin/release/*; do
+            if [ -f "$f" ] && [ -x "$f" ] && [[ "$f" != *.d ]] && [[ "$f" != *.dylib ]]; then
+              n=$(basename "$f")
+              lipo -create "$f" "target/x86_64-apple-darwin/release/$n" -output "target/universal/$n"
+            fi
+          done
+          echo "OUT=target/universal" >> "$GITHUB_ENV"
+
+      - name: Package
+        shell: bash
+        run: |
+          NAME="applewin-rs-${GITHUB_REF_NAME}-${{ matrix.name }}"
+          mkdir -p "dist/$NAME"
+          # Executables only: regular, executable files without a dot-suffix, or *.exe.
+          for f in "$OUT"/*; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.exe) cp "$f" "dist/$NAME/" ;;
+              *.*) ;;
+              *) [ -x "$f" ] && cp "$f" "dist/$NAME/" ;;
+            esac
+          done
+          cp LICENSE README.md "dist/$NAME/" 2>/dev/null || true
+          cd dist
+          if [ "${{ matrix.ext }}" = "zip" ]; then
+            7z a "$NAME.zip" "$NAME" > /dev/null
+          else
+            tar czf "$NAME.tar.gz" "$NAME"
+          fi
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/*.${{ matrix.ext }}
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
