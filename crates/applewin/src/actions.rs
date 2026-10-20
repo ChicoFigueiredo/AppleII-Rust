@@ -3,7 +3,7 @@
 //!
 //! | Key | AppleWin | Action |
 //! |---|---|---|
-//! | F1 | BTN_HELP | [`Action::Help`] |
+//! | F1 | BTN_HELP: opens the in-app manual ([`crate::help`]) | [`Action::Help`] |
 //! | F2 | BTN_RUN: reboot (`ResetMachineState`); Ctrl+F2 = `CtrlReset` | [`Action::Reboot`] / [`Action::SoftReset`] |
 //! | F3 / F4 | BTN_DRIVE1/2: choose image; Ctrl+F3/F4 = drive menu | [`Action::DriveSelect`] / [`Action::DriveMenu`] |
 //! | F5 | BTN_DRIVESWAP | [`Action::SwapDrives`] |
@@ -99,6 +99,7 @@ mod tests {
 
     #[test]
     fn function_keys_follow_applewin() {
+        assert_eq!(action_for(HostKey::F(1), NONE), Some(Action::Help));
         assert_eq!(action_for(HostKey::F(2), NONE), Some(Action::Reboot));
         assert_eq!(action_for(HostKey::F(2), CTRL), Some(Action::SoftReset));
         assert_eq!(action_for(HostKey::F(4), NONE), Some(Action::DriveSelect(1)));

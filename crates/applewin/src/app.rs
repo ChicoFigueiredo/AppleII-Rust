@@ -60,6 +60,7 @@ struct App {
     egui_ctx: egui::Context,
     egui_state: Option<egui_winit::State>,
     ui: UiState,
+    help: crate::help::HelpViewer,
     frame: Frame,
     frame_seq: u64,
     status: EmuStatus,
@@ -119,6 +120,7 @@ impl App {
             dump_window,
             exit_after_capture: false,
             ui: UiState::new(&settings),
+            help: crate::help::HelpViewer::new(),
             settings,
             emu,
             _audio: audio,
@@ -159,7 +161,7 @@ impl App {
 
     fn do_action(&mut self, a: Action) {
         match a {
-            Action::Help => self.ui.message = "Help: https://github.com/AppleWin/AppleWin/wiki (F1)".into(),
+            Action::Help => self.help.toggle(),
             Action::Reboot => self.emu.send(Command::PowerCycle),
             Action::SoftReset => self.emu.send(Command::Reset),
             Action::DriveSelect(d) => self.pick_disk(usize::from(d)),
@@ -519,7 +521,11 @@ impl App {
         let mut events = Vec::new();
         let status = &self.status;
         let ui = &mut self.ui;
-        let output = self.egui_ctx.run(input, |ctx| events = ui.draw(ctx, status, fullscreen));
+        let help = &mut self.help;
+        let output = self.egui_ctx.run(input, |ctx| {
+            events = ui.draw(ctx, status, fullscreen);
+            help.draw(ctx);
+        });
         state.handle_platform_output(&window, output.platform_output.clone());
         let repaint = output.viewport_output.values().any(|v| v.repaint_delay.is_zero());
         if let Some((path, frames)) = &self.dump_window {
@@ -577,7 +583,7 @@ impl ApplicationHandler<UserEvent> for App {
         if self.window.is_some() {
             return;
         }
-        let attrs = Window::default_attributes().with_title("AppleII-Rust").with_inner_size(window_size(self.settings.video.window_scale, true));
+        let attrs = Window::default_attributes().with_title("AppleII-Rust").with_window_icon(crate::icon::window_icon()).with_inner_size(window_size(self.settings.video.window_scale, true));
         let window = match el.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {

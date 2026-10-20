@@ -1,8 +1,7 @@
 name: Release
 
-# Builds every workspace binary (the future `applewin` frontend, tools...) for the three OSes
-# when a tag `v*` is pushed. While no binary crate exists the archives only hold LICENSE/README,
-# so the pipeline stays green.
+# Tag `v*`  -> build all three platforms and publish a GitHub release.
+# Manual run (workflow_dispatch) -> same build, artifacts only (dry run, no release is created).
 on:
   push:
     tags: ["v*"]
@@ -10,6 +9,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -19,11 +21,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-x86_64, os: ubuntu-latest, ext: tar.gz }
-          - { name: windows-x86_64, os: windows-latest, ext: zip }
-          - { name: macos-universal, os: macos-latest, ext: tar.gz }
+          # 22.04: older glibc so the binary runs on more distros
+          - { name: linux-x64, os: ubuntu-22.04, pkg: linux, ext: tar.gz }
+          - { name: windows-x64, os: windows-latest, pkg: windows, ext: zip }
+          - { name: macos-universal, os: macos-14, pkg: macos, ext: zip }
     steps:
       - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="dev-${GITHUB_SHA::7}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: Linux system packages
         if: runner.os == 'Linux'
@@ -36,56 +46,47 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.name }}
 
-      - name: Build (native)
+      - name: Build (Linux / Windows)
         if: runner.os != 'macOS'
         shell: bash
         run: |
-          cargo build --workspace --bins --release
-          echo "OUT=target/release" >> "$GITHUB_ENV"
+          cargo build -p applewin --release
+          echo "BINDIR=target/release" >> "$GITHUB_ENV"
 
       # macOS: build both architectures and merge them with lipo.
       - name: Build (macOS universal)
         if: runner.os == 'macOS'
         run: |
-          cargo build --workspace --bins --release --target aarch64-apple-darwin
-          cargo build --workspace --bins --release --target x86_64-apple-darwin
+          cargo build -p applewin --release --target aarch64-apple-darwin
+          cargo build -p applewin --release --target x86_64-apple-darwin
           mkdir -p target/universal
-          for f in target/aarch64-apple-darwin/release/*; do
-            if [ -f "$f" ] && [ -x "$f" ] && [[ "$f" != *.d ]] && [[ "$f" != *.dylib ]]; then
-              n=$(basename "$f")
-              lipo -create "$f" "target/x86_64-apple-darwin/release/$n" -output "target/universal/$n"
-            fi
-          done
-          echo "OUT=target/universal" >> "$GITHUB_ENV"
+          lipo -create \
+            target/aarch64-apple-darwin/release/applewin \
+            target/x86_64-apple-darwin/release/applewin \
+            -output target/universal/applewin
+          lipo -info target/universal/applewin
+          echo "BINDIR=target/universal" >> "$GITHUB_ENV"
+
+      # ROMs and symbols are embedded, so the bare executable must run: render 300 frames, no window.
+      - name: Smoke test (headless)
+        shell: bash
+        run: |
+          EXE="$BINDIR/applewin"; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          "$EXE" --headless-frames 300 --dump-screen smoke.png
+          test -s smoke.png
 
       - name: Package
         shell: bash
-        run: |
-          NAME="applewin-rs-${GITHUB_REF_NAME}-${{ matrix.name }}"
-          mkdir -p "dist/$NAME"
-          # Executables only: regular, executable files without a dot-suffix, or *.exe.
-          for f in "$OUT"/*; do
-            [ -f "$f" ] || continue
-            case "$f" in
-              *.exe) cp "$f" "dist/$NAME/" ;;
-              *.*) ;;
-              *) [ -x "$f" ] && cp "$f" "dist/$NAME/" ;;
-            esac
-          done
-          cp LICENSE README.md "dist/$NAME/" 2>/dev/null || true
-          cd dist
-          if [ "${{ matrix.ext }}" = "zip" ]; then
-            7z a "$NAME.zip" "$NAME" > /dev/null
-          else
-            tar czf "$NAME.tar.gz" "$NAME"
-          fi
-          ls -l
+        run: packaging/package.sh "${{ matrix.pkg }}" "${{ steps.ver.outputs.version }}" "$BINDIR"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: dist/*.${{ matrix.ext }}
+          if-no-files-found: error
 
   publish:
     needs: build

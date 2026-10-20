@@ -1,7 +1,13 @@
+// GUI subsystem on Windows release builds (no console window); see wincon.rs.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
+mod wincon;
+
 use applewin_shell::backend::DefaultBackend;
 use applewin_shell::headless::{self, HeadlessOptions};
 
 fn main() {
+    wincon::attach_parent_console();
     let no_audio = std::env::args().any(|a| a == "--no-audio");
     let (opts, gui, rest) = match shell_args(std::env::args().skip(1).collect()) {
         Ok(v) => v,
