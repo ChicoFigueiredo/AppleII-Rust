@@ -3,6 +3,17 @@ use applewin_shell::headless::{self, HeadlessOptions};
 
 fn main() {
     let no_audio = std::env::args().any(|a| a == "--no-audio");
+    // Informational flags answer before anything touches a window or the saved settings.
+    // `-h` / `-V` are shell conveniences (AppleWin itself has -help / -version).
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.iter().any(|a| matches!(a.as_str(), "--help" | "-help" | "-?" | "-h")) {
+        print!("{}", apple2_config::cmdline::HELP);
+        return;
+    }
+    if argv.iter().any(|a| matches!(a.as_str(), "--version" | "-version" | "-V")) {
+        println!("applewin {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
     let (opts, gui, rest) = match shell_args(std::env::args().skip(1).collect()) {
         Ok(v) => v,
         Err(e) => {
