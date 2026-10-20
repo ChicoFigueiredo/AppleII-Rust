@@ -260,7 +260,7 @@ impl MockingboardCard {
 
     fn schedule_timer(&self, unit: usize, t: Option<TimerSched>, ctx: &mut CardCtx) {
         if let Some(t) = t {
-            ctx.schedule((unit * 2) as u16 + t.timer as u16, t.cycles);
+            ctx.schedule_gated((unit * 2) as u16 + t.timer as u16, t.cycles, t.can_assert_irq);
         }
     }
 
@@ -434,6 +434,7 @@ impl MockingboardCard {
     /// `IOWriteInternal` (cpp:738).
     fn write_io(&mut self, a: u8, v: u8, ctx: &mut CardCtx) {
         self.pre(ctx);
+        self.false_read(a, ctx);
         let now = ctx.cycles;
         let r = a & 0xF;
         if self.is_phasor() {
@@ -447,6 +448,7 @@ impl MockingboardCard {
                 if cs & (1 << unit) != 0 {
                     let t = self.subs[unit].via.write(r, v, now);
                     self.schedule_timer(unit, t, ctx);
+                    self.sync_gates(unit, r, ctx);
                     if r == reg::ORB {
                         self.write_orb(unit, 0, now);
                     }
@@ -463,6 +465,7 @@ impl MockingboardCard {
             };
             let t = self.subs[unit].via.write(r, v, now);
             self.schedule_timer(unit, t, ctx);
+            self.sync_gates(unit, r, ctx);
             if r == reg::ORB {
                 self.write_orb(unit, for_ay, now);
             }
@@ -474,6 +477,27 @@ impl MockingboardCard {
             self.apply_ssi(u, out, ctx);
         }
         self.sync_irq(ctx);
+    }
+
+    /// 6502 false read of `STA abs,X/Y` and `STA (zp),Y` (GH#52, cpp:750-778): without a page
+    /// cross the CPU first reads the target; only T1CL/T2CL reads have an effect (they clear
+    /// IFR). `STA (zp),Y` only does it on the NMOS 6502 (UTAIIe:4-23, 4-27).
+    fn false_read(&mut self, a: u8, ctx: &mut CardCtx) {
+        let o = ctx.opcode;
+        let hit = (o.opcode == 0x91 && !o.cmos) || o.opcode == 0x99 || o.opcode == 0x9D;
+        let addr16 = 0xC000 | (ctx.slot as u16) << 8 | a as u16;
+        if hit && (o.indexed_base ^ addr16) >> 8 == 0 && matches!(a & 0xF, reg::T1CL | reg::T2CL) {
+            self.read_io(a, ctx);
+        }
+    }
+
+    /// After an IER write, the pending timer events take the new `m_canAssertIRQ` (cpp:217-220).
+    fn sync_gates(&self, unit: usize, r: u8, ctx: &mut CardCtx) {
+        if r == reg::IER {
+            let v = &self.subs[unit].via;
+            ctx.set_can_assert_irq((unit * 2) as u16, !v.t1_gated);
+            ctx.set_can_assert_irq((unit * 2) as u16 + 1, !v.t2_gated);
+        }
     }
 
     /// Writes to `$Cs4x-$Cs7x` hit the first speech chip, `$Cs2x-$Cs3x`/`$Cs6x` the second
@@ -622,7 +646,9 @@ impl Card for MockingboardCard {
                     | (v.t1_active as u8) << 2
                     | (v.t2_active as u8) << 3
                     | (v.bus_driven as u8) << 4
-                    | (s.speech_irq as u8) << 5,
+                    | (s.speech_irq as u8) << 5
+                    | (v.t1_gated as u8) << 6
+                    | (v.t2_gated as u8) << 7,
             );
             w.extend(v.last.to_le_bytes());
             for ay in &s.ay {
@@ -662,6 +688,7 @@ impl Card for MockingboardCard {
                 (f & 1 != 0, f & 2 != 0, f & 4 != 0, f & 8 != 0);
             v.bus_driven = f & 16 != 0;
             s.speech_irq = f & 32 != 0;
+            (v.t1_gated, v.t2_gated) = (f & 64 != 0, f & 128 != 0);
             v.last = u64::from_le_bytes(b[18..26].try_into().unwrap());
             let mut q = 26;
             for ay in &mut s.ay {

@@ -1,8 +1,8 @@
 //! Zilog Z80 core for the Microsoft SoftCard (replaces AppleWin's Z80VICE port, same behaviour:
 //! no interrupts are delivered, as `z80_mainloop` ignores IRQ/NMI). Instruction timing is in
 //! T-states; documented and the common undocumented opcodes (IXH/IXL, SLL, DDCB register copies,
-//! flag bits 3 and 5) are implemented. MEMPTR (WZ) is not modelled, so `BIT n,(HL)` takes
-//! flags 3/5 from H.
+//! flag bits 3 and 5) are implemented. MEMPTR (WZ) is modelled (beyond Z80VICE, which ignores
+//! flags 3/5 of `BIT` altogether), so `BIT n,(HL)` takes flags 3/5 from WZ high.
 
 use crate::state::{Dec, Enc};
 
@@ -61,13 +61,15 @@ pub struct Z80 {
     pub iff2: bool,
     pub im: u8,
     pub halted: bool,
+    /// MEMPTR (WZ), the hidden register behind `BIT n,(HL)` flags 3/5.
+    pub wz: u16,
 }
 
 impl Default for Z80 {
     fn default() -> Self {
         Z80 {
             a: 0xFF, f: 0xFF, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, a2: 0, f2: 0, b2: 0, c2: 0, d2: 0, e2: 0, h2: 0, l2: 0,
-            ix: 0, iy: 0, sp: 0xFFFF, pc: 0, i: 0, r: 0, iff1: false, iff2: false, im: 0, halted: false,
+            ix: 0, iy: 0, sp: 0xFFFF, pc: 0, i: 0, r: 0, iff1: false, iff2: false, im: 0, halted: false, wz: 0,
         }
     }
 }
@@ -328,6 +330,11 @@ impl Z80 {
         r
     }
 
+    /// `LD (rr),A` / `LD (nn),A`: WZ = (addr+1)&FF | A<<8.
+    fn wz_store_a(&mut self, addr: u16) {
+        self.wz = u16::from(self.a) << 8 | (addr.wrapping_add(1) & 0xFF);
+    }
+
     fn add16(&mut self, a: u16, b: u16) -> u16 {
         let sum = u32::from(a) + u32::from(b);
         let r = sum as u16;
@@ -344,6 +351,7 @@ impl Z80 {
 
     fn adc16(&mut self, b: u16) {
         let a = self.hl();
+        self.wz = a.wrapping_add(1);
         let c = u32::from(self.f & FC);
         let sum = u32::from(a) + u32::from(b) + c;
         let r = sum as u16;
@@ -363,6 +371,7 @@ impl Z80 {
 
     fn sbc16(&mut self, b: u16) {
         let a = self.hl();
+        self.wz = a.wrapping_add(1);
         let c = u32::from(self.f & FC);
         let diff = u32::from(a).wrapping_sub(u32::from(b)).wrapping_sub(c);
         let r = diff as u16;
@@ -453,7 +462,9 @@ impl Z80 {
             Pfx::Hl => self.hl(),
             _ => {
                 let d = self.fetch(bus) as i8;
-                self.idx(p).wrapping_add(d as u16)
+                let a = self.idx(p).wrapping_add(d as u16);
+                self.wz = a;
+                a
             }
         }
     }
@@ -476,6 +487,7 @@ impl Z80 {
                         self.b = self.b.wrapping_sub(1);
                         if self.b != 0 {
                             self.pc = self.pc.wrapping_add(d as u16);
+                            self.wz = self.pc;
                             13
                         } else {
                             8
@@ -484,12 +496,14 @@ impl Z80 {
                     3 => {
                         let d = self.fetch(bus) as i8;
                         self.pc = self.pc.wrapping_add(d as u16);
+                        self.wz = self.pc;
                         12
                     }
                     _ => {
                         let d = self.fetch(bus) as i8;
                         if self.cond(y - 4) {
                             self.pc = self.pc.wrapping_add(d as u16);
+                            self.wz = self.pc;
                             12
                         } else {
                             7
@@ -503,6 +517,7 @@ impl Z80 {
                         10
                     } else {
                         let (a, b) = (self.idx(p), self.rp(pp, p));
+                        self.wz = a.wrapping_add(1);
                         let r = self.add16(a, b);
                         self.set_idx(p, r);
                         11
@@ -511,39 +526,47 @@ impl Z80 {
                 2 => match (q, pp) {
                     (0, 0) => {
                         bus.write(self.bc(), self.a);
+                        self.wz_store_a(self.bc());
                         7
                     }
                     (0, 1) => {
                         bus.write(self.de(), self.a);
+                        self.wz_store_a(self.de());
                         7
                     }
                     (0, 2) => {
                         let a = self.fetch16(bus);
                         Self::wr16(bus, a, self.idx(p));
+                        self.wz = a.wrapping_add(1);
                         16
                     }
                     (0, _) => {
                         let a = self.fetch16(bus);
                         bus.write(a, self.a);
+                        self.wz_store_a(a);
                         13
                     }
                     (_, 0) => {
                         self.a = bus.read(self.bc());
+                        self.wz = self.bc().wrapping_add(1);
                         7
                     }
                     (_, 1) => {
                         self.a = bus.read(self.de());
+                        self.wz = self.de().wrapping_add(1);
                         7
                     }
                     (_, 2) => {
                         let a = self.fetch16(bus);
                         let v = Self::rd16(bus, a);
                         self.set_idx(p, v);
+                        self.wz = a.wrapping_add(1);
                         16
                     }
                     _ => {
                         let a = self.fetch16(bus);
                         self.a = bus.read(a);
+                        self.wz = a.wrapping_add(1);
                         13
                     }
                 },
@@ -660,6 +683,7 @@ impl Z80 {
             0 => {
                 if self.cond(y) {
                     self.pc = self.pop(bus);
+                    self.wz = self.pc;
                     11
                 } else {
                     5
@@ -679,6 +703,7 @@ impl Z80 {
                     match pp {
                         0 => {
                             self.pc = self.pop(bus);
+                            self.wz = self.pc;
                             10
                         }
                         1 => {
@@ -703,6 +728,7 @@ impl Z80 {
             }
             2 => {
                 let a = self.fetch16(bus);
+                self.wz = a;
                 if self.cond(y) {
                     self.pc = a;
                 }
@@ -711,6 +737,7 @@ impl Z80 {
             3 => match y {
                 0 => {
                     self.pc = self.fetch16(bus);
+                    self.wz = self.pc;
                     10
                 }
                 1 => {
@@ -720,17 +747,21 @@ impl Z80 {
                 2 => {
                     let n = self.fetch(bus);
                     bus.io_out(u16::from(self.a) << 8 | u16::from(n), self.a);
+                    self.wz = u16::from(self.a) << 8 | u16::from(n.wrapping_add(1));
                     11
                 }
                 3 => {
                     let n = self.fetch(bus);
-                    self.a = bus.io_in(u16::from(self.a) << 8 | u16::from(n));
+                    let port = u16::from(self.a) << 8 | u16::from(n);
+                    self.a = bus.io_in(port);
+                    self.wz = port.wrapping_add(1);
                     11
                 }
                 4 => {
                     let v = Self::rd16(bus, self.sp);
                     Self::wr16(bus, self.sp, self.idx(p));
                     self.set_idx(p, v);
+                    self.wz = v;
                     19
                 }
                 5 => {
@@ -752,6 +783,7 @@ impl Z80 {
             },
             4 => {
                 let a = self.fetch16(bus);
+                self.wz = a;
                 if self.cond(y) {
                     self.push(bus, self.pc);
                     self.pc = a;
@@ -772,6 +804,7 @@ impl Z80 {
                     11
                 } else if pp == 0 {
                     let a = self.fetch16(bus);
+                    self.wz = a;
                     self.push(bus, self.pc);
                     self.pc = a;
                     17
@@ -790,6 +823,7 @@ impl Z80 {
             _ => {
                 self.push(bus, self.pc);
                 self.pc = u16::from(y) * 8;
+                self.wz = self.pc;
                 11
             }
         }
@@ -804,7 +838,7 @@ impl Z80 {
                 self.cb_store(bus, z, hl, r);
             }
             1 => {
-                let xy = if hl { self.h } else { v };
+                let xy = if hl { (self.wz >> 8) as u8 } else { v };
                 self.bit(y, v, xy);
                 return if hl { 12 } else { 8 };
             }
@@ -841,6 +875,7 @@ impl Z80 {
     /// `DD CB d op` / `FD CB d op`: always operates on (IX+d); other registers get a copy too.
     fn cb_indexed(&mut self, bus: &mut dyn Z80Bus, addr: u16, op: u8) -> u32 {
         let (x, y, z) = (op >> 6, (op >> 3) & 7, op & 7);
+        self.wz = addr;
         let v = bus.read(addr);
         let r = match x {
             0 => self.rot(y, v),
@@ -865,6 +900,7 @@ impl Z80 {
             1 => match z {
                 0 => {
                     let v = bus.io_in(self.bc());
+                    self.wz = self.bc().wrapping_add(1);
                     self.f = (self.f & FC) | szp(v);
                     if y != 6 {
                         self.set8(y, Pfx::Hl, v);
@@ -874,6 +910,7 @@ impl Z80 {
                 1 => {
                     let v = if y == 6 { 0 } else { self.get8(y, Pfx::Hl) };
                     bus.io_out(self.bc(), v);
+                    self.wz = self.bc().wrapping_add(1);
                     12
                 }
                 2 => {
@@ -887,6 +924,7 @@ impl Z80 {
                 }
                 3 => {
                     let a = self.fetch16(bus);
+                    self.wz = a.wrapping_add(1);
                     if q == 0 {
                         Self::wr16(bus, a, self.rp(pp, Pfx::Hl));
                     } else {
@@ -904,6 +942,7 @@ impl Z80 {
                 5 => {
                     self.iff1 = self.iff2;
                     self.pc = self.pop(bus);
+                    self.wz = self.pc;
                     14
                 }
                 6 => {
@@ -927,6 +966,7 @@ impl Z80 {
                     }
                     4 | 5 => {
                         let t = bus.read(self.hl());
+                        self.wz = self.hl().wrapping_add(1);
                         let (new_m, new_a) = if y == 5 {
                             (t << 4 | self.a & 0xF, self.a & 0xF0 | t >> 4)
                         } else {
@@ -951,6 +991,7 @@ impl Z80 {
         let repeat = y >= 6;
         let step = |v: u16| if dec { v.wrapping_sub(1) } else { v.wrapping_add(1) };
         let mut again;
+        let start = self.pc.wrapping_sub(2);
         match z {
             0 => {
                 let v = bus.read(self.hl());
@@ -973,9 +1014,11 @@ impl Z80 {
                 let n = r.wrapping_sub(h as u8);
                 self.f = (self.f & FC) | FN | sz(r) | if h { FH } else { 0 } | if bc != 0 { FPV } else { 0 } | (n & FX) | if n & 2 != 0 { FY } else { 0 };
                 again = bc != 0 && r != 0;
+                self.wz = step(self.wz);
             }
             2 => {
                 let v = bus.io_in(self.bc());
+                self.wz = step(self.bc());
                 bus.write(self.hl(), v);
                 self.b = self.b.wrapping_sub(1);
                 let c = if dec { self.c.wrapping_sub(1) } else { self.c.wrapping_add(1) };
@@ -987,6 +1030,7 @@ impl Z80 {
                 let v = bus.read(self.hl());
                 self.b = self.b.wrapping_sub(1);
                 bus.io_out(self.bc(), v);
+                self.wz = step(self.bc());
                 self.set_hl(step(self.hl()));
                 self.io_block_flags(v, u16::from(v) + u16::from(self.l));
                 again = self.b != 0;
@@ -994,7 +1038,8 @@ impl Z80 {
         }
         again &= repeat;
         if again {
-            self.pc = self.pc.wrapping_sub(2);
+            self.pc = start;
+            self.wz = start.wrapping_add(1);
             21
         } else {
             16
@@ -1019,7 +1064,7 @@ impl Z80 {
         e.bytes(&[self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l]);
         e.bytes(&[self.a2, self.f2, self.b2, self.c2, self.d2, self.e2, self.h2, self.l2]);
         e.u16(self.ix).u16(self.iy).u16(self.sp).u16(self.pc);
-        e.u8(self.i).u8(self.r).bool(self.iff1).bool(self.iff2).u8(self.im).bool(self.halted);
+        e.u8(self.i).u8(self.r).bool(self.iff1).bool(self.iff2).u8(self.im).bool(self.halted).u16(self.wz);
     }
 
     pub fn load(&mut self, d: &mut Dec) -> Option<()> {
@@ -1032,6 +1077,7 @@ impl Z80 {
         (self.iff1, self.iff2) = (d.bool()?, d.bool()?);
         self.im = d.u8()?.min(2);
         self.halted = d.bool()?;
+        self.wz = d.u16()?;
         Some(())
     }
 }
@@ -1388,5 +1434,136 @@ mod tests {
         let mut d = Dec::new(&e.0);
         assert!(c2.load(&mut d).is_some() && d.done());
         assert_eq!(c, c2);
+        let (c, _, _) = run(&[0x3A, 0x00, 0x28, 0x76], |_| {});
+        let mut e = Enc::default();
+        c.save(&mut e);
+        let mut c2 = Z80::default();
+        assert!(c2.load(&mut Dec::new(&e.0)).is_some());
+        assert_eq!(c2.wz, 0x2801);
+    }
+
+    // ---- MEMPTR (WZ): documented by "The Undocumented Z80 Documented" (Sean Young) §4 ----
+
+    /// Runs `code`, then `BIT 0,(HL)` with HL=$1000 (bit set) and returns wz via flags 3/5.
+    fn wz_after(code: &[u8], setup: impl FnOnce(&mut Z80)) -> u16 {
+        let (c, _, _) = run(code, setup);
+        c.wz
+    }
+
+    #[test]
+    fn bit_n_hl_takes_flags_3_and_5_from_memptr_high() {
+        // LD A,(0x2800) sets WZ=0x2801; BIT 0,(HL) copies bits 3/5 of WZ high ($28 = both).
+        let mut ram = Ram(vec![0; 0x10000], vec![]);
+        ram.0[..6].copy_from_slice(&[0x3A, 0x00, 0x28, 0xCB, 0x46, 0x76]);
+        ram.0[0x1000] = 1;
+        let mut c = Z80::default();
+        c.set_hl(0x1000);
+        while !c.halted {
+            c.step(&mut ram);
+        }
+        assert_eq!(c.f & (FY | FX), FY | FX);
+        assert_eq!(c.f & (FZ | FH), FH);
+    }
+
+    #[test]
+    fn memptr_after_loads_and_stores() {
+        assert_eq!(wz_after(&[0x3A, 0x00, 0x28, 0x76], |_| {}), 0x2801); // LD A,(nn)
+        assert_eq!(wz_after(&[0x32, 0xFF, 0x28, 0x76], |c| c.a = 0x77), 0x7700); // LD (nn),A: (nn+1)&FF | A<<8
+        assert_eq!(wz_after(&[0x0A, 0x76], |c| c.set_bc(0x1234)), 0x1235); // LD A,(BC)
+        assert_eq!(wz_after(&[0x12, 0x76], |c| {
+            c.set_de(0x12FF);
+            c.a = 0x99;
+        }), 0x9900); // LD (DE),A
+        assert_eq!(wz_after(&[0x2A, 0x00, 0x30, 0x76], |_| {}), 0x3001); // LD HL,(nn)
+        assert_eq!(wz_after(&[0x22, 0x00, 0x30, 0x76], |_| {}), 0x3001); // LD (nn),HL
+        assert_eq!(wz_after(&[0xED, 0x4B, 0x00, 0x30, 0x76], |_| {}), 0x3001); // LD BC,(nn)
+        assert_eq!(wz_after(&[0xED, 0x43, 0xFF, 0xFF, 0x76], |_| {}), 0x0000); // LD (nn),BC wraps
+    }
+
+    #[test]
+    fn memptr_after_jumps_calls_and_returns() {
+        assert_eq!(wz_after(&[0xC3, 0x04, 0x00, 0x76, 0x76], |_| {}), 0x0004); // JP nn
+        let mut ram_prog = vec![0xC2, 0x00, 0x20, 0x76]; // JP NZ,nn with Z set: not taken, WZ=nn anyway
+        ram_prog.resize(8, 0);
+        assert_eq!(wz_after(&ram_prog, |c| c.f = FZ), 0x2000);
+        assert_eq!(wz_after(&[0xCD, 0x04, 0x00, 0x76, 0x76], |_| {}), 0x0004); // CALL nn
+        assert_eq!(wz_after(&[0xC4, 0x00, 0x20, 0x76], |c| c.f = FZ), 0x2000); // CALL NZ,nn not taken
+        let mut rst = vec![0xCF, 0, 0, 0, 0, 0, 0, 0, 0x76];
+        rst.resize(16, 0);
+        assert_eq!(wz_after(&rst, |_| {}), 0x0008); // RST 8
+    }
+
+    #[test]
+    fn memptr_after_ret_jr_and_djnz() {
+        // CALL 4 ; HALT ; (4:) RET -> WZ = return address 3
+        assert_eq!(wz_after(&[0xCD, 0x05, 0x00, 0x76, 0x00, 0xC9], |_| {}), 0x0003);
+        // RET NZ not taken leaves WZ alone
+        assert_eq!(wz_after(&[0xC0, 0x76], |c| {
+            c.f = FZ;
+            c.wz = 0x4321;
+        }), 0x4321);
+        // JR +2 taken: WZ = target
+        assert_eq!(wz_after(&[0x18, 0x02, 0x00, 0x00, 0x76], |_| {}), 0x0004);
+        // JR NZ not taken: unchanged
+        assert_eq!(wz_after(&[0x20, 0x02, 0x76], |c| {
+            c.f = FZ;
+            c.wz = 0x1111;
+        }), 0x1111);
+        // DJNZ taken (B=2 -> 1): WZ = target; ends with B=0 not taken
+        assert_eq!(wz_after(&[0x10, 0xFE, 0x76], |c| c.b = 2), 0x0000);
+    }
+
+    #[test]
+    fn memptr_after_16_bit_arithmetic_and_exchange() {
+        assert_eq!(wz_after(&[0x09, 0x76], |c| c.set_hl(0x4000)), 0x4001); // ADD HL,BC
+        assert_eq!(wz_after(&[0xED, 0x4A, 0x76], |c| c.set_hl(0x4000)), 0x4001); // ADC HL,BC
+        assert_eq!(wz_after(&[0xED, 0x42, 0x76], |c| c.set_hl(0x4000)), 0x4001); // SBC HL,BC
+        assert_eq!(wz_after(&[0xDD, 0x09, 0x76], |c| c.ix = 0x5000), 0x5001); // ADD IX,BC
+        // EX (SP),HL: WZ = new HL (the word from the stack)
+        let mut ram = Ram(vec![0; 0x10000], vec![]);
+        ram.0[0] = 0xE3;
+        ram.0[1] = 0x76;
+        ram.0[0x8000] = 0x34;
+        ram.0[0x8001] = 0x12;
+        let mut c = Z80 { sp: 0x8000, ..Default::default() };
+        c.step(&mut ram);
+        assert_eq!(c.wz, 0x1234);
+    }
+
+    #[test]
+    fn memptr_after_indexed_access_rld_and_io() {
+        assert_eq!(wz_after(&[0xDD, 0x7E, 0x05, 0x76], |c| c.ix = 0x1000), 0x1005); // LD A,(IX+5)
+        assert_eq!(wz_after(&[0xFD, 0x36, 0xFF, 0x01, 0x76], |c| c.iy = 0x1000), 0x0FFF); // LD (IY-1),n
+        assert_eq!(wz_after(&[0xDD, 0xCB, 0x02, 0x46, 0x76], |c| c.ix = 0x1000), 0x1002); // BIT 0,(IX+2)
+        assert_eq!(wz_after(&[0xED, 0x6F, 0x76], |c| c.set_hl(0x1000)), 0x1001); // RLD
+        assert_eq!(wz_after(&[0xDB, 0x10, 0x76], |c| c.a = 0x20), 0x2011); // IN A,(n)
+        assert_eq!(wz_after(&[0xD3, 0xFF, 0x76], |c| c.a = 0x20), 0x2000); // OUT (n),A: (n+1)&FF | A<<8
+        assert_eq!(wz_after(&[0xED, 0x78, 0x76], |c| c.set_bc(0x1234)), 0x1235); // IN A,(C)
+        assert_eq!(wz_after(&[0xED, 0x79, 0x76], |c| c.set_bc(0x1234)), 0x1235); // OUT (C),A
+    }
+
+    #[test]
+    fn memptr_after_block_instructions() {
+        // CPI / CPD adjust WZ by +-1
+        assert_eq!(wz_after(&[0xED, 0xA1, 0x76], |c| {
+            c.wz = 0x1000;
+            c.set_bc(5);
+        }), 0x1001);
+        assert_eq!(wz_after(&[0xED, 0xA9, 0x76], |c| {
+            c.wz = 0x1000;
+            c.set_bc(5);
+        }), 0x0FFF);
+        // LDIR repeating: WZ = PC+1 where PC is the instruction address (here 0 -> 1)
+        let mut ram = Ram(vec![0; 0x10000], vec![]);
+        ram.0[..3].copy_from_slice(&[0xED, 0xB0, 0x76]);
+        let mut c = Z80::default();
+        c.set_bc(2);
+        c.set_hl(0x100);
+        c.set_de(0x200);
+        c.step(&mut ram);
+        assert_eq!((c.pc, c.wz), (0, 0x0001));
+        // INI: WZ = BC_before + 1 ; OUTI: WZ = BC_after + 1
+        assert_eq!(wz_after(&[0xED, 0xA2, 0x76], |c| c.set_bc(0x0510)), 0x0511);
+        assert_eq!(wz_after(&[0xED, 0xA3, 0x76], |c| c.set_bc(0x0510)), 0x0411);
     }
 }

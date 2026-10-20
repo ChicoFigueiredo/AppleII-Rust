@@ -1,0 +1,48 @@
+02EC:00                  BRK                       A  'A'  41 B0PC= 0304
+02ED:00                  BRK                       X  '@'  00
+02EE:00                  BRK                       Y  '@'  00
+02EF:00                  BRK                       PC    0302
+02F0:00                  BRK                       P NVRBDIZC
+02F1:00                  BRK                       2400100100
+02F2:00                  BRK                       S 00  01FF
+02F3:00                  BRK                       0100:   00
+02F4:00                  BRK                       0101:   00
+02F5:00                  BRK
+02F6:00                  BRK
+02F7:00                  BRK
+02F8:00                  BRK
+02F9:00                  BRK
+02FA:00                  BRK                       -none-
+02FB:00                  BRK                       0400   00
+02FC:00                  BRK                       Z0         W0 0400:0000(0000)
+02FD:00                  BRK                       10:0000:00  00000000 00000000
+02FE:00                  BRK
+02FF:00                  BRK
+0300:A9 41               LDA #$41          #+65 A
+0302:8D 00 04            STA $0400      0400:00 @
+0305:D0 FB               BNE $0302      0302 ↑
+0307:60                  RTS
+0308:00                  BRK
+0309:00                  BRK
+030A:00                  BRK
+030B:00                  BRK
+030C:00                  BRK
+030D:00                  BRK                                   v:000 h:002
+030E:00                  BRK                                   cycles:00000002
+030F:00                  BRK
+0310:00                  BRK                       GR./TEXT    HEX at 0300
+0311:00                  BRK                       FULL/MIX    0300:A9 41 8D 00
+0312:00                  BRK                       PAGE 1/2    0304:04 D0 FB 60
+0313:00                  BRK                       LO/HIRES    0308:00 00 00 00
+0314:00                  BRK                       DHGR/HGR    030C:00 00 00 00
+0315:00                  BRK                       80Sto0/1
+0316:00                  BRK                       ZP M/A
+0317:00                  BRK                       RD M/A
+0318:00                  BRK                       WR M/A
+0319:00                  BRK                       Col40/80
+031A:00                  BRK                       ASC/MOUS
+                                                   LC2/1
+                                                   LCRRAM/ROM
+                                                   LCWRAM/ROM
+
+>

@@ -229,6 +229,22 @@ enum PacketDestination {
     Other,
 }
 
+/// The state AppleWin saves for the Uthernet II (`Uthernet2::SaveSnapshot`, Uthernet2.cpp:1538).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Uthernet2Snapshot {
+    /// `getInterfaceName()` (host side, ignored by [`Uthernet2::apply_snapshot`]).
+    pub interface: String,
+    pub virtual_dns: bool,
+    pub mode_register: u8,
+    pub data_address: u16,
+    /// The 32 KB W5100 memory. AppleWin keeps only the common registers (`0x0000-0x002F`), the
+    /// socket registers (`0x0400-0x07FF`) and the TX/RX memory (`0x4000-0x7FFF`); the rest is
+    /// reserved and reads as zero.
+    pub memory: Vec<u8>,
+    /// Per socket: `(Sn_RX_WR, Sn_RX_RSR, status)`; only RAW sockets keep a status.
+    pub sockets: [(u16, u16, u8); 4],
+}
+
 pub struct Uthernet2 {
     backend: Box<dyn NetworkBackend>,
     virtual_dns: bool,
@@ -282,6 +298,48 @@ impl Uthernet2 {
         self.set_tx_sizes(0x55);
         if !self.virtual_dns {
             self.memory[PTIMER as usize] = 0x28; // 0 if Virtual DNS is supported
+        }
+    }
+
+    pub fn snapshot(&self) -> Uthernet2Snapshot {
+        let mut memory = vec![0u8; MEM_SIZE];
+        for r in [0..UPORT1 as usize + 1, S0_BASE as usize..S3_MAX as usize + 1, TX_BASE as usize..MEM_SIZE] {
+            memory[r.clone()].copy_from_slice(&self.memory[r]);
+        }
+        let mut sockets = [(0, 0, SR_CLOSED); 4];
+        for (o, s) in sockets.iter_mut().zip(&self.sockets) {
+            *o = (s.rx_wr, s.rx_rsr, if matches!(s.status, SR_MACRAW | SR_IPRAW) { s.status } else { SR_CLOSED });
+        }
+        Uthernet2Snapshot {
+            interface: self.backend.interface_name().to_string(),
+            virtual_dns: self.virtual_dns,
+            mode_register: self.mode_register,
+            data_address: self.data_address,
+            memory,
+            sockets,
+        }
+    }
+
+    /// `LoadSnapshot` (:1566): resets the chip with the saved Virtual DNS setting, then restores
+    /// registers and memory. RAW sockets are restored, others come back closed (:337-363).
+    pub fn apply_snapshot(&mut self, s: &Uthernet2Snapshot) {
+        self.virtual_dns = s.virtual_dns;
+        self.reset_chip(true);
+        self.mode_register = s.mode_register;
+        self.data_address = s.data_address;
+        for r in [0..UPORT1 as usize + 1, S0_BASE as usize..S3_MAX as usize + 1, TX_BASE as usize..MEM_SIZE] {
+            let end = r.end.min(s.memory.len());
+            if r.start < end {
+                self.memory[r.start..end].copy_from_slice(&s.memory[r.start..end]);
+            }
+        }
+        let (r, t) = (self.memory[RMSR as usize], self.memory[TMSR as usize]);
+        self.set_rx_sizes(r);
+        self.set_tx_sizes(t);
+        for (sock, &(wr, rsr, status)) in self.sockets.iter_mut().zip(&s.sockets) {
+            sock.rx_wr = wr;
+            sock.rx_rsr = rsr;
+            sock.set_status(if matches!(status, SR_MACRAW | SR_IPRAW) { status } else { SR_CLOSED });
         }
     }
 
@@ -813,6 +871,14 @@ fn host_by_name(name: &str) -> Ipv4 {
 impl Card for Uthernet2 {
     fn name(&self) -> &'static str {
         "Uthernet II"
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     /// `IO_C0` (:1411-1465): only A0 and A1 are decoded.

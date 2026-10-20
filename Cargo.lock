@@ -31,6 +31,7 @@ dependencies = [
  "apple2-core",
  "apple2-cpu",
  "apple2-roms",
+ "apple2-video",
 ]
 
 [[package]]
@@ -56,6 +57,14 @@ dependencies = [
 [[package]]
 name = "apple2-cpu"
 version = "0.1.0"
+
+[[package]]
+name = "apple2-debugger"
+version = "0.1.0"
+dependencies = [
+ "apple2-core",
+ "apple2-cpu",
+]
 
 [[package]]
 name = "apple2-hostio"

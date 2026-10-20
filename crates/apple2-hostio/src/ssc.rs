@@ -95,6 +95,23 @@ fn baud_to_index(baud: u32) -> u8 {
     }
 }
 
+/// The state AppleWin saves for the SSC (`CSuperSerialCard::SaveSnapshot`, SerialComms.cpp:1448).
+///
+/// AppleWin's `DIPSW Default` is a process-wide static (9600-8-N-1 unless the config changes
+/// it) and is not kept by the card; `Support DCD` and the serial port name are host settings of
+/// the back end. They are written with AppleWin's defaults and ignored on load.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SscSnapshot {
+    /// `m_DIPSWCurrent`.
+    pub dip: DipSwitches,
+    pub command: u8,
+    pub control: u8,
+    pub tx_irq_pending: bool,
+    pub rx_irq_pending: bool,
+    /// `m_vbTxEmpty` ("Written TX").
+    pub tx_empty: bool,
+}
+
 pub struct SuperSerialCard {
     backend: Box<dyn SerialBackend>,
     dip: DipSwitches,
@@ -375,6 +392,30 @@ impl SuperSerialCard {
         self.control
     }
 
+    /// The AppleWin view of the card state (see [`SscSnapshot`]).
+    pub fn snapshot(&self) -> SscSnapshot {
+        SscSnapshot {
+            dip: self.dip,
+            command: self.command,
+            control: self.control,
+            tx_irq_pending: self.tx_irq_pending,
+            rx_irq_pending: self.rx_irq_pending,
+            tx_empty: self.tx_empty,
+        }
+    }
+
+    /// `LoadSnapshot` (SerialComms.cpp:1487): DIP switches first, then command and control
+    /// registers (`UpdateCommandAndControlRegs`), then the flags. The IRQ line itself is the
+    /// machine's state, not the card's.
+    pub fn apply_snapshot(&mut self, s: &SscSnapshot) {
+        self.dip = s.dip;
+        self.update_command_reg(s.command);
+        self.update_control_reg(s.control);
+        self.tx_irq_pending = s.tx_irq_pending;
+        self.rx_irq_pending = s.rx_irq_pending;
+        self.tx_empty = s.tx_empty;
+    }
+
     pub fn command(&self) -> u8 {
         self.command
     }
@@ -387,6 +428,14 @@ impl SuperSerialCard {
 impl Card for SuperSerialCard {
     fn name(&self) -> &'static str {
         "Super Serial Card"
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     fn io_read(&mut self, lo: u8, ctx: &mut CardCtx) -> u8 {

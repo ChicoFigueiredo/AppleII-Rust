@@ -7,9 +7,10 @@
 //! [`VidHd::is_shr`], the registers, and [`iigs_color_to_rgb`] / [`shr_cell`] (the SHR pixel
 //! decode of `VidHDCard::UpdateSHRCell`). SHR scanlines live in aux memory `$2000-$9FFF`.
 //!
-//! Not modelled (AppleWin neither, or needs core work): dual writes to aux memory on the
-//! ][/][+ (`memVidHD`, see [`VidHd::is_write_aux`]), the 80x45 text modes and border colour
-//! rendering.
+//! On the ][/][+ the card turns on the core's dual write (`memVidHD`: CPU RAM writes are also
+//! stored in aux RAM while [`VidHd::is_write_aux`]) through `CardCtx::set_dual_write_aux`; the
+//! //e with an empty aux slot is not covered. Not modelled: the 80x45 text modes (see the
+//! video crate) and border colour rendering.
 
 use crate::state::{Dec, Enc};
 use apple2_core::memory::mf;
@@ -73,6 +74,10 @@ impl Card for VidHd {
         Some(self)
     }
 
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+
     /// `VidHDCard::IORead` (:56): the Cn00 ROM is just the detection bytes.
     fn slot_rom_read(&mut self, offset: u8, ctx: &mut CardCtx) -> u8 {
         match offset {
@@ -89,7 +94,7 @@ impl Card for VidHd {
 
     /// `VidHDCard::VideoIOWrite` (:69). The mirrored switches react to any access of
     /// `$C000-$C005` writes and `$C054/$C055`; the IIgs registers to writes only.
-    fn io_snoop(&mut self, addr: u16, write: bool, value: u8, _ctx: &mut CardCtx) {
+    fn io_snoop(&mut self, addr: u16, write: bool, value: u8, ctx: &mut CardCtx) {
         let set = |m: &mut u32, flag: u32, on: bool| *m = if on { *m | flag } else { *m & !flag };
         match (addr as u8, write) {
             (0x00 | 0x01, true) => set(&mut self.mem_mode, mf::STORE80, addr & 1 != 0),
@@ -102,6 +107,7 @@ impl Card for VidHd {
             (0x35, true) => self.shadow = value,
             _ => {}
         }
+        ctx.set_dual_write_aux(self.is_write_aux());
     }
 
     /// `VidHDCard::Reset` (:46): NEWVIDEO cleared (SHR off).
@@ -124,6 +130,17 @@ impl Card for VidHd {
             }
             _ => false,
         }
+    }
+}
+
+/// The renderer's view of the card (the video crate defines the trait so it need not depend on
+/// this one): hand it over with `apple2_video::WithVidHd`.
+impl apple2_video::VidHdView for VidHd {
+    fn is_shr(&self) -> bool {
+        VidHd::is_shr(self)
+    }
+    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+        shr_cell(is_640, color_fill, palette, a, prev)
     }
 }
 

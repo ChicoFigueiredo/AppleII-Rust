@@ -472,3 +472,96 @@ fn card_state_roundtrip_covers_ay_ssi263_and_phasor_mode() {
     m3.insert_card(4, Box::new(MockingboardCard::new(Variant::MockingboardC, &bus)));
     assert!(m3.load_state(&st).is_err());
 }
+
+// ---- 6502 false reads (Mockingboard.cpp:750-778, GH#52) and IER gating (6522.cpp:217-220) ----
+
+/// One-shot T1 (latch $0020, IER off) that has expired, then `tail`, then `LDA IFR : STA $10`.
+fn expired_t1_then(model: Model, tail: &[u8]) -> u8 {
+    let bus = AudioBus::new(RATE, VideoStandard::Ntsc);
+    let mut rom = vec![0xEAu8; 0x3000];
+    rom[0x2FFC] = 0x00;
+    rom[0x2FFD] = 0x03;
+    let mut cfg = MachineConfig::for_model(model);
+    cfg.video_standard = VideoStandard::Ntsc;
+    cfg.custom_rom = Some(rom);
+    let mut m = Machine::new(cfg);
+    assert!(m.insert_card(4, Box::new(MockingboardCard::new(Variant::MockingboardC, &bus))));
+    let mut code = sta(0x20, 0xC404).to_vec();
+    code.extend(sta(0x00, 0xC405));
+    code.extend([0xA2, 0x20, 0xCA, 0xD0, 0xFD]); // delay: LDX #$20 ; DEX ; BNE
+    code.extend_from_slice(tail);
+    code.extend([0xAD, 0x0D, 0xC4, 0x85, 0x10]);
+    code.extend(spin_at(0x300 + code.len() as u16));
+    let end = 0x300 + code.len() as u16 - 3;
+    load(&mut m, 0x300, &code);
+    m.poke(0x06, 0x04); // pointer $C404 (hi at $07)
+    m.poke(0x07, 0xC4);
+    run_to(&mut m, end);
+    m.peek(0x10)
+}
+
+#[test]
+fn ifr_t1_stays_set_after_a_plain_write_to_t1cl() {
+    assert_eq!(expired_t1_then(Model::Apple2Plus, &[0xA9, 0x33, 0x8D, 0x04, 0xC4]) & 0x40, 0x40);
+}
+
+#[test]
+fn sta_abs_x_false_reads_t1cl_and_clears_the_t1_flag() {
+    // LDA #$33 ; LDX #0 ; STA $C404,X : no page cross, so the 6502 reads $C404 first.
+    let tail = [0xA9, 0x33, 0xA2, 0x00, 0x9D, 0x04, 0xC4];
+    assert_eq!(expired_t1_then(Model::Apple2Plus, &tail) & 0x40, 0);
+    assert_eq!(expired_t1_then(Model::Apple2eEnhanced, &tail) & 0x40, 0); // 65C02 too (abs,X)
+}
+
+#[test]
+fn sta_abs_x_with_page_cross_does_not_false_read_the_target() {
+    // Base $C3FC + X=8 crosses a page: the false read goes to $C304, not the 6522.
+    let tail = [0xA9, 0x33, 0xA2, 0x08, 0x9D, 0xFC, 0xC3];
+    assert_eq!(expired_t1_then(Model::Apple2Plus, &tail) & 0x40, 0x40);
+}
+
+#[test]
+fn sta_abs_x_false_read_only_matters_for_t1cl_and_t2cl() {
+    // Register 6 (T1LL) read has no side effect: the flag survives.
+    let tail = [0xA9, 0x33, 0xA2, 0x00, 0x9D, 0x06, 0xC4];
+    assert_eq!(expired_t1_then(Model::Apple2Plus, &tail) & 0x40, 0x40);
+}
+
+#[test]
+fn sta_zp_y_false_reads_on_the_6502_but_not_on_the_65c02() {
+    // LDA #$33 ; LDY #0 ; STA ($06),Y with pointer $C404.
+    let tail = [0xA9, 0x33, 0xA0, 0x00, 0x91, 0x06];
+    assert_eq!(expired_t1_then(Model::Apple2Plus, &tail) & 0x40, 0);
+    assert_eq!(expired_t1_then(Model::Apple2eEnhanced, &tail) & 0x40, 0x40);
+}
+
+#[test]
+fn ier_write_gates_whether_pending_timer_events_defer_an_irq() {
+    let (mut m, _bus) = setup(Variant::MockingboardC);
+    let flag = |m: &Machine| m.board().scheduler.events().iter().map(|e| e.can_assert_irq).collect::<Vec<_>>();
+    let mut code = sta(0x00, 0xC404).to_vec();
+    code.extend(sta(0x40, 0xC405)); // T1 pending, IER off: still IRQ-capable until IER is written
+    code.extend(sta(0x40, 0xC40E)); // IER: clear T1
+    let at_clear = 0x300 + code.len() as u16;
+    code.extend(sta(0xC0, 0xC40E)); // IER: set T1
+    code.extend(spin_at(0x300 + code.len() as u16));
+    let end = 0x300 + code.len() as u16 - 3;
+    load(&mut m, 0x300, &code);
+    run_to(&mut m, at_clear);
+    assert_eq!(flag(&m), [false]);
+    run_to(&mut m, end);
+    assert_eq!(flag(&m), [true]);
+}
+
+#[test]
+fn a_timer_started_after_ier_cleared_t1_is_also_gated() {
+    let (mut m, _bus) = setup(Variant::MockingboardC);
+    let mut code = sta(0x40, 0xC40E).to_vec(); // IER: clear T1 (nothing pending yet)
+    code.extend(sta(0x00, 0xC404));
+    code.extend(sta(0x40, 0xC405));
+    code.extend(spin_at(0x300 + code.len() as u16));
+    let end = 0x300 + code.len() as u16 - 3;
+    load(&mut m, 0x300, &code);
+    run_to(&mut m, end);
+    assert_eq!(m.board().scheduler.events().iter().map(|e| e.can_assert_irq).collect::<Vec<_>>(), [false]);
+}

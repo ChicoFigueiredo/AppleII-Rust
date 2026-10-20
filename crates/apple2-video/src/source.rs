@@ -4,6 +4,19 @@
 use apple2_core::memory::mf;
 use apple2_core::{AuxCardKind, Machine, Model, VideoMode, VideoStandard};
 
+/// What the renderer needs from a VidHD card (AppleWin `VidHDCard`). `apple2-video` does not
+/// depend on `apple2-cards`: the cards crate implements this trait for its `VidHd` (so the
+/// IIgs `$0RGB` palette decode lives in one place), and a caller hands the view to the
+/// renderer with [`WithVidHd`] or its own [`VideoSource::vidhd`].
+pub trait VidHdView {
+    /// `IsSHR` (VidHD.h:30): NEWVIDEO b7 and b6, i.e. `VF_SHR`.
+    fn is_shr(&self) -> bool;
+    /// `UpdateSHRCell` (VidHD.cpp:130): the 16 pixels of four SHR bytes `a` (first byte in the low
+    /// bits) given the scanline's 16 IIgs palette entries; `prev` is the pixel to the left (colour
+    /// fill).
+    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16];
+}
+
 pub trait VideoSource {
     /// Main RAM, ignoring paging (`MemGetMainPtr`).
     fn main(&self, addr: u16) -> u8;
@@ -20,6 +33,122 @@ pub trait VideoSource {
     fn floating_bus(&self) -> u8;
     /// Cycle of the video frame, for [`crate::Renderer::resync`].
     fn cycles_in_frame(&self) -> u32;
+    /// The VidHD card, if one is installed: the framebuffer is then 640x400 (Video.cpp:96-103)
+    /// with the older modes centred, and Super Hi-Res is drawn while [`VidHdView::is_shr`].
+    fn vidhd(&self) -> Option<&dyn VidHdView> {
+        None
+    }
+    /// Debugger pseudo hires page (`VF_PAGE0/3/4/5/6/7/8`, NTSC.cpp:2039-2069): the page index into
+    /// `aPageAddr` = `$0000 $2000 $4000 $6000 $8000 $A000 $C000 $D000 $E000`. `None` = the
+    /// page the switches select.
+    fn hgr_pseudo_page(&self) -> Option<u8> {
+        None
+    }
+}
+
+/// A [`VideoSource`] plus a VidHD view (the machine itself knows nothing of cards' concrete types).
+pub struct WithVidHd<'a> {
+    pub source: &'a dyn VideoSource,
+    pub vidhd: &'a dyn VidHdView,
+}
+
+macro_rules! delegate {
+    ($field:ident) => {
+        fn main(&self, addr: u16) -> u8 {
+            self.$field.main(addr)
+        }
+        fn aux(&self, addr: u16) -> u8 {
+            self.$field.aux(addr)
+        }
+        fn model(&self) -> Model {
+            self.$field.model()
+        }
+        fn standard(&self) -> VideoStandard {
+            self.$field.standard()
+        }
+        fn aux_card(&self) -> AuxCardKind {
+            self.$field.aux_card()
+        }
+        fn floating_bus(&self) -> u8 {
+            self.$field.floating_bus()
+        }
+        fn cycles_in_frame(&self) -> u32 {
+            self.$field.cycles_in_frame()
+        }
+    };
+}
+
+impl VideoSource for WithVidHd<'_> {
+    delegate!(source);
+    fn mode(&self) -> VideoMode {
+        self.source.mode()
+    }
+    fn memmode(&self) -> u32 {
+        self.source.memmode()
+    }
+    fn vidhd(&self) -> Option<&dyn VidHdView> {
+        Some(self.vidhd)
+    }
+    fn hgr_pseudo_page(&self) -> Option<u8> {
+        self.source.hgr_pseudo_page()
+    }
+}
+
+/// The debugger's "view" commands (Debug.cpp `_ViewOutput`, VF_PAGE0..8): shows `source`'s memory
+/// with explicit mode `flags` instead of its soft switches, optionally on a pseudo hires page.
+/// Render it with [`Renderer::redraw`](crate::Renderer::redraw).
+pub struct DebugView<'a> {
+    source: &'a dyn VideoSource,
+    mode: VideoMode,
+    memmode: u32,
+    page: Option<u8>,
+    hd: Option<NoShr<'a>>,
+}
+
+/// A VidHD seen by the debugger: present (same framebuffer) but never in SHR.
+struct NoShr<'a>(&'a dyn VidHdView);
+
+impl VidHdView for NoShr<'_> {
+    fn is_shr(&self) -> bool {
+        false
+    }
+    fn shr_cell(&self, is_640: bool, fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+        self.0.shr_cell(is_640, fill, palette, a, prev)
+    }
+}
+
+impl<'a> DebugView<'a> {
+    /// `flags`: text, mixed, hires, dhires, col80 and page2 are taken from it; the rest from the
+    /// source. `pseudo_page`: `Some(n)` with `n` in `0, 3..=8` selects that hires page (pages 1
+    /// and 2 are `page2` false/true).
+    pub fn new(source: &'a dyn VideoSource, flags: VideoFlags, pseudo_page: Option<u8>) -> Self {
+        let mut mode = source.mode();
+        (mode.text, mode.mixed, mode.dhires, mode.col80) = (flags.text, flags.mixed, flags.dhires, flags.col80);
+        let mut memmode = source.memmode() & !(mf::HIRES | mf::PAGE2 | mf::STORE80);
+        if flags.hires {
+            memmode |= mf::HIRES;
+        }
+        if flags.page2 {
+            memmode |= mf::PAGE2;
+        }
+        DebugView { source, mode, memmode, page: pseudo_page, hd: source.vidhd().map(NoShr) }
+    }
+}
+
+impl VideoSource for DebugView<'_> {
+    delegate!(source);
+    fn mode(&self) -> VideoMode {
+        self.mode
+    }
+    fn memmode(&self) -> u32 {
+        self.memmode
+    }
+    fn vidhd(&self) -> Option<&dyn VidHdView> {
+        self.hd.as_ref().map(|h| h as &dyn VidHdView)
+    }
+    fn hgr_pseudo_page(&self) -> Option<u8> {
+        self.page
+    }
 }
 
 impl VideoSource for Machine {

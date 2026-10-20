@@ -10,3 +10,4 @@ repository.workspace = true
 apple2-cpu = { path = "../apple2-cpu" }
 apple2-core = { path = "../apple2-core" }
 apple2-roms = { path = "../apple2-roms" }
+apple2-video = { path = "../apple2-video" }
