@@ -6,7 +6,7 @@
 //! flags of the card that can write into the global memmode. The 16K RAM behind $D000-$FFFF is a
 //! "region" of [`Memory`]: region 0 for the built-in / slot-0 card, then the Saturn banks.
 //!
-//! [`LanguageCards::io`] has the shape of a slot card's $C080+s*16 handler so slice 4 can wrap it.
+//! [`LanguageCards::io`] has the shape of a slot card's $C080+s*16 handler; the board tries it before the boxed cards (see `slots`).
 
 use crate::memory::{mf, Memory};
 use crate::CardKind;
@@ -134,6 +134,11 @@ impl LanguageCards {
             }
         }
         self.attach(mem);
+    }
+
+    /// True if a Language Card or Saturn lives in `slot`.
+    pub fn has_slot(&self, slot: u8) -> bool {
+        self.cards.iter().any(|c| c.slot == slot)
     }
 
     /// Flags of the card in `slot`, for tests and debuggers.

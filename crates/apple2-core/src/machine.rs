@@ -1,10 +1,13 @@
 //! The [`Machine`]: CPU plus board, advanced cycle by cycle through `Bus::tick`.
 
+use crate::card::{card_event_id, CardCtx, CardOp};
 use crate::irq::{Interrupts, IrqSource};
 use crate::language_card::LanguageCards;
 use crate::memory::Memory;
 use crate::video_mode::VideoMode;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
+use crate::slots::Slots;
+use crate::Card;
 use crate::{CardKind, MachineConfig};
 use crate::Model;
 use apple2_cpu::{Bus, Cpu, FLAG_I};
@@ -16,13 +19,18 @@ mod io;
 pub enum EventAction {
     /// Assert the IRQ line for `source` (level; cleared with `Interrupts::set_irq`).
     RaiseIrq(IrqSource),
+    /// [`Card::on_event`]`(token)` of the card in `slot`; the handler's return value re-arms it.
+    Card { slot: u8, token: u16 },
     Noop,
 }
 
 /// Everything except the CPU, so `cpu.step(&mut board)` borrows cleanly.
 pub struct Board {
     pub memory: Memory,
+    /// Language Card / Saturn 128K cards (spec item 10): [`Slots`] defers to it for those kinds.
     pub lc: LanguageCards,
+    /// Every other card, plus the `$C800-$CFFF` expansion-ROM selection.
+    pub slots: Slots,
     pub video: VideoMode,
     /// AN0-AN3 (Memory.cpp `g_Annunciator`).
     pub annunciators: [bool; 4],
@@ -53,14 +61,69 @@ impl Board {
     /// opcode's last cycle.
     fn update_events(&mut self) -> bool {
         let n = std::mem::take(&mut self.pending) as i32;
-        let Board { scheduler, interrupts, actions, .. } = self;
-        scheduler.update(n, |id, _cycles| {
+        let floating_bus = self.floating_bus();
+        let Board { scheduler, interrupts, actions, slots, cycles, .. } = self;
+        let irq_on_last_cycle = scheduler.update(n, |id, _cycles| {
             match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
                 Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
+                Some(EventAction::Card { slot, token }) => {
+                    if let Some(card) = slots.cards.get_mut(slot as usize).and_then(Option::as_deref_mut) {
+                        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, interrupts, ops: &mut slots.ops };
+                        return card.on_event(token, &mut ctx);
+                    }
+                }
                 Some(EventAction::Noop) | None => {}
             }
             0
-        })
+        });
+        self.flush_card_ops();
+        irq_on_last_cycle
+    }
+
+    /// Runs `f` on the card in `slot` (None if empty or a RAM card) and applies the scheduling
+    /// requests it made. No allocation unless the card schedules something.
+    pub(crate) fn card_call<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
+        let floating_bus = self.floating_bus();
+        let Board { slots, interrupts, cycles, .. } = self;
+        let card = slots.cards.get_mut(slot as usize)?.as_deref_mut()?;
+        let mut ctx = CardCtx { slot, cycles: *cycles, floating_bus, interrupts, ops: &mut slots.ops };
+        let r = f(card, &mut ctx);
+        self.flush_card_ops();
+        Some(r)
+    }
+
+    /// Applies [`CardCtx::schedule`]/[`CardCtx::cancel`]: times are relative to the current cycle,
+    /// i.e. including the cycles of the running opcode the scheduler has not seen yet.
+    fn flush_card_ops(&mut self) {
+        if self.slots.ops.is_empty() {
+            return;
+        }
+        let ops = std::mem::take(&mut self.slots.ops);
+        for op in &ops {
+            match *op {
+                CardOp::Schedule { slot, token, cycles } => {
+                    let id = card_event_id(slot, token);
+                    self.scheduler.remove(id);
+                    self.actions.retain(|(i, _)| *i != id);
+                    self.actions.push((id, EventAction::Card { slot, token }));
+                    self.scheduler.insert(SyncEvent::new(id, cycles + self.pending as i32));
+                }
+                CardOp::Cancel { slot, token } => {
+                    let id = card_event_id(slot, token);
+                    self.scheduler.remove(id);
+                    self.actions.retain(|(i, _)| *i != id);
+                }
+            }
+        }
+        self.slots.ops = ops;
+        self.slots.ops.clear();
+    }
+
+    /// Calls `f` on every card with a context (reset, per-run update).
+    fn for_each_card(&mut self, mut f: impl FnMut(&mut dyn Card, &mut CardCtx)) {
+        for slot in 0..8 {
+            self.card_call(slot, &mut f);
+        }
     }
 }
 
@@ -69,9 +132,9 @@ impl Bus for Board {
     fn read(&mut self, addr: u16) -> u8 {
         match addr >> 8 {
             0xC0 => self.io_read(addr),
-            page => match self.memory.read(addr) {
+            0xC1..=0xCF => self.cx_access(addr, None),
+            _ => match self.memory.read(addr) {
                 Some(v) => v,
-                None if page < 0xD0 => self.slot_rom_read(addr),
                 None => self.floating_bus(),
             },
         }
@@ -81,7 +144,9 @@ impl Bus for Board {
     fn write(&mut self, addr: u16, value: u8) {
         match addr >> 8 {
             0xC0 => self.io_write(addr, value),
-            0xC1..=0xCF => self.slot_rom_write(addr, value),
+            0xC1..=0xCF => {
+                self.cx_access(addr, Some(value));
+            }
             _ => self.memory.write(addr, value),
         }
     }
@@ -119,9 +184,16 @@ impl Machine {
         let mut memory = Memory::new(config.model, &rom, config.aux_card, config.slots[0].is_some());
         let mut lc = LanguageCards::new(is_e, &config.slots);
         lc.attach(&mut memory);
+        // Kinds backed by `LanguageCards`; a new `CardKind` forces a decision here.
+        for kind in config.slots.iter().flatten() {
+            match kind {
+                CardKind::LanguageCard16K | CardKind::Saturn128K => {}
+            }
+        }
         let board = Board {
             memory,
             lc,
+            slots: Slots::default(),
             video: VideoMode::default(),
             annunciators: [false; 4],
             model: config.model,
@@ -249,8 +321,22 @@ impl Machine {
         self.board.scheduler.insert(SyncEvent::new(id, cycles));
     }
 
+    /// Inserts a card in an empty slot 0-7 not used by a Language Card/Saturn; false if refused.
+    /// The card gets a power-on [`Card::reset`].
+    pub fn insert_card(&mut self, slot: u8, card: Box<dyn Card>) -> bool {
+        if self.board.lc.has_slot(slot) || !self.board.slots.insert(slot, card) {
+            return false;
+        }
+        self.board.card_call(slot, |c, ctx| c.reset(true, ctx));
+        true
+    }
+
     /// CPU reset (the Reset key): pending events and cycle counters are kept.
     pub fn reset(&mut self) {
+        self.reset_cpu_and_board(false);
+    }
+
+    fn reset_cpu_and_board(&mut self, power_cycle: bool) {
         // Utilities.cpp CtrlReset(): the //e resets paging and the video mode; the annunciators
         // are reset on the //e and Base64A only (the Base64A ROM page is reset by the memory).
         let b = &mut self.board;
@@ -262,6 +348,7 @@ impl Machine {
         if b.is_e || b.model == Model::Base64A {
             b.annunciators = [false; 4];
         }
+        b.for_each_card(|c, ctx| c.reset(power_cycle, ctx));
         self.cpu.reset(&mut self.board);
         self.irq_on_last_opcode_cycle = false;
         self.irq_defer_1_opcode = false;
@@ -272,6 +359,7 @@ impl Machine {
         let b = &mut self.board;
         b.memory.power_cycle();
         b.lc.power_cycle(b.is_e, &mut b.memory);
+        b.slots.power_cycle();
         b.video = VideoMode::default();
         b.annunciators = [false; 4];
         b.scheduler.reset();
@@ -283,7 +371,7 @@ impl Machine {
         b.pending = 0;
         self.cpu.cycles = 0;
         self.nmi_line = false;
-        self.reset();
+        self.reset_cpu_and_board(true);
     }
 
     /// Executes one instruction (or interrupt entry); returns the cycles it took.
@@ -321,6 +409,7 @@ impl Machine {
         while done < n {
             done += self.step() as u64;
         }
+        self.board.for_each_card(|c, ctx| c.update(done, ctx));
         done
     }
 
@@ -331,6 +420,7 @@ impl Machine {
         while self.board.frames < target {
             done += self.step() as u64;
         }
+        self.board.for_each_card(|c, ctx| c.update(done, ctx));
         done
     }
 }

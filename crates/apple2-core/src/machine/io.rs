@@ -1,8 +1,9 @@
 //! $C000-$CFFF dispatch of the [`Board`] (AppleWin Memory.cpp `IORead_C0xx`/`IOWrite_C0xx`
 //! tables, :540-870). Keyboard, speaker and game I/O are stubs until slice 6; slot cards and
-//! the floating bus arrive in slices 4 and 5.
+//! the floating bus value arrives in slice 5. Slot cards are dispatched through [`crate::card::Card`].
 
 use super::Board;
+use crate::slots::{expansion_offset, ExpansionRom};
 use crate::language_card::is_rmw_abs;
 use crate::memory::mf;
 use apple2_cpu::Variant;
@@ -49,18 +50,31 @@ impl Board {
 
     // ---- Slice 3/4 seams. ----
 
-    /// $C080-$C0FF: Language Card (slice 3) and card I/O (slice 4).
+    /// $C080-$C0FF: Language Card first, then the card in the slot.
     fn slot_io_read(&mut self, addr: u16) -> u8 {
-        self.lc_io(addr, false);
-        self.floating_bus()
+        if self.lc_io(addr, false) {
+            return self.floating_bus();
+        }
+        let (slot, lo) = (((addr as u8) >> 4) - 8, addr as u8 & 0xF);
+        match self.card_call(slot, |c, x| c.io_read(lo, x)) {
+            Some(v) => v,
+            None => self.floating_bus(), // IO_Null
+        }
     }
 
-    fn slot_io_write(&mut self, addr: u16, _value: u8) {
-        self.lc_io(addr, true);
+    fn slot_io_write(&mut self, addr: u16, value: u8) {
+        if !self.lc_io(addr, true) {
+            let (slot, lo) = (((addr as u8) >> 4) - 8, addr as u8 & 0xF);
+            self.card_call(slot, |c, x| c.io_write(lo, value, x));
+        }
     }
 
     /// Language Card / Saturn access; false if no such card is in the addressed slot.
     fn lc_io(&mut self, addr: u16, write: bool) -> bool {
+        let slot = ((addr as u8) >> 4) - 8;
+        if !self.lc.has_slot(slot) {
+            return false;
+        }
         let rmw = write && {
             // GH#700: operand bytes of the executing opcode (the CPU does not expose them).
             let (pc, op) = self.current_opcode();
@@ -68,16 +82,49 @@ impl Board {
             let operand = byte(pc.wrapping_add(1)) | byte(pc.wrapping_add(2)) << 8;
             is_rmw_abs(op, operand, addr, self.model.cpu_variant() == Variant::Cmos65C02)
         };
-        let slot = ((addr as u8) >> 4) - 8;
         self.lc.io(slot, addr as u8, write, rmw, &mut self.memory)
     }
 
-    /// $C100-$CFFF owned by a slot card (slice 4): ROM not provided by the internal Cx ROM.
-    pub(super) fn slot_rom_read(&mut self, _addr: u16) -> u8 {
-        self.floating_bus()
+    /// `IO_Cxxx` (Memory.cpp:946-1086) for a read (`write` None) or write of `$C100-$CFFF`:
+    /// updates IO_SELECT/INTC8ROM/the expansion-ROM choice, then serves the access from the
+    /// internal Cx ROM, the slot card, its expansion ROM or the floating bus.
+    pub(super) fn cx_access(&mut self, addr: u16, write: Option<u8>) -> u8 {
+        let m = self.memory.memmode();
+        let (intcxrom, slotc3rom) = (m & mf::INTCXROM != 0, m & mf::SLOTC3ROM != 0);
+        self.slots.select(addr, self.is_e, intcxrom, slotc3rom);
+        if addr < 0xC800 {
+            let slot = (addr >> 8) as u8 & 7;
+            // Peripheral ROM unless the internal one is switched in (UTAIIe:5-28).
+            if self.is_e && (intcxrom || (!slotc3rom && slot == 3)) {
+                return self.memory.internal_cx(addr).unwrap_or_else(|| self.floating_bus());
+            }
+            if self.slots.card(slot).is_none() && !self.lc.has_slot(slot) {
+                return self.floating_bus(); // GH#149/GH#164: empty slot
+            }
+            return match write {
+                None => self.card_call(slot, |c, x| c.slot_rom_read(addr as u8, x)).unwrap_or(0),
+                Some(v) => {
+                    self.card_call(slot, |c, x| c.slot_rom_write(addr as u8, v, x));
+                    0
+                }
+            };
+        }
+        if self.is_e && (intcxrom || self.slots.intc8rom()) {
+            return self.memory.internal_cx(addr).unwrap_or_else(|| self.floating_bus());
+        }
+        match self.slots.expansion() {
+            ExpansionRom::Slot(slot) => match write {
+                None => self
+                    .card_call(slot, |c, x| c.expansion_rom().map_or(x.floating_bus, |r| r[expansion_offset(addr)]))
+                    .unwrap_or_else(|| self.floating_bus()),
+                Some(v) => {
+                    self.card_call(slot, |c, x| c.expansion_rom_write(addr - 0xC800, v, x));
+                    0
+                }
+            },
+            _ => self.floating_bus(),
+        }
     }
-
-    pub(super) fn slot_rom_write(&mut self, _addr: u16, _value: u8) {}
 
     // ---- Dispatch. ----
 
@@ -101,7 +148,12 @@ impl Board {
         match lo >> 4 {
             0 => {
                 if lo <= 0x0B {
+                    let before = self.memory.memmode() & (mf::INTCXROM | mf::SLOTC3ROM);
                     self.memory.set_paging(lo, value);
+                    let after = self.memory.memmode();
+                    if before != after & (mf::INTCXROM | mf::SLOTC3ROM) {
+                        self.slots.cx_switches_changed(after & mf::INTCXROM != 0);
+                    }
                 } else {
                     self.video.set(lo, self.is_e);
                 }

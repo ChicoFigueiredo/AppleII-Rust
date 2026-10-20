@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod card;
 pub mod config;
 pub mod irq;
 pub mod language_card;
@@ -9,9 +10,11 @@ pub mod machine;
 pub mod memory;
 pub mod model;
 pub mod scheduler;
+pub mod slots;
 pub mod video_mode;
 pub mod video_standard;
 
+pub use card::{Card, CardCtx};
 pub use config::{AuxCardKind, CardKind, MachineConfig};
 pub use irq::{Interrupts, IrqSource};
 pub use machine::Machine;

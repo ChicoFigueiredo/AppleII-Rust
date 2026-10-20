@@ -286,15 +286,21 @@ impl Memory {
     }
 
     /// Internal Cx ROM at $C100-$CFFF (Memory.cpp:1367-1387): used for everything when INTCXROM,
-    /// and for $C3xx unless SLOTC3ROM. `None` when a slot owns the space (slice 4) or the model
+    /// and for $C3xx unless SLOTC3ROM. `None` when a slot owns the space (see `Board::cx_access`) or the model
     /// has no internal ROM.
     pub fn read_cx(&self, addr: u16) -> Option<u8> {
-        if self.cx_rom.is_empty() || !(0xC100..=0xCFFF).contains(&addr) {
-            return None;
-        }
         let internal = self.memmode & mf::INTCXROM != 0
             || (addr >> 8 == 0xC3 && self.memmode & mf::SLOTC3ROM == 0);
-        internal.then(|| self.cx_rom[(addr - 0xC000) as usize])
+        if internal { self.internal_cx(addr) } else { None }
+    }
+
+    /// Byte of the internal Cx ROM at `addr` (`$C100-$CFFF`) whatever the switches say; `None`
+    /// on models without one.
+    pub fn internal_cx(&self, addr: u16) -> Option<u8> {
+        if !(0xC100..=0xCFFF).contains(&addr) {
+            return None;
+        }
+        self.cx_rom.get((addr - 0xC000) as usize).copied()
     }
 
     /// Main RAM, ignoring paging.
