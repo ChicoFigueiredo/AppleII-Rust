@@ -7,6 +7,7 @@ use crate::keyboard::{Keyboard, NavKey};
 use crate::speaker::Speaker;
 use crate::language_card::LanguageCards;
 use crate::memory::Memory;
+use crate::observer::{AccessKind, AccessObserver};
 use crate::video_mode::VideoMode;
 use crate::video_scanner::VideoScanner;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
@@ -62,6 +63,7 @@ pub struct Board {
     pending: u32,
     opcode_pc: u16,
     opcode: u8,
+    observer: Option<Box<dyn AccessObserver>>,
 }
 
 impl Board {
@@ -144,18 +146,25 @@ impl Board {
 impl Bus for Board {
     #[inline]
     fn read(&mut self, addr: u16) -> u8 {
-        match addr >> 8 {
+        let v = match addr >> 8 {
             0xC0 => self.io_read(addr),
             0xC1..=0xCF => self.cx_access(addr, None),
             _ => match self.memory.read(addr) {
                 Some(v) => v,
                 None => self.floating_bus(),
             },
+        };
+        if let Some(o) = self.observer.as_mut() {
+            o.access(addr, v, AccessKind::Read);
         }
+        v
     }
 
     #[inline]
     fn write(&mut self, addr: u16, value: u8) {
+        if let Some(o) = self.observer.as_mut() {
+            o.access(addr, value, AccessKind::Write);
+        }
         match addr >> 8 {
             0xC0 => self.io_write(addr, value),
             0xC1..=0xCF => {
@@ -236,6 +245,7 @@ impl Machine {
             pending: 0,
             opcode_pc: 0,
             opcode: 0,
+            observer: None,
         };
         let mut m = Machine {
             cpu: Cpu::new(config.model.cpu_variant()),
@@ -290,6 +300,11 @@ impl Machine {
 
     pub fn board_mut(&mut self) -> &mut Board {
         &mut self.board
+    }
+
+    /// Installs (or removes, with `None`) the bus-access observer; returns the previous one.
+    pub fn set_access_observer(&mut self, o: Option<Box<dyn AccessObserver>>) -> Option<Box<dyn AccessObserver>> {
+        std::mem::replace(&mut self.board.observer, o)
     }
 
     /// Absolute cycle counter since power-on.
