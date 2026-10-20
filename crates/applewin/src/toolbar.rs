@@ -4,6 +4,7 @@
 use crate::actions::Action;
 use crate::backend::{DriveActivity, DriveStatus};
 use crate::emu::EmuStatus;
+use crate::icons::Icon;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Button {
@@ -39,6 +40,20 @@ impl Button {
         }
     }
 
+    /// The toolbar icon; RUN varies with the model like AppleWin's `CreateGdiObjects`.
+    pub fn icon(self, model: &str) -> Icon {
+        match self {
+            Button::Help => Icon::Help,
+            Button::Run => Icon::run_for_model(model),
+            Button::Drive1 => Icon::Drive1,
+            Button::Drive2 => Icon::Drive2,
+            Button::Swap => Icon::DriveSwap,
+            Button::Fullscreen => Icon::Fullscreen,
+            Button::Debug => Icon::Debug,
+            Button::Settings => Icon::Setup,
+        }
+    }
+
     /// The action a click triggers (the same as the F-key).
     pub fn action(self) -> Action {
         match self {
@@ -71,6 +86,16 @@ pub fn led(d: &DriveStatus) -> Led {
     }
 }
 
+/// Disk LED icon: off, read (green), write (red) or, reading a write-protected disk, orange.
+pub fn led_icon(d: &DriveStatus) -> Icon {
+    match led(d) {
+        Led::Off => Icon::LedOff,
+        Led::Green if d.write_protected => Icon::LedProtected,
+        Led::Green => Icon::LedRead,
+        Led::Red => Icon::LedWrite,
+    }
+}
+
 /// "Drive 1: T17 DOS33.dsk" (AppleWin shows the track in decimal).
 pub fn drive_text(n: usize, d: &DriveStatus) -> String {
     if !d.present {
@@ -97,9 +122,8 @@ pub fn title(s: &EmuStatus) -> String {
 
 /// One-line status bar text.
 pub fn status_line(s: &EmuStatus) -> String {
-    let caps = crate::overlay::caps_indicator(s).map_or(String::new(), |c| format!("{c}  "));
     let audio = if s.underruns > 0 { format!("  audio underruns: {}", s.underruns) } else { String::new() };
-    format!("{caps}{:.2} MHz  {}{audio}", s.mhz, s.video)
+    format!("{:.2} MHz  {}{audio}", s.mhz, s.video)
 }
 
 #[cfg(test)]

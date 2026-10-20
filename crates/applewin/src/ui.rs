@@ -6,10 +6,15 @@ use crate::backend::DriveStatus;
 use crate::disk_ui::DiskUi;
 use crate::emu::EmuStatus;
 use crate::settings::SettingsDialog;
-use crate::toolbar::{self, Button, Led};
+use crate::icons::{Icon, IconCache};
+use crate::toolbar::{self, Button};
 use crate::video::Frame;
 use apple2_config::Settings;
 use egui::{Color32, Context, Rect, TextureHandle, TextureOptions, Vec2};
+
+/// Toolbar icon / LED sizes in points (rasterised at the current pixels-per-point).
+const ICON_POINTS: f32 = 40.0;
+const LED_POINTS: f32 = 12.0;
 
 #[derive(Debug)]
 pub enum UiEvent {
@@ -40,6 +45,8 @@ pub struct UiState {
     pub drive_menu: Option<usize>,
     /// Mouse capture state for the overlay hint (set by the shell).
     pub mouse: crate::overlay::MouseState,
+    /// Rasterised SVG toolbar icons, per pixel size.
+    icons: IconCache,
 }
 
 impl UiState {
@@ -67,6 +74,7 @@ impl UiState {
             message: String::new(),
             drive_menu: None,
             mouse: Default::default(),
+            icons: IconCache::default(),
         }
     }
 
@@ -84,7 +92,7 @@ impl UiState {
     pub fn draw(&mut self, ctx: &Context, status: &EmuStatus, fullscreen: bool) -> Vec<UiEvent> {
         let mut ev = Vec::new();
         if !fullscreen && self.show_toolbar {
-            egui::SidePanel::left("toolbar").exact_width(92.0).resizable(false).show(ctx, |ui| {
+            egui::SidePanel::left("toolbar").exact_width(104.0).resizable(false).show(ctx, |ui| {
                 ui.spacing_mut().item_spacing.y = 6.0;
                 for b in Button::ALL {
                     self.button(ui, b, status, &mut ev);
@@ -92,6 +100,12 @@ impl UiState {
             });
             egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    if let Some(icon) = Icon::caps_for_model(&status.model, status.caps_lock) {
+                        let ctx = ui.ctx().clone();
+                        if let Some(t) = self.icons.get(&ctx, icon, 16.0) {
+                            ui.add(egui::Image::new((t.id(), Vec2::splat(16.0)))).on_hover_text("Caps Lock");
+                        }
+                    }
                     ui.label(toolbar::status_line(status));
                     for (i, d) in status.drives.iter().enumerate() {
                         ui.separator();
@@ -141,24 +155,35 @@ impl UiState {
             Button::Run if status.paused => "Run (paused)".to_string(),
             _ => b.label().to_string(),
         };
+        let ctx = ui.ctx().clone();
         ui.horizontal(|ui| {
-            let resp = ui.add_sized(Vec2::new(68.0, 26.0), egui::Button::new(format!("{label}\nF{}", b.fkey())).small());
+            let tex = self.icons.get(&ctx, b.icon(&status.model), ICON_POINTS).map(|t| t.id());
+            let resp = match tex {
+                Some(id) => ui.add(egui::ImageButton::new(egui::Image::new((id, Vec2::splat(ICON_POINTS))))),
+                None => ui.add_sized(Vec2::splat(ICON_POINTS), egui::Button::new(&label)),
+            };
+            let resp = resp.on_hover_text(format!("{label} (F{})", b.fkey()));
             if resp.clicked() {
                 ev.push(UiEvent::Action(b.action()));
             }
-            if let Some(d) = drive {
-                if resp.secondary_clicked() {
-                    self.drive_menu = Some(d);
-                }
-                let (rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
-                let drv: &DriveStatus = &status.drives[d];
-                let color = match toolbar::led(drv) {
-                    Led::Off => Color32::from_gray(60),
-                    Led::Green => Color32::from_rgb(40, 220, 60),
-                    Led::Red => Color32::from_rgb(230, 40, 40),
-                };
-                ui.painter().circle_filled(rect.center(), 4.5, color);
-            }
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.label(egui::RichText::new(b.label()).small());
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 3.0;
+                    ui.label(egui::RichText::new(format!("F{}", b.fkey())).small().weak());
+                    if let Some(d) = drive {
+                        if resp.secondary_clicked() {
+                            self.drive_menu = Some(d);
+                        }
+                        let drv: &DriveStatus = &status.drives[d];
+                        let led = self.icons.get(&ctx, toolbar::led_icon(drv), LED_POINTS).map(|t| t.id());
+                        if let Some(id) = led {
+                            ui.add(egui::Image::new((id, Vec2::splat(LED_POINTS))));
+                        }
+                    }
+                });
+            });
         });
     }
 
