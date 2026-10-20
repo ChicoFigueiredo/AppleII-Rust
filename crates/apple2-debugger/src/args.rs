@@ -168,7 +168,7 @@ pub fn hex_prefix(s: &str) -> u16 {
     let mut v: u32 = 0;
     for c in s.chars() {
         match c.to_digit(16) {
-            Some(d) => v = (v << 4 | d) & 0xFFFF_FFFF,
+            Some(d) => v = v << 4 | d,
             None => break,
         }
     }

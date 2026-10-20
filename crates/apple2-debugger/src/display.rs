@@ -258,6 +258,7 @@ impl Debugger {
         let _ = r;
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_register(&self, g: &mut Grid, y: usize, name: &str, bytes: u8, value: u16, source_reg: bool, sp: bool) {
         let c = |id: DebugColor| self.colors.get(id);
         let bg = c(DebugColor::BG_DATA_1);
@@ -377,6 +378,7 @@ impl Debugger {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn switch_line(&self, g: &mut Grid, y: usize, prefix: &str, on: &str, off: &str, suffix: &str, set: bool) {
         let c = |id: DebugColor| self.colors.get(id);
         let bg = c(DebugColor::BG_INFO);

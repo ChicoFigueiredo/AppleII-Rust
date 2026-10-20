@@ -181,45 +181,37 @@ impl Debugger {
         if let Some(u) = self.symbols_update_forms(a, table) {
             return u;
         }
-        {
-            let i = 1;
-            match a.text(i).to_ascii_uppercase().as_str() {
-                "CLEAR" => {
-                    self.symbols.clear(table);
-                    self.data.0.retain(|d| table != Table::Asm || d.removed);
-                    self.console.print(&format!(" Cleared symbol table: {CHC_STRING}{}", table.name()));
-                    return upd::CONSOLE_DISPLAY | upd::SYMBOLS;
-                }
-                "LOAD" => {
-                    // SYMxxx LOAD "file" [, offset]
-                    let file = a.get(i + 1).filter(|x| x.quoted()).map(|x| x.text.clone());
-                    let mut offset = 0u32;
-                    if a.get(i + 2).map(|t| t.is_op(",")).unwrap_or(false) && a.get(i + 3).is_some() {
-                        let o = a.value(i + 3) as u32;
-                        offset = o;
-                    }
-                    let (loaded, u) = self.load_symbol_file(m, table, file.as_deref(), offset);
-                    if loaded > 0 {
-                        let h = self.symbols_info_header(table, Some(loaded));
-                        self.console.print(&h);
-                    }
-                    return u | upd::CONSOLE_DISPLAY;
-                }
-                "SAVE" => return upd::CONSOLE_DISPLAY,
-                "ON" => {
-                    self.symbols.set_displayed(table, true);
-                    let h = format!("{}{CHC_ARG_SEP}({CHC_COMMAND}ON{CHC_ARG_SEP})", self.symbols_info_header(table, None));
-                    self.console.print(&h);
-                    return upd::CONSOLE_DISPLAY | upd::DISASM;
-                }
-                "OFF" => {
-                    self.symbols.set_displayed(table, false);
-                    let h = format!("{}{CHC_ARG_SEP}({CHC_COMMAND}OFF{CHC_ARG_SEP})", self.symbols_info_header(table, None));
-                    self.console.print(&h);
-                    return upd::CONSOLE_DISPLAY | upd::DISASM;
-                }
-                _ => return self.symbols_list_tables(a, &[table]),
+        let i = 1;
+        match a.text(i).to_ascii_uppercase().as_str() {
+            "CLEAR" => {
+                self.symbols.clear(table);
+                self.data.0.retain(|d| table != Table::Asm || d.removed);
+                self.console.print(&format!(" Cleared symbol table: {CHC_STRING}{}", table.name()));
+                upd::CONSOLE_DISPLAY | upd::SYMBOLS
             }
+            "LOAD" => {
+                // SYMxxx LOAD "file" [, offset]
+                let file = a.get(i + 1).filter(|x| x.quoted()).map(|x| x.text.clone());
+                let mut offset = 0u32;
+                if a.get(i + 2).map(|t| t.is_op(",")).unwrap_or(false) && a.get(i + 3).is_some() {
+                    offset = a.value(i + 3) as u32;
+                }
+                let (loaded, u) = self.load_symbol_file(m, table, file.as_deref(), offset);
+                if loaded > 0 {
+                    let h = self.symbols_info_header(table, Some(loaded));
+                    self.console.print(&h);
+                }
+                u | upd::CONSOLE_DISPLAY
+            }
+            "SAVE" => upd::CONSOLE_DISPLAY,
+            "ON" | "OFF" => {
+                let on = a.text(i).eq_ignore_ascii_case("ON");
+                self.symbols.set_displayed(table, on);
+                let h = format!("{}{CHC_ARG_SEP}({CHC_COMMAND}{}{CHC_ARG_SEP})", self.symbols_info_header(table, None), if on { "ON" } else { "OFF" });
+                self.console.print(&h);
+                upd::CONSOLE_DISPLAY | upd::DISASM
+            }
+            _ => self.symbols_list_tables(a, &[table]),
         }
     }
 

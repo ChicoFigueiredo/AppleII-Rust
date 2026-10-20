@@ -597,10 +597,7 @@ impl Debugger {
                 if !b.valid() || !b.source.is_mem() || self.pre_hit.contains(&i) {
                     continue;
                 }
-                let ok = match (b.source, kind) {
-                    (Source::MemRw, _) | (Source::MemRead, AccessKind::Read) | (Source::MemWrite, AccessKind::Write) => true,
-                    _ => false,
-                };
+                let ok = matches!((b.source, kind), (Source::MemRw, _) | (Source::MemRead, AccessKind::Read) | (Source::MemWrite, AccessKind::Write));
                 if ok && b.check_value(addr as u32, &pg) {
                     self.break_mem_addr = addr;
                     let k = match b.source {

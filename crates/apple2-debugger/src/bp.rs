@@ -199,9 +199,9 @@ impl Breakpoint {
         let sel = |aux_flag: bool| (want_main && !aux_flag) || (want_aux && aux_flag);
         if v <= 0x1FF {
             sel(m & mf::ALTZP != 0)
-        } else if (0x400..=0x7FF).contains(&v) && m & mf::STORE80 != 0 {
-            sel(m & mf::PAGE2 != 0)
-        } else if (0x2000..=0x3FFF).contains(&v) && m & (mf::STORE80 | mf::HIRES) == (mf::STORE80 | mf::HIRES) {
+        } else if ((0x400..=0x7FF).contains(&v) && m & mf::STORE80 != 0)
+            || ((0x2000..=0x3FFF).contains(&v) && m & (mf::STORE80 | mf::HIRES) == (mf::STORE80 | mf::HIRES))
+        {
             sel(m & mf::PAGE2 != 0)
         } else if v <= 0xBFFF {
             (is_read && sel(m & mf::AUXREAD != 0)) || (is_write && sel(m & mf::AUXWRITE != 0))
@@ -283,6 +283,7 @@ impl BpTable {
     }
 
     /// Fills slot `i` (`_CmdBreakpointAddReg`).
+    #[allow(clippy::too_many_arguments)]
     pub fn add(&mut self, i: usize, source: Source, op: Op, address: u16, length: u32, temp: bool, prefix: Prefix) {
         let b = &mut self.slots[i];
         if !b.set {

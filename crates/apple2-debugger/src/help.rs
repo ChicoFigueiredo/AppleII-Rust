@@ -79,9 +79,9 @@ impl Debugger {
         }
         if let Some(lines) = crate::helptext::usage(cmd) {
             let name = entry.map(|e| e.name).unwrap_or("");
-            for l in lines {
+            for (colorized, l) in lines {
                 let l = l.replace("{cmd}", name);
-                self.console.print(&colorize(&l));
+                self.console.print(&if *colorized { colorize(&l) } else { l });
             }
         }
         upd::CONSOLE_DISPLAY

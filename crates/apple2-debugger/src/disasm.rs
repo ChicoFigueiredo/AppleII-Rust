@@ -333,7 +333,7 @@ pub fn get_targets(ctx: &DisasmCtx, addr: u16, ignore_branch: bool, include_next
 /// `_6502_GetTargetAddress`: where the instruction at `addr` goes/refers to (for the cursor jump).
 pub fn target_address(ctx: &DisasmCtx, addr: u16) -> Option<u16> {
     let (op, mode, _n, data) = opmode_opbyte(ctx, addr);
-    let Some(mode) = mode else { return None };
+    let mode = mode?;
     if let Some(d) = data {
         return Some(d.target);
     }

@@ -182,7 +182,7 @@ impl Debugger {
             } else {
                 return self.help_for(kcmd);
             }
-            let len = ((end - start as i32).abs() as u32 & 0xFFFF) as u16;
+            let len = ((end - start as i32).unsigned_abs() & 0xFFFF) as u16;
             skip = Some((start, len));
         }
         let pc = m.cpu().pc;

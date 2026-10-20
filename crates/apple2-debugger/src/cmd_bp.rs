@@ -49,7 +49,7 @@ impl Debugger {
     /// `Range_GetAllPrefixes`: consumes `[sN/][nn/][lN/][ROM/]` starting at argument `i`.
     pub(crate) fn range_prefixes(&mut self, a: &Args, i: &mut usize) -> Result<Prefix, ()> {
         let mut p = Prefix::default();
-        while a.get(*i + 1).map(|t| t.is_op("/")).unwrap_or(false) && *i + 1 <= a.n() {
+        while a.get(*i + 1).map(|t| t.is_op("/")).unwrap_or(false) && *i < a.n() {
             let t = a.text(*i).to_ascii_lowercase();
             if t.starts_with('s') {
                 let n = t.chars().last().and_then(|c| c.to_digit(10)).unwrap_or(99);
@@ -413,16 +413,16 @@ impl Debugger {
         };
         if n <= 1 {
             let t = if n == 0 { 0 } else { a.value(1) as u32 };
-            if param.is_none() {
+            if let Some(on) = param {
+                // `BRK ON|OFF` (n == 1 and the arg is the state): applies to BRK
+                set(self, 0, on);
+                report(self, 0, on);
+            } else {
                 if t > 3 {
                     return self.help_last();
                 }
                 let on = self.break_invalid & (1 << t) != 0;
                 report(self, t, on);
-            } else {
-                // `BRK ON|OFF` (n == 1 and the arg is the state): applies to BRK
-                set(self, 0, param.unwrap());
-                report(self, 0, param.unwrap());
             }
             return upd::CONSOLE_DISPLAY;
         }

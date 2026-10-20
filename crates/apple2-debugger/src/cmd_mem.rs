@@ -21,6 +21,9 @@ pub fn read_prefixed(m: &Machine, addr: u16, p: &Prefix) -> u8 {
     }
 }
 
+/// Parsed `["file"] , [bank :] addr [, len | : end]`: (file, bank, start, length).
+type LoadSave = (Option<String>, Option<u16>, u16, Option<u32>);
+
 /// One element of a memory search pattern (`MemorySearch_t`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Pat {
@@ -83,7 +86,7 @@ impl Debugger {
         }
         let (start, len) = if n == 3 {
             let (s, e) = (a.value(1), a.value(2));
-            (s, (e as i32 - s as i32 + 1).min(0xFFFF).max(0) as u32)
+            (s, (e as i32 - s as i32 + 1).clamp(0, 0xFFFF) as u32)
         } else {
             let (a1, a2, rt) = range_get(a, 1);
             match range_end_len(rt, a1, a2) {
@@ -237,7 +240,7 @@ impl Debugger {
     // ---- BLOAD / BSAVE / TSAVE ----
 
     /// Parses `["file"] , addr [, len | : end]` or the bank form `["file"] , bank : addr [...]`.
-    fn parse_load_save(&self, a: &Args) -> Option<(Option<String>, Option<u16>, u16, Option<u32>)> {
+    fn parse_load_save(&self, a: &Args) -> Option<LoadSave> {
         let n = a.n();
         let has_name = a.get(1).map(|x| x.kind == Kind::Quoted2).unwrap_or(false);
         let name = has_name.then(|| a.text(1).to_string());
