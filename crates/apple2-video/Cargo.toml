@@ -1,0 +1,11 @@
+[package]
+name = "apple2-video"
+description = "Apple II video rendering (port of AppleWin NTSC.cpp, NTSC_CharSet.cpp, RGBMonitor.cpp)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }
+apple2-roms = { path = "../apple2-roms" }
