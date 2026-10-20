@@ -266,8 +266,11 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
             continue;
         };
         if let Some(c) = (map.load)(&mut ctx, slot, version, state)? {
+            // `insert_card` power-on resets the card; keep what the mapping loaded into it.
+            let loaded = c.save();
             if machine.insert_card(slot, c) {
                 inserted[slot as usize] = true;
+                machine.with_card(slot, |c, _| c.load(&loaded));
             } else {
                 ctx.warnings.push(format!("Slot {slot}: cannot insert '{card}' there"));
             }
