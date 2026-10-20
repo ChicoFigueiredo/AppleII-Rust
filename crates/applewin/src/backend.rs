@@ -3,7 +3,7 @@
 //! [`BackendFactory`] that creates them does.
 
 use crate::video::{FrameSource, VideoRenderer};
-use apple2_audio::{AudioBus, MockingboardCard, Variant};
+use apple2_audio::AudioBus;
 use apple2_config::Settings;
 use apple2_config::SlotCardSpec;
 use apple2_core::Machine;
@@ -97,6 +97,14 @@ pub trait Backend {
     fn mouse(&mut self, _settings: &Settings) -> Box<dyn MouseSink> {
         Box::new(NullMouse)
     }
+    /// Sinks for an already built machine (also after a save-state replaced it); the default
+    /// follows the settings.
+    fn disks_for(&mut self, _machine: &Machine, settings: &Settings) -> Box<dyn DiskSink> {
+        self.disks(settings)
+    }
+    fn mouse_for(&mut self, _machine: &Machine, settings: &Settings) -> Box<dyn MouseSink> {
+        self.mouse(settings)
+    }
 }
 
 /// Disk II in `slot` (apple2-storage).
@@ -144,60 +152,14 @@ impl DiskSink for Disk2Sink {
 /// Creates the [`Backend`] inside the emulation thread (cards are not `Send`).
 pub type BackendFactory = Box<dyn FnOnce() -> Box<dyn Backend> + Send>;
 
-/// Core-only backend: the machine from `Settings::to_machine_config`, a Mockingboard in slot 4
-/// when enabled, the text placeholder for video.
+/// The real backend: the machine and every card from [`crate::factory`], the `apple2-video`
+/// renderer, Disk II and mouse sinks found by looking at the machine's slots.
 #[derive(Default)]
 pub struct DefaultBackend;
 
 impl Backend for DefaultBackend {
     fn build_machine(&mut self, settings: &Settings, bus: &AudioBus) -> Result<Machine, String> {
-        let mut config = settings.to_machine_config();
-        if let Some(path) = &settings.machine.custom_rom {
-            config.custom_rom = Some(std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?);
-        }
-        let mut m = Machine::try_new(config).map_err(|e| format!("{e:?}"))?;
-        {
-            let sound = !settings.sound.disable_sound;
-            for (slot, spec) in settings.slots.0.iter().enumerate().skip(1) {
-                let card: Option<Box<dyn apple2_core::Card>> = match spec {
-                    SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
-                        let mut c = Disk2Card::new();
-                        c.set_force_13_sector_firmware(*firmware_13_sector);
-                        c.set_enhance_disk(settings.storage.enhance_disk_speed);
-                        for (d, spec) in drives.iter().enumerate() {
-                            if !spec.connected {
-                                c.unplug_drive(d);
-                            }
-                            if let Some(path) = &spec.image {
-                                if let Err(e) = c.insert_path(d, path, spec.write_protect) {
-                                    eprintln!("drive {}: {}: {e:?}", d + 1, path.display());
-                                }
-                            }
-                        }
-                        Some(Box::new(c))
-                    }
-                    SlotCardSpec::MouseInterface { .. } => Some(Box::new(apple2_cards::mouse::MouseCard::new())),
-                    SlotCardSpec::MockingboardC(_) if sound && !settings.sound.disable_mockingboard => {
-                        Some(Box::new(MockingboardCard::new(Variant::MockingboardC, bus)))
-                    }
-                    SlotCardSpec::Phasor(_) if sound && !settings.sound.disable_mockingboard => {
-                        Some(Box::new(MockingboardCard::new(Variant::Phasor, bus)))
-                    }
-                    SlotCardSpec::MegaAudio(_) if sound && !settings.sound.disable_mockingboard => {
-                        Some(Box::new(MockingboardCard::new(Variant::MegaAudio, bus)))
-                    }
-                    SlotCardSpec::SdMusic(_) if sound && !settings.sound.disable_mockingboard => {
-                        Some(Box::new(MockingboardCard::new(Variant::SdMusic, bus)))
-                    }
-                    SlotCardSpec::Sam if sound => Some(Box::new(apple2_audio::SamCard::new(bus))),
-                    _ => None,
-                };
-                if let Some(c) = card {
-                    m.insert_card(slot as u8, c);
-                }
-            }
-        }
-        Ok(m)
+        crate::factory::build_machine(settings, bus)
     }
 
     fn frame_source(&mut self, settings: &Settings) -> Box<dyn FrameSource> {
@@ -214,6 +176,20 @@ impl Backend for DefaultBackend {
     fn mouse(&mut self, settings: &Settings) -> Box<dyn MouseSink> {
         match settings.slots.0.iter().position(|s| matches!(s, SlotCardSpec::MouseInterface { .. })) {
             Some(slot) => Box::new(CardMouse { slot: slot as u8 }),
+            None => Box::new(NullMouse),
+        }
+    }
+
+    fn disks_for(&mut self, machine: &Machine, _settings: &Settings) -> Box<dyn DiskSink> {
+        match crate::factory::slot_of::<Disk2Card>(machine) {
+            Some(slot) => Box::new(Disk2Sink { slot }),
+            None => Box::new(NullDisks),
+        }
+    }
+
+    fn mouse_for(&mut self, machine: &Machine, _settings: &Settings) -> Box<dyn MouseSink> {
+        match crate::factory::slot_of::<apple2_cards::MouseCard>(machine) {
+            Some(slot) => Box::new(CardMouse { slot }),
             None => Box::new(NullMouse),
         }
     }

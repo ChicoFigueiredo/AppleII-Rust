@@ -12,7 +12,7 @@ use crate::video::{Frame, FrameSource};
 use apple2_audio::{volume_gain, AudioBus, Mixer};
 use apple2_config::Settings;
 use apple2_debugger::{Debugger, RunMode};
-use apple2_core::{Machine, StateError};
+use apple2_core::Machine;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -40,6 +40,8 @@ pub enum Command {
     Step,
     SaveState(PathBuf),
     LoadState(PathBuf),
+    /// The user picked another state file (F11/F12 dialog): used for "Save State On Exit".
+    SetStatePath(PathBuf),
     /// Rebuilds the machine (power cycle) with new settings.
     ApplySettings(Box<Settings>),
     SetVolume(u32),
@@ -129,14 +131,9 @@ impl Shared {
     }
 }
 
-/// Where F11/F12 keep the state unless the settings say otherwise.
+/// Where F11/F12 keep the state unless the user picked a file (see [`crate::state_io`]).
 pub fn default_state_path(settings: &Settings) -> PathBuf {
-    settings
-        .storage
-        .savestate_filename
-        .clone()
-        .or_else(|| apple2_config::store::config_dir().map(|d| d.join("AppleWin.aws.json")))
-        .unwrap_or_else(|| PathBuf::from("AppleWin.aws.json"))
+    crate::state_io::default_state_path(settings, &std::env::current_dir().unwrap_or_default())
 }
 
 /// Settings "Emulation Speed" (tenths, 40 = unbounded) to [`Speed`].
@@ -150,9 +147,42 @@ pub fn speed_from_settings(s: &Settings) -> Speed {
     }
 }
 
-fn new_debugger(m: &mut Machine) -> Debugger {
+/// `FsHost` that serves `-debugger-auto-run <file>` when the debugger asks for its
+/// `DebuggerAutoRun.txt` (Debug.cpp:9435: only once per run, not on a restart).
+struct AutoRunHost {
+    fs: apple2_debugger::host::FsHost,
+    script: Option<PathBuf>,
+}
+
+impl apple2_debugger::host::Host for AutoRunHost {
+    fn read(&mut self, name: &str) -> std::io::Result<Vec<u8>> {
+        match (&self.script, name) {
+            (Some(p), "DebuggerAutoRun.txt") => {
+                let r = std::fs::read(p);
+                self.script = None;
+                r
+            }
+            _ => self.fs.read(name),
+        }
+    }
+    fn write(&mut self, name: &str, data: &[u8]) -> std::io::Result<()> {
+        self.fs.write(name, data)
+    }
+    fn create(&mut self, name: &str) -> std::io::Result<Box<dyn std::io::Write>> {
+        self.fs.create(name)
+    }
+    fn dir(&self) -> String {
+        self.fs.dir()
+    }
+    fn set_dir(&mut self, dir: &str) -> bool {
+        self.fs.set_dir(dir)
+    }
+}
+
+fn new_debugger(m: &mut Machine, auto_run: Option<&Path>) -> Debugger {
     let mut d = Debugger::new();
-    d.set_host(Box::new(apple2_debugger::host::FsHost::new(std::env::current_dir().unwrap_or_default())));
+    let fs = apple2_debugger::host::FsHost::new(std::env::current_dir().unwrap_or_default());
+    d.set_host(Box::new(AutoRunHost { fs, script: auto_run.map(Path::to_path_buf) }));
     d.initialize(m);
     d
 }
@@ -187,9 +217,9 @@ impl Emulator {
         let mut machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
         let video = backend.frame_source(&settings);
-        let disks = backend.disks(&settings);
-        let mouse = backend.mouse(&settings);
-        let debugger = new_debugger(&mut machine);
+        let disks = backend.disks_for(&machine, &settings);
+        let mouse = backend.mouse_for(&machine, &settings);
+        let debugger = new_debugger(&mut machine, settings.debugger.auto_run_script.as_deref());
         let speed = speed_from_settings(&settings);
         Ok(Emulator {
             settings,
@@ -273,6 +303,13 @@ impl Emulator {
         &self.frame
     }
 
+    /// `Video_RedrawAndTakeScreenShot`: repaints the whole screen from the machine's current
+    /// state (no frames are run) and returns it. Used by `-screenshot-and-exit`.
+    pub fn redraw_now(&mut self) -> &Frame {
+        self.video.redraw(&self.machine);
+        self.render()
+    }
+
     pub fn frame(&self) -> &Frame {
         &self.frame
     }
@@ -313,9 +350,9 @@ impl Emulator {
                 self.mixer = Mixer::new(&bus);
                 self.bus = bus;
                 self.video = self.backend.frame_source(&settings);
-                self.disks = self.backend.disks(&settings);
-                self.mouse = self.backend.mouse(&settings);
-                self.debugger = new_debugger(&mut self.machine);
+                self.disks = self.backend.disks_for(&self.machine, &settings);
+                self.mouse = self.backend.mouse_for(&self.machine, &settings);
+                self.debugger = new_debugger(&mut self.machine, None);
                 let sp = speed_from_settings(&settings);
                 self.full_speed = sp == Speed::Max;
                 if let Speed::Multiplier(_) = sp {
@@ -330,28 +367,69 @@ impl Emulator {
 
     pub fn save_state(&mut self, path: &Path) {
         self.disks.flush(&mut self.machine);
-        let r = serde_json::to_vec(&self.machine.save_state()).map_err(|e| e.to_string()).and_then(|bytes| {
+        let r = crate::state_io::save_machine(&self.machine).and_then(|saved| {
             if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
                 std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
             }
-            std::fs::write(path, bytes).map_err(|e| e.to_string())
+            std::fs::write(path, &saved.text).map_err(|e| e.to_string())?;
+            Ok(saved.warnings)
         });
         match r {
-            Ok(()) => self.say(format!("State saved: {}", path.display())),
+            Ok(w) if w.is_empty() => self.say(format!("State saved: {}", path.display())),
+            Ok(w) => self.say(format!("State saved: {} ({})", path.display(), w.join("; "))),
             Err(e) => self.say(format!("Save state failed: {e}")),
         }
     }
 
     pub fn load_state(&mut self, path: &Path) {
-        let r = std::fs::read(path).map_err(|e| e.to_string()).and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string())).and_then(|s| {
-            self.machine.load_state(&s).map_err(|e: StateError| format!("{e:?}"))
-        });
-        match r {
-            Ok(()) => {
-                self.video.reset();
-                self.say(format!("State loaded: {}", path.display()));
-            }
+        match self.try_load_state(path) {
+            Ok(w) if w.is_empty() => self.say(format!("State loaded: {}", path.display())),
+            Ok(w) => self.say(format!("State loaded: {} ({})", path.display(), w.join("; "))),
             Err(e) => self.say(format!("Load state failed: {e}")),
+        }
+    }
+
+    /// Replaces the machine by the one in the `.aws.yaml` at `path`. Returns the loader's warnings.
+    fn try_load_state(&mut self, path: &Path) -> Result<Vec<String>, String> {
+        crate::state_io::check_loadable(path)?;
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        // The cards the state builds hold their own audio bus; the mixer must read the same one.
+        let bus = AudioBus::new(self.audio_rate, self.settings.to_machine_config().video_standard);
+        let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).map(Path::to_path_buf);
+        let loaded = crate::state_io::load_machine(&text, &self.settings, &bus, dir.as_deref())?;
+        let mut machine = loaded.machine;
+        let cfg = machine.config().clone();
+        bus.set_clock(apple2_audio::SampleClock::new(self.audio_rate, cfg.video_standard));
+        self.settings.machine.model = cfg.model;
+        self.settings.machine.refresh_rate = match cfg.video_standard {
+            apple2_core::VideoStandard::Pal => apple2_config::settings::RefreshRate::Hz50,
+            apple2_core::VideoStandard::Ntsc => apple2_config::settings::RefreshRate::Hz60,
+        };
+        self.debugger = new_debugger(&mut machine, None);
+        self.disks = self.backend.disks_for(&machine, &self.settings);
+        self.mouse = self.backend.mouse_for(&machine, &self.settings);
+        self.mixer = Mixer::new(&bus);
+        self.bus = bus;
+        self.machine = machine;
+        self.video.reset();
+        Ok(loaded.warnings)
+    }
+
+    /// `Snapshot_Startup`: with "Save State On Exit" the previous session's state comes back.
+    pub fn startup_state(&mut self) {
+        if self.settings.storage.save_state_on_exit {
+            let p = default_state_path(&self.settings);
+            if p.is_file() {
+                self.load_state(&p);
+            }
+        }
+    }
+
+    /// `Snapshot_Shutdown`: with "Save State On Exit" the state is saved when quitting.
+    pub fn shutdown_state(&mut self) {
+        if self.settings.storage.save_state_on_exit {
+            let p = default_state_path(&self.settings);
+            self.save_state(&p);
         }
     }
 
@@ -417,6 +495,7 @@ impl Emulator {
             }
             Command::SaveState(p) => self.save_state(&p),
             Command::LoadState(p) => self.load_state(&p),
+            Command::SetStatePath(p) => self.settings.storage.savestate_filename = Some(p),
             Command::ApplySettings(s) => self.rebuild(*s),
             Command::SetVolume(v) => {
                 self.settings.sound.master_volume = v;
@@ -465,6 +544,7 @@ impl Emulator {
                 }
             }
             Command::Shutdown => {
+                self.shutdown_state();
                 self.disks.flush(&mut self.machine);
                 return false;
             }
@@ -525,7 +605,8 @@ pub fn spawn(
     let join = std::thread::Builder::new()
         .name("emulation".into())
         .spawn(move || match Emulator::new(settings, factory(), audio_rate) {
-            Ok(emu) => {
+            Ok(mut emu) => {
+                emu.startup_state();
                 let _ = ready_tx.send(Ok(()));
                 drive(emu, rx, &sh, ring, &*notify);
             }

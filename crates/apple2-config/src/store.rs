@@ -37,9 +37,17 @@ pub fn config_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("org", "AppleII-Rust", "applewin-rs").map(|d| d.config_dir().to_path_buf())
 }
 
+static PATH_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// `-conf <file>`: makes [`default_path`] (and so `load_default` / `save_default`) use `path`.
+/// Only the first call has an effect; returns false if a path was already set.
+pub fn set_path_override(path: PathBuf) -> bool {
+    PATH_OVERRIDE.set(path).is_ok()
+}
+
 /// Default settings file path.
 pub fn default_path() -> Option<PathBuf> {
-    config_dir().map(|d| d.join(FILE_NAME))
+    PATH_OVERRIDE.get().cloned().or_else(|| config_dir().map(|d| d.join(FILE_NAME)))
 }
 
 impl Settings {

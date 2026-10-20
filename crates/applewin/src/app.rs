@@ -210,13 +210,28 @@ impl App {
             Action::PrevVideoMode => self.emu.send(Command::VideoMode(-1)),
             Action::ToggleScanlines => self.emu.send(Command::ToggleScanlines),
             Action::RockerSwitch => self.emu.send(Command::RockerSwitch),
-            Action::SaveState => self.emu.send(Command::SaveState(default_state_path(&self.settings))),
-            Action::LoadState => self.emu.send(Command::LoadState(default_state_path(&self.settings))),
+            Action::SaveState => self.state_dialog(true),
+            Action::LoadState => self.state_dialog(false),
             Action::TogglePause => self.emu.send(Command::TogglePause),
             Action::ToggleFullSpeed => self.emu.send(Command::ToggleFullSpeed),
             Action::Step => self.emu.send(Command::Step),
             Action::Screenshot => self.screenshot(),
         }
+    }
+
+    /// F11 / F12 (`SaveStateSelectImage`): the file dialog starts at the current state file; the
+    /// chosen file becomes the current one (and is remembered, like AppleWin's registry value).
+    fn state_dialog(&mut self, save: bool) {
+        let was_paused = self.status.paused;
+        self.emu.send(Command::SetPaused(true));
+        let picked = crate::state_io::pick_file(save, &default_state_path(&self.settings));
+        self.emu.send(Command::SetPaused(was_paused));
+        let Some(path) = picked else { return };
+        if let Err(e) = crate::state_io::remember_path(&mut self.settings, &path) {
+            self.ui.message = format!("Could not save settings: {e}");
+        }
+        self.emu.send(Command::SetStatePath(path.clone()));
+        self.emu.send(if save { Command::SaveState(path) } else { Command::LoadState(path) });
     }
 
     fn pick_disk(&mut self, drive: usize) {
@@ -476,8 +491,7 @@ impl App {
 }
 
 fn open_command(p: &std::path::Path) -> Command {
-    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
-    if name.ends_with(".aws.json") || name.ends_with(".aws.yaml") {
+    if crate::state_io::is_state_file(p) {
         Command::LoadState(p.to_path_buf())
     } else {
         Command::InsertDisk { drive: 0, path: p.to_path_buf() }

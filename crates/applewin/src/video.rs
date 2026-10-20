@@ -73,7 +73,13 @@ impl VideoRenderer {
     }
 
     pub fn from_settings(s: &apple2_config::Settings) -> Self {
-        Self::new(render_config(&s.video))
+        let mut cfg = render_config(&s.video);
+        // `-videorom`: a file that cannot be read keeps the built-in character generator.
+        match s.read_video_rom() {
+            Ok(rom) => cfg.user_video_rom = rom.map(std::sync::Arc::new),
+            Err(e) => eprintln!("video ROM: {e}"),
+        }
+        Self::new(cfg)
     }
 
     fn edit(&mut self, f: impl FnOnce(&mut apple2_video::RenderConfig)) {
@@ -103,26 +109,78 @@ pub fn render_config(v: &apple2_config::settings::VideoSettings) -> apple2_video
         rgb_invert_bit7: v.rgb_card_invert_bit7,
         rgb_mac_lc_dlgr: v.mac_lc_card_dlgr,
         video_rom_rocker: false,
+        user_video_rom: None,
+    }
+}
+
+/// The VidHD card seen by the renderer (apple2-video does not depend on apple2-cards).
+struct HdView<'a>(&'a apple2_cards::VidHd);
+
+impl apple2_video::VidHdView for HdView<'_> {
+    fn is_shr(&self) -> bool {
+        self.0.is_shr()
+    }
+    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+        apple2_cards::vidhd::shr_cell(is_640, color_fill, palette, a, prev)
+    }
+}
+
+/// The slot of the VidHD card, if the machine has one.
+fn vidhd_slot(m: &Machine) -> Option<u8> {
+    crate::factory::slot_of::<apple2_cards::VidHd>(m)
+}
+
+impl VideoRenderer {
+    /// Feeds the renderer the cycles of one instruction, with the VidHD view when there is one.
+    fn feed(&mut self, m: &Machine, slot: Option<u8>, cycles: u32) {
+        match slot.and_then(|s| m.card::<apple2_cards::VidHd>(s)) {
+            Some(hd) => {
+                let view = HdView(hd);
+                self.renderer.update(&apple2_video::WithVidHd { source: m, vidhd: &view }, cycles);
+            }
+            None => self.renderer.update(m, cycles),
+        }
     }
 }
 
 impl FrameSource for VideoRenderer {
     fn run_frame(&mut self, m: &mut Machine) -> u64 {
-        self.renderer.run_frame(m)
+        let slot = vidhd_slot(m);
+        if slot.is_none() {
+            return self.renderer.run_frame(m);
+        }
+        self.renderer.resync(m.cycles_in_frame());
+        let target = m.frames() + 1;
+        let mut done = 0u64;
+        while m.frames() < target {
+            let c = m.step();
+            done += u64::from(c);
+            self.feed(m, slot, c);
+        }
+        done
     }
     fn step(&mut self, m: &mut Machine) -> u32 {
         let c = m.step();
-        self.renderer.update(m, c);
+        let slot = vidhd_slot(m);
+        self.feed(m, slot, c);
         c
     }
     fn reset(&mut self) {
         self.renderer.reset();
     }
     fn redraw(&mut self, m: &Machine) {
-        self.renderer.redraw(m);
+        match vidhd_slot(m).and_then(|s| m.card::<apple2_cards::VidHd>(s)) {
+            Some(hd) => {
+                let view = HdView(hd);
+                self.renderer.redraw(&apple2_video::WithVidHd { source: m, vidhd: &view });
+            }
+            None => self.renderer.redraw(m),
+        }
     }
     fn render(&mut self, _m: &Machine, frame: &mut Frame) {
-        frame.resize(SCREEN_W, SCREEN_H);
+        // 560x384, or 640x400 with a VidHD card (Video.cpp:96-103)
+        let (_, _, w, h) = self.renderer.visible_rect();
+        frame.resize(w as u32, h as u32);
         frame.rgba = self.renderer.rgba8();
     }
     fn cycle_video_mode(&mut self, delta: i32) {

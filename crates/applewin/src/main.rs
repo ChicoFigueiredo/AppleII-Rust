@@ -1,5 +1,7 @@
 use applewin_shell::backend::DefaultBackend;
+use applewin_shell::emu::{Command, Emulator};
 use applewin_shell::headless::{self, HeadlessOptions};
+use apple2_config::{CmdLine, Settings};
 
 fn main() {
     let no_audio = std::env::args().any(|a| a == "--no-audio");
@@ -14,24 +16,57 @@ fn main() {
         println!("applewin {}", env!("CARGO_PKG_VERSION"));
         return;
     }
-    let (opts, gui, rest) = match shell_args(std::env::args().skip(1).collect()) {
+    let (opts, gui, rest) = match shell_args(argv) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(2);
         }
     };
-    let cmd = match apple2_config::CmdLine::parse(&rest) {
+    let mut cmd = match CmdLine::parse(&rest) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(2);
         }
     };
-    if let Some(h) = opts {
+    // `-current-dir`: where relative paths (images, printer file, save-states) resolve.
+    if let Some(dir) = &cmd.current_dir {
+        if let Err(e) = std::env::set_current_dir(dir) {
+            eprintln!("-current-dir {}: {e}", dir.display());
+            std::process::exit(2);
+        }
+    }
+    // Relative paths given before `-current-dir` took effect are not a concern: AppleWin has the same order.
+    for w in &cmd.warnings {
+        eprintln!("warning: {w}");
+    }
+    if !cmd.unsupported.is_empty() {
+        eprintln!("warning: unsupported command line options: {}", cmd.unsupported.join(" "));
+    }
+    // `-load-state` is the current save-state file for this session (Snapshot_SetFilename).
+    let apply = |settings: &mut Settings, cmd: &CmdLine| {
+        cmd.apply(settings);
+        if let Some(p) = &cmd.load_state {
+            settings.storage.savestate_filename = Some(p.clone());
+        }
+    };
+
+    if let Some(path) = cmd.screenshot_and_exit.clone() {
+        // Reproducible: no saved settings (unless -conf names a file).
+        let mut settings = conf_settings(&cmd).unwrap_or_default();
+        apply(&mut settings, &cmd);
+        if let Err(e) = screenshot_and_exit(settings, &cmd, &path) {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if let Some(mut h) = opts {
         // headless runs ignore the user's saved settings: reproducible output for CI
-        let mut settings = apple2_config::Settings::default();
-        cmd.apply(&mut settings);
+        let mut settings = conf_settings(&cmd).unwrap_or_default();
+        apply(&mut settings, &cmd);
+        h.load_state = cmd.load_state.clone();
         match headless::run(settings, Box::new(DefaultBackend), &h) {
             Ok(text) => {
                 if h.dump_text {
@@ -47,14 +82,16 @@ fn main() {
         }
         return;
     }
-    let mut settings = apple2_config::Settings::load_default().unwrap_or_default();
-    cmd.apply(&mut settings);
+    let mut settings = conf_settings(&cmd).unwrap_or_else(|| Settings::load_default().unwrap_or_default());
+    apply(&mut settings, &cmd);
+    // `-power-on` starts the machine running; this shell always does (there is no logo screen).
+    cmd.power_on = true;
     let run = applewin_shell::app::run(applewin_shell::app::Options {
         settings,
         factory: Box::new(|| Box::new(DefaultBackend)),
         no_audio,
         load_state: cmd.load_state.clone(),
-        open: cmd.positional.clone(),
+        open: std::mem::take(&mut cmd.positional),
         dump_window: gui.dump_window,
         type_text: gui.type_text,
     });
@@ -62,6 +99,48 @@ fn main() {
         eprintln!("{e}");
         std::process::exit(1);
     }
+}
+
+/// `-conf <file>`: an AppleWin `.ini` / `.reg` is imported once; any other file is our TOML
+/// settings, used (and saved to) instead of the default location.
+fn conf_settings(cmd: &CmdLine) -> Option<Settings> {
+    let path = cmd.conf_file.as_ref()?;
+    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "ini" | "reg" => match std::fs::read(path) {
+            Ok(b) if ext == "ini" => Some(apple2_config::import::import_ini(&String::from_utf8_lossy(&b))),
+            Ok(b) => Some(apple2_config::import::import_reg(&b)),
+            Err(e) => {
+                eprintln!("-conf {}: {e}", path.display());
+                std::process::exit(2);
+            }
+        },
+        _ => {
+            apple2_config::store::set_path_override(path.clone());
+            match Settings::load(path) {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    eprintln!("-conf {}: {e}", path.display());
+                    std::process::exit(2);
+                }
+            }
+        }
+    }
+}
+
+/// `-screenshot-and-exit <file>` (with `-load-state`): builds the machine, loads the state,
+/// repaints the screen once and writes it as PNG (`Video_RedrawAndTakeScreenShot`).
+fn screenshot_and_exit(settings: Settings, cmd: &CmdLine, path: &std::path::Path) -> Result<(), String> {
+    let mut emu = Emulator::new(settings, Box::new(DefaultBackend), 48_000)?;
+    if let Some(p) = &cmd.load_state {
+        emu.apply(Command::LoadState(p.clone()));
+        let msg = emu.status().message;
+        if msg.starts_with("Load state failed") {
+            return Err(msg);
+        }
+    }
+    let frame = emu.redraw_now().clone();
+    applewin_shell::screenshot::save_png(path, &frame)
 }
 
 /// Splits the shell's own flags from the AppleWin command line.
