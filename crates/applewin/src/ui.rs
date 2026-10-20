@@ -3,27 +3,35 @@
 
 use crate::actions::Action;
 use crate::backend::DriveStatus;
-use crate::emu::{EmuStatus, VOLUME_MAX};
+use crate::disk_ui::DiskUi;
+use crate::emu::EmuStatus;
+use crate::settings::SettingsDialog;
 use crate::toolbar::{self, Button, Led};
 use crate::video::Frame;
-use apple2_config::settings::RefreshRate;
 use apple2_config::Settings;
-use apple2_core::Model;
 use egui::{Color32, Context, Rect, TextureHandle, TextureOptions, Vec2};
 
 #[derive(Debug)]
 pub enum UiEvent {
     Action(Action),
-    /// Rebuild the machine with these settings.
+    /// Rebuild the machine (restart) with these settings.
     Apply(Box<Settings>),
+    /// Settings that need no restart: video, input, speed, file names...
+    ApplyLive(Box<Settings>),
     Volume(u32),
     EjectDisk(usize),
+    InsertDisk { drive: usize, path: std::path::PathBuf },
+    SetWriteProtect { drive: usize, on: bool },
+    /// "Paste From Clipboard" button of the Input page.
+    Paste,
 }
 
 pub struct UiState {
     texture: Option<TextureHandle>,
-    pub show_settings: bool,
-    pub draft: Settings,
+    pub settings: SettingsDialog,
+    pub disk: DiskUi,
+    /// The settings in force (for the disk menu's hard disk section).
+    applied: Settings,
     pub show_toolbar: bool,
     pub integer_scale: bool,
     /// Where the Apple screen was drawn last frame (for mouse-as-joystick mapping).
@@ -32,24 +40,13 @@ pub struct UiState {
     pub drive_menu: Option<usize>,
 }
 
-const MODELS: [(Model, &str); 9] = [
-    (Model::Apple2, "Apple ]["),
-    (Model::Apple2Plus, "Apple ][+"),
-    (Model::Apple2JPlus, "Apple ][ J-Plus"),
-    (Model::Apple2e, "Apple //e"),
-    (Model::Apple2eEnhanced, "Apple //e Enhanced"),
-    (Model::Pravets82, "Pravets 82"),
-    (Model::Pravets8M, "Pravets 8M"),
-    (Model::Base64A, "Base64A"),
-    (Model::Tk3000e, "TK3000 //e"),
-];
-
 impl UiState {
     pub fn new(settings: &Settings) -> Self {
         UiState {
             texture: None,
-            show_settings: false,
-            draft: settings.clone(),
+            settings: SettingsDialog::new(settings),
+            disk: DiskUi::default(),
+            applied: settings.clone(),
             show_toolbar: true,
             integer_scale: false,
             screen_rect: None,
@@ -105,24 +102,12 @@ impl UiState {
                 self.screen_rect = Some(rect);
             }
         });
-        if let Some(d) = self.drive_menu {
-            let mut open = true;
-            egui::Window::new(format!("Drive {}", d + 1)).open(&mut open).collapsible(false).show(ctx, |ui| {
-                if ui.button("Insert disk image...").clicked() {
-                    ev.push(UiEvent::Action(Action::DriveSelect(d as u8)));
-                    self.drive_menu = None;
-                }
-                if ui.button("Eject").clicked() {
-                    ev.push(UiEvent::EjectDisk(d));
-                    self.drive_menu = None;
-                }
-            });
-            if !open {
-                self.drive_menu = None;
+        self.disk.drive_menu(ctx, &mut self.drive_menu, &status.drives, &self.applied, &mut ev);
+        self.settings.show(ctx, &mut self.integer_scale, &mut ev);
+        for e in &ev {
+            if let UiEvent::Apply(s) | UiEvent::ApplyLive(s) = e {
+                self.applied = (**s).clone();
             }
-        }
-        if self.show_settings {
-            self.settings_window(ctx, &mut ev);
         }
         ev
     }
@@ -158,66 +143,9 @@ impl UiState {
         });
     }
 
-    fn settings_window(&mut self, ctx: &Context, ev: &mut Vec<UiEvent>) {
-        let mut open = true;
-        egui::Window::new("Configuration").open(&mut open).collapsible(false).show(ctx, |ui| {
-            egui::Grid::new("settings").num_columns(2).show(ui, |ui| {
-                ui.label("Machine");
-                let current = MODELS.iter().find(|(m, _)| *m == self.draft.machine.model).map_or("Other", |(_, n)| *n);
-                egui::ComboBox::from_id_salt("model").selected_text(current).show_ui(ui, |ui| {
-                    for (m, n) in MODELS {
-                        ui.selectable_value(&mut self.draft.machine.model, m, n);
-                    }
-                });
-                ui.end_row();
-
-                ui.label("Video standard");
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.draft.machine.refresh_rate, RefreshRate::Hz60, "NTSC 60 Hz");
-                    ui.selectable_value(&mut self.draft.machine.refresh_rate, RefreshRate::Hz50, "PAL 50 Hz");
-                });
-                ui.end_row();
-
-                ui.label("Speed");
-                let mut speed = self.draft.machine.speed.min(40);
-                ui.add(egui::Slider::new(&mut speed, 1..=40).custom_formatter(|v, _| if v >= 40.0 { "max".into() } else { format!("{:.1}x", v / 10.0) }));
-                self.draft.machine.speed = speed;
-                self.draft.machine.clock_multiplier = None;
-                ui.end_row();
-
-                ui.label("Volume");
-                let mut vol = VOLUME_MAX - self.draft.sound.master_volume.min(VOLUME_MAX);
-                if ui.add(egui::Slider::new(&mut vol, 0..=VOLUME_MAX)).changed() {
-                    self.draft.sound.master_volume = VOLUME_MAX - vol;
-                    ev.push(UiEvent::Volume(self.draft.sound.master_volume));
-                }
-                ui.end_row();
-
-                ui.label("Window scale");
-                ui.add(egui::Slider::new(&mut self.draft.video.window_scale, 1..=4));
-                ui.end_row();
-
-                ui.label("Integer scaling");
-                ui.checkbox(&mut self.integer_scale, "");
-                ui.end_row();
-
-                ui.label("Disable sound");
-                ui.checkbox(&mut self.draft.sound.disable_sound, "");
-                ui.end_row();
-            });
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button("Apply (reboots)").clicked() {
-                    ev.push(UiEvent::Apply(Box::new(self.draft.clone())));
-                }
-                if ui.button("Close").clicked() {
-                    self.show_settings = false;
-                }
-            });
-            ui.label("Cards, disks, joysticks and the remaining options arrive with apple2-config's full dialog.");
-        });
-        if !open {
-            self.show_settings = false;
-        }
+    /// F8: opens the Settings dialog on the applied settings, or closes it.
+    pub fn toggle_settings(&mut self, settings: &Settings) {
+        self.applied = settings.clone();
+        self.settings.toggle(settings);
     }
 }

@@ -203,8 +203,7 @@ impl App {
             }
             Action::ToggleDebugger => self.emu.send(Command::ToggleDebugger),
             Action::Settings => {
-                self.ui.draft = self.settings.clone();
-                self.ui.show_settings = !self.ui.show_settings;
+                self.ui.toggle_settings(&self.settings);
             }
             Action::NextVideoMode => self.emu.send(Command::VideoMode(1)),
             Action::PrevVideoMode => self.emu.send(Command::VideoMode(-1)),
@@ -233,6 +232,7 @@ impl App {
         let picked = dialog.pick_file();
         self.emu.send(Command::SetPaused(was_paused));
         if let Some(path) = picked {
+            self.ui.disk.note_inserted(&path);
             self.emu.send(Command::InsertDisk { drive, path });
         }
     }
@@ -421,8 +421,21 @@ impl App {
                     }
                     self.emu.send(Command::ApplySettings(s));
                 }
+                UiEvent::ApplyLive(s) => {
+                    self.settings = (*s).clone();
+                    if let Err(e) = self.settings.save_default() {
+                        self.ui.message = format!("Could not save settings: {e}");
+                    }
+                    self.emu.send(Command::UpdateSettings(s));
+                }
                 UiEvent::Volume(v) => self.emu.send(Command::SetVolume(v)),
                 UiEvent::EjectDisk(d) => self.emu.send(Command::EjectDisk { drive: d }),
+                UiEvent::InsertDisk { drive, path } => {
+                    self.ui.disk.note_inserted(&path);
+                    self.emu.send(Command::InsertDisk { drive, path });
+                }
+                UiEvent::SetWriteProtect { drive, on } => self.emu.send(Command::SetWriteProtect { drive, on }),
+                UiEvent::Paste => self.paste(),
             }
         }
     }

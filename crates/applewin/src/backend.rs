@@ -34,6 +34,8 @@ pub trait DiskSink {
     fn insert(&mut self, machine: &mut Machine, drive: usize, path: &Path) -> Result<(), String>;
     fn eject(&mut self, machine: &mut Machine, drive: usize);
     fn swap(&mut self, machine: &mut Machine);
+    /// Drive menu "Write protected" check box.
+    fn set_write_protect(&mut self, _machine: &mut Machine, _drive: usize, _on: bool) {}
     fn status(&self, machine: &Machine) -> [DriveStatus; 2];
     /// AppleWin "enhanced disk speed": run unthrottled while a drive motor spins.
     fn wants_full_speed(&self, _machine: &Machine) -> bool {
@@ -117,6 +119,11 @@ impl DiskSink for Disk2Sink {
     fn swap(&mut self, m: &mut Machine) {
         if let Some(c) = m.card_mut::<Disk2Card>(self.slot) {
             c.swap_disks();
+        }
+    }
+    fn set_write_protect(&mut self, m: &mut Machine, drive: usize, on: bool) {
+        if let Some(c) = m.card_mut::<Disk2Card>(self.slot) {
+            c.set_write_protect(drive, on);
         }
     }
     fn status(&self, m: &Machine) -> [DriveStatus; 2] {
