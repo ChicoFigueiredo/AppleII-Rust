@@ -4,6 +4,7 @@
 use apple2_core::{Card, Machine, MachineConfig, Model};
 use apple2_hostio::serial::{Parity, StopBits};
 use apple2_hostio::ssc::{DipSwitches, FirmwareMode, SscSnapshot, SuperSerialCard};
+use apple2_hostio::printer::{MemorySink, ParallelPrinterCard, PrinterEncoding, PrinterOptions, PrinterSnapshot};
 use apple2_hostio::LoopbackSerial;
 use apple2_savestate::cards::{self, LoadCtx};
 use apple2_savestate::yaml::{self, Map, Writer};
@@ -11,7 +12,10 @@ use apple2_savestate::{default_card, load_aws_yaml, save_aws_yaml, ImageRequest,
 use apple2_storage::image::DiskImage;
 
 /// Builds the host-bound cards with in-memory back ends.
-struct Host;
+#[derive(Default)]
+struct Host {
+    sink: MemorySink,
+}
 
 impl LoadHost for Host {
     fn open_image(&mut self, _req: &ImageRequest) -> Result<DiskImage, String> {
@@ -21,6 +25,7 @@ impl LoadHost for Host {
     fn make_card(&mut self, name: &str, slot: u8, model: Model) -> Option<Box<dyn Card>> {
         match name {
             "Super Serial Card" => Some(Box::new(SuperSerialCard::new(Box::new(LoopbackSerial::new().0)))),
+            "Generic Printer" => Some(Box::new(ParallelPrinterCard::new(Box::new(self.sink.clone()), PrinterOptions::default()))),
             _ => default_card(name, slot, model),
         }
     }
@@ -28,15 +33,18 @@ impl LoadHost for Host {
 
 /// Loads the `<slot>:` entry in `text` through the mapping named `aw_name`.
 fn load_entry(text: &str, aw_name: &str) -> Box<dyn Card> {
+    load_entry_with(&mut Host::default(), text, aw_name)
+}
+
+fn load_entry_with(host: &mut Host, text: &str, aw_name: &str) -> Box<dyn Card> {
     let top = yaml::parse(text).unwrap();
     let (key, node) = &top[0];
     let yaml::Node::Map(entry) = node else { panic!("not a map") };
     let m = Map { name: key, entries: entry };
     let version = m.u32("Version").unwrap();
     let state = m.need_sub("State").unwrap();
-    let mut host = Host;
     let mut warnings = Vec::new();
-    let mut ctx = LoadCtx { host: &mut host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
+    let mut ctx = LoadCtx { host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
     let map = cards::by_aw_name(aw_name).unwrap();
     let card = (map.load)(&mut ctx, key.parse().unwrap(), version, state).unwrap().unwrap();
     assert!(warnings.is_empty(), "{warnings:?}");
@@ -61,7 +69,7 @@ fn machine_with(slot: u8, card: Box<dyn Card>) -> Machine {
 fn roundtrip(a: &Machine) -> Machine {
     let saved = save_aws_yaml(a, &SaveOptions::default()).unwrap();
     assert!(saved.warnings.is_empty(), "{:?}", saved.warnings);
-    let loaded = load_aws_yaml(&saved.text, &mut Host).unwrap();
+    let loaded = load_aws_yaml(&saved.text, &mut Host::default()).unwrap();
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert_eq!(a.save_state(), loaded.machine.save_state());
     loaded.machine
@@ -69,7 +77,7 @@ fn roundtrip(a: &Machine) -> Machine {
 
 fn no_ext(a: &Machine) -> Machine {
     let saved = save_aws_yaml(a, &SaveOptions { extension: false, ..Default::default() }).unwrap();
-    load_aws_yaml(&saved.text, &mut Host).unwrap().machine
+    load_aws_yaml(&saved.text, &mut Host::default()).unwrap().machine
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -227,4 +235,93 @@ fn ssc_full_machine_roundtrip() {
     assert_eq!(ssc_snapshot(b.board().slots.card(2).unwrap()), snap);
     let c = no_ext(&a);
     assert_eq!(ssc_snapshot(c.board().slots.card(2).unwrap()), snap);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Generic Printer
+
+const PRINTER_OPEN: &str = "\
+1:
+  Card: Generic Printer
+  Version: 1
+  State:
+    Inactivity: 1234
+    Printer Idle Limit: 7
+    Print Filename: C:\\Temp\\Printer.txt
+    Is File Open: true
+    Dump To Printer: true
+    Convert Encoding: true
+    Filter Unprintable: true
+    Printer Append: false
+    Enable Dump To Real Printer: true
+";
+
+fn printer_snapshot(c: &dyn Card) -> PrinterSnapshot {
+    c.as_any().unwrap().downcast_ref::<ParallelPrinterCard>().unwrap().snapshot()
+}
+
+#[test]
+fn printer_golden_resumes_the_open_job_in_append_mode() {
+    let mut host = Host::default();
+    let c = load_entry_with(&mut host, PRINTER_OPEN, "Generic Printer");
+    let expected = PrinterSnapshot {
+        inactivity: 0, // CheckPrint restarts the counter after the load
+        options: PrinterOptions {
+            idle_limit: 7,
+            dump_to_printer: true,
+            convert_encoding: Some(PrinterEncoding::Pravets82),
+            filter_unprintable: true,
+            append: true, // forced when a job is resumed
+        },
+        is_open: true,
+    };
+    assert_eq!(printer_snapshot(&*c), expected);
+    assert!(host.sink.is_open());
+}
+
+#[test]
+fn printer_golden_closed_job_keeps_its_fields() {
+    let t = PRINTER_OPEN.replace("Is File Open: true", "Is File Open: false").replace("Printer Append: false", "Printer Append: true");
+    let mut host = Host::default();
+    let c = load_entry_with(&mut host, &t, "Generic Printer");
+    let s = printer_snapshot(&*c);
+    assert_eq!((s.inactivity, s.is_open, s.options.append, s.options.idle_limit), (1234, false, true, 7));
+    assert!(!host.sink.is_open());
+}
+
+#[test]
+fn printer_write_matches_the_cpp_writer() {
+    let c = load_entry(&PRINTER_OPEN.replace("Is File Open: true", "Is File Open: false"), "Generic Printer");
+    let expected = "\
+1:
+  Card: Generic Printer
+  Version: 1
+  State:
+    Inactivity: 1234
+    Printer Idle Limit: 7
+    Print Filename: Printer.txt
+    Is File Open: false
+    Dump To Printer: true
+    Convert Encoding: true
+    Filter Unprintable: true
+    Printer Append: false
+    Enable Dump To Real Printer: false
+";
+    assert_eq!(save_entry(1, &*c), expected);
+}
+
+#[test]
+fn printer_full_machine_roundtrip() {
+    let mut a = machine_with(1, Box::new(ParallelPrinterCard::new(Box::new(MemorySink::new()), PrinterOptions::default())));
+    a.with_card(1, |c, ctx| c.io_write(0, b'X', ctx));
+    a.run_frame();
+    let snap = printer_snapshot(a.board().slots.card(1).unwrap());
+    assert!(snap.is_open && snap.inactivity > 0);
+    // The load resumes the job in append mode, then `insert_card`'s power-on reset closes it: the
+    // next print reopens it (appending), so only the flag differs.
+    let want = PrinterSnapshot { inactivity: 0, options: PrinterOptions { append: true, ..snap.options }, is_open: false };
+    let b = roundtrip(&a);
+    assert_eq!(printer_snapshot(b.board().slots.card(1).unwrap()), want);
+    let c = no_ext(&a);
+    assert_eq!(printer_snapshot(c.board().slots.card(1).unwrap()), want);
 }

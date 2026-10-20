@@ -12,6 +12,7 @@ use apple2_core::{Card, Model};
 
 mod disk2;
 mod hdd;
+mod printer;
 mod simple;
 mod ssc;
 
@@ -37,7 +38,7 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, ssc::MAP];
+pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, ssc::MAP, printer::MAP];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)
