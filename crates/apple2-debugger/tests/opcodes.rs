@@ -68,7 +68,7 @@ fn memory_access_flags_match_the_cpu_for_documented_opcodes() {
         cpu.pc = 0x1000;
         cpu.step(&mut bus);
         let read = bus.reads.iter().skip(3).any(|a| *a == 0x2000);
-        let wrote = bus.writes.iter().any(|a| *a == 0x2000);
+        let wrote = bus.writes.contains(&0x2000);
         assert_eq!(wrote, info.mem & MEM_W != 0, "{} ${op:02X} write", info.mnemonic);
         // AppleWin lists several read-modify-write opcodes (TSB, TRB, LSR abs, ...) as write-only in the
         // 65C02 table; so a table flag must be backed by the CPU, not the other way round.
