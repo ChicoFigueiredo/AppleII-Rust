@@ -161,3 +161,5 @@ Veja o [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Licença e créditos
 
 GPL-2.0-or-later, como o AppleWin. O AppleII-Rust deve tudo ao trabalho da equipe do AppleWin: Tom Charlesworth, Michael Pohoreski, Nick Westgate, Linards Ticmanis, Glenn Jones, Stannev, Ken Wessen, Sheldon Simms, Oliver Schmidt e todos os colaboradores listados em [docs/manual/13-creditos-e-licenca.md](docs/manual/13-creditos-e-licenca.md). Agradecimentos também às equipes do VICE e do FUSE, de cujos módulos o AppleWin se vale, e a Klaus Dormann pela suíte de testes de CPU.
+
+**Marcas.** Apple, Apple II, Apple //e e o logotipo da maçã colorida (usado no botão Ligar, como no AppleWin) são marcas da Apple Inc. Pravets, TK3000 e Base64A pertencem a seus respectivos donos. Este projeto não tem vínculo com nenhum deles. Os ícones em `assets/ui/` redesenham os bitmaps do AppleWin e seguem a mesma licença GPL.
