@@ -8,6 +8,7 @@ pub mod backend;
 pub mod debug_view;
 pub mod emu;
 pub mod gfx;
+pub mod help;
 pub mod headless;
 pub mod host;
 pub mod joy;
