@@ -1,0 +1,17 @@
+[package]
+name = "apple2-savestate"
+description = "AppleWin .aws.yaml save-state reader and writer for AppleII-Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }
+apple2-cpu = { path = "../apple2-cpu" }
+apple2-storage = { path = "../apple2-storage" }
+apple2-cards = { path = "../apple2-cards" }
+apple2-audio = { path = "../apple2-audio" }
+apple2-hostio = { path = "../apple2-hostio" }
+serde_json = "1"
+flate2 = "1"

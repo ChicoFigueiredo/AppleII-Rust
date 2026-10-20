@@ -15,6 +15,26 @@ use serde::{Deserialize, Serialize};
 /// Banks of a full Saturn 128K (`kMaxSaturnBanks`).
 const SATURN_BANKS: u8 = 8;
 
+/// Public view of a card's kind (see [`LanguageCards::infos`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LcKind {
+    Builtin,
+    Card16K,
+    Saturn { banks: u8, active: u8 },
+}
+
+/// Public view of one Language Card / Saturn (see [`LanguageCards::infos`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LcInfo {
+    pub slot: u8,
+    pub kind: LcKind,
+    /// `BANK2|HIGHRAM|WRITERAM` bits.
+    pub memmode: u32,
+    pub last_ram_write: bool,
+    /// [`Memory`] LC region this card currently exposes (the active Saturn bank's).
+    pub region: usize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Kind {
     /// //e built-in card (`CT_LanguageCardIIe`).
@@ -134,6 +154,45 @@ impl LanguageCards {
             }
         }
         self.attach(mem);
+    }
+
+    /// Per-card state in ascending slot order, for save-states.
+    pub fn infos(&self) -> Vec<LcInfo> {
+        self.cards
+            .iter()
+            .map(|c| LcInfo {
+                slot: c.slot,
+                kind: match c.kind {
+                    Kind::Builtin => LcKind::Builtin,
+                    Kind::Card16K => LcKind::Card16K,
+                    Kind::Saturn { banks, active } => LcKind::Saturn { banks, active },
+                },
+                memmode: c.memmode,
+                last_ram_write: c.last_ram_write,
+                region: c.region(),
+            })
+            .collect()
+    }
+
+    /// Sets the flags, "last access was odd" latch and (Saturn) active bank of the card in
+    /// `slot`; false if there is none. The memory is not touched.
+    pub fn set_info(&mut self, slot: u8, memmode: u32, last_ram_write: bool, active_bank: Option<u8>) -> bool {
+        let Some(c) = self.cards.iter_mut().find(|c| c.slot == slot) else { return false };
+        c.memmode = memmode & mf::LANGCARD_MASK;
+        c.last_ram_write = last_ram_write;
+        if let (Kind::Saturn { banks, active }, Some(a)) = (&mut c.kind, active_bank) {
+            *active = a.min(*banks - 1);
+        }
+        true
+    }
+
+    /// Slot of the card that last set the main LC RAM region (`m_lastSlotToSetMainMemLC`).
+    pub fn last_slot(&self) -> u8 {
+        self.last_slot
+    }
+
+    pub fn set_last_slot(&mut self, slot: u8) {
+        self.last_slot = slot;
     }
 
     /// True if a Language Card or Saturn lives in `slot`.

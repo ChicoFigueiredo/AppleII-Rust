@@ -1265,6 +1265,172 @@ impl Floppy {
     }
 }
 
+/// One drive in an AppleWin save-state (`SaveSnapshotDriveUnit`/`SaveSnapshotFloppy`,
+/// Disk.cpp:2316-2352). The disk image itself is not part of it: the file names say which to
+/// re-open before [`Disk2Card::apply_snapshot`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DriveSnapshot {
+    pub connected: bool,
+    pub phase: i32,
+    pub phase_precise: f32,
+    pub head_window: u8,
+    pub last_stepper_cycle: u64,
+    pub motor_on_cycle: u64,
+    pub spinning: u32,
+    pub write_light: u32,
+    /// `m_fullname` ("Filename"): empty when the drive is empty.
+    pub filename: String,
+    /// `ImageGetPathname` ("Absolute Path").
+    pub pathname: String,
+    pub write_protected: bool,
+    pub byte: u32,
+    pub nibbles: u32,
+    pub bit_offset: u32,
+    pub bit_count: u32,
+    pub extra_cycles: f64,
+    pub track_data: bool,
+    pub track_dirty: bool,
+    /// The track buffer (`ImageGetMaxNibblesPerTrack` bytes); `None` with no disk.
+    pub track: Option<Vec<u8>>,
+}
+
+/// The Disk II card state AppleWin saves (`Disk2InterfaceCard::SaveSnapshot`, Disk.cpp:2354).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Disk2Snapshot {
+    pub current_drive: u8,
+    pub magnet_states: u8,
+    pub enhance_disk: bool,
+    pub floppy_latch: u8,
+    pub motor_on: bool,
+    pub last_cycle: u64,
+    pub last_read_latch_cycle: u64,
+    pub shift_reg: u8,
+    pub latch_delay: i32,
+    /// `SEQFUNC`: bit 0 write mode, bit 1 load mode.
+    pub seq_func: u8,
+    pub deferred_stepper_event: bool,
+    pub deferred_stepper_address: u8,
+    pub deferred_stepper_cycles: u64,
+    pub drives: [DriveSnapshot; NUM_DRIVES],
+}
+
+impl Disk2Card {
+    /// State in AppleWin's save-state terms (see [`Disk2Snapshot`]).
+    pub fn snapshot(&self) -> Disk2Snapshot {
+        let drive = |d: &Drive| {
+            let f = &d.disk;
+            let max = f.image.as_ref().map(|i| i.max_nibbles_per_track());
+            DriveSnapshot {
+                connected: d.connected,
+                phase: d.phase,
+                phase_precise: d.phase_precise,
+                head_window: d.head_window,
+                last_stepper_cycle: d.last_stepper_cycle,
+                motor_on_cycle: d.motor_on_cycle,
+                spinning: d.spinning,
+                write_light: d.write_light,
+                filename: f.full_name.clone(),
+                pathname: f.image.as_ref().map(|i| i.pathname().to_string()).unwrap_or_default(),
+                write_protected: f.write_protected,
+                byte: f.byte as u32,
+                nibbles: f.nibbles as u32,
+                bit_offset: f.bit_offset,
+                bit_count: f.bit_count,
+                extra_cycles: f.extra_cycles,
+                track_data: f.track_data,
+                track_dirty: f.track_dirty,
+                track: max.map(|m| {
+                    let mut t = f.track.clone();
+                    t.resize(m, 0);
+                    t
+                }),
+            }
+        };
+        Disk2Snapshot {
+            current_drive: self.curr_drive as u8,
+            magnet_states: self.magnet_states,
+            enhance_disk: self.enhance_disk,
+            floppy_latch: self.floppy_latch,
+            motor_on: self.motor_on,
+            last_cycle: self.disk_last_cycle,
+            last_read_latch_cycle: self.disk_last_read_latch_cycle,
+            shift_reg: self.shift_reg,
+            latch_delay: self.latch_delay,
+            seq_func: self.seq_func,
+            deferred_stepper_event: self.deferred_stepper_event,
+            deferred_stepper_address: self.deferred_stepper_address,
+            deferred_stepper_cycles: self.deferred_stepper_cycles,
+            drives: [drive(&self.drives[0]), drive(&self.drives[1])],
+        }
+    }
+
+    /// Re-arms the deferred-stepper synchronous event after a state was loaded from AppleWin's
+    /// units, which do not carry the scheduler (`InsertSyncEvent`, Disk.cpp:2693). `ctx` is the
+    /// card's context at the loaded cycle count.
+    pub fn rearm_deferred_stepper(&self, ctx: &mut CardCtx) {
+        if self.deferred_stepper_event {
+            let remaining = self.deferred_stepper_cycles.saturating_sub(ctx.cycles).clamp(1, i32::MAX as u64);
+            ctx.schedule(STEPPER_EVENT, remaining as i32);
+        }
+    }
+
+    /// Applies a [`Disk2Snapshot`] (`LoadSnapshot`, Disk.cpp:2587). Insert the images first with
+    /// [`Disk2Card::insert_disk`]; a drive whose image is missing keeps its mechanics but loses
+    /// the track data (AppleWin's `bImageError` path). The deferred-stepper synchronous event is
+    /// not re-armed here: load the machine state after this, or call `Machine::schedule`.
+    pub fn apply_snapshot(&mut self, s: &Disk2Snapshot) {
+        self.curr_drive = (s.current_drive as usize).min(1);
+        self.magnet_states = s.magnet_states & 0xF;
+        self.enhance_disk = s.enhance_disk;
+        self.floppy_latch = s.floppy_latch;
+        self.motor_on = s.motor_on;
+        self.disk_last_cycle = s.last_cycle;
+        self.disk_last_read_latch_cycle = s.last_read_latch_cycle;
+        self.shift_reg = s.shift_reg;
+        self.latch_delay = s.latch_delay;
+        self.seq_func = s.seq_func & 3;
+        self.deferred_stepper_event = s.deferred_stepper_event;
+        self.deferred_stepper_address = s.deferred_stepper_address;
+        self.deferred_stepper_cycles = s.deferred_stepper_cycles;
+        for (d, ds) in self.drives.iter_mut().zip(&s.drives) {
+            d.connected = ds.connected;
+            d.phase = ds.phase;
+            d.phase_precise = ds.phase_precise;
+            d.head_window = ds.head_window & 0xF;
+            d.last_stepper_cycle = ds.last_stepper_cycle;
+            d.motor_on_cycle = ds.motor_on_cycle;
+            d.spinning = ds.spinning;
+            d.write_light = ds.write_light;
+            let f = &mut d.disk;
+            f.byte = ds.byte as usize;
+            f.nibbles = ds.nibbles as usize;
+            f.bit_offset = ds.bit_offset;
+            f.bit_count = ds.bit_count;
+            f.extra_cycles = ds.extra_cycles;
+            let ok = match (&ds.track, f.image.is_some()) {
+                (Some(t), true) => {
+                    if f.track.len() < t.len() {
+                        f.track.resize(t.len(), 0);
+                    }
+                    f.track[..t.len()].copy_from_slice(t);
+                    f.bit_count == 0 || f.bit_offset < f.bit_count
+                }
+                _ => false,
+            };
+            if ok {
+                f.track_data = ds.track_data;
+                f.track_dirty = ds.track_dirty;
+                f.update_bit_stream_offsets_if_woz();
+            } else {
+                f.track_data = false;
+                f.track_dirty = false;
+                f.nibbles = 0;
+            }
+        }
+        self.events.clear();
+    }
+}
+
 impl Card for Disk2Card {
     fn name(&self) -> &'static str {
         "Disk II"

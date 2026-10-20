@@ -270,6 +270,17 @@ impl Keyboard {
         true
     }
 
+    /// AppleWin's `keycode` (bit 7 clear) and `keywaiting` (the strobe), for save-states.
+    pub fn latch(&self) -> (u8, bool) {
+        (self.keycode, self.strobe)
+    }
+
+    /// Restores [`Keyboard::latch`].
+    pub fn set_latch(&mut self, keycode: u8, strobe: bool) {
+        self.keycode = keycode & 0x7F;
+        self.strobe = strobe;
+    }
+
     /// `KeybReadData` ($C000-$C00F read).
     pub fn read_data(&self) -> u8 {
         match self.paste.front() {

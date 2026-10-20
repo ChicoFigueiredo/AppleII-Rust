@@ -73,6 +73,20 @@ name = "apple2-roms"
 version = "0.1.0"
 
 [[package]]
+name = "apple2-savestate"
+version = "0.1.0"
+dependencies = [
+ "apple2-audio",
+ "apple2-cards",
+ "apple2-core",
+ "apple2-cpu",
+ "apple2-hostio",
+ "apple2-storage",
+ "flate2",
+ "serde_json",
+]
+
+[[package]]
 name = "apple2-storage"
 version = "0.1.0"
 dependencies = [
