@@ -114,6 +114,78 @@ _Avoid_: joystick (quando se refere à porta inteira)
 Uma das quatro saídas digitais AN0–AN3 da Porta de jogos, ligadas e desligadas por Soft switches.
 _Avoid_: annunciator, saída TTL
 
+**Dongle**:
+Um dispositivo de proteção contra cópia ligado à Porta de jogos. Ele altera botões e paddles conforme os Anunciadores.
+_Avoid_: chave de hardware
+
+**Quadro de áudio**:
+Uma amostra estéreo na taxa de saída do hospedeiro.
+_Avoid_: frame de áudio, sample frame (para não confundir com Quadro)
+
+## Vídeo
+
+**Tipo de vídeo**:
+A forma de exibir o sinal do Apple II: monitor monocromático, cor idealizada, carta RGB, monitor composto NTSC ou TV NTSC.
+_Avoid_: modo de vídeo (que é TEXT, HIRES etc.), filtro
+
+**Modo de vídeo**:
+O que a Máquina está mostrando: texto 40/80, LORES, DLORES, HIRES, DHIRES ou misto, conforme os Soft switches.
+_Avoid_: tipo de vídeo
+
+**Artefato de cor**:
+A cor que surge da posição dos pixels no sinal NTSC, não de um valor de cor guardado na memória.
+_Avoid_: cor falsa
+
+**Carta RGB**:
+Uma carta de vídeo (Video-7, Feline, Le Chat Mauve) que gera cor digital e oferece modos DHIRES próprios (140, 160, 560 e misto).
+_Avoid_: modo RGB
+
+**Super Hi-Res**:
+Os modos gráficos de 320/640 pontos do IIgs, exibidos no Apple //e pela carta VidHD.
+_Avoid_: SHR (só em código)
+
+## Disco
+
+**Nibble**:
+Um byte como ele é gravado na superfície do disquete, com o bit 7 sempre ligado.
+_Avoid_: byte de disco
+
+**Trilha**:
+Um dos anéis concêntricos do disquete (35 no Disk II), lidos por um cabeçote que se move em Quartos de trilha.
+_Avoid_: track, cilindro
+
+**Velocidade de disco aprimorada**:
+Modo em que a Máquina corre sem limite de velocidade enquanto o motor do drive gira, como a opção "Enhanced disk access speed" do AppleWin.
+_Avoid_: turbo, fast disk
+
+**Imagem de disco**:
+Um arquivo com o conteúdo de um disquete ou disco rígido (DSK, PO, NIB, WOZ, 2MG, HDV), opcionalmente compactado em zip ou gz.
+_Avoid_: ROM de disco, dump
+
+**SmartPort**:
+O protocolo de blocos que a controladora de disco rígido expõe para o ProDOS.
+_Avoid_: HDD protocol
+
+## Cartas especiais
+
+**CPU alternativa**:
+O processador de uma Carta (o Z80 da SoftCard) que assume o barramento no lugar do 6502 enquanto está ativo.
+_Avoid_: coprocessador
+
+**DNS virtual**:
+A resolução de nomes feita pelo emulador para a Uthernet II, sem passar pela pilha de rede emulada.
+_Avoid_: DNS interno
+
+## Depurador
+
+**Console do depurador**:
+A área de comandos do depurador: histórico rolável mais a linha de entrada.
+_Avoid_: prompt, terminal
+
+**Breakpoint**:
+Uma condição (PC, registrador, acesso à memória, I/O, opcode, posição do vídeo) que pausa a Máquina quando é satisfeita.
+_Avoid_: ponto de parada, trap
+
 **Open Apple / Closed Apple**:
 As teclas modificadoras do IIe, lidas como os botões 0 e 1 do joystick.
 _Avoid_: Command, Option

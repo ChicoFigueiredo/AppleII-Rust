@@ -1,0 +1,11 @@
+[package]
+name = "apple2-debugger"
+description = "UI-less AppleWin debugger core: disassembler, assembler, symbols, breakpoints, command console"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
+apple2-core = { path = "../apple2-core" }

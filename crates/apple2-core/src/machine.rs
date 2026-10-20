@@ -8,6 +8,7 @@ use crate::keyboard::{Keyboard, NavKey};
 use crate::speaker::Speaker;
 use crate::language_card::LanguageCards;
 use crate::memory::Memory;
+use crate::observer::{AccessKind, AccessObserver};
 use crate::video_mode::VideoMode;
 use crate::video_scanner::VideoScanner;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
@@ -69,6 +70,7 @@ pub struct Board {
     snoop_mask: u8,
     rom_tap: Option<Box<dyn RomTap>>,
     game_io: Option<Box<dyn GameIoDevice>>,
+    observer: Option<Box<dyn AccessObserver>>,
 }
 
 impl Board {
@@ -187,18 +189,25 @@ impl Board {
 impl Bus for Board {
     #[inline]
     fn read(&mut self, addr: u16) -> u8 {
-        match addr >> 8 {
+        let v = match addr >> 8 {
             0xC0 => self.io_read(addr),
             0xC1..=0xCF => self.cx_access(addr, None),
             _ => match self.f8_tap(addr, None).or_else(|| self.memory.read(addr)) {
                 Some(v) => v,
                 None => self.floating_bus(),
             },
+        };
+        if let Some(o) = self.observer.as_mut() {
+            o.access(addr, v, AccessKind::Read);
         }
+        v
     }
 
     #[inline]
     fn write(&mut self, addr: u16, value: u8) {
+        if let Some(o) = self.observer.as_mut() {
+            o.access(addr, value, AccessKind::Write);
+        }
         match addr >> 8 {
             0xC0 => self.io_write(addr, value),
             0xC1..=0xCF => {
@@ -286,6 +295,7 @@ impl Machine {
             snoop_mask: 0,
             rom_tap: None,
             game_io: None,
+            observer: None,
         };
         let mut m = Machine {
             cpu: Cpu::new(config.model.cpu_variant()),
@@ -342,6 +352,11 @@ impl Machine {
         &mut self.board
     }
 
+    /// Installs (or removes, with `None`) the bus-access observer; returns the previous one.
+    pub fn set_access_observer(&mut self, o: Option<Box<dyn AccessObserver>>) -> Option<Box<dyn AccessObserver>> {
+        std::mem::replace(&mut self.board.observer, o)
+    }
+
     /// Absolute cycle counter since power-on.
     pub fn cycles(&self) -> u64 {
         self.board.cycles
@@ -349,6 +364,17 @@ impl Machine {
 
     pub fn cycles_in_frame(&self) -> u32 {
         self.board.cycles_in_frame
+    }
+
+    /// `(vertical line, horizontal cycle)` of the video scanner between instructions
+    /// (`NTSC_GetVideoVertHorzForDebugger`).
+    pub fn video_position(&self) -> (u32, u32) {
+        self.board.scanner.position(self.board.cycles_in_frame)
+    }
+
+    /// Scan lines per frame of the current video standard (262 NTSC, 312 PAL).
+    pub fn video_lines(&self) -> u32 {
+        self.board.cycles_per_frame / 65
     }
 
     /// Completed frames since power-on.
