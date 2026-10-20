@@ -970,7 +970,7 @@ impl Disk2Card {
         for _ in 0..bit_cells {
             let drive = &mut self.drives[curr];
             let bit = drive.disk.bit() as u8;
-            drive.head_window = (drive.head_window << 1) | bit;
+            drive.head_window = ((drive.head_window << 1) | bit) & 0xF; // only 4 cells matter; AppleWin saves 4 bits
             let hw = drive.head_window;
             // Within four zero cells the MC3470 returns random "fake" bits (~30% ones, WOZ-2.0).
             let output = if hw & 0xF != 0 { (hw >> 1) & 1 } else { self.rng.chance(3, 10) as u8 };
