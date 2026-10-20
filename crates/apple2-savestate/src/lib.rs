@@ -134,15 +134,21 @@ pub fn save_aws_yaml(machine: &Machine, opts: &SaveOptions) -> Result<Saved, Err
         }
     }
     if !entries.is_empty() {
-        w.unit("Slots", UNIT_SLOTS_VER, |w| {
-            for e in &entries {
-                match e {
-                    Entry::Lc(lc) => apple2::save_lc_card(w, &st, lc),
-                    Entry::Card(slot, card) => {
-                        cards::save_card(w, *slot, *card);
+        let env = cards::SaveEnv {
+            model: st.config.model,
+            aux_empty: st.config.model.is_apple2e_family() && st.config.aux_card == apple2_core::AuxCardKind::Empty,
+        };
+        cards::with_save_env(env, || {
+            w.unit("Slots", UNIT_SLOTS_VER, |w| {
+                for e in &entries {
+                    match e {
+                        Entry::Lc(lc) => apple2::save_lc_card(w, &st, lc),
+                        Entry::Card(slot, card) => {
+                            cards::save_card(w, *slot, *card);
+                        }
                     }
                 }
-            }
+            })
         });
     }
 

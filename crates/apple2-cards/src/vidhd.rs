@@ -19,6 +19,16 @@ use std::any::Any;
 
 const MIRRORED: u32 = mf::STORE80 | mf::AUXREAD | mf::AUXWRITE | mf::PAGE2;
 
+/// The registers of [`VidHd::snapshot`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VidHdSnapshot {
+    pub mem_mode: u32,
+    pub screen_color: u8,
+    pub new_video: u8,
+    pub border_color: u8,
+    pub shadow: u8,
+}
+
 #[derive(Default)]
 pub struct VidHd {
     /// Mirror of 80STORE/AUXREAD/AUXWRITE/PAGE2 (`m_memMode`, only meaningful on the ][ family).
@@ -46,6 +56,23 @@ impl VidHd {
     /// `IsWriteAux` (VidHD.cpp:84, `MemIsWriteAux`): AUXWRITE, or 80STORE with PAGE2.
     pub fn is_write_aux(&self) -> bool {
         self.mem_mode & mf::AUXWRITE != 0 || (self.mem_mode & mf::STORE80 != 0 && self.mem_mode & mf::PAGE2 != 0)
+    }
+
+    /// The registers `VidHDCard::SaveSnapshot` writes (VidHD.cpp:199), unmasked.
+    pub fn snapshot(&self) -> VidHdSnapshot {
+        VidHdSnapshot {
+            mem_mode: self.mem_mode,
+            screen_color: self.screen_color,
+            new_video: self.new_video,
+            border_color: self.border_color,
+            shadow: self.shadow,
+        }
+    }
+
+    /// `VidHDCard::LoadSnapshot` (VidHD.cpp:224).
+    pub fn apply_snapshot(&mut self, s: &VidHdSnapshot) {
+        (self.mem_mode, self.screen_color, self.new_video, self.border_color, self.shadow) =
+            (s.mem_mode & MIRRORED, s.screen_color, s.new_video, s.border_color, s.shadow);
     }
 
     pub fn mem_mode(&self) -> u32 {

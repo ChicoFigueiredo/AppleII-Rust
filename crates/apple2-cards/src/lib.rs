@@ -24,7 +24,7 @@ pub use dongles::{Dongle, DongleKind};
 pub use fourplay::FourPlay;
 pub use nsc::NoSlotClock;
 pub use snesmax::SnesMax;
-pub use vidhd::VidHd;
+pub use vidhd::{VidHd, VidHdSnapshot};
 pub use softcard::SoftCard;
 pub use thunderclock::{ClockModel, ThunderClock};
 pub use time::{FixedClock, HostClock, WallTime};

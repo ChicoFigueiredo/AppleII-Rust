@@ -14,6 +14,7 @@ mod disk2;
 mod hdd;
 mod simple;
 mod snesmax;
+mod vidhd;
 
 /// Loader context handed to [`Mapping::load`].
 pub struct LoadCtx<'a> {
@@ -37,7 +38,7 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, snesmax::MAP];
+pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, snesmax::MAP, vidhd::MAP];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)
@@ -59,4 +60,29 @@ pub fn make(ctx: &mut LoadCtx, name: &str, slot: u8) -> Option<Box<dyn Card>> {
         ctx.warnings.push(format!("Slot {slot}: the host cannot provide a '{name}' card; the slot stays empty"));
     }
     c
+}
+
+/// Machine facts a card entry depends on beyond the card itself (VidHD saves the aux memory
+/// only for a ][/][+ or a //e without aux card). `lib.rs` sets it around the slot writes with
+/// [`with_save_env`]; the default is a //e with aux memory.
+#[derive(Clone, Copy, Debug)]
+pub struct SaveEnv {
+    pub model: Model,
+    pub aux_empty: bool,
+}
+
+thread_local! {
+    static SAVE_ENV: std::cell::Cell<SaveEnv> = const { std::cell::Cell::new(SaveEnv { model: Model::Apple2eEnhanced, aux_empty: false }) };
+}
+
+/// Runs `f` with `env` visible to the card writers through [`save_env`].
+pub fn with_save_env<R>(env: SaveEnv, f: impl FnOnce() -> R) -> R {
+    let old = SAVE_ENV.with(|c| c.replace(env));
+    let r = f();
+    SAVE_ENV.with(|c| c.set(old));
+    r
+}
+
+pub fn save_env() -> SaveEnv {
+    SAVE_ENV.with(|c| c.get())
 }
