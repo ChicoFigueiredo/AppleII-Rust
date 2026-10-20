@@ -22,7 +22,7 @@ pub mod z80;
 pub use breakpoint::BreakpointCard;
 pub use dongles::{Dongle, DongleKind};
 pub use fourplay::FourPlay;
-pub use nsc::NoSlotClock;
+pub use nsc::{NoSlotClock, NscSnapshot};
 pub use snesmax::SnesMax;
 pub use vidhd::{VidHd, VidHdSnapshot};
 pub use softcard::SoftCard;

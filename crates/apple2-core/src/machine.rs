@@ -459,6 +459,10 @@ impl Machine {
         self.board.game_io = dev;
     }
 
+    pub fn game_io(&self) -> Option<&(dyn GameIoDevice + 'static)> {
+        self.board.game_io.as_deref()
+    }
+
     pub fn game_io_mut(&mut self) -> Option<&mut (dyn GameIoDevice + 'static)> {
         self.board.game_io.as_deref_mut()
     }

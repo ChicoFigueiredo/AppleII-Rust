@@ -21,6 +21,10 @@ pub trait RomTap {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         None
     }
+    /// Shared downcast hook (the save-state writer reads the dongle type through it).
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
 }
 
 /// A device on the game I/O connector that overrides pushbuttons and paddles from the
@@ -43,6 +47,10 @@ pub trait GameIoDevice {
         true
     }
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+    /// Shared downcast hook (the save-state writer reads the dongle type through it).
+    fn as_any(&self) -> Option<&dyn Any> {
         None
     }
 }

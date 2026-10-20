@@ -24,6 +24,7 @@ pub mod apple2;
 pub mod cards;
 pub mod ext;
 pub mod host;
+mod misc;
 pub mod yaml;
 
 pub use host::{default_card, ImageRequest, LoadHost};
@@ -152,14 +153,14 @@ pub fn save_aws_yaml(machine: &Machine, opts: &SaveOptions) -> Result<Saved, Err
         });
     }
 
-    // Unit: Game I/O Connector (CopyProtectionDongles.cpp:307). The shift-key mod is a frontend
-    // setting; dongles travel in the extension.
-    w.unit("Game I/O Connector", UNIT_GAME_IO_CONNECTOR_VER, |w| w.bool("Shift Key Mod", false));
-    if st.game_io.is_some() {
-        warnings.push("Game I/O Connector: the dongle is saved in the extension only".into());
-    }
-    if st.rom_tap.is_some() {
-        warnings.push("Miscellaneous: the No-Slot Clock is saved in the extension only".into());
+    // Unit: Game I/O Connector (CopyProtectionDongles.cpp:307); the shift-key mod is a frontend
+    // setting (see `misc`).
+    w.unit("Game I/O Connector", UNIT_GAME_IO_CONNECTOR_VER, |w| misc::save_game_io(w, machine));
+    // Unit: Miscellaneous (SaveState.cpp:550), only with a No-Slot Clock.
+    if let Some(nsc) = misc::nsc_of(&st) {
+        w.unit("Miscellaneous", misc::UNIT_MISC_VER, |w| misc::save_nsc(w, &nsc));
+    } else if st.rom_tap.is_some() {
+        warnings.push("Miscellaneous: the ROM device is not a No-Slot Clock; saved in the extension only".into());
     }
     Ok(Saved { text: w.finish(), warnings })
 }
@@ -202,12 +203,16 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
 
     let mut warnings = Vec::new();
     let (mut a2, mut aux, mut slots_unit) = (None, None, None);
+    let mut devices = misc::DeviceUnits { apple2_version: u32::MAX, misc_unit: false, nsc: None, game_io: None, ext_rom_tap: false, ext_game_io: false };
     for u in unit_maps(&top) {
         let kind = u.string("Type")?;
         let version = u.u32("Version")?;
         let state = u.need_sub("State").map_err(|_| Error::Format("Unit: Expected sub-map name: State".into()))?;
         match kind.as_str() {
-            "Apple2" => a2 = Some(apple2::parse_apple2(version, state)?),
+            "Apple2" => {
+                a2 = Some(apple2::parse_apple2(version, state)?);
+                devices.apple2_version = version;
+            }
             "Auxiliary Slot" => aux = Some(apple2::parse_aux(version, state)?),
             "Slots" => {
                 if version != UNIT_SLOTS_VER {
@@ -215,12 +220,11 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
                 }
                 slots_unit = Some(state);
             }
-            "Game I/O Connector" => {
-                if !(1..=UNIT_GAME_IO_CONNECTOR_VER).contains(&version) {
-                    return Err(Error::Format(format!("Version {version} is not supported for game I/O device.")));
-                }
+            "Game I/O Connector" => devices.game_io = Some(misc::parse_game_io(version, state, UNIT_GAME_IO_CONNECTOR_VER)?),
+            "Miscellaneous" => {
+                devices.misc_unit = true;
+                devices.nsc = misc::parse_nsc(state)?;
             }
-            "Miscellaneous" => warnings.push("Miscellaneous: the No-Slot Clock state is not loaded from the AppleWin unit".into()),
             other => warnings.push(format!("Unit: Unknown type: {other} (skipped)")),
         }
     }
@@ -263,6 +267,11 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     }
     let mut machine = Machine::try_new(cfg.clone()).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut inserted = [false; 8];
+
+    // No-Slot Clock and dongle (the extension's state expects the devices the file had).
+    devices.ext_rom_tap = extension.as_ref().is_some_and(|e| e.state.rom_tap.is_some());
+    devices.ext_game_io = extension.as_ref().is_some_and(|e| e.state.game_io.is_some());
+    misc::install(&mut machine, host, &devices, &mut warnings);
 
     // Cards (Unit: Slots).
     let mut ctx = LoadCtx { host, model, warnings: &mut warnings };
