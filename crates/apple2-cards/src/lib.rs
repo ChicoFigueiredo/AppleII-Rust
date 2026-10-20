@@ -7,6 +7,9 @@
 
 pub mod mouse;
 pub mod pia6821;
+pub mod softcard;
 pub mod state;
+pub mod z80;
 
+pub use softcard::SoftCard;
 pub use mouse::{mouse_button, mouse_move, MouseCard};

@@ -93,6 +93,8 @@ impl CardCtx<'_> {
 pub trait AltCpu {
     /// Executes one instruction against `bus` (without ticking it); returns 6502 cycles used.
     fn step(&mut self, bus: &mut dyn apple2_cpu::Bus) -> u32;
+    /// For getting the concrete CPU back in [`Card::restore_alt_cpu`].
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
 }
 
 pub trait Card {
