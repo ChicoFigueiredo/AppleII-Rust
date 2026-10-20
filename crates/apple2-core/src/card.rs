@@ -171,6 +171,13 @@ pub trait Card {
     /// Bus snoop of `$C000-$C07F` accesses (VidHD mirrors the //e switches, Memory.cpp:625-650).
     fn io_snoop(&mut self, _addr: u16, _write: bool, _value: u8, _ctx: &mut CardCtx) {}
 
+    /// The card reads [`OpcodeInfo::operand`]/[`OpcodeInfo::indexed_base`] from [`CardCtx::opcode`]
+    /// (default true). A card that returns false gets them as 0, which spares the board peeking
+    /// at memory on every access to the card; `pc`, `opcode` and `cmos` are always filled in.
+    fn wants_opcode_info(&self) -> bool {
+        true
+    }
+
     /// Lends the card's CPU for one machine step while it owns the CPU; the machine hands it
     /// back with [`Card::restore_alt_cpu`] (the card stays in its slot to serve I/O meanwhile).
     fn take_alt_cpu(&mut self) -> Option<Box<dyn AltCpu>> {

@@ -9,4 +9,4 @@ Itens que os agentes deixaram por depender de outro crate ou do núcleo. Serão 
 
 ## Desempenho
 
-- Depois dos merges da onda 1 (ganchos `RomTap`, snoop, `AccessObserver`, `CardCtx` com mais campos), o teste `emulated_speed` caiu de 80,5 MHz para 40 MHz no Enhanced //e. Ainda é 39× o tempo real, mas vale uma rodada de profiling no caminho `Board::read/write` (ex.: `floating_bus()` calculado mesmo quando o cartão não usa).
+- Resolvido: o custo estava em `update_events` (calculava `floating_bus()` a cada instrução) e nos testes de observer/rom_tap por acesso. Agora `emulated_speed` ~90 MHz e o boot do DOS 3.3 ~88 MHz (CPU time). `tests/no_alloc.rs` garante zero alocações por passo. Resta: `Renderer::update` domina o laço completo (~15 MHz com ColorTv); `CardCtx` ainda calcula `floating_bus` de forma eager por chamada de cartão.

@@ -1270,6 +1270,10 @@ impl Card for Disk2Card {
         "Disk II"
     }
 
+    fn wants_opcode_info(&self) -> bool {
+        false
+    }
+
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }

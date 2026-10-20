@@ -105,6 +105,20 @@ impl Scheduler {
         }
     }
 
+    /// True if advancing by `cycles` expires the head event.
+    #[inline]
+    pub fn head_due(&self, cycles: i32) -> bool {
+        self.events.first().is_some_and(|e| e.cycles_remaining - cycles <= 0)
+    }
+
+    /// [`Scheduler::update`] for the case where [`Scheduler::head_due`] is false.
+    #[inline]
+    pub fn count_down(&mut self, cycles: i32) {
+        if let Some(e) = self.events.first_mut() {
+            e.cycles_remaining -= cycles;
+        }
+    }
+
     /// `Update` (cpp:137-169). Advances time by `cycles`, calling `handler(id, cycles)` for each
     /// expired event; the handler returns the cycles until it re-arms (0 = do not re-arm).
     /// Returns true if some `can_assert_irq` event expired exactly on the last cycle.

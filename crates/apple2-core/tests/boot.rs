@@ -201,15 +201,25 @@ fn load_state_rejects_a_different_configuration() {
     assert!(other.load_state(&state).is_err());
 }
 
-/// `cargo test --release -- --ignored --nocapture emulated_speed`
+/// On-CPU nanoseconds of this thread (Linux), so the benchmark is meaningful on a loaded machine.
+fn thread_cpu_ns() -> Option<f64> {
+    let s = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    s.split_whitespace().next()?.parse().ok()
+}
+
+/// `cargo test --release -p apple2-core --test boot emulated_speed -- --ignored --nocapture`
 #[test]
 #[ignore]
 fn emulated_speed() {
     let mut m = booted(Model::Apple2eEnhanced);
     assert!(m.paste("FOR I=1 TO 1E9:NEXT\r")); // keep the CPU busy in Applesoft
     m.run_frame();
+    let cpu0 = thread_cpu_ns();
     let t = std::time::Instant::now();
     let cycles: u64 = (0..600).map(|_| m.run_frame()).sum();
     let secs = t.elapsed().as_secs_f64();
     println!("emulated {:.1} MHz ({:.0}x real time)", cycles as f64 / secs / 1e6, cycles as f64 / secs / 1_020_484.0);
+    if let (Some(a), Some(b)) = (cpu0, thread_cpu_ns()) {
+        println!("emulated {:.1} MHz on-CPU", cycles as f64 / (b - a) * 1e3);
+    }
 }
