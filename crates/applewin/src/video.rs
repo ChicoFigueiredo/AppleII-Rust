@@ -159,7 +159,7 @@ impl TextPlaceholder {
         if self.is_e {
             // The ROM stores inverted pixels (1 = dark). First 256 characters = alternate set
             // (inverse, MouseText, inverse lowercase, normal).
-            let idx = if alt || code >= 0x80 || code < 0x40 {
+            let idx = if alt || !(0x40..0x80).contains(&code) {
                 usize::from(code)
             } else {
                 // FLASH ($40-$7F): the inverse glyph while the flash phase is "inverse"
@@ -190,12 +190,13 @@ impl FrameSource for TextPlaceholder {
     fn render(&mut self, m: &Machine, frame: &mut Frame) {
         frame.resize(SCREEN_W, SCREEN_H);
         let v = m.board().video;
-        let flash_on = (m.frames() / 16) % 2 == 0;
+        let flash_on = (m.frames() / 16).is_multiple_of(2);
         let col80 = v.col80 && self.is_e;
         let alt = v.altcharset && self.is_e;
         let w = SCREEN_W as usize;
-        for px in frame.rgba.chunks_exact_mut(4) {
-            px.copy_from_slice(&[0, 0, 0, 255]);
+        frame.rgba.fill(0);
+        for a in frame.rgba.iter_mut().skip(3).step_by(4) {
+            *a = 255;
         }
         let cols = if col80 { 80 } else { COLS };
         let cell_w = if col80 { 7 } else { 14 };
