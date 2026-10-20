@@ -316,6 +316,17 @@ impl Machine {
         self.board.cycles_in_frame
     }
 
+    /// `(vertical line, horizontal cycle)` of the video scanner between instructions
+    /// (`NTSC_GetVideoVertHorzForDebugger`).
+    pub fn video_position(&self) -> (u32, u32) {
+        self.board.scanner.position(self.board.cycles_in_frame)
+    }
+
+    /// Scan lines per frame of the current video standard (262 NTSC, 312 PAL).
+    pub fn video_lines(&self) -> u32 {
+        self.board.cycles_per_frame / 65
+    }
+
     /// Completed frames since power-on.
     pub fn frames(&self) -> u64 {
         self.board.frames

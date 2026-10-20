@@ -10,7 +10,6 @@ use crate::symbols::Symbols;
 struct Delayed {
     name: String,
     base: u16,
-    opcode: u8,
     mode: Mode,
 }
 
@@ -202,7 +201,7 @@ impl Assembler {
             if hi_lo.is_some() || matches!(mode, Mode::Imm) {
                 return Err("Syntax Error: undefined symbol in immediate operand".into());
             }
-            self.delayed.push(Delayed { name: operand_text.trim().to_string(), base, opcode, mode });
+            self.delayed.push(Delayed { name: operand_text.trim().to_string(), base, mode });
         }
         self.address = base.wrapping_add(n as u16);
         Ok(n)
