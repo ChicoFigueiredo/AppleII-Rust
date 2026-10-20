@@ -91,6 +91,12 @@ impl SoftCard {
     pub fn is_active(&self) -> bool {
         self.active
     }
+
+    /// Marks the Z80 as the one running (`SetActiveCpu(CPU_Z80)` in `Z80_LoadSnapshot`,
+    /// z80.cpp:6575). The board's CPU owner is set by whoever loads the machine state.
+    pub fn set_active(&mut self, active: bool) {
+        self.active = active;
+    }
 }
 
 impl Card for SoftCard {
@@ -99,6 +105,10 @@ impl Card for SoftCard {
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }
 

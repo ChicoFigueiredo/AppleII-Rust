@@ -125,6 +125,78 @@ mod snesmax {
     }
 }
 
+mod softcard {
+    use super::*;
+    use apple2_cards::SoftCard;
+
+    const BODY: &str = "Active: 1\nA: 0x11\nB: 0x22\nC: 0x33\nD: 0x44\nE: 0x55\nF: 0x66\nH: 0x77\nL: 0x88\nIX: 0x1234\nIY: 0x5678\nSP: 0x9ABC\nPC: 0xDEF0\nI: 0x12\nR: 0x34\nIFF1: 0x01\nIFF2: 0x00\nIM Mode: 0x02\nA': 0xA1\nB': 0xB2\nC': 0xC3\nD': 0xD4\nE': 0xE5\nF': 0xF6\nH': 0x17\nL': 0x28";
+
+    /// The registers AppleWin saves, in its order.
+    fn regs(c: &SoftCard) -> Vec<u32> {
+        let z = c.z80().unwrap();
+        vec![
+            c.is_active() as u32, z.a as u32, z.b as u32, z.c as u32, z.d as u32, z.e as u32, z.f as u32, z.h as u32, z.l as u32,
+            z.ix as u32, z.iy as u32, z.sp as u32, z.pc as u32, z.i as u32, z.r as u32, z.iff1 as u32, z.iff2 as u32, z.im as u32,
+            z.a2 as u32, z.b2 as u32, z.c2 as u32, z.d2 as u32, z.e2 as u32, z.f2 as u32, z.h2 as u32, z.l2 as u32,
+        ]
+    }
+
+    const EXPECT: [u32; 26] = [
+        1, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x12, 0x34, 1, 0, 2, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6,
+        0x17, 0x28,
+    ];
+
+    fn sample() -> SoftCard {
+        let mut c = golden("Z80 SoftCard", 4, 1, BODY);
+        let c = c.as_any_mut().unwrap().downcast_mut::<SoftCard>().unwrap();
+        let mut n = SoftCard::new();
+        n.load(&c.save());
+        n
+    }
+
+    #[test]
+    fn golden_registers_and_old_card_name() {
+        for name in ["Z80 SoftCard", "Z80"] {
+            let c = golden(name, 4, 1, BODY);
+            assert_eq!(regs(c.as_any().unwrap().downcast_ref::<SoftCard>().unwrap()), EXPECT, "{name}");
+        }
+    }
+
+    #[test]
+    fn writes_registers_in_applewin_order() {
+        let c = sample();
+        assert_eq!(regs(&c), EXPECT);
+        let body: String = BODY.lines().map(|l| format!("    {l}\n")).collect();
+        assert_eq!(written(4, &c), format!("4:\n  Card: Z80 SoftCard\n  Version: 1\n  State:\n{body}"));
+    }
+
+    #[test]
+    fn slot_zero_is_refused() {
+        let entries = parse_state(BODY);
+        let mut host = TestHost::default();
+        let mut warnings = Vec::new();
+        let mut ctx = LoadCtx { host: &mut host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
+        let map = cards::by_aw_name("Z80 SoftCard").unwrap();
+        assert!((map.load)(&mut ctx, 0, 1, Map { name: "State", entries: &entries }).is_err());
+    }
+
+    #[test]
+    fn machine_round_trip_with_the_z80_running() {
+        let t = round_trip(4, Box::new(SoftCard::new()), |m| {
+            m.with_card(4, |c, ctx| c.slot_rom_write(0, 0, ctx)); // hand the CPU to the Z80
+            assert_eq!(m.cpu_owner(), Some(4));
+            m.card_mut::<SoftCard>(4).unwrap().z80_mut().unwrap().pc = 0x0100;
+            for _ in 0..3 {
+                m.run_frame();
+            }
+        });
+        assert_eq!(t.orig.cpu_owner(), Some(4));
+        assert_eq!(t.orig.save_state(), t.exact.save_state());
+        assert_eq!(t.plain.cpu_owner(), Some(4), "Active restores the CPU owner");
+        assert_eq!(regs(t.plain.card::<SoftCard>(4).unwrap()), regs(t.orig.card::<SoftCard>(4).unwrap()));
+    }
+}
+
 mod breakpoint {
     use super::*;
     use apple2_cards::BreakpointCard;

@@ -299,6 +299,8 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
 
     // State: AppleWin units first, then (if present) the exact extension state over it.
     let mut st = machine.save_state();
+    // The Z80 SoftCard's `Active: 1` (z80.cpp:6575) makes the Z80 the running CPU.
+    st.cpu_owner = (0..8u8).find(|&s| machine.card::<apple2_cards::SoftCard>(s).is_some_and(|c| c.is_active()));
     apple2::apply_apple2(&mut st, &a2, &lc_loads, ctx.warnings)?;
     if let Some(a) = &aux {
         apple2::load_aux_memory(&mut st, a)?;

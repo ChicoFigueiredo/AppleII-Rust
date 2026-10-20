@@ -14,6 +14,7 @@ mod disk2;
 mod breakpoint;
 mod hdd;
 mod simple;
+mod softcard;
 mod snesmax;
 mod vidhd;
 
@@ -39,7 +40,7 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, snesmax::MAP, vidhd::MAP, breakpoint::MAP];
+pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, snesmax::MAP, vidhd::MAP, breakpoint::MAP, softcard::MAP];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)
