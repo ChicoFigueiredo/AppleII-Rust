@@ -111,6 +111,10 @@ impl Card for BreakpointCard {
         Some(self)
     }
 
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+
     fn io_read(&mut self, lo: u8, ctx: &mut CardCtx) -> u8 {
         ctx.set_irq(IrqSource::BreakpointCard, false);
         match lo {

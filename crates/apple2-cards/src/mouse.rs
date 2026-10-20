@@ -31,7 +31,7 @@ pub const STAT_CURR_BUTTON1: u8 = 1 << 4;
 pub const STAT_MOVEMENT_SINCE_READMOUSE: u8 = 1 << 5;
 pub const STAT_PREV_BUTTON0: u8 = 1 << 6;
 pub const STAT_CURR_BUTTON0: u8 = 1 << 7;
-const STAT_INT_ALL: u8 = STAT_INT_VBL | STAT_INT_BUTTON | STAT_INT_MOVEMENT;
+pub const STAT_INT_ALL: u8 = STAT_INT_VBL | STAT_INT_BUTTON | STAT_INT_MOVEMENT;
 
 // Mode byte (:109-112).
 pub const MODE_MOUSE_ON: u8 = 1 << 0;
@@ -41,6 +41,36 @@ pub const MODE_INT_VBL: u8 = 1 << 3;
 
 const VBL_TOKEN: u16 = 0;
 const FIRMWARE_SIZE: usize = 2048;
+
+/// Everything `CMouseInterface::SaveSnapshot` keeps (MouseInterface.cpp:636), as the card holds it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MouseSnapshot {
+    pub pia: Pia6821,
+    /// `m_by6821A`, `m_by6821B`.
+    pub by_a: u8,
+    pub by_b: u8,
+    /// `m_byBuff`.
+    pub buff: [u8; 8],
+    pub buf_pos: usize,
+    pub data_len: usize,
+    pub mode: u8,
+    pub state: u8,
+    /// `m_nX`, `m_nY`: position reported to the firmware.
+    pub n_x: i32,
+    pub n_y: i32,
+    /// `m_iX`, `m_iMinX`, `m_iMaxX`, and the Y trio.
+    pub i_x: i32,
+    pub min_x: i32,
+    pub max_x: i32,
+    pub i_y: i32,
+    pub min_y: i32,
+    pub max_y: i32,
+    /// `m_bBtn0`, `m_bBtn1`: buttons as of the last READMOUSE.
+    pub btn0: bool,
+    pub btn1: bool,
+    /// `m_bButtons`: live host buttons.
+    pub buttons: [bool; 2],
+}
 
 pub struct MouseCard {
     pia: Pia6821,
@@ -115,6 +145,44 @@ impl MouseCard {
         self.buttons = [false; 2];
         self.clear();
         self.buff = [0; 8];
+    }
+
+    pub fn snapshot(&self) -> MouseSnapshot {
+        MouseSnapshot {
+            pia: self.pia,
+            by_a: self.by_a,
+            by_b: self.by_b,
+            buff: self.buff,
+            buf_pos: self.buf_pos,
+            data_len: self.data_len,
+            mode: self.mode,
+            state: self.state,
+            n_x: self.n_x,
+            n_y: self.n_y,
+            i_x: self.i_x,
+            min_x: self.clamp_x.0,
+            max_x: self.clamp_x.1,
+            i_y: self.i_y,
+            min_y: self.clamp_y.0,
+            max_y: self.clamp_y.1,
+            btn0: self.btn0,
+            btn1: self.btn1,
+            buttons: self.buttons,
+        }
+    }
+
+    /// `CMouseInterface::LoadSnapshot` (MouseInterface.cpp:722). `buf_pos` and `data_len` are
+    /// kept inside the buffer, as [`Card::load`] does.
+    pub fn apply_snapshot(&mut self, s: &MouseSnapshot) {
+        self.pia = s.pia;
+        (self.by_a, self.by_b, self.buff) = (s.by_a, s.by_b, s.buff);
+        self.buf_pos = s.buf_pos.min(7);
+        self.data_len = s.data_len.clamp(1, 8);
+        (self.mode, self.state) = (s.mode, s.state);
+        (self.n_x, self.n_y, self.i_x, self.i_y) = (s.n_x, s.n_y, s.i_x, s.i_y);
+        self.clamp_x = (s.min_x, s.max_x);
+        self.clamp_y = (s.min_y, s.max_y);
+        (self.btn0, self.btn1, self.buttons) = (s.btn0, s.btn1, s.buttons);
     }
 
     /// Current position as the host sees it (after clamping).
@@ -372,6 +440,10 @@ impl Card for MouseCard {
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }
 

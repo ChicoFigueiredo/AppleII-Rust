@@ -32,6 +32,18 @@ pub trait LoadHost {
     fn make_card(&mut self, name: &str, slot: u8, model: Model) -> Option<Box<dyn Card>> {
         default_card(name, slot, model)
     }
+
+    /// Creates the No-Slot Clock (`MemInsertNoSlotClock`). The default reads a fixed time;
+    /// override to supply the host clock. `None` leaves the machine without one.
+    fn make_no_slot_clock(&mut self) -> Option<Box<dyn apple2_core::hooks::RomTap>> {
+        let clock = apple2_cards::FixedClock(apple2_cards::WallTime::SAMPLE);
+        Some(Box::new(apple2_cards::NoSlotClock::new(Box::new(clock))))
+    }
+
+    /// Creates the copy-protection dongle of the game I/O connector.
+    fn make_dongle(&mut self, kind: apple2_cards::DongleKind) -> Option<Box<dyn apple2_core::hooks::GameIoDevice>> {
+        Some(Box::new(apple2_cards::Dongle::new(kind)))
+    }
 }
 
 /// Cards that can be built without host objects.

@@ -49,6 +49,17 @@ impl Ring {
     }
 }
 
+/// The six values `CNoSlotClock::SaveSnapshot` writes (NoSlotClock.cpp:196).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NscSnapshot {
+    pub clock_register_enabled: bool,
+    pub write_enabled: bool,
+    pub clock_register_mask: u64,
+    pub clock_register: u64,
+    pub comparison_register_mask: u64,
+    pub comparison_register: u64,
+}
+
 pub struct NoSlotClock {
     clock: Box<dyn HostClock>,
     clock_reg: Ring,
@@ -62,6 +73,36 @@ impl NoSlotClock {
         let mut c = NoSlotClock { clock, clock_reg: Ring::new(0), cmp: Ring::new(INIT_SEQUENCE), reg_enabled: false, write_enabled: true };
         c.reset();
         c
+    }
+
+    pub fn snapshot(&self) -> NscSnapshot {
+        NscSnapshot {
+            clock_register_enabled: self.reg_enabled,
+            write_enabled: self.write_enabled,
+            clock_register_mask: self.clock_reg.mask,
+            clock_register: self.clock_reg.reg,
+            comparison_register_mask: self.cmp.mask,
+            comparison_register: self.cmp.reg,
+        }
+    }
+
+    /// `CNoSlotClock::LoadSnapshot` (:208). False (nothing changed) if a mask is not a single
+    /// bit, which no run of the clock can produce.
+    pub fn apply_snapshot(&mut self, s: &NscSnapshot) -> bool {
+        if !s.clock_register_mask.is_power_of_two() || !s.comparison_register_mask.is_power_of_two() {
+            return false;
+        }
+        (self.reg_enabled, self.write_enabled) = (s.clock_register_enabled, s.write_enabled);
+        self.clock_reg = Ring { mask: s.clock_register_mask, reg: s.clock_register };
+        self.cmp = Ring { mask: s.comparison_register_mask, reg: s.comparison_register };
+        true
+    }
+
+    /// Decodes the bytes of [`RomTap::save`] into a snapshot; `None` if they are not a No-Slot
+    /// Clock's.
+    pub fn snapshot_of_saved(state: &[u8]) -> Option<NscSnapshot> {
+        let mut c = NoSlotClock::new(Box::new(crate::time::FixedClock(crate::time::WallTime::SAMPLE)));
+        c.load(state).then(|| c.snapshot())
     }
 
     /// `CNoSlotClock::Reset` (:54): a power-cycle, not the RESET signal.
@@ -157,6 +198,10 @@ impl RomTap for NoSlotClock {
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }
 }
