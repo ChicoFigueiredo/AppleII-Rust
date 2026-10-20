@@ -176,7 +176,7 @@ impl Emulator {
         let machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
         let video = backend.frame_source(&settings);
-        let disks = backend.disks();
+        let disks = backend.disks(&settings);
         let mouse = backend.mouse(&settings);
         let debugger = backend.debugger();
         let speed = speed_from_settings(&settings);
@@ -201,6 +201,11 @@ impl Emulator {
             mhz: 0.0,
             underruns: 0,
         })
+    }
+
+    /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
+    pub fn effective_full_speed(&self) -> bool {
+        self.full_speed || self.disks.wants_full_speed(&self.machine)
     }
 
     pub fn clock_hz(&self) -> f64 {
@@ -278,7 +283,7 @@ impl Emulator {
                 self.mixer = Mixer::new(&bus);
                 self.bus = bus;
                 self.video = self.backend.frame_source(&settings);
-                self.disks = self.backend.disks();
+                self.disks = self.backend.disks(&settings);
                 self.mouse = self.backend.mouse(&settings);
                 self.debugger = self.backend.debugger();
                 let sp = speed_from_settings(&settings);
@@ -294,6 +299,7 @@ impl Emulator {
     }
 
     pub fn save_state(&mut self, path: &Path) {
+        self.disks.flush(&mut self.machine);
         let r = serde_json::to_vec(&self.machine.save_state()).map_err(|e| e.to_string()).and_then(|bytes| {
             if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
                 std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -404,7 +410,10 @@ impl Emulator {
                     self.say("Debugger not available in this build");
                 }
             }
-            Command::Shutdown => return false,
+            Command::Shutdown => {
+                self.disks.flush(&mut self.machine);
+                return false;
+            }
         }
         true
     }
@@ -522,7 +531,7 @@ fn drive(mut emu: Emulator, rx: Receiver<Command>, shared: &Shared, ring: Option
         // 2. pick the pacing mode
         let new_mode = if emu.paused {
             Mode::Paused
-        } else if emu.full_speed {
+        } else if emu.effective_full_speed() {
             Mode::Max
         } else if emu.speed.is_normal() && ring.is_some() {
             Mode::AudioPaced

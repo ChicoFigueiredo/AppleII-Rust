@@ -65,7 +65,9 @@ impl TimerPacer {
         let max_lag_cycles = self.max_lag.as_secs_f64() * self.clk_hz * self.mult;
         let behind = self.target(now) - done as f64;
         if behind > max_lag_cycles {
-            self.rebase(now, done);
+            // Owe one capped slice, then be exactly on time.
+            self.base_cycles = done as f64 + max_lag_cycles;
+            self.anchor = now;
             return max_lag_cycles as u64;
         }
         behind.max(0.0) as u64

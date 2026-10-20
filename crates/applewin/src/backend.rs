@@ -7,6 +7,7 @@ use apple2_audio::{AudioBus, MockingboardCard, Variant};
 use apple2_config::Settings;
 use apple2_config::SlotCardSpec;
 use apple2_core::Machine;
+use apple2_storage::disk2::{Disk2Card, DiskStatus};
 use std::path::Path;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -34,6 +35,12 @@ pub trait DiskSink {
     fn eject(&mut self, machine: &mut Machine, drive: usize);
     fn swap(&mut self, machine: &mut Machine);
     fn status(&self, machine: &Machine) -> [DriveStatus; 2];
+    /// AppleWin "enhanced disk speed": run unthrottled while a drive motor spins.
+    fn wants_full_speed(&self, _machine: &Machine) -> bool {
+        false
+    }
+    /// Writes dirty tracks back (before saving a state or quitting).
+    fn flush(&mut self, _machine: &mut Machine) {}
 }
 
 pub struct NullDisks;
@@ -102,7 +109,7 @@ pub trait Backend {
     /// audio cards (Mockingboard, SAM).
     fn build_machine(&mut self, settings: &Settings, bus: &AudioBus) -> Result<Machine, String>;
     fn frame_source(&mut self, settings: &Settings) -> Box<dyn FrameSource>;
-    fn disks(&mut self) -> Box<dyn DiskSink> {
+    fn disks(&mut self, _settings: &Settings) -> Box<dyn DiskSink> {
         Box::new(NullDisks)
     }
     fn mouse(&mut self, _settings: &Settings) -> Box<dyn MouseSink> {
@@ -110,6 +117,48 @@ pub trait Backend {
     }
     fn debugger(&mut self) -> Box<dyn DebuggerHook> {
         Box::new(NullDebugger)
+    }
+}
+
+/// Disk II in `slot` (apple2-storage).
+pub struct Disk2Sink {
+    pub slot: u8,
+}
+
+impl DiskSink for Disk2Sink {
+    fn insert(&mut self, m: &mut Machine, drive: usize, path: &Path) -> Result<(), String> {
+        let card = m.card_mut::<Disk2Card>(self.slot).ok_or("no Disk II card in this slot")?;
+        card.insert_path(drive, path, false).map_err(|e| format!("{}: {e:?}", path.display()))
+    }
+    fn eject(&mut self, m: &mut Machine, drive: usize) {
+        if let Some(c) = m.card_mut::<Disk2Card>(self.slot) {
+            c.eject_disk(drive);
+        }
+    }
+    fn swap(&mut self, m: &mut Machine) {
+        if let Some(c) = m.card_mut::<Disk2Card>(self.slot) {
+            c.swap_disks();
+        }
+    }
+    fn status(&self, m: &Machine) -> [DriveStatus; 2] {
+        let Some(c) = m.card::<Disk2Card>(self.slot) else { return Default::default() };
+        std::array::from_fn(|d| DriveStatus {
+            present: c.is_drive_connected(d),
+            image: (!c.is_drive_empty(d)).then(|| c.base_name(d).to_string()),
+            track: c.track(d) as u8,
+            activity: match c.light_status(d) {
+                DiskStatus::Read => DriveActivity::Read,
+                DiskStatus::Write => DriveActivity::Write,
+                _ => DriveActivity::Off,
+            },
+            write_protected: c.is_write_protected(d),
+        })
+    }
+    fn wants_full_speed(&self, m: &Machine) -> bool {
+        apple2_storage::disk2::manager::is_condition_for_full_speed(m)
+    }
+    fn flush(&mut self, m: &mut Machine) {
+        apple2_storage::disk2::manager::flush_all(m);
     }
 }
 
@@ -132,6 +181,22 @@ impl Backend for DefaultBackend {
             let sound = !settings.sound.disable_sound;
             for (slot, spec) in settings.slots.0.iter().enumerate().skip(1) {
                 let card: Option<Box<dyn apple2_core::Card>> = match spec {
+                    SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
+                        let mut c = Disk2Card::new();
+                        c.set_force_13_sector_firmware(*firmware_13_sector);
+                        c.set_enhance_disk(settings.storage.enhance_disk_speed);
+                        for (d, spec) in drives.iter().enumerate() {
+                            if !spec.connected {
+                                c.unplug_drive(d);
+                            }
+                            if let Some(path) = &spec.image {
+                                if let Err(e) = c.insert_path(d, path, spec.write_protect) {
+                                    eprintln!("drive {}: {}: {e:?}", d + 1, path.display());
+                                }
+                            }
+                        }
+                        Some(Box::new(c))
+                    }
                     SlotCardSpec::MouseInterface { .. } => Some(Box::new(apple2_cards::mouse::MouseCard::new())),
                     SlotCardSpec::MockingboardC(_) if sound && !settings.sound.disable_mockingboard => {
                         Some(Box::new(MockingboardCard::new(Variant::MockingboardC, bus)))
@@ -158,6 +223,13 @@ impl Backend for DefaultBackend {
 
     fn frame_source(&mut self, settings: &Settings) -> Box<dyn FrameSource> {
         Box::new(VideoRenderer::from_settings(settings))
+    }
+
+    fn disks(&mut self, settings: &Settings) -> Box<dyn DiskSink> {
+        match settings.slots.0.iter().position(|s| matches!(s, SlotCardSpec::Disk2 { .. })) {
+            Some(slot) => Box::new(Disk2Sink { slot: slot as u8 }),
+            None => Box::new(NullDisks),
+        }
     }
 
     fn mouse(&mut self, settings: &Settings) -> Box<dyn MouseSink> {
