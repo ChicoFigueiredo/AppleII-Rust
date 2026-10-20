@@ -12,6 +12,7 @@ pub mod headless;
 pub mod host;
 pub mod joy;
 pub mod keymap;
+pub mod overlay;
 pub mod pacing;
 pub mod screenshot;
 pub mod toolbar;

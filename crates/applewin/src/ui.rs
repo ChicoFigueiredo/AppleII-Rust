@@ -30,6 +30,8 @@ pub struct UiState {
     pub screen_rect: Option<Rect>,
     pub message: String,
     pub drive_menu: Option<usize>,
+    /// Mouse capture state for the overlay hint (set by the shell).
+    pub mouse: crate::overlay::MouseState,
 }
 
 const MODELS: [(Model, &str); 9] = [
@@ -55,6 +57,7 @@ impl UiState {
             screen_rect: None,
             message: String::new(),
             drive_menu: None,
+            mouse: Default::default(),
         }
     }
 
@@ -105,6 +108,10 @@ impl UiState {
                 self.screen_rect = Some(rect);
             }
         });
+        if let Some(rect) = self.screen_rect {
+            let toolbar_visible = !fullscreen && self.show_toolbar;
+            crate::overlay::paint(ctx, rect, &crate::overlay::Overlay::new(status, toolbar_visible, self.mouse));
+        }
         if let Some(d) = self.drive_menu {
             let mut open = true;
             egui::Window::new(format!("Drive {}", d + 1)).open(&mut open).collapsible(false).show(ctx, |ui| {
