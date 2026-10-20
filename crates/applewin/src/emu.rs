@@ -42,6 +42,10 @@ pub enum Command {
     LoadState(PathBuf),
     /// Rebuilds the machine (power cycle) with new settings.
     ApplySettings(Box<Settings>),
+    /// New settings that need no machine rebuild (video, speed, input...): swaps the settings and
+    /// the renderer, keeps the machine running.
+    UpdateSettings(Box<Settings>),
+    SetWriteProtect { drive: usize, on: bool },
     SetVolume(u32),
     InsertDisk { drive: usize, path: PathBuf },
     EjectDisk { drive: usize },
@@ -418,6 +422,16 @@ impl Emulator {
             Command::SaveState(p) => self.save_state(&p),
             Command::LoadState(p) => self.load_state(&p),
             Command::ApplySettings(s) => self.rebuild(*s),
+            Command::UpdateSettings(s) => {
+                self.video = self.backend.frame_source(&s);
+                let sp = speed_from_settings(&s);
+                self.full_speed = sp == Speed::Max;
+                if let Speed::Multiplier(_) = sp {
+                    self.speed = sp;
+                }
+                self.settings = *s;
+            }
+            Command::SetWriteProtect { drive, on } => self.disks.set_write_protect(&mut self.machine, drive, on),
             Command::SetVolume(v) => {
                 self.settings.sound.master_volume = v;
             }

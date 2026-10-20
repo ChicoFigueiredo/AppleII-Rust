@@ -1,6 +1,6 @@
 # Configuração, vídeo, som e velocidade
 
-A janela de configuração abre com **F8** (botão Config). As mudanças só têm efeito quando você clica em **Apply**, que reinicia a Máquina (power-cycle). As configurações ficam num arquivo TOML no diretório de configuração do sistema:
+A janela de configuração abre com **F8** (botão Config). A janela tem as abas Configuration, Input, Sound, Slots e Advanced, e os botões **OK**, **Cancel** e **Apply**, como no AppleWin. Mudanças que não mexem no hardware (vídeo, joystick, velocidade, volume, nomes de arquivo) valem na hora. Mudar Modelo, CPU, 50/60 Hz, cartas, ROMs, Freeze's F8 ROM ou No-Slot clock abre a pergunta "The emulator needs to restart", que lista o que mudou, e reinicia a Máquina (power-cycle) se você confirmar. Os botões "..." da aba Slots abrem as opções de cada carta (SSC serial ou TCP, impressora, Disk II, discos rígidos, Mockingboard/Phasor, Uthernet, mouse, Saturn, RamWorks). No modo TCP da SSC a janela avisa que a porta escuta em todas as interfaces (porta 1977 por padrão). As configurações ficam num arquivo TOML no diretório de configuração do sistema:
 
 | Sistema | Local |
 |---|---|
@@ -12,7 +12,7 @@ Chaves desconhecidas são ignoradas e chaves ausentes assumem os valores padrão
 
 O módulo `apple2-config` também sabe importar uma configuração existente do AppleWin, seja um arquivo `.reg` exportado do Registro do Windows, seja o arquivo INI do porte Linux (`-conf`). Veja "Diferenças em relação ao AppleWin" para o que a interface expõe hoje.
 
-As seções a seguir seguem as páginas da configuração do AppleWin (Configuration, Input, Sound, Disk, Advanced e Slots) e dizem a que chaves de configuração e opções de linha de comando cada uma corresponde. A janela da interface expõe hoje só uma parte dessas opções; o restante vale pelo arquivo TOML e pela linha de comando.
+As seções a seguir seguem as páginas da configuração do AppleWin (Configuration, Input, Sound, Disk, Advanced e Slots) e dizem a que chaves de configuração e opções de linha de comando cada uma corresponde. A janela cobre quase todas essas opções; as restantes valem pelo arquivo TOML e pela linha de comando.
 
 ## Configuração geral (Configuration)
 
