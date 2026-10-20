@@ -84,7 +84,7 @@ O programa emula o alto-falante do Apple II, a Mockingboard, a Phasor e a SAM. A
 - **Centralização automática** do joystick de teclado.
 - **Modificação da tecla Shift**: PB2 lê a tecla Shift (só ][ e ][+ com o joystick 2 desativado). Dongles que usam PB2 têm prioridade.
 - **Alt como botões**: `-left-alt-control-buttons`, `-right-alt-control-buttons` e `-no-hook-alt`.
-- **Colar da área de transferência**: Shift+Insert ou Ctrl+V.
+- **Colar da área de transferência**: Shift+Insert ou Ctrl+Shift+V.
 - **Scroll Lock** como alternância de velocidade máxima ou só enquanto pressionado (`scroll_lock_toggle`).
 - **Caps Lock**: `-capslock=off` inicia com o Caps Lock do Apple desligado.
 
