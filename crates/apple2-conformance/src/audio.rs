@@ -54,19 +54,17 @@ pub struct AudioSpec {
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PcmLimitsSpec {
-    pub e_max: i32,
-    pub r_max: f64,
     pub f_tol: f64,
     pub rms_tol: f64,
+    pub peak_tol: f64,
 }
 
 impl From<PcmLimitsSpec> for Limits {
     fn from(s: PcmLimitsSpec) -> Limits {
         Limits {
-            e_max: s.e_max,
-            r_max: s.r_max,
             f_tol: s.f_tol,
             rms_tol: s.rms_tol,
+            peak_tol: s.peak_tol,
         }
     }
 }
@@ -497,24 +495,25 @@ pub fn compare_pcm(
         _ => (&run.mb_pcm, 2),
     };
     let expected = pcm::read_s16le(expected_bytes);
-    let m = pcm::measure(&expected, actual, channels, limits);
+    let m = pcm::measure(&expected, actual, channels);
     (pcm::decide(&m, limits), m)
 }
 
 pub fn describe_measures(m: &pcm::Measures) -> String {
     format!(
-        "{} quadros no oráculo, {} no Rust; desvio global {}; idêntico={}; conjuntos de valores iguais={}; {} janelas medidas ({} silenciosas); pior erro {} (RMS {:.1}), frequência {:.2} %, RMS {:.2} % na janela {}",
+        "{} quadros no oráculo, {} no Rust; desvio global {}; idêntico={}; conjuntos de valores iguais={}; erro por amostra máx {} / RMS {:.1}; {} janelas medidas ({} silenciosas); pior diferença: frequência {:.2} %, RMS {:.2} %, pico {:.2} % (janela {})",
         m.frames_expected,
         m.frames_actual,
         m.lag,
         m.exact,
         m.value_sets_equal,
+        m.max_abs_err,
+        m.rms_err,
         m.windows,
         m.silent_windows,
-        m.worst_e,
-        m.worst_r,
         m.worst_f * 100.0,
         m.worst_rms * 100.0,
+        m.worst_peak * 100.0,
         m.worst_window
     )
 }

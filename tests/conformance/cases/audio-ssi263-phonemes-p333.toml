@@ -1,0 +1,22 @@
+id = "audio-ssi263-phonemes-p333"
+story = "HU-0502"
+criterion = "SSI263 (Mockingboard C, soquete 1): fonemas encadeados por IRQ de fonema completo e power-down no fim; mesma sequência de eventos e durações de fonema dentro da tolerância do AppleWin (fase 333 NOP antes do primeiro acesso)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/ssi263-phonemes.s, PHASE=333); o AppleWin detecta o fim do fonema a cada 1000 ciclos (buffer circular), o Rust agenda o fim exato: política 'ssi' em test-oracles.md."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/ssi263-phonemes-p333.bin"
+
+[run]
+cycles = 1500000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ssi263-phonemes-p333"
+events = "reference-audio/audio-ssi263-phonemes-p333.events"
+timing = "ssi"
+ssi_tolerance = 0  # PLACEHOLDER: J_ssi (audit/audio-differential.md)

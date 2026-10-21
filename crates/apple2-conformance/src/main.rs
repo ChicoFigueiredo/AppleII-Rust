@@ -17,7 +17,7 @@ uso:
   conformance trace --model M (--frames N | --cycles N) [--cpu 6502|65C02] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
   conformance audio-run --case ID --out-dir DIR [--root DIR] [--trace]
-  conformance pcm-compare ESPERADO.pcm OBTIDO.pcm [--channels N] [--e-max N --r-max X --f-tol X --rms-tol X]
+  conformance pcm-compare ESPERADO.pcm OBTIDO.pcm [--channels N] [--f-tol X --rms-tol X --peak-tol X]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
 Código de saída de `run`: 0 se tudo PASS, 1 se algum FAIL, 2 se algum BLOCKED (sem FAIL).
@@ -304,10 +304,9 @@ fn cmd_audio_run(rest: &[String]) -> Result<u8, String> {
 fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
     let (mut files, mut channels) = (Vec::new(), 2usize);
     let mut l = pcm::Limits {
-        e_max: 256,
-        r_max: 64.0,
         f_tol: 0.01,
         rms_tol: 0.02,
+        peak_tol: 0.02,
     };
     let mut a = Args::new(rest);
     while let Some(arg) = a.next() {
@@ -319,10 +318,9 @@ fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
                     .parse()
                     .map_err(|e: std::num::ParseIntError| e.to_string())?
             }
-            "--e-max" => l.e_max = num(a.value(arg)?)? as i32,
-            "--r-max" => l.r_max = num(a.value(arg)?)?,
             "--f-tol" => l.f_tol = num(a.value(arg)?)?,
             "--rms-tol" => l.rms_tol = num(a.value(arg)?)?,
+            "--peak-tol" => l.peak_tol = num(a.value(arg)?)?,
             f if !f.starts_with("--") => files.push(PathBuf::from(f)),
             o => return Err(format!("argumento desconhecido `{o}`")),
         }
@@ -335,7 +333,7 @@ fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
             .map(|b| pcm::read_s16le(&b))
             .map_err(|e| format!("{}: {e}", p.display()))
     };
-    let m = pcm::measure(&rd(e)?, &rd(o)?, channels, &l);
+    let m = pcm::measure(&rd(e)?, &rd(o)?, channels);
     println!("{}", audio::describe_measures(&m));
     let v = pcm::decide(&m, &l);
     println!("{v:?}");

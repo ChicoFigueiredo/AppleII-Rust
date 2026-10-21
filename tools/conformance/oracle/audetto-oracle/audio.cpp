@@ -184,18 +184,20 @@ namespace
     //
     // Play cursor: advances with g_nCumulativeCycles at the buffer's sample rate, never past the write
     // cursor (an underrun stalls it, like LinuxSoundBuffer). Write cursor: end of the data written so far.
-    // The buffer starts pre-filled with 3/8 of silence: inside the 1/4..1/2 band where the AppleWin
-    // feedback (m_numSamplesError) is zero, so the generated PCM is not time-stretched at start-up.
+    // The Mockingboard buffer starts pre-filled with 3/8 of silence: inside the 1/4..1/2 band where the
+    // AppleWin feedback (m_numSamplesError) is zero, so the generated PCM is not time-stretched at
+    // start-up. The SSI263 buffers start empty: SSI263::Update pre-fills 25% itself on its first call.
     class VirtualSoundBuffer : public SoundBuffer
     {
     public:
-        VirtualSoundBuffer(uint32_t bufferSize, uint32_t sampleRate, int channels)
+        // `leadEighths`: initial pre-fill of silence, in eighths of the buffer.
+        VirtualSoundBuffer(uint32_t bufferSize, uint32_t sampleRate, int channels, unsigned leadEighths)
             : myData(bufferSize)
             , mySampleRate(sampleRate)
             , myBytesPerFrame(sizeof(short) * channels)
         {
             const size_t frames = bufferSize / myBytesPerFrame;
-            myWritePos = (frames * 3 / 8) * myBytesPerFrame;
+            myWritePos = (frames * leadEighths / 8) * myBytesPerFrame;
             myAvailable = myWritePos;
             myLastCycle = g_nCumulativeCycles;
         }
@@ -207,12 +209,16 @@ namespace
             advance();
             *play = static_cast<DWORD>(myPlayPos);
             *write = static_cast<DWORD>(myWritePos);
+            if (std::getenv("ORACLE_DS_DEBUG"))
+                std::fprintf(stderr, "[ds %zu] cyc=%" PRIu64 " play=%zu write=%zu avail=%zu\n", mySampleRate,
+                    static_cast<uint64_t>(g_nCumulativeCycles), myPlayPos, myWritePos, myAvailable);
             return DS_OK;
         }
 
         HRESULT Lock(DWORD offset, DWORD bytes, LPVOID *p1, DWORD *n1, LPVOID *p2, DWORD *n2, DWORD flags) override
         {
-            if (flags & DSBLOCK_ENTIREBUFFER)
+            myEntireLock = (flags & DSBLOCK_ENTIREBUFFER) != 0;
+            if (myEntireLock)
             {
                 *p1 = myData.data();
                 *n1 = static_cast<DWORD>(myData.size());
@@ -246,6 +252,8 @@ namespace
         HRESULT Unlock(LPVOID, DWORD n1, LPVOID, DWORD n2) override
         {
             advance();
+            if (myEntireLock)
+                return DS_OK; // DSZeroVoiceBuffer clears the whole buffer: the cursors do not move
             const size_t written = static_cast<size_t>(n1) + n2;
             myWritePos = (myWritePos + written) % myData.size();
             myAvailable = std::min(myData.size(), myAvailable + written);
@@ -309,6 +317,7 @@ namespace
         uint64_t myLastCycle = 0;
         double myFraction = 0.0;
         DWORD myStatus = 0;
+        bool myEntireLock = false;
         LONG myVolume = 0;
     };
 
@@ -420,7 +429,8 @@ namespace audio_oracle
         // a real voice would add the speaker's cycle feedback (g_nCpuCyclesFeedback) to the CPU clock.
         if (name && std::strcmp(name, "Spkr") == 0)
             return nullptr;
-        return std::make_shared<VirtualSoundBuffer>(bufferSize, sampleRate, channels);
+        const unsigned lead = (name && std::strcmp(name, "SSI263") == 0) ? 0 : 3;
+        return std::make_shared<VirtualSoundBuffer>(bufferSize, sampleRate, channels, lead);
     }
 
     void begin()
