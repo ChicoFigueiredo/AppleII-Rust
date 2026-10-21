@@ -67,13 +67,14 @@ fn ssi_type(c: Ssi263Chip) -> SsiType {
     }
 }
 
-/// Socket population as the sound card crate models it (one AY type per card; the Phasor's
-/// third and fourth sockets and the "bad 6522" switches are not modelled there).
+/// Socket population as the sound card crate models it: one AY type per socket (0..=3, the
+/// Phasor uses all four) and the `6522a-bad` / `6522b-bad` switches (AUD-P-006, AUD-P-007).
 pub fn sockets(s: &SoundSockets) -> Sockets {
     Sockets {
         ssi263: [ssi_type(s.ssi263[0]), ssi_type(s.ssi263[1])],
         sc01: s.sc01,
-        ay: ay_type(s.ay[0]),
+        ay: std::array::from_fn(|i| ay_type(s.ay[i])),
+        bad_6522: s.bad_6522,
     }
 }
 

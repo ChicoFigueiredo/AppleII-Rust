@@ -1,0 +1,24 @@
+id = "audio-phasor-two-ay"
+story = "HU-0501"
+criterion = "Phasor em modo nativo: dois AY por 6522, escolha por ORB, leitura dos registradores 14 de cada AY e modo Echo+: eventos e PCM iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/phasor-two-ay.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "phasor"
+slot = 4
+program = "audio/programs/phasor-two-ay.bin"
+ay_sockets = ["ay8910", "ay8912", "ay8913", "ym2149"]
+pcm = "mockingboard"
+
+[run]
+cycles = 120000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-phasor-two-ay"
+events = "reference-audio/audio-phasor-two-ay.events"
+pcm = "reference-audio/audio-phasor-two-ay.mb.pcm"
+pcm_limits = { f_tol = 0.0100, rms_tol = 0.0200, peak_tol = 0.0200 }  # 2 x oráculo(1000) contra oráculo(250), pisos 1/2/2 %

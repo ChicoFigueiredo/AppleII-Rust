@@ -1,0 +1,21 @@
+id = "audio-speaker-clicks-pcm"
+story = "HU-0501"
+criterion = "PCM (44,1 kHz) do programa speaker-clicks comparado ao do AppleWin pelas métricas por janela da política v2 (limiares calibrados com o oráculo contra ele mesmo)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/speaker-clicks.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+program = "audio/programs/speaker-clicks.bin"
+pcm = "speaker"
+
+[run]
+cycles = 900000
+
+[oracle]
+known_divergence = "AUD-P-010/D-3"
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-speaker-clicks"
+pcm = "reference-audio/audio-speaker-clicks.spkr.pcm"
+pcm_limits = { f_tol = 0.0100, rms_tol = 0.0200, peak_tol = 0.0200 }  # 2 x oráculo(1000) contra oráculo(250), pisos 1/2/2 %

@@ -1,0 +1,20 @@
+id = "audio-ay-tone"
+story = "HU-0501"
+criterion = "Notas no AY (oito notas, acorde de três vozes e AY direito) do Mockingboard: escritas nos registradores do 6522 e do AY iguais ao AppleWin (o PCM é o caso -pcm)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/ay-tone.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/ay-tone.bin"
+
+[run]
+cycles = 250000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-tone"
+events = "reference-audio/audio-ay-tone.events"

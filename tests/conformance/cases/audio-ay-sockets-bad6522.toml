@@ -1,0 +1,22 @@
+id = "audio-ay-sockets-bad6522"
+story = "HU-0501"
+criterion = "Um tipo de AY por soquete (AUD-P-006) e 6522a-bad/6522b-bad (AUD-P-007): leitura de todos os registradores dos dois AY e do DDRB iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/ay-read-regs.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/ay-read-regs.bin"
+ay_sockets = ["ay8910", "ay8912", "ay8913", "ym2149"]
+bad_6522 = [true, false]
+
+[run]
+cycles = 120000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-sockets-bad6522"
+events = "reference-audio/audio-ay-sockets-bad6522.events"

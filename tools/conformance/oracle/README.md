@@ -132,3 +132,25 @@ Commits upstream entre o merge-base e a base do port (`3e8054b..a8f0d1d`, 22 com
 - `6c579da5` `-no-joystick<1|2>`; `56c95d31` `-ssc-tcp-port`; `3057ddf8`/`daf813dc` versão no save-state; `18303d49` PNG em vez de BMP.
 
 Nenhum desses altera o fluxo de CPU do boot sem disco, mas qualquer comparação de leituras de `$C061-$C063` ou de save-states com campos novos (`Shift Key Mod`, versão) pode divergir.
+
+## Áudio (HU-0501, HU-0502)
+
+`audetto-audio.patch` (aplicado depois de `audetto-trace.patch`) acrescenta ao fork pontos de observação de áudio, todos nulos por padrão: acessos à página da carta (`IOR`/`IOW`), escritas e leituras de registrador do AY, transições do IRQ (`IS_6522`, `IS_SPEECH`), toques do alto-falante, início e fim de fonema do SSI263 e o PCM do Mockingboard, do alto-falante e do SSI263 (`source/audio_hook.h`). `audetto-oracle/audio.cpp` os liga a um arquivo de eventos (`audio-events v1`, ver [test-oracles.md](../../../docs/conformance/test-oracles.md)) e a arquivos PCM brutos.
+
+Como o AppleWin só roda o código de som quando há um dispositivo de áudio, o oráculo usa um "DirectSound virtual": um buffer circular cujo cursor de reprodução anda com os Ciclos emulados (o do Mockingboard começa com 3/8 de silêncio, o do SSI263 vazio). O alto-falante não ganha voz (uma voz traria o `g_nCpuCyclesFeedback` e mexeria no relógio da CPU); o PCM dele é retirado da fila do próprio `SpkrUpdate`.
+
+Opções (todas `--audio-*`; qualquer uma liga o módulo):
+
+```sh
+tools/conformance/oracle/run-audetto-oracle.sh --model apple2p --cycles 250000 --out trace.csv \
+    --cards none --audio-card mockingboard --audio-slot 4 \
+    --audio-program tests/conformance/audio/programs/ay-tone.bin --audio-load 300 --audio-pc 300 \
+    --audio-events ay-tone.events --audio-mb-pcm ay-tone.mb.pcm --audio-spkr-pcm ay-tone.spkr.pcm
+#   --audio-card mockingboard|phasor|megaaudio|sdmusic     --audio-ay-socket N=empty|ay8910|ay8912|ay8913|ym2149
+#   --audio-bad6522 a|b   --audio-ssi263 N=empty|ssi263p|ssi263ap   --audio-sc01 on|off
+#   --audio-slice N        lote de CPU em Ciclos (padrão: clk/1000), usado na calibração
+#   --audio-ssi-pcm PREFIXO   PCM mono de 22,05 kHz de cada SSI263
+#   --audio-ay-script FILE --audio-ay-out FILE   autoteste do núcleo do AY (sem máquina)
+```
+
+`--state FILE.aws.yaml` funciona (a fixture define as cartas; os eventos têm Ciclo relativo ao fim do carregamento). Os casos e as referências: `tests/conformance/cases/audio-*.toml`, `tests/conformance/reference-audio/`; regenerar com `tools/conformance/audio/run-oracle-case.py CASO` e `run-ay-core.py`. Os programas 6502 (`tests/conformance/audio/programs/*.s`) são montados por `tools/conformance/audio/build-programs.sh`.
