@@ -6,7 +6,8 @@ set -euo pipefail
 
 REPO_URL="https://github.com/AppleWin/AppleWin-Test"
 PINNED_SHA="4b113ce8cff1426bda5595cac9cb04776adfbb5d"   # master em 2026-10-04
-CACHE_DIR="${APPLEWIN_TEST_CACHE:-/mnt/d/Chico/AppleRust/target/conformance-cache/applewin-test}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CACHE_DIR="${APPLEWIN_TEST_CACHE:-$ROOT/target/conformance-cache/applewin-test}"
 
 mkdir -p "$(dirname "$CACHE_DIR")"
 if [ ! -d "$CACHE_DIR/.git" ]; then
