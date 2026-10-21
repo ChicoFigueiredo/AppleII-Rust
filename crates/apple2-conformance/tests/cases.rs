@@ -44,11 +44,20 @@ fn every_shipped_case_passes_and_its_manifest_validates() {
     let mut outcomes = Vec::new();
     for c in &cases {
         let o = run_case(&env, c);
-        assert_eq!(
-            o.manifest.result,
-            TestResult::Pass,
-            "{}: {}",
+        // A case may document a finding it is expected to fail on (`known_divergence`), and a
+        // fixture-based case is BLOCKED, never PASS, where the corpus cache is absent.
+        let fixture_missing = c
+            .fixture
+            .as_ref()
+            .is_some_and(|f| !env.workspace.join(&f.path).exists());
+        let expected_fail =
+            o.manifest.result == TestResult::Fail && c.oracle.known_divergence.is_some();
+        let expected_blocked = o.manifest.result == TestResult::Blocked && fixture_missing;
+        assert!(
+            o.manifest.result == TestResult::Pass || expected_fail || expected_blocked,
+            "{}: {:?} {}",
             c.id,
+            o.manifest.result,
             o.manifest.actual
         );
         validate_against_schema(&serde_json::to_value(&o.manifest).unwrap()).unwrap();

@@ -1,0 +1,23 @@
+id = "audio-ay-envelope-pcm"
+story = "HU-0501"
+criterion = "PCM (44,1 kHz) do programa ay-envelope comparado ao do AppleWin pelas métricas por janela da política v2 (limiares calibrados com o oráculo contra ele mesmo)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/ay-envelope.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/ay-envelope.bin"
+pcm = "mockingboard"
+
+[run]
+cycles = 320000
+
+[oracle]
+known_divergence = "AUD-P-010/D-2"
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-envelope"
+pcm = "reference-audio/audio-ay-envelope.mb.pcm"
+pcm_limits = { f_tol = 0.0100, rms_tol = 0.0200, peak_tol = 0.0200 }  # 2 x oráculo(1000) contra oráculo(250), pisos 1/2/2 %

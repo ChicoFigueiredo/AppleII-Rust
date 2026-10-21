@@ -1,0 +1,20 @@
+id = "audio-ssi263-4x-fixture"
+story = "HU-0502"
+criterion = "Fixture real SSI263-4x_phonemes_playing_continuously (AppleWin-Test): depois de carregar o save-state, os quatro SSI263 retomam o fonema (#1372) e a sequência de eventos e a duração dos fonemas por 90 quadros coincidem com o AppleWin"
+model = "apple2e-enhanced"
+notes = "Save-state v2 do corpus do AppleWin (Mockingboard C e Phasor, 4 SSI263 repetindo fonemas). Carregado no oráculo (--state) e no Rust (apple2-savestate); sem o cache da fixture o resultado é BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/SSI263-4x_phonemes_playing_continuously.aws.yaml"
+sha256 = "f4422749f4cda6db8eec926d3b670c9f034bcb3435576e3de89d0f71b207c1df"
+
+[run]
+frames = 90
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ssi263-4x-fixture"
+events = "reference-audio/audio-ssi263-4x-fixture.events"
+timing = "ssi"
+ssi_tolerance = 3977  # J_ssi = 2977 (maior diferença entre --audio-slice 1000 e 250 do oráculo sobre a fixture) + 1000

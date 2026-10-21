@@ -90,16 +90,21 @@ def main():
         cmd += ["--audio-slice", str(ns.slice)]
     cmd += ["--audio-events", os.path.join(out_dir, name + ".events")]
     if not ns.no_pcm:
-        if audio.get("pcm") == "speaker":
-            cmd += ["--audio-spkr-pcm", os.path.join(out_dir, name + ".spkr.pcm")]
-        else:
-            cmd += ["--audio-mb-pcm", os.path.join(out_dir, name + ".mb.pcm")]
-        cmd += ["--audio-ssi-pcm", os.path.join(out_dir, name + ".ssi")]
+        cmd += ["--audio-spkr-pcm", os.path.join(out_dir, name + ".spkr.pcm"),
+                "--audio-mb-pcm", os.path.join(out_dir, name + ".mb.pcm"),
+                "--audio-ssi-pcm", os.path.join(out_dir, name + ".ssi")]
     print(" ".join(cmd))
     r = subprocess.run(cmd)
     if r.returncode == 0 and not ns.keep_all:
         # Only the events and the PCM are references; the CPU trace and the SSI263 PCM are large.
-        for f in (name + ".trace.csv", name + ".ssi.0.pcm", name + ".ssi.1.pcm"):
+        # Keep a PCM file only if some case refers to it (the oracle always records both streams).
+        cases_dir = os.path.join(root, "cases")
+        used = ""
+        for fn in os.listdir(cases_dir):
+            with open(os.path.join(cases_dir, fn)) as f:
+                used += f.read()
+        extra = [n for n in (name + ".mb.pcm", name + ".spkr.pcm") if os.path.join("reference-audio", n) not in used]
+        for f in [name + ".trace.csv", name + ".ssi.0.pcm", name + ".ssi.1.pcm"] + extra:
             try:
                 os.remove(os.path.join(out_dir, f))
             except FileNotFoundError:

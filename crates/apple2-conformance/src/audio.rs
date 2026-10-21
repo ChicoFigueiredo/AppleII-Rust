@@ -210,11 +210,6 @@ pub fn run(
 ) -> Result<AudioRun, String> {
     let spec = case.audio.clone().unwrap_or_default();
     spec.validate()?;
-    let total = match (case.run.cycles, case.run.frames) {
-        (Some(c), _) => c,
-        (_, Some(f)) => f * 17_030,
-        _ => return Err("run: cycles or frames".into()),
-    };
     let bus = AudioBus::new(44_100, VideoStandard::Ntsc);
     let mut warnings = Vec::new();
     let mut m = if let Some(fx) = &case.fixture {
@@ -249,6 +244,16 @@ pub fn run(
             m.cpu_mut().pc = spec.pc.map_or(load, |p| p as u16);
         }
         m
+    };
+    // The audio clock follows the machine's video standard (a save-state may be PAL).
+    bus.set_clock(apple2_audio::SampleClock::new(
+        44_100,
+        m.config().video_standard,
+    ));
+    let total = match (case.run.cycles, case.run.frames) {
+        (Some(c), _) => c,
+        (_, Some(f)) => f * (m.video_lines() as u64 * 65),
+        _ => return Err("run: cycles or frames".into()),
     };
     let speaker_only = spec.pcm.as_deref() == Some("speaker");
     let start = m.cycles();
@@ -350,22 +355,28 @@ fn depends_on_phoneme_end(line: &str) -> bool {
     matches!(kind(line), "PHEND" | "IRQ")
 }
 
-/// `(PHEND - PHON)` of each completed phoneme, per `(slot, device)`.
-fn durations(lines: &[String]) -> Vec<u64> {
-    let mut last: std::collections::HashMap<(String, String), u64> = Default::default();
+/// Chip a phoneme line belongs to (`slot,device`), or `None` for any other line.
+fn chip_of(line: &str) -> Option<String> {
+    let f: Vec<&str> = line.split(',').collect();
+    match f.get(1) {
+        Some(&("PHON" | "PHEND")) if f.len() > 3 => Some(format!("{},{}", f[2], f[3])),
+        _ => None,
+    }
+}
+
+/// `PHEND - PHON` of each completed phoneme of one chip; a `PHEND` with no `PHON` before it (the
+/// phoneme restarted by a save-state load) counts from cycle 0, the load.
+fn durations(lines: &[String], chip: &str) -> Vec<u64> {
+    let mut start = 0u64;
     let mut out = Vec::new();
     for l in lines {
-        let f: Vec<&str> = l.split(',').collect();
-        match f.get(1) {
-            Some(&"PHON") if f.len() > 3 => {
-                last.insert((f[2].into(), f[3].into()), cycle_of(l));
-            }
-            Some(&"PHEND") if f.len() > 3 => {
-                if let Some(s) = last.get(&(f[2].to_string(), f[3].to_string())) {
-                    out.push(cycle_of(l).saturating_sub(*s));
-                }
-            }
-            _ => {}
+        if chip_of(l).as_deref() != Some(chip) {
+            continue;
+        }
+        if kind(l) == "PHON" {
+            start = cycle_of(l);
+        } else {
+            out.push(cycle_of(l).saturating_sub(start));
         }
     }
     out
@@ -387,6 +398,7 @@ pub fn compare_events(
     expected: &[String],
     actual: &[String],
     timing: Timing,
+    end_cycle: u64,
 ) -> Result<String, String> {
     let exact_until = match timing {
         Timing::Exact => usize::MAX,
@@ -435,49 +447,76 @@ pub fn compare_events(
         }
         Timing::Ssi { tolerance } => {
             let cut = exact_until.min(expected.len()).min(actual.len());
+            // After the first phoneme end the program reacts to IRQs the two sides raise at
+            // slightly different cycles, and chips drift against each other, so the order
+            // between different chips is not an invariant: each chip (and "everything else")
+            // is compared as its own sequence without cycles, plus its phoneme durations.
             let (e_tail, a_tail) = (&expected[cut..], &actual[cut..]);
-            let e_seq: Vec<&str> = e_tail.iter().map(|l| strip_cycle(l)).collect();
-            let a_seq: Vec<&str> = a_tail.iter().map(|l| strip_cycle(l)).collect();
-            if let Some(i) = (0..e_seq.len().min(a_seq.len())).find(|&i| e_seq[i] != a_seq[i]) {
-                return Err(format!(
-                    "sequência de eventos diverge (sem ciclos) na linha {}:\n  esperado (oráculo): {}\n  obtido (Rust):      {}",
-                    cut + i + 1,
-                    e_tail[i],
-                    a_tail[i]
-                ));
-            }
-            if e_seq.len() != a_seq.len() {
-                return Err(format!(
-                    "a sequência após o primeiro fim de fonema tem {} eventos no oráculo e {} no Rust",
-                    e_seq.len(),
-                    a_seq.len()
-                ));
-            }
-            let (de, da) = (durations(expected), durations(actual));
-            if de.len() != da.len() {
-                return Err(format!(
-                    "fonemas completos: {} no oráculo, {} no Rust",
-                    de.len(),
-                    da.len()
-                ));
-            }
-            let worst = de
+            let mut chips: Vec<String> = e_tail
                 .iter()
-                .zip(&da)
-                .map(|(a, b)| a.abs_diff(*b))
-                .max()
-                .unwrap_or(0);
+                .chain(a_tail)
+                .filter_map(|l| chip_of(l))
+                .collect();
+            chips.sort();
+            chips.dedup();
+            let split = |lines: &[String], chip: Option<&str>| -> Vec<String> {
+                lines
+                    .iter()
+                    .filter(|l| match chip {
+                        Some(c) => chip_of(l).as_deref() == Some(c),
+                        None => chip_of(l).is_none(),
+                    })
+                    .cloned()
+                    .collect()
+            };
+            // A phoneme that ends within the tolerance of the last cycle may fall on either side.
+            let edge = end_cycle.saturating_sub(2 * tolerance);
+            let mut groups: Vec<Option<&str>> = chips.iter().map(|c| Some(c.as_str())).collect();
+            groups.push(None);
+            let mut worst = 0u64;
+            let mut done = 0usize;
+            let mut report = Vec::new();
+            for g in groups {
+                let (e, a) = (split(e_tail, g), split(a_tail, g));
+                let n = e.len().min(a.len());
+                if let Some(i) = (0..n).find(|&i| strip_cycle(&e[i]) != strip_cycle(&a[i])) {
+                    return Err(format!(
+                        "sequência de eventos diverge (sem ciclos) em {} no evento {}:\n  esperado (oráculo): {}\n  obtido (Rust):      {}",
+                        g.map_or("eventos fora dos chips".to_string(), |c| format!("chip {c}")),
+                        i + 1,
+                        e[i],
+                        a[i]
+                    ));
+                }
+                for extra in e[n..].iter().chain(&a[n..]) {
+                    if cycle_of(extra) < edge {
+                        return Err(format!(
+                            "um lado tem um evento a mais longe do fim da execução (ciclo {} < {edge}): {extra}",
+                            cycle_of(extra)
+                        ));
+                    }
+                }
+                done += n;
+                if let Some(c) = g {
+                    let (de, da) = (durations(&e, c), durations(&a, c));
+                    let m = de.len().min(da.len());
+                    let w = (0..m).map(|i| de[i].abs_diff(da[i])).max().unwrap_or(0);
+                    worst = worst.max(w);
+                    report.push(format!("chip {c}: pior {w}; oráculo {de:?}; Rust {da:?}"));
+                }
+            }
             if worst > tolerance {
                 return Err(format!(
-                    "duração de fonema fora da tolerância: pior diferença {worst} ciclos > {tolerance}\n  oráculo: {de:?}\n  Rust:    {da:?}"
+                    "duração de fonema fora da tolerância: pior diferença {worst} ciclos > {tolerance}\n  {}",
+                    report.join("\n  ")
                 ));
             }
             Ok(format!(
-                "{} eventos; {} exatos e {} só em sequência; {} fonemas completos, pior diferença de duração {worst} ciclos (tolerância {tolerance}); durações oráculo {de:?}, Rust {da:?}",
+                "{} eventos do oráculo e {} do Rust; {} exatos (ciclo incluído) e {done} só em sequência por chip; pior diferença de duração de fonema {worst} ciclos (tolerância {tolerance}); {}",
                 expected.len(),
+                actual.len(),
                 cut,
-                expected.len() - cut,
-                de.len()
+                report.join(" | ")
             ))
         }
     }

@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "AY8910.h"
 #include "CPU.h"
 #include "CardManager.h"
 #include "Core.h"
@@ -37,7 +38,7 @@ namespace
         bool enabled = false;
         std::string card;
         UINT slot = 4;
-        std::string eventsPath, mbPcmPath, spkrPcmPath, ssiPcmPrefix, program;
+        std::string eventsPath, mbPcmPath, spkrPcmPath, ssiPcmPrefix, program, ayScript, ayOut;
         uint32_t loadAddr = 0x0300, startPc = 0x0300;
         bool havePc = false;
         uint32_t slice = 0;
@@ -321,6 +322,70 @@ namespace
         LONG myVolume = 0;
     };
 
+    // AY core self-test: the fork's AY8913 class (AY8910.cpp) driven by a script, no emulated machine.
+    //   clk <hz>            AY clock (integer, as AY8910_InitClock gets it)
+    //   type <t>            empty|ay8910|ay8912|ay8913|ym2149
+    //   reset               sound_ay_reset()
+    //   w <reg> <val> <ts>  sound_ay_write(reg, val, ts), ts = CPU cycles since the frame start
+    //   frame <n>           SetFramesize(n) + sound_frame(); n samples x 3 voices (s16le) go to the output
+    void ayCoreSelfTest(const std::string &scriptPath, const std::string &outPath)
+    {
+        FILE *in = std::fopen(scriptPath.c_str(), "r");
+        FILE *out = std::fopen(outPath.c_str(), "wb");
+        if (!in || !out)
+        {
+            std::perror("ay self-test");
+            std::exit(1);
+        }
+        static AY8913 ay;
+        char line[256];
+        double clk = 1020484.0;
+        bool started = false;
+        while (std::fgets(line, sizeof(line), in))
+        {
+            char word[32], arg[32];
+            unsigned a = 0, b = 0, c = 0;
+            if (line[0] == '#' || std::sscanf(line, "%31s", word) != 1)
+                continue;
+            const std::string cmd = word;
+            if (cmd == "clk" && std::sscanf(line, "%*s %lf", &clk) == 1)
+                continue;
+            if (cmd == "type" && std::sscanf(line, "%*s %31s", arg) == 1)
+            {
+                AY891xType t = AY_3_8913;
+                parseAyType(arg, t);
+                ay.SetType(t);
+                continue;
+            }
+            if (!started)
+            {
+                AY8913::SetCLK(clk);
+                ay.sound_init(nullptr);
+                ay.sound_ay_init();
+                started = true;
+            }
+            if (cmd == "reset")
+                ay.sound_ay_reset();
+            else if (cmd == "w" && std::sscanf(line, "%*s %u %u %u", &a, &b, &c) == 3)
+                ay.sound_ay_write(static_cast<int>(a), static_cast<int>(b), static_cast<libspectrum_dword>(c));
+            else if (cmd == "frame" && std::sscanf(line, "%*s %u", &a) == 1)
+            {
+                std::vector<short> v0(a), v1(a), v2(a);
+                INT16 *bufs[3] = {v0.data(), v1.data(), v2.data()};
+                ay.SetFramesize(static_cast<int>(a));
+                ay.SetSoundBuffers(bufs);
+                ay.sound_frame();
+                for (unsigned i = 0; i < a; ++i)
+                {
+                    const short s[3] = {v0[i], v1[i], v2[i]};
+                    std::fwrite(s, sizeof(short), 3, out);
+                }
+            }
+        }
+        std::fclose(in);
+        std::fclose(out);
+    }
+
     FILE *openOut(const std::string &path)
     {
         FILE *f = std::fopen(path.c_str(), "wb");
@@ -353,6 +418,10 @@ namespace audio_oracle
             g_opt.spkrPcmPath = val;
         else if (arg == "--audio-ssi-pcm")
             g_opt.ssiPcmPrefix = val;
+        else if (arg == "--audio-ay-script")
+            g_opt.ayScript = val;
+        else if (arg == "--audio-ay-out")
+            g_opt.ayOut = val;
         else if (arg == "--audio-program")
             g_opt.program = val;
         else if (arg == "--audio-load")
@@ -437,6 +506,9 @@ namespace audio_oracle
     {
         if (!g_opt.enabled)
             return;
+
+        if (!g_opt.ayScript.empty() && !g_opt.ayOut.empty())
+            ayCoreSelfTest(g_opt.ayScript, g_opt.ayOut);
 
         g_startCycle = g_nCumulativeCycles;
 

@@ -240,7 +240,8 @@ pub struct OracleSpec {
     /// Expressions for kind `expr`: `a == 0x00`, `mem[0x0400] >= 0xA0`, `pc != 0`.
     #[serde(default)]
     pub expect: Vec<String>,
-    /// Kind `audio-events`: reference event file, relative to `tests/conformance/`.
+    /// Kind `audio-events`: reference event file, relative to `tests/conformance/`. A case needs
+    /// `events`, `pcm` or both.
     #[serde(default)]
     pub events: Option<String>,
     /// Kind `audio-events`: `exact` (default) or `ssi` (phoneme end timing, see `ssi_tolerance`).
@@ -259,6 +260,11 @@ pub struct OracleSpec {
     /// (power-down silences the chip, GH#1412).
     #[serde(default)]
     pub silent_after: Option<String>,
+    /// A finding (e.g. `AUD-P-020`) that explains why this case is expected to FAIL: the result
+    /// stays FAIL in the manifest (never PASS), the id is added to `actual`, and the shipped-cases
+    /// test accepts the failure. Remove it when the divergence is fixed.
+    #[serde(default)]
+    pub known_divergence: Option<String>,
 }
 
 impl Case {
@@ -302,8 +308,8 @@ impl Case {
                 }
             }
             OracleKind::AudioEvents => {
-                if o.events.is_none() {
-                    return Err("oracle.events required".into());
+                if o.events.is_none() && o.pcm.is_none() {
+                    return Err("oracle.events or oracle.pcm required".into());
                 }
                 if let Some(a) = &self.audio {
                     a.validate()?;

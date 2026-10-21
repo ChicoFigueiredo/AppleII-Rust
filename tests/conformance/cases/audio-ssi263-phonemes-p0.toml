@@ -20,3 +20,4 @@ source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.pa
 events = "reference-audio/audio-ssi263-phonemes-p0.events"
 timing = "ssi"
 ssi_tolerance = 1670  # J_ssi = 670 (maior diferença entre as fases 0 e 333 do oráculo) + 1000
+silent_after = "IOW,4,43,80"

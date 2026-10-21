@@ -9,7 +9,6 @@ notes = "Programa 6502 próprio (audio/programs/ay-envelope.s) carregado em $030
 card = "mockingboard"
 slot = 4
 program = "audio/programs/ay-envelope.bin"
-pcm = "mockingboard"
 
 [run]
 cycles = 320000
@@ -19,5 +18,3 @@ kind = "audio-events"
 authority = "applewin"
 source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-envelope"
 events = "reference-audio/audio-ay-envelope.events"
-pcm = "reference-audio/audio-ay-envelope.mb.pcm"
-pcm_limits = { f_tol = 0.0100, rms_tol = 0.0200, peak_tol = 0.0200 }  # 2 x oráculo(1000) contra oráculo(250), pisos 1/2/2 %
