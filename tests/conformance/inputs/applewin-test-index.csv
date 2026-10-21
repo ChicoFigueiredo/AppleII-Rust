@@ -1,0 +1,274 @@
+caminho,tipo,tamanho,sha256,modelo,cpu,cartas_slots,perifericos,descricao
+Projects/AY8910-test/AY8910-test.a,a,5430,4114551a1e1b5ff93e7b1fa39f279f31ece5d6896299935d3724ee89b3afdc7e,,,,,
+Projects/AY8910-test/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/AY8910-test/MockingboardDefs.a,a,834,240d7042e8b428da5357bd06da6e0e9c9bf1d867135a7d96b8406645b8c9696c,,,,,
+Projects/AY8910-test/build.bat,bat,75,ed6215fdc59f15314919fe93a24622903e9b3de9193b44d4602a8ab01feefd77,,,,,
+Projects/AY8910-test/debug.txt,txt,137,3c18d6ae129ed95a997aa874c848cf55f88059777bd9ef55f981641e4e2036aa,,,,,
+Projects/AY8910-test/readme.txt,txt,730,d85ad80eeac540572c8b22bde93d9a1db1d83730c77382c19222e7ad4a43e132,,,,,
+Projects/Dummy-image/AppleDefs.a,a,319,664917ce26434f166700664abf24146956560454375cf854b8c5b5eedf74164a,,,,,
+Projects/Dummy-image/Dummy-image.a,a,1119,e0142e39feecebfd90f39a30972622e5953eb66102ca7972d1a556d8fa7e7b95,,,,,
+Projects/Dummy-image/build.bat,bat,75,8d6c8f54a17b97d4c0db2e5a110ad9294a2c33774cc56e75b76fc8e8a69a2777,,,,,
+Projects/Dummy-image/debug.txt,txt,112,d788929cfc6a1366aff8d95f548e0994c51ea06e82b165f65609a62c23decc3d,,,,,
+Projects/Dummy-image/readme.txt,txt,221,6570b9d1cc50ad20b6c5212698ba0bee37ee2cebb4888d289dafe256f0effbf9,,,,,
+Projects/GH1007-HDD-RW-IO-Boundary/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/GH1007-HDD-RW-IO-Boundary/HDD-RW-IO-Boundary.a,a,5252,d0ed6c3e49185b8628aa7d1a32ce4e0fb35d31142f759936d02c3388c2d7d107,,,,,
+Projects/GH1007-HDD-RW-IO-Boundary/HDD-RW-IO-Boundary.hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+Projects/GH1007-HDD-RW-IO-Boundary/HardDiskDefs.a,a,184,1dfeb410b5bd358b0d56a930a8d531f89fd0febcaf63c7d7bba5e6145f49a3bd,,,,,
+Projects/GH1007-HDD-RW-IO-Boundary/build.bat,bat,89,65a285dbb66fd0bc428aeb3a48b72338131b3f456e7373bb6ea4ab601c659984,,,,,
+Projects/GH1007-HDD-RW-IO-Boundary/debug.txt,txt,338,7883a7597eb5d340102627e104a91d5a14d70a2b78bfb53ea79c2376bbbb1cb6,,,,,
+Projects/GH1207-SmartPort-firmware/AppleDefs.a,a,385,6c6bc6950d34604c758439f1ae605b209d1b5b130047ef34010bc6cce6600d79,,,,,
+Projects/GH1207-SmartPort-firmware/HDD-small(write-protected).hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+Projects/GH1207-SmartPort-firmware/HDD-small.hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+Projects/GH1207-SmartPort-firmware/HardDiskDefs.a,a,1006,c64086f40d051de886ced2b913b1c90f9624f6880e11daef15120877c5508416,,,,,
+Projects/GH1207-SmartPort-firmware/SmartPort-firmware.a,a,17448,5f03f14d1f8573e231f116e4084cc3b2d8ed9510c6b1794a8f92f074ef3a883c,,,,,
+Projects/GH1207-SmartPort-firmware/build.bat,bat,89,633ce0217ee9653c94e8c16f0a6d12359cf53098aa3a067c36cf5ac328165004,,,,,
+Projects/GH1207-SmartPort-firmware/debug.txt,txt,919,199bb32fe1fd4f73f288adcad5124debb7d40a7a2fbed0922af92d54e97fc41c,,,,,
+Projects/GH1207-SmartPort-firmware/log.txt,txt,1534,983572b17db36a484e3ee7d951d9d2e74746d536cf9776c2b4672e45a750c8b2,,,,,
+Projects/GH1262-RamWorksIII-256KB/AppleDefs.a,a,713,5174dac2866db4a9a8c8ae1cc9c88fe115568e1209ad43c02bf838083eb839ef,,,,,
+Projects/GH1262-RamWorksIII-256KB/RamWorksIII-256KB.a,a,2250,76463b39363e2a71191e96321d7f469365a40c8116a422070c9e97f10848e4e7,,,,,
+Projects/GH1262-RamWorksIII-256KB/build.bat,bat,87,298fdae21639c460425c686e8d444be9ce3dfa7d47a3a1139041b6fdf1e639e3,,,,,
+Projects/GH1262-RamWorksIII-256KB/debug.txt,txt,94,2264d50b5f60506629ee0e810b373f6e41db45687182dc5ca57ab8dd8a18b8a1,,,,,
+Projects/GH1279-Saturn-in-slot3/AppleDefs.a,a,1354,09eb6b777b378364df82059c6c701245b275535b011f4d0f646cf773d250ef25,,,,,
+Projects/GH1279-Saturn-in-slot3/Saturn-in-slot3.a,a,11923,e7cc4456fc9906cdbe9d92a504d81b42817b979ffc872a9c8bc616b97ab2b988,,,,,
+Projects/GH1279-Saturn-in-slot3/build.bat,bat,83,660cd3f9b5e7c7c513e743abe92e26cd7ac6c701e82fd1e5e4909ff14aae7b4a,,,,,
+Projects/GH1279-Saturn-in-slot3/debug.txt,txt,90,f102db32b95ad46527a418d89d1c9b9a6065344ab7bc83d1dec74836c717383e,,,,,
+Projects/GH1302-SSI263-power-on/AppleDefs.a,a,1458,a96b8eae0a8ea0db163d446a2790b122d1bfbcce04e7ed19b1ea82d92c79b997,,,,,
+Projects/GH1302-SSI263-power-on/MockingboardDefs.a,a,3262,3e616b6063ae9d6430e9e390d687115928550e565a8777a56e0fcc8e32882032,,,,,
+Projects/GH1302-SSI263-power-on/build.bat,bat,61,0f9e970b29a0d4e2057b21a900b12374248655f9c004cd92442ffa48eb9c08b5,,,,,
+Projects/GH1302-SSI263-power-on/chip-6522.a,a,85407,009769c7b7c1b065695a7a771e4df71747934b24a4e2fba51237e98e2a8182f3,,,,,
+Projects/GH1302-SSI263-power-on/chip-ay8913.a,a,57603,c5c53b7f75484954ca5cff5920f22ac42131806cb90e690f670f18fe7e49378e,,,,,
+Projects/GH1302-SSI263-power-on/chip-ssi263.a,a,8714,a360ae0ace77f033dff84b222e0f82649d7711ed1873072ad4237ff90f9c32fa,,,,,
+Projects/GH1302-SSI263-power-on/debug.txt,txt,65,5cd5124c6d6e7dc83cd12d73f31b8fa0aba06131110334cb343c49cdf4a6ed61,,,,,
+Projects/GH1302-SSI263-power-on/test.a,a,34254,aa19fc8d8f05b1b14477863fc61c27512c615947a97a989510c5be15260d7aad,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/AppleDefs.a,a,1022,8021788b075c48ea55862304c65a676920d4a419bf5d3f7926b1329db3d8ff90,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/BreakpointCard.a,a,553,28bc967b715745b3ef31988348c73a878e91cb622bbbd74cba186d36fb28529d,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/DbgAutoRun1.txt,txt,190,3cbbf837fc95fb199adb44230a668b50eec5b5aff18cfa833e709b723a8977c2,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/DbgAutoRun2.txt,txt,126,cfdf61b54a6dcbc94fa1941a1e10e10b90b7e7a9f0a34f69953e29fa4cf8e5e0,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/DbgAutoRun3.txt,txt,205,5be500fdfc4a8993f5e9ac9a5a91eef10d64a8769fe66ad6e26170d68c8164b4,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/Debugger-prefix-breakpoints.a,a,26008,54248e01c8bac71a020ff3d4cb49ccb2cecf77a65bb82b72fe1556a75f72aa97,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/HDD-small.hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/HardDiskDefs.a,a,184,1dfeb410b5bd358b0d56a930a8d531f89fd0febcaf63c7d7bba5e6145f49a3bd,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/build.bat,bat,107,c2f743831462a767ce09ae1b0248931f0468936babcdaed8dac9a14d1d3fdc9d,,,,,
+Projects/GH451-Debugger-prefix-breakpoints/debug.txt,txt,170,69cb939e5c86628eacec4b09c69bed4d384628906bdf5fc7e4b12e83584c5a86,,,,,
+Projects/GH522-SSC-TX-RX/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/GH522-SSC-TX-RX/SSCDefs.a,a,780,48e31905841f0771bcb6e87bc1d5f155cac58daaca30177a235514459b87b0df,,,,,
+Projects/GH522-SSC-TX-RX/build.bat,bat,89,66bbc50ff31aeab666b3f7faa7a61bf266ef9c99814d4625db485c8343439e65,,,,,
+Projects/GH522-SSC-TX-RX/debug.txt,txt,174,3753ddb166844d505a65086d2783839506f181b169d0e98f9c173fec38897bd9,,,,,
+Projects/GH522-SSC-TX-RX/ssc-tx-rx-poll-irq.a,a,5502,2104946a10d4a8a7704399dcd87e8e07345d1a137747541fb9c08764fe1ad35e,,,,,
+Projects/GH579-Sound-ramp/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/GH579-Sound-ramp/build.bat,bat,73,e40548b5f1684306e855c5688e9fd1c924ccab8f76293fbda5d891603bef0568,,,,,
+Projects/GH579-Sound-ramp/debug.txt,txt,116,df0f9f95cf946a2a916d95766dc196120fbe314d0e05bad8cbc5c2908545fb4c,,,,,
+Projects/GH579-Sound-ramp/sound-ramp.a,a,1365,0b7d0a4b10d2b53d7b68e887ad8da7dcfd3a01c3e926a92ed8c379c9c8aed32d,,,,,
+Projects/GH654-Sathers-LittleTextWindow/build_apl.bat,bat,46,5fee6a7955cfe8d71e72a144ff5f3c40aaa97c6d2226e6e6ecb157d9d3b9ea32,,,,,
+Projects/GH654-Sathers-LittleTextWindow/ntsc-sather.a,a,2096,3517486ef8fb3588298db5a8c76e75115973af91f340a9842383b5de619b0f37,,,,,
+Projects/GH654-Sathers-LittleTextWindow/ntsc-sather.apl,apl,168,49c2a536cf56e5faefb5d541649f682a8159186a341dbb24e873ee3bcc583cb2,,,,,
+Projects/GH677-IRQ-Pending/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/GH677-IRQ-Pending/MockingboardDefs.a,a,834,240d7042e8b428da5357bd06da6e0e9c9bf1d867135a7d96b8406645b8c9696c,,,,,
+Projects/GH677-IRQ-Pending/build.bat,bat,75,8166817a47afaa00166b5669d412f6dd6e04753a43690630b2fb31c1cbd6fb18,,,,,
+Projects/GH677-IRQ-Pending/debug.txt,txt,143,35959e223ae60344b4b3c69439b2f7a3307137564fbff5e99743f86fa89df7e5,,,,,
+Projects/GH677-IRQ-Pending/irq-pending.a,a,3427,5f6c871d55ae3c751cfd83eedcd5425b627de3613e22f84a8236c4c519c5bef1,,,,,
+Projects/GH765-6522-one-shot/6522-one-shot.a,a,6924,13a97b9836c47650edf7567d1e13d426e5fcadf22409ad0bcabaa29264b430fa,,,,,
+Projects/GH765-6522-one-shot/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/GH765-6522-one-shot/MockingboardDefs.a,a,834,240d7042e8b428da5357bd06da6e0e9c9bf1d867135a7d96b8406645b8c9696c,,,,,
+Projects/GH765-6522-one-shot/build.bat,bat,79,1d67e300aaac54b8d501d27e54cfa1bd7357f44fb00800c21b4b6680cee91646,,,,,
+Projects/GH765-6522-one-shot/debug.txt,txt,147,11ab2614584f30c3f3993db3737bfb6bc89aad70fe6429ffbfe4a94335d174a8,,,,,
+Projects/GH777-SSI263-test/AppleDefs.a,a,306,16cd6872ed1934ad9fdad3caf4ddf52aa7f11e9b6cac46c814b93f2ca351a9f8,,,,,
+Projects/GH777-SSI263-test/MockingboardDefs.a,a,1575,702b90b06a7cb2705ad46da0b007b411834da3298cbfbd55f5b2424da2614339,,,,,
+Projects/GH777-SSI263-test/SSI263-test.a,a,17341,ebbe94a2054df394c6f55e115683ad2133ae49979d1ef88e81e6cd4b7f7c2fd7,,,,,
+Projects/GH777-SSI263-test/build.bat,bat,75,dd6e24e84f8e09e9a8e012bb851ff4ed53823cd8091c53579b1ad26a06c7f414,,,,,
+Projects/GH777-SSI263-test/debug.txt,txt,143,744c67b3afc6dc78d02579e6f41a55dd07c202b6203da58d522d5367abe0aeb6,,,,,
+Projects/GH997-SHR-AppleII-64K/AppleDefs.a,a,588,00c164817403fbb5f2c11c2c021323df07f28982ebb38fe5c48581b9c4ae26dc,,,,,
+Projects/GH997-SHR-AppleII-64K/SHR-AppleII-64K-Skyfox.aws.yaml,aws.yaml,240762,b000a53586bd20c318cf2ec6445063fd7f84057a15d56611cdb5187e27fe2ddb,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;3=VidHD;6=Disk][,No Slot Clock,Test: Apple II+ copying SHR image to VidHD's aux memory & displaying it
+Projects/GH997-SHR-AppleII-64K/SHR-AppleII-64K.a,a,1220,5391aea7ecae9509f0763ba106023251df4616bb6d7033fc0f0f09b74cf88491,,,,,
+Projects/GH997-SHR-AppleII-64K/build.bat,bat,83,53a526dc55a2e85f24101f207fca5026a115504b7ef8203a5a5b421bf70828ba,,,,,
+Projects/GH997-SHR-AppleII-64K/debug.txt,txt,101,a794dd511005703337bb216599f55c2c89bfcb1582d40eda23e2177c818a01de,,,,,
+README.md,md,233,f35d4c897c0214809c05f44cc7be857a3d21578ca32945d63daac5647396ae76,,,,,
+test index.txt,txt,13521,d85e848915b6327df911b371a872addd709b208a026937bacf049c2883f82af2,,,,,
+test.bat,bat,144,c339bc864a18a3cc20b1864f3426c12260215a777636fe0b0ddcd557d81880c9,,,,,
+v1/Boulderdash1-level-L1-bonus.aws,aws,145400,7581f7dc2350fe4ea7fb496e495d7e5c3bb54aff0d3a21d1ee3e4f898fe1ef7d,,,,,Test loading of old .aws snapshot: message box saying to use AppleWin 1.27
+v1/test.bat,bat,189,7423319ca7d9adda40216ad72e19992eadab6f9e590ddb3b5520eb051b29b8e0,,,,,
+v2/4Play-slot4.aws.yaml,aws.yaml,149288,76a29aa8d023e0f5935cbeb588560fd9cf38c05a0ee90ecc0391cecbcfaad10c,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=4Play;6=Disk][,aux=Extended 80 Column;No Slot Clock,From Lukazi's 4playRevB_Example\4playRevB_Example.dsk | Only supports controller#0
+v2/A2+-VideoModeSwitch.aws.yaml,aws.yaml,21791,363ee2bab3c01e7ad640e7be57e1148afdc786640171d6fdcde29168a4cb6a4c,Apple][+,6502,,,Apple][+: Horizontal HGR/TEXT split | Minimal .aws.yaml file
+v2/A2e-enhanced-VideoModeSwitch.aws.yaml,aws.yaml,21762,f39cc0f5cf783dfd837807d3ac8f04648d270055ab8a24c55528091df30d0229,Enhanced Apple//e,65C02,,,Enhanced Apple//e: Horizontal HGR/TEXT split | Minimal .aws.yaml file
+v2/A2e-internal-C4nn-with-mousecard-(self test).aws.yaml,aws.yaml,292566,1f39c29b2a30c5a29d6520a832da358215850cfa15087501c74e5e81c7d07654,Apple//e,6502,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,"GH#381: Test when internal ROM is enabled at $C400, mouse-card is inserted and PC is in range [$C400..FF]"
+v2/AS-S1.dsk,dsk,143360,ff33aa4032a71618474fb4540bc35537cbddfcdad071259c48c9c640524dc0a0,,,,,
+v2/AS-S1_Turn the disk over(PAL).aws.yaml,aws.yaml,311094,c06d785502250400bf45794bf8a4c802d51139c78fea2c2e29014afc4b9dcfd4,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column;No Slot Clock,Vertical DLORES/TEXT80 split | GH#763: PAL kill color-burst
+v2/AS-S1_Turn the disk over.aws.yaml,aws.yaml,307872,6f8241119ca24e8322a5d31947bd27fe38c5ea4c14817915227e2455785e78cf,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,Vertical DLORES/TEXT80 split | GH#763: PAL kill color-burst
+v2/AS-S2.dsk,dsk,143360,8ecf73061bceefe3a374b1bc91249fce5a78c99c587c2c22213eb993f230c48b,,,,,
+v2/AS-S2_End credits(PAL).aws.yaml,aws.yaml,326689,b7b02a03da200616d0677ef3ea0825679b51ce56fc5c3be7413f4ba89f227778,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column;No Slot Clock,Horizontal DLORES/TEXT80 split | GH#763: PAL kill color-burst
+v2/AS-S2_End credits.aws.yaml,aws.yaml,322575,bf8a5eae2d8a1569ecdce3e692c71805a2b43997ad624ff7aed81fb44e6bbfd5,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,Horizontal DLORES/TEXT80 split | GH#763: PAL kill color-burst
+v2/AZTEC.aws.yaml,aws.yaml,301618,6a151aa9b33ae2d38c7f4b362d954b7f2244e107e4f66901c1e51e43e3ffd9a7,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,"GH#347: Test speed of Aztec loading until ""PRESS ANY KEY"" message | Check AppleWin.log for: (~2500ms for Win7-64, AMD Phenom II dual-core @3GHz)"
+v2/Aztec.dsk,dsk,143360,03025227e524d948e28da084beb426018d628e98f36d5b3cb1b9e82bd8528505,,,,,
+v2/Base64A.aws.yaml,aws.yaml,149806,8ec12eb91c5844c7d479c6bfb6eac05fcbccc7dad9102fe32159c5312a450e96,Base 64A,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,No Slot Clock,Base 64A (Taiwanese Apple II clone)
+v2/Buttons_KeyData_AnyKeyDown-Test.aws.yaml,aws.yaml,152268,35611a2895c158541dee2560f6c4167ca70bb35a3d388946da3e2c712a615cfc,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#556: Test Hook Filter ie. emulator can detect these: ALT+ESC, ALT+SPACE, ALT+TAB | GH#556: Test: -alt-enter=open-apple-enter | Test ALT+ENTER (doesn't toggle full-screen) | GH#556: Test AKD: RETURN(keyboard) + ENTER(numpad), then release ENTER. AKD should still be high."
+v2/CPM2.2(56k)-1.aws.yaml,aws.yaml,307761,141c44a6a7f838622afd216896f200c08aaadb7bae755bc4d3274fb82c9543c7,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Z80;6=Disk][,aux=Extended 80 Column,CPM card: dir
+v2/CPM2.2(56k)-2-mbasic.aws.yaml,aws.yaml,307764,a4dffdca9c41124930be146352aa342042383f8445ecb7b1e091af8c65c22d3d,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Z80;6=Disk][,aux=Extended 80 Column,CPM card: run
+v2/CPM2.2(56k)-3-GR-A2+.aws.yaml,aws.yaml,163106,e9199ef2622be8fe385e064581548b3305da431f9b9fd4e407c80e8bd2a7606f,Apple][+,6502,1=Generic Printer;2=Super Serial Card;4=Z80;6=Disk][,,GH#371: Z80 updating video in units of ~1000 cycles. Test for mixed GR/TEXT video.
+v2/CPM2.2(56k).dsk,dsk,143360,a8e145ec11a5758d236b83a349705efc6f6de0aad1e89e37824787cffbab09b8,,,,,
+v2/CmdLineSwitches/Dummy-image.dsk.gz,imagem-disco.gz,322,ae0d6d6ea68a0662f85cb92ca56f4d37d230049ec67824372a746615722d4d18,,,,,
+v2/CmdLineSwitches/Dummy-image.hdv.gz,imagem-disco.gz,160,f30140077d72e653385b36da91b35e70db79e609bc4aeac01ac4826c4871e5dd,,,,,
+v2/CmdLineSwitches/conftest-gm.ini,ini,85,1c7a0456d623c187684fb0794b6422a7114b5d46cdf6fe43096072fd55ca6e3d,,,,,
+v2/CmdLineSwitches/test.bat,bat,1740,4a396103a7374cb6f7813332bb8fdfa30b33888f0506a6aa72d1c2f5656be71a,,,,,
+v2/DD-v0.6.aws.yaml,aws.yaml,302075,ba7182d5ea8e137c1923e4ad35d9601a2aa31651b841fd8966fb350ac2b19343,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column;No Slot Clock,"Test loading multiple sync events: Phasor, using 6522-A.T1 and 6522-B.T1"
+v2/Debugger-prefix-breakpoints/DbgAutoRun1.txt,txt,190,3cbbf837fc95fb199adb44230a668b50eec5b5aff18cfa833e709b723a8977c2,,,,,
+v2/Debugger-prefix-breakpoints/DbgAutoRun2.txt,txt,126,cfdf61b54a6dcbc94fa1941a1e10e10b90b7e7a9f0a34f69953e29fa4cf8e5e0,,,,,
+v2/Debugger-prefix-breakpoints/DbgAutoRun3.txt,txt,205,5be500fdfc4a8993f5e9ac9a5a91eef10d64a8769fe66ad6e26170d68c8164b4,,,,,
+v2/Debugger-prefix-breakpoints/Debugger-prefix-breakpoints.aws.yaml,aws.yaml,156202,54d02d9a3d4772f8f4945883342f90b4b7d5c1825d7c003ace663000b6207bc1,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;3=Saturn 128;4=Breakpoint;6=Disk][;7=Generic HDD,aux=RamWorksIII;No Slot Clock,"Test prefix breakpoints for main, aux, LC, ROM, RamWorks, Saturn | Source: DMA r/w, CPU PC, CPU memory r/w"
+v2/Debugger-prefix-breakpoints/HDD-small.hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+v2/Debugger-prefix-breakpoints/test.bat,bat,590,c3ffaf6e2bcf55ad02ba4511102b7c2d1b83baeaf256977aa11148731294a5e6,,,,,
+v2/DiskFormat/DOS3.2.1_init_enh_nib.aws.yaml,aws.yaml,147679,ab7c9933729b0f0c30ef65973f34e642d089db3248e71c8b96c263bc791a0c60,Apple][+,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,,GH#537: Test DOS 3.2.1 INIT
+v2/DiskFormat/DOS3.2.1_init_enh_woz1.aws.yaml,aws.yaml,149462,af6d184431f12d1620e530e610312a53748873a4c0ce9479965947555e2a7e29,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,
+v2/DiskFormat/DOS3.2.1_init_enh_woz2.aws.yaml,aws.yaml,149462,7343ceb3e632f08ed23d1fd4c5b25b7eaf3c30b219c532d3741fed7cfd2313e3,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,
+v2/DiskFormat/DOS3.3_init_auth_dsk.aws.yaml,aws.yaml,307239,88b738f305e9f113fa13f86c3a690964379ecee676a61d1dfe3544b0e44f1e43,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/DOS3.3_init_auth_nib.aws.yaml,aws.yaml,307240,f4dfcce71f8ffd63ef63bee0e3b8c28c6a5d2db3c99715d4c9105071495f86e1,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/DOS3.3_init_auth_woz2.aws.yaml,aws.yaml,310795,759283bf65f59578b7fd33493180fec9391208f56ac17f4521aa4f2d1e834279,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,
+v2/DiskFormat/DOS3.3_init_enh_dsk.aws.yaml,aws.yaml,307238,5294d37cccdd9db6c0e54604b0d12491215cb941c46b99f4bc26950e2b0d931f,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/DOS3.3_init_enh_nib.aws.yaml,aws.yaml,307239,09cedea2814150564365d4819fecd9ed2896285454324ce164be408a8230b2d2,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/DOS3.3_init_enh_woz1.aws.yaml,aws.yaml,310794,9ef634ca26c0186294159cd80d42a33dbcd19a8dc932c512775d2582f82c9fa6,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,
+v2/DiskFormat/DOS3.3_init_enh_woz2.aws.yaml,aws.yaml,310794,3b6712dac6665db6420005db998cd555895da1bb43a1134b879e1fa1022538b1,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,
+v2/DiskFormat/ProDOS_format_auth_dsk.aws.yaml,aws.yaml,307239,8e41d4af94444a6ff0985b22aa0e132cd8bd4c00c8df27ef4389fd9dc3342596,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/ProDOS_format_auth_nib.aws.yaml,aws.yaml,307239,f84a6f7ea079ed3bb1b988f82f53596403fdeb31e4a858a7f0107e5407a8be96,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/ProDOS_format_auth_woz2.aws.yaml,aws.yaml,310133,0ea8e37df203981cae3b3fac0e374436fe6dad7365c4363e5e260574d7241934,Enhanced Apple//e,65C02,1=Generic Printer;6=Disk][,aux=Extended 80 Column,
+v2/DiskFormat/ProDOS_format_enh_dsk.aws.yaml,aws.yaml,307238,766ee2628bb492a3cfe2f0b06914126c0f9d031b07d7cf6b34f2c0ae8441cf6a,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/ProDOS_format_enh_nib.aws.yaml,aws.yaml,307238,f6e3aba640d310a0ee68e004c5c6510eade9a307a47a573709ffc5c876e79afb,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"GH#125, GH-PR#507: test:"
+v2/DiskFormat/ProDOS_format_enh_woz1.aws.yaml,aws.yaml,310132,e6d188d7e1e2daeaafff6861d2dcc25d984a9290b4c205149e02a554d64c2812,Enhanced Apple//e,65C02,1=Generic Printer;6=Disk][,aux=Extended 80 Column,
+v2/DiskFormat/ProDOS_format_enh_woz2.aws.yaml,aws.yaml,310132,1e059683310db14ec0292f6e958d6fdc115560885d5ee938e3acce11eae0a640,Enhanced Apple//e,65C02,1=Generic Printer;6=Disk][,aux=Extended 80 Column,
+v2/DiskFormat/dos3.3_slave.dsk,dsk,143360,12da3aa4929952215084ed45c4178df3ce0d3460cf2f67dd72a863d574f4ba03,,,,,
+v2/DiskFormat/prodos_utility.dsk,dsk,143360,3ed7664e8fa38a53a9068b7feb89231366a12a8ec3478fd1b1fe94eaf2693163,,,,,
+v2/DiskFormat/test.bat,bat,1905,5d7fd8b695c50ec93298ed392fefd376ae1cfa8ef1e5be2fc46b11d2b3329193,,,,,
+v2/DiskFormat/wozv1-gm.woz,woz,256,7a34ddf3982b7454fc1d7a69d064471de94e4952fa142346beffbc30b178dc3c,,,,,
+v2/DiskFormat/wozv2-gm.woz,woz,1536,3d4b2ae0a8f7ce21c2d62be6a6afba3bba0b21c433c8c931021f4b5de3c40061,,,,,
+v2/DiskFormat/zero.dsk,dsk,0,e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855,,,,,
+v2/DiskFormat/zero.nib,nib,0,e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855,,,,,
+v2/FANTAVISION.aws.yaml,aws.yaml,307906,9688a00e4942f8a71f6eadcba6ac7825005167a9d080b01d988bf5e61eb1f2c8,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,Test: mouse
+v2/FANTAVISION.dsk,dsk,143360,1af94853d739b5b0870d6c8d13ad4a90eeb003fef71e5fa1001bafb66b4a23b6,,,,,
+v2/FileFormat/ntsc-sather.apl,apl,168,49c2a536cf56e5faefb5d541649f682a8159186a341dbb24e873ee3bcc583cb2,,,,,
+v2/FileFormat/test.bat,bat,199,ac37cafe22fc67078846a591f860a934a0aa5504ae4fd6e431c207d2447b0e6b,,,,,
+v2/GNR-FINAL.2mg.gz,imagem-disco.gz,3339936,5927e8daa66642ccb7d7c90926874c9355eb0036c956635a38887c8588d05b54,,,,,
+v2/Gemstone Warrior (clean crack).dsk,dsk,143360,188d3ec3d6c42c4ee51f07f1f8c052e6ca6ab9482b82639a47bd39c81e9e852f,,,,,
+v2/Gemstone Warrior.aws.yaml,aws.yaml,3186,afee08df16e292460b2da09ad194b8289a4d5efb7bf9ae6b3ca8076611ee4eb5,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"Allow game to boot to title screen, to test: | GH#389: Test that disk's write-protect status can be read with drive off | GH#395: Test that LC write-enabled state is maintained after STA $C083"
+v2/HDD-32MB.aws.yaml,aws.yaml,294874,fe8534fbc8e09bc5d20666d4d7534854c984d64ee666d04cd8d50346f09530fd,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][;7=Generic HDD,aux=Extended 80 Column,GH#348: Test HDD image >800KiB
+v2/HDD-RW-IO-Boundary/DebuggerAutoRun.txt,txt,64,cfafce3eb15374339af444ab032abc8c47f34ce0a6e48f6bd02fe5339b0da900,,,,,
+v2/HDD-RW-IO-Boundary/HDD-RW-IO-Boundary.aws.yaml,aws.yaml,152340,5319bfada6dd65c7ad349af472558ebdaf2bef0f0a98d85d0cf7e269f5b4ad9e,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][;7=Generic HDD,aux=Extended 80 Column;No Slot Clock,"GH#1007: Test HDD reads & writes overlapping with I/O memory | Test HDD DMA breakpoints, by setting BPs using DebuggerAutoRun.txt"
+v2/HDD-RW-IO-Boundary/HDD-RW-IO-Boundary.hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+v2/HDD-RW-IO-Boundary/test.bat,bat,243,14fbec93655c12b24a76ffcc1ae203027251141516bd4e82509045d384dc8aac,,,,,
+v2/Memory/II+_s0(LC)_s3(Saturn)-test1.aws.yaml,aws.yaml,446684,d1dc60b8495e8ebeb3f50a775ea79224710737f32ff98e4b9b17277642224e4b,Apple][+,6502,0=Language Card;3=Saturn 128;6=Disk II,gameio:Device;No Slot Clock,
+v2/Memory/II+_s0(LC)_s3(Saturn)-test2.aws.yaml,aws.yaml,446684,495631b508198acc078b66544923c57d6cb351583a44ebb93b117baf0ee92e7b,Apple][+,6502,0=Language Card;3=Saturn 128;6=Disk II,gameio:Device;No Slot Clock,
+v2/Memory/II+_s0(Saturn)_s3(Saturn)-test1.aws.yaml,aws.yaml,706787,7f181f3c8233fd3b61ae2d3944541e252ce76c07ceb0c2e40c7392a45b0e1eb0,Apple][+,6502,0=Saturn 128;3=Saturn 128;6=Disk II,gameio:Device;No Slot Clock,
+v2/Memory/II+_s0(Saturn)_s3(Saturn)-test2.aws.yaml,aws.yaml,706787,9a0ce234b8d2c17afd3d1994af8c3467e6e0bbf8fe247abe9781384d1a4e621f,Apple][+,6502,0=Saturn 128;3=Saturn 128;6=Disk II,gameio:Device;No Slot Clock,
+v2/Memory/IIee_s0(LC)_s3(Saturn)-test1.aws.yaml,aws.yaml,445665,f9292c55dfd3ecabec8cea48df6bf69fc07b5e5620f14fb6dd6efa8dd0202092,Enhanced Apple//e,65C02,3=Saturn 128;6=Disk II,aux=Empty;gameio:Device;No Slot Clock,
+v2/Memory/IIee_s0(LC)_s3(Saturn)-test2.aws.yaml,aws.yaml,445665,1321e7f6b8df0007bd4fad03a4c6112dbc2fff53b8ad388ded83cf9fc9985be8,Enhanced Apple//e,65C02,3=Saturn 128;6=Disk II,aux=Empty;gameio:Device;No Slot Clock,
+v2/Memory/LC-RamWrite-Test-II+.aws.yaml,aws.yaml,7587,e7ea665489e047ee9c6993865492212d280446f225c516e32a03aa3bf43e9f62,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,Same as above but for II+ slot-0 LC
+v2/Memory/LC-RamWrite-Test-II+Saturn.aws.yaml,aws.yaml,7983,6e8c8421537235528ee2380a35d533b46bb09de68c01e083f445cc038774162e,Apple][+,6502,0=Saturn 128;1=Generic Printer;2=Super Serial Card;6=Disk][,,Same as above but for II+ slot-0 Saturn
+v2/Memory/LC-RamWrite-Test.aws.yaml,aws.yaml,7800,06989c0e313137e27b7ecc0c1e034a625dad91baf21f1b707173012e74333b58,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"Test save-state being in the middle of 2x LDA $C083 (to write enable LC Bank2 RAM) | Success is an ""OK"" message, otherwise crash to the monitor"
+v2/Memory/RamWorksIII-256KB.aws.yaml,aws.yaml,596524,fee8f84de45d1e1d0b94597ef25999dcea41b686f934632de49b2aeb9e9445ba,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=RamWorksIII;No Slot Clock,GH#1262: Test that 1st aux 64KB bank isn't corrupted (pages 0 & 1) when loading save-state.
+v2/Memory/RamWorks_r4.aws.yaml,aws.yaml,733125,360be991917dffea40decaa540019ffe93c2dd8ea6f380c292b13c405a5267fc,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=RamWorksIII,"Test RamWorks card | Use gid's 64K bank counting code (ref: https://groups.google.com/d/msg/comp.emulators.apple2/C62pO09U2og/MhrRZH14AgAJ, 1st May 2017) | NB. Need to improve this to verify that the memory in all aux banks has been correctly restored"
+v2/Memory/Saturn128-Bank3-2.aws.yaml,aws.yaml,424166,98a50d442817a149ab5bdfc7d4ed62b2fce2334a68f780f01842555b2303a340,Apple][+,6502,0=Saturn 128;1=Generic Printer;2=Super Serial Card;6=Disk][,,
+v2/Memory/Saturn128.aws.yaml,aws.yaml,127357,6f3ff8d41460d7a436f301212b61b840dec62aaa874d619b094b976d4ab1b9b5,Apple][+,6502,0=Saturn 128;1=Generic Printer;2=Super Serial Card;6=Disk][,,Test Saturn64/128K cards by running RAMTEST64K/RAMTEST128K
+v2/Memory/Saturn64.aws.yaml,aws.yaml,127190,0ec7653d39d0eff03009eeaf6b88dc121259922d63e17f03adcc45f7f0993be3,Apple][+,6502,0=Saturn 128;1=Generic Printer;2=Super Serial Card;6=Disk][,,Test Saturn64/128K cards by running RAMTEST64K/RAMTEST128K
+v2/Memory/Saturn_System.dsk,dsk,143360,4400de2e8f3c0fe4580a7c854d573b461280261964d9ea55f9f2c71fa7791755,,,,,
+v2/Memory/test.bat,bat,1107,88efa0c6c63876caa754ff9caa00e60d2f787325f8760bde2a16230fd3138cba,,,,,
+v2/Mockingboard/6522-one-shot.aws.yaml,aws.yaml,156645,c03fb6a55347993f058bdb148418d20be2533c1c9cc703346b4e66e7e263af1b,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,"GH#567 & GH#765: 3 tests for 6522, including T1 one-shot test | Also has the 6522's (at $C480) TIMER1_LATCH=$0000 (which is problematic for MB detection)"
+v2/Mockingboard/Cybernoid(MBv3).aws.yaml,aws.yaml,316093,8e4edf6641f61c415c0a00904d3f71cfd1db35e945b8399d51697f50857ed9ea,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,save-state: Mockingboard unit v3
+v2/Mockingboard/Cybernoid-TimerAtC480.aws.yaml,aws.yaml,315762,100c97421b3a6eb4317ce29cb506aa3c71d2f878cc6efd48cacd8cdfe29f2f9f,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,"GH#309: Mockingboard, mid-tune using 6522 at $C480 for Timer1 interrupt"
+v2/Mockingboard/Cybernoid.aws.yaml,aws.yaml,315489,da836969d55ff26b1b74e8174af67b14476d59891bee43c22cfa0d6ef774a292,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,"Mockingboard, mid-tune"
+v2/Mockingboard/Cybernoid.dsk,dsk,143360,713c7e53a624233a819219d68f6682fbd0b3d5529ce616c4ebfd6cf0dd993efd,,,,,
+v2/Mockingboard/Cybernoid2(Phasorv3).aws.yaml,aws.yaml,314331,ac53e30c50b0d140e4862650dc9b68c87c969df699f168f6b46f35c7e4a75391,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column,save-state: Phasor unit v3
+v2/Mockingboard/Cybernoid2-Phasor.aws.yaml,aws.yaml,314147,494a4972d41931bd6ece6a0ffd83734573df150547fe468b140c94782b5b5a8d,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column,"Phasor, mid-tune"
+v2/Mockingboard/MB-Poll-IFR-Test.aws.yaml,aws.yaml,15237,a0218cd1749a8b6eda64823f10085742f5699f92a3ce3815da61124a7ef1e541,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,"GH#496: Test polling IFR.Timer1 (NB. Interrupt enable is off, ie. IER.Timer1=0) | Success is an ""OK"" message, otherwise crash to the monitor"
+v2/Mockingboard/MB-Poll-IFR-Test2.aws.yaml,aws.yaml,314838,c87204ec0e5a290d500f6252c79e7d4e4d46bc39a8fe0b389737a5bf55d23e0e,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,"GH#496: dschmenk's MB player, polling IFR.Timer1 | https://github.com/dschmenk/PLASMA/blob/master/src/mockingboard/mbtest-poll.po (165f16d)"
+v2/Mockingboard/SC01-2x_phonemes_playing_continuously.aws.yaml,aws.yaml,159687,c248d1ba7ceff42f520eec564c696bb19221c2ae7bfaf0d587b16a66f9b77946,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Phasor;6=Disk][,aux=Extended 80 Column;No Slot Clock,Mockingboards in slot 4 & slot 5: both with 1x SC01 with phonemes continuously playing back (GH#1372) | Phoneme=$3F to silence
+v2/Mockingboard/SSI263-4x_phonemes_playing_continuously-alt.aws.yaml,aws.yaml,159693,9a837d65c146f596d8043f8c92a1ac571d2ed9104fdbcd65a87d89bc9db547b5,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Phasor;6=Disk][,aux=Extended 80 Column;No Slot Clock,Mockingboards in slot 4 & slot 5: both with 2x SSI263s with phonemes continuously playing back (GH#1412) | CTL=1 to silence
+v2/Mockingboard/SSI263-4x_phonemes_playing_continuously.aws.yaml,aws.yaml,159693,f4422749f4cda6db8eec926d3b670c9f034bcb3435576e3de89d0f71b207c1df,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Phasor;6=Disk][,aux=Extended 80 Column;No Slot Clock,Mockingboards in slot 4 & slot 5: both with 2x SSI263s with phonemes continuously playing back (GH#1372) | Phoneme=$00 to silence
+v2/Mockingboard/SSI263-test.aws.yaml,aws.yaml,67899,4c637e00e1125373eb2b3ad3ab0269dd242b03d0380949731945522720b5c77f,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column,GH#777: 6 tests for the SSI263 testing both Mockingboard & Phasor modes
+v2/Mockingboard/irq-pending.aws.yaml,aws.yaml,156650,c8d56f6a5a0adafc10862374d480a13f76dcee5353bf36ddcea6065678167e85,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,GH#677: Test loading a save-state with a MB Timer1 interrupt pending
+v2/Mockingboard/mbtest-poll.po,po,143360,c4030af6447b446b2aa4396664f193429fde81cfacd2be3b887e2c2ca5b6fec6,,,,,
+v2/Mockingboard/phasor-fugue(v9).aws.yaml,aws.yaml,332903,2b2773670f3eaea3ab788164c797082cdd803480436478bb4836055c50ae0923,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column;No Slot Clock,"Phasor, mid-tune"
+v2/Mockingboard/phasor-fugue.aws.yaml,aws.yaml,332417,9776518fe87c9a76d912e6f421158120f36da7482d4c058fcc560d7273001267,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column,"Phasor, mid-tune"
+v2/Mockingboard/phasor-speech.aws.yaml,aws.yaml,328232,ff9bba07f34e86db7870fa190e60fba075181e417c160a244dfbff8668c93c94,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column,"Select 1 for ""Dr Fay Zor"" speech"
+v2/Mockingboard/phasor-tone.aws.yaml,aws.yaml,328230,17c8ba2212b5358eff1a503ee2f97301d5d1f8a9daea5f272ce9d84cb9a10ada,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Phasor;6=Disk][,aux=Extended 80 Column,"Phasor, mid-tone (ie. no more changes to AY regs occur after loading snapshot)"
+v2/Mockingboard/phasor1.dsk,dsk,143360,1ac1856df6e54f026f642c5f75e004fb6fc044c95eed1d413d6604d17dc1f9f8,,,,,
+v2/Mockingboard/phasor2.dsk,dsk,143360,aaf2a91869436f5ffe9253a91b00a4b0162e6bd656b3a2dc776401b9a994e42c,,,,,
+v2/Mockingboard/test.bat,bat,1286,4faa40367c3ef8f7bf9434c453982e345927ecb25856160ea5236503130b95ac,,,,,
+v2/NoSlotClockTest-v6.aws.yaml,aws.yaml,311096,b8ba4ec9399264851fa7c4740f073a4112bac4d79ce8fd35015c5595748d0eca,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column;No Slot Clock,v6 = unit 'Apple2' v6 | Test unit type 'Miscellaneous' which contains NSC state | Code is in the middle of reading date/time from NSC
+v2/NoSlotClockTest.aws.yaml,aws.yaml,307227,9ed919d0bde455b7552e05b05e21872d3d502f229c0bee9fb04396fd04e61c7c,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"Test NSC | Code is in the middle of reading date/time from NSC | NB. Use ProDOS command ""- NS.CLOCK.UTILS"""
+v2/NoSlotClockTest.dsk,dsk,143360,eecb0696e846dbb87a6c284938dfc05159d3e0309fb61ecb741f90a6db30a523,,,,,
+v2/OMT-PAL.aws.yaml,aws.yaml,318464,2a7f881f9820808f3d2c24783c16a5ff6e6d7985a315c1ce1311f35bc4e431e2,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mockingboard C;5=Mockingboard C;6=Disk][,aux=Extended 80 Column,GH#648: 50Hz/PAL | GH#652: TIMER1 period=N+2
+v2/OMT.dsk,dsk,143360,b3cd3e0715981a93cd33dff168d85e4f00f14ade14ab016efccdb2e0e36fce63,,,,,"GH#648: 60Hz/NTSC - correctly fails with ""KO"" message"
+v2/Pravets82.aws.yaml,aws.yaml,147318,37173d26eb23309ffd0e5cb9a9fbc455feef6d9143c262b6d220d234ec8b9780,Pravets82,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,,Pravets82
+v2/Pravets8A.aws.yaml,aws.yaml,725158,50337a9adc909d12185d94d7d66bd3fa71aee64062687f16719caa60031aeee5,Pravets8A,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=RamWorksIII,Pravets8A
+v2/Pravets8M.aws.yaml,aws.yaml,147319,7be56216fdbbfd2b36376e20c0c2a25ee122dfb0edae6ab7d909adfa720e945f,Pravets8M,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,,Pravets8M
+v2/Prince of Persia (Original 3.5 floppy for IIc+).po,po,819200,88495ac330a8332ea013b8856de698d6020c55e3510f0168233fa86046d328d6,,,,,
+v2/Prince of Persia.aws.yaml,aws.yaml,299490,545076a447ba5c840a9e881ed48ad363b206fdb108b6339b798eda6ee1e648b5,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][;7=Generic HDD,aux=Extended 80 Column;No Slot Clock,"Test 800KiB 3.5"" image | NB. 6502.PC is in $C7nn firmware (so take care if firmware is updated in the future, eg. GH#319)"
+v2/RGB card/AppleColorCard-slideshow-lake.aws.yaml,aws.yaml,295092,444b91f6c0077761d4bd19c9c3b52b73ef260bcf03443771c70e05b8034c2bee,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,GH#621: Test support for AppleColor card's 160-color pixel video mode
+"v2/RGB card/Video-7 Apple II RGB Demo (Video-7, Inc.)(1984).dsk",dsk,143360,1b1503a9156f2f3bfc42fb3ef9fb606c502ea3f31bb7ef085c8ce070bc4ff885,,,,,Test various video modes (GH#851) | NB. AppleColor card is identical to Video7's RGB-SL7 card.
+v2/RGB card/dazzledraw1.aws.yaml,aws.yaml,295259,4bc2bee1316bf382906c3642bddd6b4862bd99362c40008f24594fb85ef9d9f5,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,Test: mouse | Test: RGB DHGR MIX mode
+v2/RGB card/dragon_wars.aws.yaml,aws.yaml,294604,ec887e5a50624939b63a51415aec5529e7eccb90ecd9cbe1d725f5464afcf59e,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"Test: RGB DHGR MIX mode, invert bit7 (GH#633)"
+v2/RGB card/test.bat,bat,533,bef85211b4bb92459253d0a770c03cd5dffeecbdad3b209bb188f49a3ca4ab5a,,,,,
+v2/Reset_defaults.aws.yaml,aws.yaml,9627,b6b4cf5c5c2bab599061cbefd88e94b17940ff1b7c98450ab4c1cdf385bbde27,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column;No Slot Clock,"Empty the drives and set model=apple2ee | Otherwise, next time AppleWin starts it'll try to load the temp disk image that has since been deleted!"
+v2/SAM Slot 5.aws.yaml,aws.yaml,164889,3b6067b23e6df2aea48cc2f2c02858efdb66fdd518bd6b67ac91344018ca54f5,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;5=SAM;6=Disk][,aux=Extended 80 Column;No Slot Clock,Test SAM in slot 5
+v2/SAM Slot 5.dsk,dsk,143360,8e456ba776dad11a50f1eb1858d12b8cee4102c0d8642c354b6c145f71c47caa,,,,,
+v2/SNES_MAX-slot4.aws.yaml,aws.yaml,149310,17d8b7e483ba991614301b5ddd6e45e6ea8913a57e8fd51d87d4b0b1cf980b72,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=SNES MAX;6=Disk][,aux=Extended 80 Column;No Slot Clock,From Lukazi's SNES_MAX_Programming_Example\SNES_MAX.dsk | Supports both controllers | NB. Part way through reading the controller buttons
+v2/SSC-COM2-tx-rx-tcp.aws.yaml,aws.yaml,60083,b47f10874c89467f219dea2618b278797d3317078e1249f3932dbff9b67fbd57,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"same as SSC-TCP-tx-rx-tcp.aws.yaml, except COM2 instead of TCP. | Added for GH#707. | NB. Can use com0com virtual serial port pair, so that test can be done wholly on local PC."
+v2/SSC-TCP-IN#2.aws.yaml,aws.yaml,7803,fac5b5fc6c105df772d7f1a072df0107da99149428c804c68bae4eeb147f1589,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,Test save-state SSC unit v1 | GH#486:
+v2/SSC-TCP-tx-rx-tcp.aws.yaml,aws.yaml,59132,9721c76f1c6b1699b10b1157fecceb43fa129c6a727e67f69ee42672350ca34a,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,Test save-state SSC unit v2 | Test that SSC's expansion ROM is loaded - PC is in expansion ROM space. | GH#522:
+v2/Sherwood Forest.aws.yaml,aws.yaml,3532,d4218740409d72f6eb39758e9647c8489403c71034c0349af97c968ea466520e,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,Test reading data when drive is off (but still spinning). | Also test .zip support
+v2/SmartPort-firmware/HDD-small(write-protected).hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+v2/SmartPort-firmware/HDD-small.hdv,hdv,4096,cf74cf7f7ed119a7b855d50797d45d63b6113c974ca1099df7f0e2f1953fee44,,,,,
+v2/SmartPort-firmware/SmartPort-firmware.aws.yaml,aws.yaml,299862,b0a6c7c9b4ad531c5ca97b22a6fcc0237c1b75303ef607a93e34a43efd2d99fb,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][;7=Generic HDD,aux=Extended 80 Column;No Slot Clock,"GH#319: Test SmartPort (HDD) firmware when MLI crosses page | GH#1207: SmartPort: test Status (SP Controller & units), Read, Write & Format | BLK: test Status, Read, Write & Format"
+v2/SmartPort-firmware/test.bat,bat,424,ebe1cfc16b1c8b4997c1620dd01768648124e01014e803629bb7ad7a24fdd014,,,,,
+v2/TK3000e.aws.yaml,aws.yaml,291927,74a6f97c200910a7809fb33a546c1e7301bea343d2fedc12fe95bfc7c47dbe3c,TK3000//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,TK3000 //e
+v2/TRIBU.dsk,dsk,143360,e163123e55d055298d9da6c268708603ca8bbdd95dfce5802a4dc94ec370e928,,,,,GH#763: PAL kill color-burst | NB. uses MB's in slot-4 & slot-5 (but only sees Phasor as a single MB in slot-4)
+v2/Tests-Various.aws.yaml,aws.yaml,3169,02bbafee08d11956b20bf5c85de8f4576dc8dc1b6207c66f550b71ca01bb859d,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,Minimal .aws.yaml file (just wrapper around .dsk) | GH#341: Color Monitor mode are shifted one HGR pixel to the right (losing the rightmost pixel) | GH#352: Full-speed in mixed mode results in flickery video | GH#356: PrintScreen from Color TV or B&W TV video modes is missing top line | GH#254: Rainbow (read floating bus to switch between GR and HGR screens) | GH#555: All combinations of 40-col & 80-col text/graphics mixed modes (NTSC) | GH#763: All combinations of 40-col & 80-col text/graphics mixed modes (PAL)
+v2/Tests-Various.dsk,dsk,143360,69a4dfff15dc32aa706a3a2015d9e1485dd55f24341992e48473cd598ad5017a,,,,,
+v2/Ultima-V.aws.yaml,aws.yaml,3526,99cd6c1697d3e8e6422dd4a00a66299f0f0129228a639b573ff73460cd8c0ec0,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,GH#599: Test waiting for drive to stop spinning in Authentic Disk Speed mode.
+v2/VidHD/SHR-AppleII-64K-Skyfox.aws.yaml,aws.yaml,240762,b000a53586bd20c318cf2ec6445063fd7f84057a15d56611cdb5187e27fe2ddb,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;3=VidHD;6=Disk][,No Slot Clock,Test: Apple II+ copying SHR image to VidHD's aux memory & displaying it
+v2/VidHD/test.bat,bat,200,f2562269844f3390860d33689b4e7aeed4625ea39ad05c4d2b9d49fab36264f2,,,,,
+v2/Video ROM/A2+.aws.yaml,aws.yaml,8182,8c5ec9d7906555354f58a2f544b437b18b3148a17a0ebe1bb169d396f8fe7b7c,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,Apple][+ | Apple][+ with 2K pig font video ROM
+v2/Video ROM/A2.aws.yaml,aws.yaml,8194,e39c9bc7118afe8bd0800009c0a088dd7b9c32ef5841d18171e998aa205266ea,Apple][,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,,Apple][
+v2/Video ROM/A2JPlus.aws.yaml,aws.yaml,8897,da177a45871f541f3fc5b32402470f9fa973bc90b6049f89a5f49e5eaf03b93d,Apple][ J-Plus,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,Apple][ J-Plus
+v2/Video ROM/A2e-enhanced-EDM.aws.yaml,aws.yaml,9348,5d7d89643bccdb52922109d7b1d0b2bb991d85c9557ded3bfe832837d023e4a6,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,
+v2/Video ROM/A2e-enhanced.aws.yaml,aws.yaml,8437,5cfe55e35391c838c2283edac40556a0a54a88dedfaf428052d7cb85bc517329,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"Enhanced Apple//e | Enhanced Apple//e: 4K, 8K and 16K video ROMs"
+v2/Video ROM/A2e.aws.yaml,aws.yaml,8427,19dd1212daba003afed57f96d9afb28c3de4aabcb22eaa43ffd88080e5d01b4f,Apple//e,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,Apple//e
+v2/Video ROM/Apple II+ - Pig Font Character Generator - 2716.bin,bin,2048,f5cafb1f18a11328267a89de942ddae2eff444270cd0d82ff250899981a8a529,,,,,
+v2/Video ROM/Apple IIe Video - Custom - French-US - Enhanced - 2764.bin,bin,8192,6914ec8c873d432f036754f66dad32f390654d3a1903bb0ad9d16af9e6714139,,,,,
+v2/Video ROM/Apple IIe Video French Canadian - Enhanced - 2732.bin,bin,4096,56479cbec4767651c62a4d0f61e6ed103395216f2b86eddba74d85495dd71cc4,,,,,
+v2/Video ROM/Apple2e_EDM.rom,rom,16384,863dbf2513f614a480762c57c156c87f3c051339262cd680e3e3fa8cbb507786,,,,,
+v2/Video ROM/IIJPLUS.ROM,rom,12288,076136209353b8cec4fc7dca955998b28e0202d019b1defbd1c6b8ea2f8e030d,,,,,
+v2/Video ROM/JVIDEO.ROM,rom,2048,c5443831794aedd9790037d274f190e2c577a0c0e65c33fe3db46e73da386052,,,,,
+v2/Video ROM/VID-342-274A.bin,bin,16384,00e3cf25ad9deefafb275c0cc682d0068be0c4258027dae58a5a8adf8739e289,,,,,
+v2/Video ROM/test.bat,bat,1089,db999fe7523fd2855d0f29c7588d3d2fd9be2551c1cbdce0f0fbed77850a37c4,,,,,
+v2/WOZ/Accolade's Comics - A.woz,woz,228090,413b1996d5b1a7f87088e1e3dfb4552403e7a181e875768c9af9a402927e9dd1,,,,,"Press any key at blue ""Accolade"" title, and it will do 2 protections checks before advancing to ""Play Game"" / ""Practice video game sequence"""
+"v2/WOZ/Balance of Power(OptTiming0x20) - Disk 1, Side A.woz",woz,241549,110ecff25657cf38543d240fab38f75fae9d6875654207a2103f881e5de42bdc,,,,,"Protection occurs at ""PRODOS 8 V1.3"" text screen."
+v2/WOZ/Buzzard Bait (woz-a-day collection).zip,zip,21442,500590263a94f59f01a2ce2ec25cfb0ff721a764cd818083fdc6019e9a474bc1,,,,,
+v2/WOZ/Glutton.zip,zip,52632,6fa8b1bd223555fe1c6722214f423aec6012ee937f64c37bb5d800213e3c1288,,,,,Reboot 10 times to check it passes protection check each time
+v2/WOZ/Gruds in Space side A.woz,woz,114987,6e6e27f8ec1a31775c960adb3196af85e5b1b85d31796c5f28041f08e31e749f,,,,,
+v2/WOZ/Legacy of the Ancients - Side 1 - copy 2.woz,woz,241424,5270ccc489cd2db2c546aeeede088411de745d0e5b6469d010d0a74f1ef3c6f7,,,,,same as Wasteland
+"v2/WOZ/Run For It - Disk 1, Side A_wp.woz",woz,234789,8cda2f8e2e9c75bdd0cdc82e5d85976aa29e41002c717c289d3ca3aac6d20e9f,,,,,
+v2/WOZ/Wasteland - Boot #1.woz,woz,234757,ee71ec4bbc66a1e775082ccb582bcad75372cb5d216bf928ad9a741bba5c22f9,,,,,same as Legacy of the Ancients
+v2/WOZ/Wizardry III side B - boot.woz,woz,234871,d7f82cacfe0972aa1744dec159d7a2b5d18a81b7d2e7c7d4a94310875aa85aab,,,,,Protection occurs after title sequence
+v2/WOZ/test.bat,bat,754,3cd0a2b5817348a0c22ac78918efe0236bdfc4c65325301961ef943591adc109,,,,,
+v2/archon_i.aws.yaml,aws.yaml,307258,59ac7a23c47c2b8bb74136318f94f1b6f8590d1fc96e540a3016ab77d13c7b26,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"Archon title screen, snapshot mid-tune (speaker) | GH#616: RGB (Color Monitor) & vertical blend | RGB (Color Monitor) & no vertical blend"
+v2/archon_i.dsk,dsk,143360,727c493a64f65db3bf9a8e3a418f367fda8088f812a0a2260e3dae6dffbb8de3,,,,,
+v2/arkanoid.aws.yaml,aws.yaml,307908,0d27304bc7542b09ff3d43564c67e964568c912f1e2aeb89d036f709546183e1,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,Test: mouse
+v2/arkanoid.dsk,dsk,143360,7b0718a537bdd8b5bd835f5b8577136144f9f392ee674103e0468f74f9140bb5,,,,,
+v2/audit-A2+-LC.aws.yaml,aws.yaml,3366,8d90f1511e902e1909838261be252bedaacf9d316cf19ae1884d69dc9a7093dd,Apple][+,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit-A2+-Saturn.aws.yaml,aws.yaml,3762,d02e96d82c937b0e35740dcdd94ddd48ad9d13f678ded720c4b5cfa05701ea80,Apple][+,6502,0=Saturn 128;1=Generic Printer;2=Super Serial Card;6=Disk][,,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit-A2-LC.aws.yaml,aws.yaml,5606,28c9f724d55020fcbb42ae6bec921ed70b49801addd7bbb140e752227cb29cf5,Apple][,6502,0=Language Card;1=Generic Printer;2=Super Serial Card;6=Disk][,,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit-A2.aws.yaml,aws.yaml,7703,daaf4fe8b96a2dc7c72e38008c371b79319ecf7f27aa781d169b2944549d058a,Apple][,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit-A2e-enhanced-aux-empty.aws.yaml,aws.yaml,4895,1a5e81717fb09f30b37869f29bad7660f5058d30fcdb19374b57b0f858aaddea,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Empty;No Slot Clock,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit-A2e-enhanced-aux-std80.aws.yaml,aws.yaml,7227,ff268c7d1c161c9c3e50d07613b11ab10b54c3ba9f3c0595ce26472f3d186025,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=80 Column;No Slot Clock,"https://github.com/zellyn/a2audit 1.07 | Test LC, internal ROM soft switches, etc | NB. ""audit-A2+-Saturn.aws.yaml"" will have LC errors, as Saturn is different to the Apple LC."
+v2/audit-A2e-enhanced.aws.yaml,aws.yaml,3161,765c46a6044049ed72b6e47dccf4e749fc23495ac8e9dc7333d8b54fdfc07720,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit-A2e.aws.yaml,aws.yaml,3472,c4bf735fbf1d585cc1b0d18619c32dd3b7d0c40a832987fe48651a637ff4ef2d,Apple//e,6502,1=Generic Printer;2=Super Serial Card;6=Disk][,aux=Extended 80 Column,"currently failing, reported here: https://github.com/zellyn/a2audit/issues/18"
+v2/audit.dsk,dsk,143360,1760f64a90eb42c7a7bb58073cbf57313f66d415fb805a4cd7a1faa241fe168f,,,,,
+v2/contiki-apple2-1-request-ip.aws.yaml,aws.yaml,320906,d664fd1fca4dbf08dc03c6a5ce8b414cf93e3c6b5bc29355538206f530799eb6,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;3=Uthernet;6=Disk][,aux=Extended 80 Column;No Slot Clock,
+v2/contiki-apple2-1.dsk,dsk,143360,d76cd7a56db11bed21a9e7f8969a51de8b0ca223c6af7aba2c26888adb323652,,,,,
+v2/dazzledraw1-mouse-rom-page0.aws.yaml,aws.yaml,307914,32d1da8820346b1241895fd95640be91838baf171d68c6fb1136169151176c71,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,"GH#381: Test when external ROM is enabled (mouse-card ROM) at $C400, and when PC is in range [$C400..FF]"
+v2/dazzledraw1-mouse-rom-page6.aws.yaml,aws.yaml,307915,a1f9287fcb570b0b8e22b80a2070b4e819b5d3e20615414bb91881d9df332fbb,Enhanced Apple//e,65C02,1=Generic Printer;2=Super Serial Card;4=Mouse Card;6=Disk][,aux=Extended 80 Column,"GH#381: Test when external ROM is enabled (mouse-card ROM) at $C400, and when PC is in range [$C400..FF]"
+v2/dazzledraw1.dsk,dsk,143360,6a3a8f33fd012b0f662bfc93d90fa0d01a037c5db6d729b9689213e395a33206,,,,,
+v2/dazzledraw2.dsk,dsk,143360,f8a2e8828d43b25431f975a2fee9d1d10ba9d47d27f3738b8ee379158ff72935,,,,,
+v2/sherwood_forest.zip,zip,70738,2f8b8481691aac210497ee8be6bb8cfb758bae5d86f4d2a91cd1edc8999f76b4,,,,,
+v2/skm-apple2ee.aws.yaml,aws.yaml,110152,e3f054706e286d5dedbcba0796d1ce260391350d36931e992d489ced1737a954,Enhanced Apple//e,65C02,,aux=Empty;gameio:Shift Key Mod;No Slot Clock,
+v2/skm-apple2p.aws.yaml,aws.yaml,110194,1c95f1c434d4171fec677bf66d00cab546c2bcc99ec75bee124f16df43766db8,Apple][+,6502,0=Language Card,gameio:Shift Key Mod;No Slot Clock,
+v2/test.bat,bat,4347,0cabf4628be015ab3811b4d30f0f8ae25f7e55363b7c47915ec037f1f605bb49,,,,,
+v2/u5boot.do.gz,imagem-disco.gz,77496,ffc700ca85a462ac85f24205fc8e82e6eb7779aab4b107bdbf4ff4e2567b8b12,,,,,
