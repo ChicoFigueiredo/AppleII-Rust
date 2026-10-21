@@ -56,6 +56,7 @@ Registrada **antes** da primeira comparação Rust × oráculo (a calibração e
 | `SPK` | (nenhum) | Toque do alto-falante (`$C030-$C03F`) |
 | `PHON` | `slot,unidade,fonema,amostras` | Início de um fonema (`SSI263::Play`); `amostras` é o comprimento da forma de onda em amostras de 22,05 kHz |
 | `PHEND` | `slot,unidade` | Fim do fonema (IRQ de "fonema completo", `SSI263::UpdateIRQ`) |
+| `PIO` | `slot,addr_lo,escrita` | Acesso de seleção de modo do Phasor em `$C0(8+slot)x` (`PhasorIO`); `escrita` é 1 para escrita |
 
 `cycle` é o contador acumulado de Ciclos do 6502 no momento do acesso (o mesmo de `UpdateCycles`/`CpuCalcCycles` no AppleWin e de `CardCtx::cycles` no Rust). Exceção declarada para SSI263: o AppleWin só detecta o fim do fonema em `PeriodicUpdate` (a cada 1000 Ciclos, com o buffer circular do DirectSound), e o port Rust agenda o fim exatamente em `início + comprimento` (decisão de projeto em `ssi263.rs`, sem laço de realimentação). Por isso, para `PHEND` (e para o `IRQ SPEECH` e o `IOR` de IFR que dependem dele) a comparação é: mesma **sequência** de fonemas e IRQs; a diferença `(PHEND − PHON)` do Rust contra a do oráculo deve ficar dentro de `J_ssi`, definido abaixo. As linhas que **não** dependem do fim do fonema continuam exatas.
 
@@ -75,7 +76,7 @@ Métricas (janelas de 4 410 amostras, 100 ms, por canal; só janelas em que o or
 
 Limiares: `E_max`, `R_max`, `f_tol` e `rms_tol` são **2 vezes o máximo observado** de M2/M3 entre duas execuções do próprio oráculo no mesmo programa com fatiamento diferente (`--audio-slice 1000` contra `--audio-slice 250`: muda onde caem as fronteiras dos blocos de `MB_Update`), com pisos de `E_max ≥ 256`, `R_max ≥ 64`, `f_tol ≥ 1 %` e `rms_tol ≥ 2 %`. Decisão: M0 satisfeita = PASS (exato); senão M1 igual **e** M2 e M3 dentro dos limiares = PASS (tolerância); qualquer outro caso = FAIL. Nenhum limiar é alterado depois da primeira comparação; uma mudança é um novo registro, só para as execuções seguintes.
 
-**SSI263 (fala).** `J_ssi` = o maior `|(PHEND − PHON)| ` observado entre duas fases de partida do oráculo (o mesmo programa disparado em Ciclos defasados de 0 e 333, que mudam o alinhamento com o `PeriodicUpdate` de 1000 Ciclos), somado a 1000 Ciclos (uma granularidade do `PeriodicUpdate`). O PCM do SSI263 não é comparado amostra a amostra: o port renderiza a mesma forma de onda de fonema na taxa do host, e o AppleWin a grava em blocos; compara-se a **duração** (e o silêncio em power-down, #1412), nunca o timbre. O timbre fica para o roteiro manual (`manual-tests/audio.md`).
+**SSI263 (fala).** `J_ssi` = o maior `|(PHEND − PHON)| ` observado entre duas fases de partida do oráculo (o mesmo programa precedido de 0 e de 333 `NOP` (0 e 666 Ciclos), que mudam o alinhamento com o `PeriodicUpdate` de 1000 Ciclos), somado a 1000 Ciclos (uma granularidade do `PeriodicUpdate`). O PCM do SSI263 não é comparado amostra a amostra: o port renderiza a mesma forma de onda de fonema na taxa do host, e o AppleWin a grava em blocos; compara-se a **duração** (e o silêncio em power-down, #1412), nunca o timbre. O timbre fica para o roteiro manual (`manual-tests/audio.md`).
 
 **Alto-falante.** Os toques (`SPK`) são exatos. O PCM do alto-falante (44 100 Hz mono, `QueueOneFrame` com o filtro DC) usa as mesmas métricas M0-M3 com a mesma calibração.
 

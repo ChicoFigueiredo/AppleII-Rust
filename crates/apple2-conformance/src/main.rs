@@ -1,6 +1,8 @@
 //! `conformance`: run declarative cases, generate and diff reference traces.
 
+use apple2_conformance::audio;
 use apple2_conformance::case::{parse_model, InputEvent, RunSpec};
+use apple2_conformance::pcm;
 use apple2_conformance::manifest::TestResult;
 use apple2_conformance::report::{counts, write_report};
 use apple2_conformance::runner::{generate_trace, load_cases, read_trace, run_case, Env};
@@ -14,6 +16,8 @@ uso:
   conformance run (--all | --case ID [--case ID ...]) --report DIR [--root DIR]
   conformance trace --model M (--frames N | --cycles N) [--cpu 6502|65C02] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
+  conformance audio-run --case ID --out-dir DIR [--root DIR] [--trace]
+  conformance pcm-compare ESPERADO.pcm OBTIDO.pcm [--channels N] [--e-max N --r-max X --f-tol X --rms-tol X]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
 Código de saída de `run`: 0 se tudo PASS, 1 se algum FAIL, 2 se algum BLOCKED (sem FAIL).
@@ -26,6 +30,8 @@ fn main() -> ExitCode {
         Some("run") => cmd_run(&args[1..]),
         Some("trace") => cmd_trace(&args[1..]),
         Some("diff") => cmd_diff(&args[1..]),
+        Some("audio-run") => cmd_audio_run(&args[1..]),
+        Some("pcm-compare") => cmd_pcm_compare(&args[1..]),
         Some("-h" | "--help" | "help") => {
             println!("{USAGE}");
             Ok(0)
@@ -229,4 +235,94 @@ fn cmd_diff(rest: &[String]) -> Result<u8, String> {
             Ok(1)
         }
     }
+}
+
+/// Runs an `audio-events` case on the Rust machine and writes `ID.events`, `ID.mb.pcm`,
+/// `ID.spkr.pcm` (and `ID.trace.csv` with `--trace`) to DIR, without comparing anything.
+fn cmd_audio_run(rest: &[String]) -> Result<u8, String> {
+    let (mut id, mut out, mut root, mut with_trace) = (None, None, None, false);
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        match arg {
+            "--case" => id = Some(a.value(arg)?.to_string()),
+            "--out-dir" => out = Some(PathBuf::from(a.value(arg)?)),
+            "--root" => root = Some(PathBuf::from(a.value(arg)?)),
+            "--trace" => with_trace = true,
+            o => return Err(format!("argumento desconhecido `{o}`")),
+        }
+    }
+    let id = id.ok_or("--case ID é obrigatório")?;
+    let out = out.ok_or("--out-dir DIR é obrigatório")?;
+    let env = Env::detect(root.as_deref());
+    let cases = load_cases(&env.root.join("cases"))?;
+    let case = cases
+        .iter()
+        .find(|c| c.id == id)
+        .ok_or_else(|| format!("caso `{id}` não existe"))?;
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let mut tw = if with_trace {
+        Some(
+            apple2_conformance::TraceWriter::new(Vec::new(), &[("source", "apple2-rust")])
+                .map_err(|e| e.to_string())?,
+        )
+    } else {
+        None
+    };
+    let run = audio::run(case, &env, tw.as_mut())?;
+    let lines: Vec<String> = run.events.iter().map(|(c, e)| e.line(*c)).collect();
+    let w = |name: String, bytes: &[u8]| {
+        std::fs::write(out.join(&name), bytes).map_err(|e| format!("{name}: {e}"))
+    };
+    w(format!("{id}.events"), audio::render_lines(&lines).as_bytes())?;
+    let le = |v: &[i16]| v.iter().flat_map(|s| s.to_le_bytes()).collect::<Vec<u8>>();
+    w(format!("{id}.mb.pcm"), &le(&run.mb_pcm))?;
+    w(format!("{id}.spkr.pcm"), &le(&run.spkr_pcm))?;
+    if let Some(t) = tw {
+        w(format!("{id}.trace.csv"), &t.finish().map_err(|e| e.to_string())?)?;
+    }
+    println!(
+        "{id}: {} eventos, {} quadros de PCM do Mockingboard, {} do alto-falante, {} ciclos",
+        lines.len(),
+        run.mb_pcm.len() / 2,
+        run.spkr_pcm.len(),
+        run.final_cycle
+    );
+    for wmsg in &run.warnings {
+        eprintln!("aviso: {wmsg}");
+    }
+    Ok(0)
+}
+
+/// Prints the PCM metrics of two raw s16le files (used to calibrate the limits with the oracle
+/// against itself). The limits only matter for the verdict line.
+fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
+    let (mut files, mut channels) = (Vec::new(), 2usize);
+    let mut l = pcm::Limits {
+        e_max: 256,
+        r_max: 64.0,
+        f_tol: 0.01,
+        rms_tol: 0.02,
+    };
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        let num = |v: &str| v.parse::<f64>().map_err(|e| e.to_string());
+        match arg {
+            "--channels" => channels = a.value(arg)?.parse().map_err(|e: std::num::ParseIntError| e.to_string())?,
+            "--e-max" => l.e_max = num(a.value(arg)?)? as i32,
+            "--r-max" => l.r_max = num(a.value(arg)?)?,
+            "--f-tol" => l.f_tol = num(a.value(arg)?)?,
+            "--rms-tol" => l.rms_tol = num(a.value(arg)?)?,
+            f if !f.starts_with("--") => files.push(PathBuf::from(f)),
+            o => return Err(format!("argumento desconhecido `{o}`")),
+        }
+    }
+    let [e, o] = files.as_slice() else {
+        return Err("pcm-compare precisa de ESPERADO.pcm e OBTIDO.pcm".into());
+    };
+    let rd = |p: &PathBuf| std::fs::read(p).map(|b| pcm::read_s16le(&b)).map_err(|e| format!("{}: {e}", p.display()));
+    let m = pcm::measure(&rd(e)?, &rd(o)?, channels, &l);
+    println!("{}", audio::describe_measures(&m));
+    let v = pcm::decide(&m, &l);
+    println!("{v:?}");
+    Ok(u8::from(matches!(v, pcm::Verdict::Fail(_))))
 }

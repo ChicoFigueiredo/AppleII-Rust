@@ -1,5 +1,6 @@
 //! Declarative conformance cases (`tests/conformance/cases/*.toml`).
 
+use crate::audio::{AudioSpec, PcmLimitsSpec};
 use apple2_core::{CardKind, Model};
 use serde::Deserialize;
 use std::path::Path;
@@ -27,6 +28,9 @@ pub struct Case {
     pub run: RunSpec,
     #[serde(default)]
     pub input: Vec<InputEvent>,
+    /// Sound card and 6502 program of `audio-events` cases.
+    #[serde(default)]
+    pub audio: Option<AudioSpec>,
     pub oracle: OracleSpec,
     /// Free text kept in the report.
     #[serde(default)]
@@ -208,6 +212,9 @@ pub enum OracleKind {
     Trace,
     /// Expressions over registers and memory, all of which must hold.
     Expr,
+    /// Audio events (and optionally PCM) recorded by the AppleWin oracle for the same program or
+    /// save-state; see `audio.rs` and docs/conformance/test-oracles.md ("Áudio").
+    AudioEvents,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -233,6 +240,20 @@ pub struct OracleSpec {
     /// Expressions for kind `expr`: `a == 0x00`, `mem[0x0400] >= 0xA0`, `pc != 0`.
     #[serde(default)]
     pub expect: Vec<String>,
+    /// Kind `audio-events`: reference event file, relative to `tests/conformance/`.
+    #[serde(default)]
+    pub events: Option<String>,
+    /// Kind `audio-events`: `exact` (default) or `ssi` (phoneme end timing, see `ssi_tolerance`).
+    #[serde(default)]
+    pub timing: Option<String>,
+    /// Kind `audio-events`, timing `ssi`: tolerance in cycles of each phoneme duration.
+    #[serde(default)]
+    pub ssi_tolerance: Option<u64>,
+    /// Kind `audio-events`: reference PCM (raw s16le), relative to `tests/conformance/`.
+    #[serde(default)]
+    pub pcm: Option<String>,
+    #[serde(default)]
+    pub pcm_limits: Option<PcmLimitsSpec>,
 }
 
 impl Case {
@@ -273,6 +294,23 @@ impl Case {
             OracleKind::Expr => {
                 for e in &o.expect {
                     Expr::parse(e)?;
+                }
+            }
+            OracleKind::AudioEvents => {
+                if o.events.is_none() {
+                    return Err("oracle.events required".into());
+                }
+                if let Some(a) = &self.audio {
+                    a.validate()?;
+                }
+                match o.timing.as_deref() {
+                    None | Some("exact") => {}
+                    Some("ssi") if o.ssi_tolerance.is_some() => {}
+                    Some("ssi") => return Err("oracle.ssi_tolerance required with timing `ssi`".into()),
+                    Some(t) => return Err(format!("oracle.timing `{t}`: expected exact or ssi")),
+                }
+                if o.pcm.is_some() != o.pcm_limits.is_some() {
+                    return Err("oracle.pcm and oracle.pcm_limits go together".into());
                 }
             }
             OracleKind::Trace

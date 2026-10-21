@@ -31,6 +31,7 @@
 #include "SaveState.h"
 #include "Speaker.h"
 
+#include "audio.h"
 #include "linux/context.h"
 #include "linux/paddle.h"
 #include "linux/registryclass.h"
@@ -70,16 +71,16 @@ namespace
             return IDOK;
         }
 
-        std::shared_ptr<SoundBuffer> CreateSoundBuffer(uint32_t, uint32_t, int, const char *) override
+        std::shared_ptr<SoundBuffer> CreateSoundBuffer(uint32_t size, uint32_t rate, int channels, const char *name) override
         {
-            return nullptr;
+            return audio_oracle::createSoundBuffer(size, rate, channels, name); // nullptr unless --audio-* is given
         }
 
         // Same batching as CommonFrame::Execute (1 ms slices), but with no video rendering.
         void RunUntil(const uint64_t endCycle)
         {
             const UINT clksPerFrame = NTSC_GetCyclesPerFrame();
-            const uint32_t slice = static_cast<uint32_t>(g_fCurrentCLK6502 * (1.0 / 1000.0));
+            const uint32_t slice = audio_oracle::slice(static_cast<uint32_t>(g_fCurrentCLK6502 * (1.0 / 1000.0)));
             while (g_nCumulativeCycles < endCycle)
             {
                 const uint32_t executed = CpuExecute(slice, false);
@@ -148,6 +149,9 @@ int main(int argc, char **argv)
             cards = argv[++i];
         else if (arg == "--meta" && hasValue)
             meta.emplace_back(argv[++i]);
+        else if (audio_oracle::parseArg(i, argc, argv))
+        {
+        }
         else
         {
             usage();
@@ -194,7 +198,7 @@ int main(int argc, char **argv)
         for (UINT slot = SLOT1; slot <= SLOT7; ++slot)
         {
             const SS_CARDTYPE type = (slot == SLOT6 && cards == "disk2") ? CT_Disk2 : CT_Empty;
-            RegSetConfigSlotNewCardType(slot, type);
+            RegSetConfigSlotNewCardType(slot, audio_oracle::cardTypeFor(slot, type));
         }
 
         const LoggerContext loggerContext(false);
@@ -204,6 +208,7 @@ int main(int argc, char **argv)
 
         g_bDisableDirectSound = true;
         g_bDisableDirectSoundMockingboard = true;
+        audio_oracle::begin();
 
         const uint64_t start = g_nCumulativeCycles;
         const uint64_t total = cycles ? cycles : frames * NTSC_GetCyclesPerFrame();
@@ -240,6 +245,7 @@ int main(int argc, char **argv)
         g_pfnCpuTraceHook = nullptr;
 
         std::fclose(g_out);
+        audio_oracle::end();
         std::fprintf(stderr, "[oracle] %" PRIu64 " instructions, final cycle %" PRIu64 "\n", g_lines,
             static_cast<uint64_t>(g_nCumulativeCycles));
     }
