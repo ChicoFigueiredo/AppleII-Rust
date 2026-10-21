@@ -3,7 +3,7 @@ use apple2_rust_shell::headless::{run, HeadlessOptions};
 
 #[test]
 fn boots_to_basic_and_dumps_a_png() {
-    let png = std::env::temp_dir().join(format!("applewin-headless-{}.png", std::process::id()));
+    let png = std::env::temp_dir().join(format!("apple2-rust-headless-{}.png", std::process::id()));
     let opts = HeadlessOptions {
         frames: 300,
         dump_screen: Some(png.clone()),

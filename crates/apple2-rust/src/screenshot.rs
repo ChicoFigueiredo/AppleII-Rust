@@ -81,7 +81,7 @@ mod tests {
     fn png_round_trip() {
         let mut f = Frame::new(2, 2);
         f.rgba[..4].copy_from_slice(&[1, 2, 3, 255]);
-        let dir = std::env::temp_dir().join(format!("applewin-shot-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("apple2-rust-shot-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut n = ScreenshotNamer::default();
         let p = n.next_path(&dir);

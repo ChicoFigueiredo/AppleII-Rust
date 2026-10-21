@@ -786,7 +786,7 @@ mod tests {
 
     #[test]
     fn imports_an_applewin_ini_into_a_draft() {
-        let dir = std::env::temp_dir().join(format!("applewin-import-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("apple2-rust-import-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("AppleWin.ini");
         std::fs::write(

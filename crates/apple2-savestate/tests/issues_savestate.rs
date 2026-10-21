@@ -1,7 +1,7 @@
 //! Regressões das issues da seção "Save-state" de docs/conformance/wave1-candidates.md que
 //! pertencem ao crate apple2-savestate (uma por issue). As que exigem o oráculo executável
 //! estão em `apple2-conformance/tests/oracle_roundtrip.rs` (#1262, #255, #591, #413), em
-//! `applewin/tests/state_gh564.rs` (#564) e nos casos `savestate-*` (corpus real).
+//! `apple2-rust/tests/state_gh564.rs` (#564) e nos casos `savestate-*` (corpus real).
 
 mod common;
 use apple2_core::{Machine, MachineConfig, Model};

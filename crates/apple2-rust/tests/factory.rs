@@ -112,7 +112,7 @@ fn disk2_firmware_13_sector_differs() {
 
 #[test]
 fn hard_disk_images_come_from_the_settings() {
-    let dir = std::env::temp_dir().join(format!("applewin-hdd-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("apple2-rust-hdd-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let img = dir.join("work.hdv");
     std::fs::write(&img, vec![0u8; 512 * 64]).unwrap();
@@ -180,7 +180,7 @@ fn cpu_override_reaches_the_machine() {
 
 #[test]
 fn rom_overrides_from_the_command_line() {
-    let dir = std::env::temp_dir().join(format!("applewin-rom-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("apple2-rust-rom-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let f8 = dir.join("f8.rom");
     std::fs::write(&f8, vec![0xEAu8; 0x800]).unwrap();

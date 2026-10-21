@@ -29,7 +29,7 @@ Usuário no grupo `dialout` (ou `uucp`): `groups`. Se não estiver, o passo 6 mo
 | 2 | Ligue o adaptador e reabra a janela de opções. | `/dev/ttyUSB0` (ou `ttyACM0`) aparece na lista. |
 | 3 | Selecione a porta, aplique e reinicie. No emulador: `PR#2` e `PRINT "OLA"`. | Com o laço, o texto volta pela serial (`IN#2` / `INPUT A$`). Com terminal no outro lado, "OLA" aparece lá. |
 | 4 | Pareie um dispositivo Bluetooth por RFCOMM (`sudo rfcomm bind 0 <MAC>`) e reabra a janela. | `/dev/rfcomm0` aparece na lista. (Opcional.) |
-| 5 | Com a porta aberta pelo emulador, abra a mesma porta em `minicom`/`screen` num segundo terminal e inicie outro `applewin` com o mesmo `-s2 ssc` e a mesma porta. | O segundo processo mostra na barra de status e no `stderr` `SSC: cannot open serial port '/dev/ttyUSB0': ...` (porta ocupada). O emulador continua rodando e a carta fica sem porta. |
+| 5 | Com a porta aberta pelo emulador, abra a mesma porta em `minicom`/`screen` num segundo terminal e inicie outro `apple2-rust` com o mesmo `-s2 ssc` e a mesma porta. | O segundo processo mostra na barra de status e no `stderr` `SSC: cannot open serial port '/dev/ttyUSB0': ...` (porta ocupada). O emulador continua rodando e a carta fica sem porta. |
 | 6 | `sudo chmod 000 /dev/ttyUSB0` (ou saia do grupo `dialout`), inicie o emulador com a porta selecionada. | Mensagem `SSC: cannot open serial port '/dev/ttyUSB0': ...` com a causa (`Permission denied`). Sem travar nem fechar. Restaure com `sudo chmod 660`. |
 | 7 | Retire o cabo USB com o emulador rodando e use `PR#2`. | Nenhum travamento. Se aparecer erro de escrita, ele é descrito. |
 

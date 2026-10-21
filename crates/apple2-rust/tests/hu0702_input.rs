@@ -303,7 +303,7 @@ fn aud_p_018_four_play_gets_pads_and_keys() {
 // ------------------------------------------------------------------ AUD-P-048
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("applewin-{name}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("apple2-rust-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     d
 }

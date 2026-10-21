@@ -24,7 +24,7 @@ fn bus() -> AudioBus {
 }
 
 fn tmp(name: &str, text: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("applewin-factory-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("apple2-rust-factory-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let p = dir.join(name);
     std::fs::write(&p, text).unwrap();

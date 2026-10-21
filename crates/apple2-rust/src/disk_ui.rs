@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn written_image_loads_back() {
-        let dir = std::env::temp_dir().join(format!("applewin-disk-ui-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("apple2-rust-disk-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("n.po");
         write_new_disk(&p, NewDiskKind::ProDos, FLOPPY_SIZE, ProDosFiles::default()).unwrap();

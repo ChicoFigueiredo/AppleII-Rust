@@ -7,7 +7,7 @@ use apple2_rust_shell::emu::{Command, Emulator};
 use std::path::PathBuf;
 
 fn temp_dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("applewin-state-{tag}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("apple2-rust-state-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     d
 }

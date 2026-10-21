@@ -140,7 +140,7 @@ Não há entrada de interrupção. `Z80::step` trata HALT como NOP de 4 T-states
 ## 5. Entrada, serial, impressora e rede do host
 
 - Reprodutor manual de AUD-P-028 (tecla presa): (1) iniciar o emulador; (2) segurar uma tecla de letra; (3) apertar F7 com a tecla ainda pressionada; (4) soltar a letra; (5) apertar F7 de novo. Uma leitura de `$C010` continua devolvendo o bit 7 (any-key-down) ligado, sem nenhuma tecla pressionada. Variante: com o joystick no teclado numérico, segurar uma direção, abrir F8 e soltar.
-- Para ver o erro de AUD-P-030 (antes engolido): `applewin` com `-s2 ssc` e a porta `/dev/ttyS0` sem permissão; o SSC fica sem porta e a barra de status mostra `SSC: cannot open serial port ...`.
+- Para ver o erro de AUD-P-030 (antes engolido): `apple2-rust` com `-s2 ssc` e a porta `/dev/ttyS0` sem permissão; o SSC fica sem porta e a barra de status mostra `SSC: cannot open serial port ...`.
 
 ## 6. UI
 

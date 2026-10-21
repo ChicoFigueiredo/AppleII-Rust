@@ -15,7 +15,7 @@ use apple2_rust_shell::emu::{Command, Emulator};
 
 #[test]
 fn gh564_save_state_on_exit_after_a_hardware_restart_saves_the_new_machine() {
-    let dir = std::env::temp_dir().join(format!("applewin-gh564-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("apple2-rust-gh564-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("session.aws.yaml");
     let mut s = Settings::default();

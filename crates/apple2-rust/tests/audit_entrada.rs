@@ -567,7 +567,7 @@ fn gh1491_disconnect_without_an_image_changes_nothing() {
 /// falhava com `bad_cast`; `Disk2CardManager` sempre consulta `QuerySlot` antes).
 #[test]
 fn gh1491_no_disk_operation_panics_with_empty_slots() {
-    let dir = std::env::temp_dir().join(format!("applewin-gh1491-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("apple2-rust-gh1491-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let img = dir.join("demo.dsk");
     std::fs::write(&img, vec![0u8; 143_360]).unwrap();

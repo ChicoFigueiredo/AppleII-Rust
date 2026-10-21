@@ -21,7 +21,7 @@ const Q7H: u16 = 0xC0EF;
 const Q7L: u16 = 0xC0EE;
 
 fn temp_dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("applewin-audit-{tag}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("apple2-rust-audit-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d

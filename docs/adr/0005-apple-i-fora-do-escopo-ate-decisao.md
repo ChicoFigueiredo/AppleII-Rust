@@ -25,7 +25,7 @@ Para o Apple I, o MAME é referência de comportamento, mas modela o terminal em
 Aproveita-se:
 - `apple2-cpu`: o 6502 NMOS e o trait `Bus` servem sem mudança.
 - O modelo do Scheduler (eventos em Ciclos, núcleo headless e determinístico da ADR 0001), embora a implementação atual viva em `apple2-core` e precise ser extraída ou duplicada.
-- Do frontend (`applewin`): janela, entrada de teclado, áudio de cassette, thread de emulação e ritmo (ADR 0003), com uma tela de texto nova.
+- Do frontend (`apple2-rust`): janela, entrada de teclado, áudio de cassette, thread de emulação e ritmo (ADR 0003), com uma tela de texto nova.
 - O mecanismo de ROM como bytes na configuração (ADR 0002).
 
 Não se aproveita: a memória com Paginação do `apple2-core`, os Soft switches, o vídeo NTSC (`apple2-video`), o Disk II e as cartas de `apple2-cards`, todos presos ao barramento e ao mapa do Apple II.
