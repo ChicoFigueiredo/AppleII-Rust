@@ -2,6 +2,8 @@
 
 Relatório do §21 do [plano de auditoria](../prompts/AppleII-Rust_Plano_Auditoria_Paridade_e_Evolucao.md), em português, com os 10 itens na ordem do plano. Esta é a **reavaliação** depois da onda final: as 1.115 issues com estado final (resultados `p23-*.csv`), a GH#1176 (reset do 6522), a GH#1340 (disco rápido com som), as correções de entrada, configuração, interface e núcleo, os 9 save-states reais corrigidos, o firmware do HDD 132.1 e o runner que compara `trace_rows_sha256`. Todos os números vêm de execuções feitas em 21/10/2026 sobre o SHA do item 1; nada vem de memória. Onde um número vem de um relatório gerado antes (vetores de CPU e Z80, smokes de plataforma, desempenho), a data do relatório é citada. A nota do item 9 é **autoavaliação; a revisão independente vem depois**.
 
+**Escopo declarado da release: Linux x86_64** (decisão do dono: release candidate para Linux, `v0.2.0-rc.1`). **Windows e macOS ficam BLOCKED/pendentes, com o motivo "teste manual do dono em VM"**, pelos roteiros de [manual-tests/plataformas.md](manual-tests/plataformas.md); não contam como FAIL do escopo Linux, e os pacotes dos dois, gerados pelo `release.yml` quando o dono o disparar, são marcados no texto da release como não verificados nativamente. Os Gates são dados no projeto inteiro e no escopo Linux, este último nas variantes com e sem a #241 corrigida (outro agente a está corrigindo).
+
 ## 1. Baseline com SHAs e versões
 
 | Repositório | Referência | SHA completo |
@@ -15,7 +17,7 @@ Relatório do §21 do [plano de auditoria](../prompts/AppleII-Rust_Plano_Auditor
 | AppleWin-Test (corpus, sem licença; cache local) | HEAD de `master` em 20/10/2026 | `4b113ce8cff1426bda5595cac9cb04776adfbb5d` |
 | audetto/AppleWin (Oráculo executável, Linux) | HEAD de `master` em 20/10/2026; núcleo AppleWin `3e8054b`; `audetto-version.patch` leva a versão a 1.32.1.0 | `a1e20c0362f392dc25f1a3b218d2f84d4f1a25da` |
 
-Versões: AppleII-Rust `0.1.0` (tag) e `0.2.0-alpha.1` (preparada na branch local `release/v0.2.0-alpha.1`, sem tag nem publicação). AppleWin `1.32.1.0` mais 5 commits. Detalhes e a comparação de commits: [baseline.md](baseline.md).
+Versões: AppleII-Rust `0.1.0` (tag) e `0.2.0-rc.1` (preparada na branch local `release/v0.2.0-rc.1`, sem tag nem publicação). AppleWin `1.32.1.0` mais 5 commits. Detalhes e a comparação de commits: [baseline.md](baseline.md).
 
 Ambiente de execução: Ubuntu 26.04.1 LTS, kernel 7.0.0-38, x86_64, AMD Ryzen 7 3700X (16 threads, 125 GiB), `rustc 1.98.1 (48a229cea 2026-09-01)`, Wine 10.0 para o Windows via `cargo-xwin`. A máquina estava compartilhada com outros processos, o que afeta tempos, não resultados.
 
@@ -37,8 +39,8 @@ Versão condensada. A tabela completa, com uma linha por componente e Modelo, es
 | Depurador | ][+, //e Enhanced | PASS 73; FAIL 11; BLOCKED 7; N/A 39 (130 issues) | `results/depurador.csv`, `results/p23-depurador.csv` | Os 11 FAIL (10 mais a #458) são comportamentos do AppleWin reproduzidos | #34 | P1 |
 | Interface, linha de comando, configuração | todos | PASS (testes próprios, 49 issues de UI e 73 de configuração verificadas); sem Oráculo de janela | `p23-ui.csv`, `p23-config-outras.csv`, `hu0702_input.rs`, `cli.rs` | Divergências a favor do usuário aguardam decisão (item 3 do gaps) | #35 | P1 |
 | Linux x86_64 | Linux | PASS (smoke, pacote extraído; 20/10/2026) | [relatorio-plataformas.md](platform/relatorio-plataformas.md) | Wayland nativo e dispositivos: manual | #36 | P0 |
-| Windows (Wine) / Windows nativo | Windows | PASS (Wine, 20/10/2026) / BLOCKED (nativo) | [windows-wine.md](platform/windows-wine.md) | Wine não é Windows | #36 | P0 |
-| macOS | macOS | BLOCKED | sem hardware | tudo | #36 | P0 |
+| Windows (Wine) / Windows nativo | Windows | PASS (Wine, 20/10/2026) / BLOCKED (nativo: teste manual do dono em VM) | [windows-wine.md](platform/windows-wine.md) | Wine não é Windows | #36 | P0 |
+| macOS | macOS | BLOCKED (teste manual do dono em VM) | sem hardware | tudo | #36 | P0 |
 | Extensões: rewind, DAP, laboratório, WASM | Enhanced //e | IMPLEMENTED | crates próprios | sem equivalente no AppleWin | #40 a #44 | P2 a P3 |
 
 ## 3. Sumário por status das issues upstream
@@ -78,7 +80,7 @@ Cada um com passos para reproduzir, causa raiz e estado. SHA observado: `bb01e34
 
 | # | Problema | Passos para reproduzir | Causa raiz | Estado |
 |---|---|---|---|---|
-| 1 | **Windows nativo e macOS nunca foram executados; a CI nunca foi executada (P0, G1)** | Não há o que reproduzir: `tools/package/smoke-wine.sh` roda sob Wine, que não é Windows; `ci.yml`, `conformance.yml` e `release.yml` jamais rodaram nesta fase. Roteiro: [manual-tests/plataformas.md](manual-tests/plataformas.md) | Sem hardware nem licença de SDK da Apple; cota de CI esgotada | **Aberto, BLOCKED**. Decisões 6, 7 e 8 |
+| 1 | **Windows nativo e macOS nunca foram executados (fora do escopo Linux, pendentes de teste manual do dono em VM); a CI nunca foi executada (P0, G1)** | Não há o que reproduzir: `tools/package/smoke-wine.sh` roda sob Wine, que não é Windows; `ci.yml`, `conformance.yml` e `release.yml` jamais rodaram nesta fase. Roteiro: [manual-tests/plataformas.md](manual-tests/plataformas.md) | Sem hardware nem licença de SDK da Apple; cota de CI esgotada | **Aberto, BLOCKED**. Decisões 6, 7 e 8. Não conta como FAIL no escopo Linux |
 | 2 | **7 P0 BLOCKED (#4, #70, #400, #422, #564, #640, #1126)** | `grep ',BLOCKED,' docs/conformance/results/*.csv` mostra a causa de cada um. Os mecanismos sintéticos de #400, #422, #564 e #640 passam em testes Rust | Precisam de software de terceiros sem fixture (UCSD Pascal, entre outros), do relógio real ou de um Oráculo de janela e de troca de disco ao vivo | **Aberto**. Decisão 5 |
 | 3 | **PCM do AY e do alto-falante, SSI263 +666 (P1, 5 casos FAIL)** | `conformance run --case audio-ay-tone-pcm` (e `-envelope-pcm`, `-noise-pcm`, `audio-speaker-clicks-pcm`, `audio-ssi263-phonemes-p333`) | O AppleWin gera o PCM em blocos que dependem do fatiamento de tempo do hospedeiro, com 23 ciclos por amostra no alto-falante e `PeriodicUpdate` de ~1000 ciclos; o Rust gera cada amostra no ciclo exato. O próprio Oráculo muda de fase com o fatiamento | **Aberto**. Núcleo do AY e eventos idênticos. Decisão 4 |
 | 4 | **#241: 1 pixel de borda no Color Monitor PAL (P1)** | Cena `tests/conformance/inputs/video/issue-0241-floatbus-dlores-text80.scene` no diferencial de vídeo, PAL + Color Monitor + `TEXT/GR` por linha + texto na página 2: pixel (18,18), Oráculo (225,239,255), Rust preto | Não localizada; duas hipóteses descartadas (zeragem em `pal_mid_line_fixups`, `addr -= 2` na troca TEXT para gráfico). NTSC e Color TV PAL passam | **Aberto**, FAIL |
@@ -132,9 +134,10 @@ Risco que não é um defeito achado, mas pesa na recomendação: **Windows e mac
 | Corpus AppleWin-Test (carga de 1 quadro) | `applewin_test_corpus.rs` | 94 OK, 18 OK com avisos, de 112 (relatório de 20/10/2026, [applewin-test-load.md](../../tests/conformance/reports/applewin-test-load.md)); carregar não é PASS de fidelidade |
 | Windows via Wine 10.0 | `tools/package/smoke-wine.sh` | PASS (relatório de 20/10/2026, [windows-wine.md](platform/windows-wine.md)); **não refeito** |
 | Linux: pacote e smoke | `tools/package/smoke-linux.sh`, `test-package.sh` | PASS, 17 verificações (relatório de 20/10/2026, [relatorio-plataformas.md](platform/relatorio-plataformas.md)); **não refeito** |
+| Pacote Linux do release candidate | `tools/package/linux.sh` (build release, smoke headless, licenças, `package.sh linux`, SBOM, SHA256SUMS) e `tools/package/test-package.sh` | **PASS**, 17 verificações (pacote extraído fora da árvore e rodado de dentro; 3 discos montam e bootam; manual embutido). Artefatos em `target/release-candidate/` (fora do Git), versão `0.2.0-rc.1`; SBOM CycloneDX 1.5 com 452 componentes; 492 licenças de terceiros dentro do pacote. SHA-256: `applewin-0.2.0-rc.1-linux-x64.tar.gz` = `3e93238ae553c832cb3173ecd13643fb3e7566ef36367d6aa4b5722f24765caa`; `applewin-0.2.0-rc.1.cdx.json` = `4e95cfc162f79b850baa30e1cfe541baa9845fec9dd3ec6edb5220069a6affc2` (conferidos por `sha256sum --check`). Gerado sobre o commit da branch `release/v0.2.0-rc.1`; o hash do tarball muda se o pacote for refeito noutra máquina ou noutro caminho |
 | Desempenho | `apple2-bench` | [performance.md](../../tests/conformance/reports/performance.md), em máquina compartilhada; não refeito |
 
-`cargo clippy --workspace --all-targets -- -D warnings`: sem avisos (exit 0). `cargo fmt --all -- --check`: sem diferenças (exit 0). Ambos em 21/10/2026 sobre o SHA do item 1 mais as alterações de documentos e do script desta entrega.
+`cargo clippy --workspace --all-targets -- -D warnings`: sem avisos (exit 0). `cargo fmt --all -- --check`: sem diferenças (exit 0). Ambos em 21/10/2026 sobre o SHA do item 1 mais as alterações de documentos e do script desta entrega, e de novo na branch `release/v0.2.0-rc.1` (clippy com a versão `0.2.0-alpha.1`, antes de a versão virar `0.2.0-rc.1`, que só muda `Cargo.toml` e `Cargo.lock`; a suíte de testes completa foi rodada no SHA do item 1, não na branch de release).
 
 Relatórios por sistema operacional: Linux nativo, [relatorio-plataformas.md](platform/relatorio-plataformas.md); Windows (Wine), [windows-wine.md](platform/windows-wine.md); Windows nativo e macOS, roteiros em [manual-tests/plataformas.md](manual-tests/plataformas.md) (não executados). Os smokes de Linux e Wine são de 20/10/2026 (commit base `516c123`); os do SHA atual não foram refeitos, só as suítes de testes e de conformidade.
 
@@ -202,6 +205,8 @@ Impacto: perda ou corrupção de dados do usuário. Os riscos "residuais" são o
 
 A nota está bem abaixo de 96: o trabalho **não** está aceito como completo (veja a leitura da nota em [release-readiness.md](release-readiness.md)).
 
+Gates do **projeto inteiro** (Linux, Windows e macOS; Windows e macOS contam como pendentes):
+
 | Gate | Estado | Motivo |
 |---|---|---|
 | G0 Inventário | **PASS** (autoavaliação) | 1.115 de 1.115 issues coletadas, classificadas e com estado; 0 UNVERIFIED; todas com evidência ou justificativa; divergências registradas. Ressalva: os 849 resultados da onda final não têm amostra independente |
@@ -209,11 +214,29 @@ A nota está bem abaixo de 96: o trabalho **não** está aceito como completo (v
 | G2 Beta funcional | FAIL (e BLOCKED em parte) | Matriz de componentes incompleta (clones, VidHD em ][, SHR em PAL) e áudio com 5 FAIL; 7 P0 BLOCKED sem aceite formal; evidência de áudio/entrada/GUI nos 3 SO BLOCKED. Zero FAIL P0 e fixtures reais críticas passam |
 | G3 Stable candidata | FAIL | FAIL P1 (#241), sem pacote instalado nos 3 SO, sem parecer independente |
 
+Gates no **escopo declarado, Linux x86_64** (Windows e macOS fora, BLOCKED por "teste manual do dono em VM", sem contar como FAIL). Critério a critério em [release-readiness.md](release-readiness.md):
+
+| Gate | Sem a #241 corrigida | Com a #241 corrigida | O que falta |
+|---|---|---|---|
+| G0 | **PASS** | **PASS** | nada |
+| G1 | **BLOCKED** | **BLOCKED** | só a CI do GitHub no Linux (nunca acionada; decisão 6). Smoke, `fmt`, `clippy`, testes e pacote estão em PASS |
+| G2 | **FAIL** | **FAIL** | matriz incompleta, 5 casos de PCM/SSI, 7 P0 sem aceite, hardware (gamepad, teclado regional, Wayland, audição) |
+| G3 | **FAIL** | **FAIL** | zero FAIL P0/P1: #241 (some se corrigida) e os 5 casos de PCM/SSI (somem se o dono aceitar a decisão 4); parecer independente |
+
+Os únicos FAIL P0/P1 do escopo Linux são a #241 e os 5 casos de PCM/SSI (P1 no harness). Não há outro.
+
 Todos os critérios de cada Gate, com PASS, FAIL ou BLOCKED e evidência: [release-readiness.md](release-readiness.md).
 
 ## 10. Recomendação de release
 
-**alpha.** Publicar, se o dono decidir, apenas como **pré-lançamento `v0.2.0-alpha.1`**, com a seção "Limitações conhecidas" do CHANGELOG, e sem chamá-la de beta nem de candidata a estável. O que mudou desde o relatório anterior (o inventário passou a PASS, 0 FAIL em save-states, FAIL P1 de 3 para 1) aproxima a beta, mas não a atinge: o G2 não está atingido (matriz incompleta, 5 FAIL de áudio, 7 P0 BLOCKED sem aceite, evidência dos 3 SO ausente). Antes de usar o rótulo "alpha técnica" sem ressalva, o G1 pede o smoke em Windows e macOS nativos (o que o dono pode executar pelos roteiros, pela VM Windows ou autorizando um `workflow_dispatch`). A versão `0.2.0-alpha.1` está preparada na branch local `release/v0.2.0-alpha.1`; nenhuma tag, PR ou push foi feito.
+**Objetiva pelo §18: alpha técnica.** O dono declarou a entrega como **release candidate para Linux x86_64** (`v0.2.0-rc.1`); isso é um rótulo dele, e o time o publica **só como pré-lançamento** (`prerelease: true`), sem chamá-lo de beta nem de stable candidate, com "Limitações conhecidas" no CHANGELOG e com os pacotes de Windows e macOS marcados como **não verificados nativamente**.
+
+O rótulo não é sustentado pelos Gates: o G1 do Linux espera só a CI; o G2 do Linux está em FAIL; o G3 do Linux está em FAIL. **Critérios que faltam**, por variante:
+
+- *Sem a #241 corrigida*: zero FAIL P1 (a #241 e os 5 casos de PCM/SSI), parecer independente, CI, aceite dos 7 P0 e matriz de componentes completa.
+- *Com a #241 corrigida*: decisão 4 (PCM/SSI como limitação conhecida), parecer independente, CI no Linux, aceite dos 7 P0 e matriz completa. A #241 corrigida tira o único FAIL P1 em issue, mas não muda o G2 e não basta para o G3.
+
+O que mudou desde o relatório anterior (o inventário passou a PASS, 0 FAIL em save-states, FAIL P1 de 3 para 1) aproxima a beta, mas não a atinge. Windows e macOS dependem do teste manual do dono em VM (decisão 7). A versão `0.2.0-rc.1` está preparada na branch local `release/v0.2.0-rc.1`; nenhuma tag, PR ou push foi feito.
 
 ## 11. Decisões pendentes do dono
 
@@ -227,6 +250,6 @@ Nove decisões que só o dono pode tomar. Nenhuma foi tomada pelo time. Cada ite
 | 4 | **As 5 divergências de PCM/SSI**, que vêm do fatiamento de tempo do hospedeiro no AppleWin | (a) Aceitar como limitação conhecida (os eventos são idênticos). (b) Copiar o quantum do AppleWin (blocos e 23 ciclos por amostra) | **(a)**: o próprio Oráculo muda de fase com o fatiamento, copiar fixaria um artefato do hospedeiro e pioraria o áudio sem prova de hardware; registrar os 5 casos como `known_divergence` aceita |
 | 5 | **Os 7 P0 BLOCKED** (#4, #70, #400, #422, #564, #640, #1126), que precisam de software de terceiros ou do relógio real | (a) Aceite formal do bloqueio, com os mecanismos sintéticos como evidência. (b) Obter as fixtures e o Oráculo de janela. (c) Misto | **(c)**: aceite formal de #4, #564 e #640 (frontend e tempo real, testes Rust passam); obter fixtures de #70, #400, #422 e #1126 só se houver origem legal. Sem o aceite, o G2 não fecha |
 | 6 | **Autorizar uma execução manual de CI** (`ci.yml` e `conformance.yml`, nos 3 SO) para destravar o G1 | (a) Autorizar uma execução de cada, no SHA final. (b) Esperar a cota renovar. (c) Não rodar | **(a)**, uma única vez, depois que as branches forem mescladas. O `release.yml` fica de fora. Sem isso o G1 continua BLOCKED |
-| 7 | **VM Windows 11 do VirtualBox** do dono para o roteiro manual de Windows nativo | (a) Usar a VM (o dono liga e dá acesso; o time executa o roteiro [plataformas.md](manual-tests/plataformas.md)). (b) Esperar a CI. (c) Não testar | **(a)**: evidência nativa sem gastar a cota; complementa o item 6, porque a CI não cobre DPI, SmartScreen nem áudio real |
-| 8 | **Assinatura e notarização** dos pacotes | (a) Alpha sem assinatura e com aviso no CHANGELOG. (b) Authenticode e Apple Developer ID antes do beta. (c) Programa de assinatura gratuita para código aberto no Windows e Developer ID no macOS | **(a) agora, (b) ou (c) antes do beta**: o aviso já está no CHANGELOG; o custo e o certificado são decisão do dono |
-| 9 | **Abrir o PR `[release]` da v0.2.0-alpha.1** | (a) Abrir agora. (b) Abrir depois das decisões 6 e 7 e da revisão independente. (c) Não abrir | **(b)**: o PR levaria o G1 em BLOCKED e uma nota de autoavaliação; com Windows e macOS nativos e o parecer independente a mensagem do alpha fica honesta. Tag só depois do merge |
+| 7 | **O dono executa os roteiros de Windows e macOS** (VMs do VirtualBox, a partir do clone do repositório) | (a) Executar [plataformas.md](manual-tests/plataformas.md) nas duas VMs e registrar o resultado. (b) Esperar a CI nos 3 SO. (c) Publicar sem verificação nativa | **(a)**: evidência nativa sem gastar a cota; complementa o item 6, porque a CI não cobre DPI, SmartScreen, Gatekeeper nem áudio real. Até lá, Windows e macOS são BLOCKED ("teste manual do dono em VM") e saem marcados como não verificados na release |
+| 8 | **Assinatura e notarização** dos pacotes | (a) Pré-lançamento sem assinatura e com aviso no CHANGELOG. (b) Authenticode e Apple Developer ID antes do beta. (c) Programa de assinatura gratuita para código aberto no Windows e Developer ID no macOS | **(a) agora, (b) ou (c) antes do beta**: o aviso já está no CHANGELOG; o custo e o certificado são decisão do dono |
+| 9 | **Abrir o PR `[release]` da v0.2.0-rc.1** | (a) Abrir agora. (b) Abrir depois da CI no Linux (6), da #241 resolvida e da revisão independente. (c) Não abrir | **(b)**: o PR levaria o G1 em BLOCKED e uma nota de autoavaliação; Windows e macOS entram marcados como não verificados. Tag só depois do merge |
