@@ -2,6 +2,7 @@
 
 use crate::case::{Authority, Case, Expr, InputEvent, OracleKind, RunSpec};
 use crate::manifest::{now_utc, Manifest, TestResult};
+use crate::scene::Scene;
 use crate::sha256::sha256_hex;
 use crate::trace::{
     compare_with, parse_field_list, CompareOptions, Trace, TraceReader, TraceWriter,
@@ -86,6 +87,9 @@ pub struct Outcome {
 pub fn machine_config(case: &Case) -> Result<MachineConfig, String> {
     let mut cfg = MachineConfig::for_model(case.model());
     cfg.cpu_cmos = case.cpu_override()?;
+    if let Some(v) = &case.video {
+        cfg.video_standard = v.standard()?;
+    }
     if let Some(slots) = case.card_slots()? {
         cfg.slots = slots;
     }
@@ -263,9 +267,38 @@ struct Observed {
     trace: Option<Vec<u8>>,
 }
 
-fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, String> {
+/// The renderer options of a case (`[video]`, defaults: colour TV, NTSC, Video-7 SL7).
+pub fn render_config(case: &Case) -> Result<RenderConfig, String> {
+    let v = case.video.clone().unwrap_or_default();
+    Ok(RenderConfig {
+        video_type: v.video_type()?,
+        rgb_card: v.rgb_card()?,
+        ..RenderConfig::default()
+    })
+}
+
+/// RGBA8 bytes of the visible area, or of the whole framebuffer with its borders.
+pub fn framebuffer_rgba(r: &Renderer, full: bool) -> Vec<u8> {
+    if !full {
+        return r.rgba8();
+    }
+    let mut out = Vec::with_capacity(r.pixels().len() * 4);
+    for &c in r.pixels() {
+        out.extend_from_slice(&[(c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8]);
+    }
+    out
+}
+
+fn observe_once(
+    case: &Case,
+    env_meta: &[(String, String)],
+    scene: Option<&Scene>,
+) -> Result<Observed, String> {
     let cfg = machine_config(case)?;
     let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    if let Some(sc) = scene {
+        sc.apply(&mut m);
+    }
     let kind = case.oracle.kind;
     match kind {
         OracleKind::Trace => {
@@ -292,7 +325,7 @@ fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, 
             })
         }
         OracleKind::FramebufferHash => {
-            let mut r = Renderer::new(RenderConfig::default());
+            let mut r = Renderer::new(render_config(case)?);
             r.resync(m.cycles_in_frame());
             drive(
                 &mut m,
@@ -303,8 +336,9 @@ fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, 
                     renderer: Some(&mut r),
                 },
             )?;
+            let full = case.video.as_ref().map_or(Ok(false), |v| v.full_region())?;
             Ok(Observed {
-                value: sha256_hex(&r.rgba8()),
+                value: sha256_hex(&framebuffer_rgba(&r, full)),
                 machine: m,
                 renderer: Some(r),
                 trace: None,
@@ -347,12 +381,17 @@ pub fn state_dump(m: &Machine) -> Vec<u8> {
     serde_json::to_vec(&m.save_state()).expect("machine state serializes")
 }
 
-fn png_bytes(r: &Renderer) -> Result<Vec<u8>, String> {
-    let (_, _, w, h) = r.visible_rect();
+fn png_bytes(r: &Renderer, full: bool) -> Result<Vec<u8>, String> {
+    let (w, h) = if full {
+        r.size()
+    } else {
+        let (_, _, w, h) = r.visible_rect();
+        (w, h)
+    };
     let mut out = Vec::new();
     image::codecs::png::PngEncoder::new(&mut out)
         .write_image(
-            &r.rgba8(),
+            &framebuffer_rgba(r, full),
             w as u32,
             h as u32,
             image::ExtendedColorType::Rgba8,
@@ -362,6 +401,22 @@ fn png_bytes(r: &Renderer) -> Result<Vec<u8>, String> {
 }
 
 use image::ImageEncoder;
+
+/// Reads and checks the scene of a `framebuffer-hash` case.
+pub fn load_scene(env: &Env, case: &Case) -> Result<Option<Scene>, String> {
+    let Some(rel) = case.video.as_ref().and_then(|v| v.scene.as_ref()) else {
+        return Ok(None);
+    };
+    let p = env.root.join(rel);
+    let bytes = std::fs::read(&p).map_err(|e| format!("cena ausente: {rel} ({e})"))?;
+    if let Some(want) = case.video.as_ref().and_then(|v| v.scene_sha256.as_ref()) {
+        let got = sha256_hex(&bytes);
+        if &got != want {
+            return Err(format!("cena {rel} com sha256 {got}, esperado {want}"));
+        }
+    }
+    Scene::parse(&String::from_utf8_lossy(&bytes)).map(Some)
+}
 
 /// Runs one case and returns its manifest and artifacts. Never panics on case problems: they
 /// become BLOCKED (cannot run) or FAIL (ran and disagreed or errored).
@@ -381,7 +436,11 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
             .then(|| std::env::var("CONFORMANCE_APPLEWIN_SHA").ok())
             .flatten(),
         rust_sha: env.rust_sha.clone(),
-        fixture_sha256: case.fixture.as_ref().map(|f| f.sha256.clone()),
+        fixture_sha256: case
+            .fixture
+            .as_ref()
+            .map(|f| f.sha256.clone())
+            .or_else(|| case.video.as_ref().and_then(|v| v.scene_sha256.clone())),
         rom_sha256: rom,
         machine_model: case.model.clone(),
         cpu_model: match &cfg {
@@ -552,10 +611,15 @@ fn evaluate(
     ];
     let _ = &cfg;
 
+    let scene = match load_scene(env, case) {
+        Ok(s) => s,
+        Err(e) => return Verdict::Blocked(e),
+    };
+
     let mut first: Option<Observed> = None;
     let mut last: Option<Observed> = None;
     for run in 1..=case.run.repeat {
-        let obs = match observe_once(case, &meta) {
+        let obs = match observe_once(case, &meta, scene.as_ref()) {
             Ok(o) => o,
             Err(e) => return Verdict::Fail(format!("erro na execução {run}: {e}"), None),
         };
@@ -657,7 +721,8 @@ fn dump_actual(
         OracleKind::StateHash => (format!("{}.actual.json", case.id), state_dump(&obs.machine)),
         OracleKind::FramebufferHash => {
             let r = obs.renderer.as_ref()?;
-            (format!("{}.actual.png", case.id), png_bytes(r).ok()?)
+            let full = case.video.as_ref().is_some_and(|v| v.full_region() == Ok(true));
+            (format!("{}.actual.png", case.id), png_bytes(r, full).ok()?)
         }
         OracleKind::Trace => return None,
     };
@@ -668,4 +733,46 @@ fn dump_actual(
 /// Re-exported for the CLI: loads a trace file.
 pub fn read_trace(path: &Path) -> Result<Trace, String> {
     TraceReader::read_file(path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// What `conformance scene-fb` prints and writes: the same fields as the oracle's framebuffer
+/// mode, so the two outputs can be compared line by line.
+pub struct SceneFramebuffer {
+    pub width: usize,
+    pub height: usize,
+    pub visible_sha256: String,
+    pub full_sha256: String,
+    pub rgba_full: Vec<u8>,
+    pub cycles: u64,
+}
+
+/// Runs `scene` for `frames` frames, rendering after every instruction, under the given options.
+pub fn render_scene(
+    model: &str,
+    scene: Option<&Scene>,
+    cfg: RenderConfig,
+    standard: apple2_core::VideoStandard,
+    frames: u64,
+) -> Result<SceneFramebuffer, String> {
+    let model = crate::case::parse_model(model)?;
+    let mut mc = MachineConfig::for_model(model);
+    mc.video_standard = standard;
+    let mut m = Machine::try_new(mc).map_err(|e| e.to_string())?;
+    if let Some(scene) = scene {
+        scene.apply(&mut m);
+    }
+    let mut r = Renderer::new(cfg);
+    r.resync(m.cycles_in_frame());
+    while m.frames() < frames {
+        r.run_frame(&mut m);
+    }
+    let (w, h) = r.size();
+    Ok(SceneFramebuffer {
+        width: w,
+        height: h,
+        visible_sha256: sha256_hex(&framebuffer_rgba(&r, false)),
+        full_sha256: sha256_hex(&framebuffer_rgba(&r, true)),
+        rgba_full: framebuffer_rgba(&r, true),
+        cycles: m.cycles(),
+    })
 }

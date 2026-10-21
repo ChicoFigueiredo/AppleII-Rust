@@ -13,6 +13,7 @@ const USAGE: &str = "\
 uso:
   conformance run (--all | --case ID [--case ID ...]) --report DIR [--root DIR]
   conformance trace --model M (--frames N | --cycles N) [--cpu 6502|65C02] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
+  conformance scene-fb [--scene FILE] --model M --frames N [--type T] [--hz 50|60] [--rgb-card C] --out PREFIX
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
@@ -26,6 +27,7 @@ fn main() -> ExitCode {
         Some("run") => cmd_run(&args[1..]),
         Some("trace") => cmd_trace(&args[1..]),
         Some("diff") => cmd_diff(&args[1..]),
+        Some("scene-fb") => cmd_scene_fb(&args[1..]),
         Some("-h" | "--help" | "help") => {
             println!("{USAGE}");
             Ok(0)
@@ -229,4 +231,61 @@ fn cmd_diff(rest: &[String]) -> Result<u8, String> {
             Ok(1)
         }
     }
+}
+
+/// Renders a video scene like the oracle's `--fb-out` mode: writes PREFIX.rgba (the whole
+/// framebuffer, RGBA8) and prints `fb_*` lines.
+fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
+    use apple2_conformance::case::parse_video_type;
+    use apple2_conformance::runner::render_scene;
+    use apple2_conformance::scene::Scene;
+    use apple2_core::VideoStandard;
+    use apple2_video::{RenderConfig, RgbCard};
+    let (mut scene, mut model, mut frames, mut out) = (None, None, None, None);
+    let (mut vt, mut hz, mut card) = ("color-tv", 60u32, "video7-sl7");
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        match arg {
+            "--scene" => scene = Some(a.value(arg)?),
+            "--model" => model = Some(a.value(arg)?),
+            "--frames" => frames = Some(a.value(arg)?.parse::<u64>().map_err(|e| e.to_string())?),
+            "--type" => vt = a.value(arg)?,
+            "--hz" => hz = a.value(arg)?.parse::<u32>().map_err(|e| e.to_string())?,
+            "--rgb-card" => card = a.value(arg)?,
+            "--out" => out = Some(a.value(arg)?),
+            o => return Err(format!("argumento desconhecido `{o}`")),
+        }
+    }
+    let (Some(model), Some(frames), Some(out)) = (model, frames, out) else {
+        return Err("scene-fb precisa de --model, --frames e --out (--scene é opcional: sem ela a ROM dá o boot)".into());
+    };
+    let sc = match scene {
+        Some(path) => {
+            let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+            Some(Scene::parse(&text)?)
+        }
+        None => None,
+    };
+    let cfg = RenderConfig {
+        video_type: parse_video_type(vt)?,
+        rgb_card: match card {
+            "video7-sl7" | "0" => RgbCard::Video7Sl7,
+            "le-chat-mauve-eve" | "1" => RgbCard::LeChatMauveEve,
+            "le-chat-mauve-feline" | "2" => RgbCard::LeChatMauveFeline,
+            o => return Err(format!("--rgb-card `{o}` desconhecido")),
+        },
+        ..RenderConfig::default()
+    };
+    let std = match hz {
+        60 => VideoStandard::Ntsc,
+        50 => VideoStandard::Pal,
+        h => return Err(format!("--hz {h}: use 50 ou 60")),
+    };
+    let fb = render_scene(model, sc.as_ref(), cfg, std, frames)?;
+    std::fs::write(format!("{out}.rgba"), &fb.rgba_full).map_err(|e| e.to_string())?;
+    println!("fb_size={}x{}", fb.width, fb.height);
+    println!("fb_sha256_visible={}", fb.visible_sha256);
+    println!("fb_sha256_full={}", fb.full_sha256);
+    println!("fb_cycles={}", fb.cycles);
+    Ok(0)
 }
