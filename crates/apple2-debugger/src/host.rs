@@ -56,7 +56,17 @@ impl Host for FsHost {
     }
 
     fn set_dir(&mut self, dir: &str) -> bool {
-        let p = self.path(dir);
+        // Approved divergence (ADR 0006, #468): `..` and `.` are resolved, not appended.
+        let mut p = PathBuf::new();
+        for c in self.path(dir).components() {
+            match c {
+                std::path::Component::ParentDir => {
+                    p.pop();
+                }
+                std::path::Component::CurDir => {}
+                c => p.push(c),
+            }
+        }
         if p.is_dir() {
             self.dir = p;
             true

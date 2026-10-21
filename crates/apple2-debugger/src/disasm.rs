@@ -561,7 +561,8 @@ pub fn disassemble(ctx: &DisasmCtx, base: u16) -> DisasmLine {
                     tgt = Some(s);
                 }
             }
-            if !line.fmt_symbol || data.is_some() {
+            // Approved divergence (ADR 0006, #1381): an exact symbol is not replaced by `target+1`.
+            if !line.fmt_symbol {
                 if let Some((s, t)) = ctx
                     .symbols
                     .find_symbol(target.wrapping_add(1))

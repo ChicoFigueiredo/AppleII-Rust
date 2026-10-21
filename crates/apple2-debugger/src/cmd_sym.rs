@@ -212,7 +212,11 @@ impl Debugger {
             }
             "LOAD" => {
                 // SYMxxx LOAD "file" [, offset]
-                let file = a.get(i + 1).filter(|x| x.quoted()).map(|x| x.text.clone());
+                // Approved divergence (ADR 0006, #114): the name may come without quotes.
+                let file = a
+                    .get(i + 1)
+                    .filter(|x| x.quoted() || !x.is_operator())
+                    .map(|x| x.text.clone());
                 let mut offset = 0u32;
                 if a.get(i + 2).map(|t| t.is_op(",")).unwrap_or(false) && a.get(i + 3).is_some() {
                     offset = a.value(i + 3) as u32;
@@ -224,7 +228,26 @@ impl Debugger {
                 }
                 u | upd::CONSOLE_DISPLAY
             }
-            "SAVE" => upd::CONSOLE_DISPLAY,
+            "SAVE" => {
+                // Approved divergence (ADR 0006, #245): writes the table as `ADDR NAME` lines.
+                let file = a
+                    .get(i + 1)
+                    .filter(|x| !x.is_operator())
+                    .map(|x| x.text.clone())
+                    .unwrap_or_else(|| table.file_name().to_string());
+                let mut out = String::new();
+                for (addr, name) in self.symbols.table(table) {
+                    out.push_str(&format!("{addr:04X} {name}\n"));
+                }
+                match self.host.write(&file, out.as_bytes()) {
+                    Ok(()) => self.console.print(&format!(
+                        " Saved {} symbols: {CHC_PATH}{file}",
+                        self.symbols.len(table)
+                    )),
+                    Err(_) => self.console.error(&format!("Could not save: {file}")),
+                }
+                upd::CONSOLE_DISPLAY
+            }
             "ON" | "OFF" => {
                 let on = a.text(i).eq_ignore_ascii_case("ON");
                 self.symbols.set_displayed(table, on);

@@ -82,7 +82,7 @@ fn gh239_debugger_screen_text_has_the_disassembly_and_registers() {
     d.goto(&m, 0x0300);
     let t = d.screen_text(&m);
     let lines: Vec<&str> = t.split_inclusive('\n').collect();
-    assert_eq!(lines.len(), 43);
+    assert_eq!(lines.len(), 48);
     assert!(lines.iter().all(|l| l.len() == 81 && l.ends_with('\n')));
     assert!(t.contains("0300:A9 42"), "{t}");
     assert!(t.contains("LDA #$42"), "{t}");
@@ -90,31 +90,18 @@ fn gh239_debugger_screen_text_has_the_disassembly_and_registers() {
     assert!(t.is_ascii());
 }
 
-/// gh458: como no oráculo (DEBUG_VIRTUAL_TEXT_HEIGHT = 43, Debugger_Display.h:64), as 5 últimas
-/// linhas da tela (o console) não entram no texto copiado.
+/// gh458: Divergência aprovada (ADR 0006). O AppleWin a8f0d1d copia só 43 das 48 linhas
+/// (DEBUG_VIRTUAL_TEXT_HEIGHT, Debugger_Display.h:64) e perde as 5 últimas do console; o port copia
+/// a tela inteira, 48 linhas.
 #[test]
-fn gh458_ctrl_prtscn_text_drops_the_last_console_rows() {
+fn gh458_ctrl_prtscn_text_has_the_whole_screen() {
     let (mut m, mut d, _) = setup();
     for i in 0..8 {
         cmd(&mut d, &mut m, &format!("echo LINE{i}"));
     }
-    let grid = d.render(&m);
-    let console_rows: String = (43..48)
-        .map(|y| grid.row_text(y))
-        .collect::<Vec<_>>()
-        .join("|");
-    assert!(console_rows.contains("LINE7"), "{console_rows}");
-    let t = d.screen_text(&m);
-    assert!(!t.contains("LINE7"), "o oráculo corta o console: {t}");
-}
-
-/// gh458: o pedido é capturar a tela inteira (48 linhas); o oráculo perde as 5 últimas.
-#[test]
-#[ignore = "FAIL gh458: Ctrl+PrintScreen copia só 43 das 48 linhas, igual ao oráculo (DEBUG_VIRTUAL_TEXT_HEIGHT)"]
-fn gh458_ctrl_prtscn_text_has_the_whole_screen() {
-    let (m, mut d, _) = setup();
     let t = d.screen_text(&m);
     assert_eq!(t.lines().count(), 48);
+    assert!(t.contains("LINE7"), "{t}");
 }
 
 // ------------------------------------------------------------------ #246 E <symbol> <byte>
