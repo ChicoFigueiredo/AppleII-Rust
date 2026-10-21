@@ -1,0 +1,685 @@
+//! Spool service: consumes the card's `CaptureEvent`s off the emulation thread, writes them to the
+//! Arquivo de impressões, feeds one `PrinterEngine` per job incrementally and publishes cheap
+//! snapshots for the UI. With the window closed only this service runs: nothing is lost (T-018).
+
+use crate::archive::{
+    Archive, ArchiveError, DiagnosticSummary, JobEntry, JobState, JobVersion, NewJob,
+    RecoveryEvent, RetentionWarning,
+};
+use crate::capture::{CaptureEvent, CloseReason};
+use crate::document::PageDocument;
+use crate::engine::PrinterEngine;
+use crate::paper::RenderOptions;
+use std::collections::VecDeque;
+use std::io::Read;
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+/// Creates a fresh engine for each job (and for each reprint).
+pub type EngineFactory = Box<dyn Fn() -> Box<dyn PrinterEngine> + Send>;
+
+const MAX_NOTICES: usize = 30;
+const REPRINT_CHUNK: usize = 8 * 1024;
+const TITLE_CHARS: usize = 60;
+
+/// One row of the job list shown by the Central de Impressoras.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct JobSummary {
+    pub id: String,
+    pub title: String,
+    /// `None` when the job is damaged.
+    pub state: Option<JobState>,
+    pub damaged: Option<String>,
+    pub started_at: String,
+    pub total_bytes: u64,
+    pub pages: u32,
+    pub versions: u32,
+    pub close_reason: Option<CloseReason>,
+}
+
+/// The job being printed now.
+#[derive(Clone, Debug)]
+pub struct ActiveView {
+    pub job_id: String,
+    pub capture_job: u64,
+    /// Bytes received from the card so far.
+    pub bytes: u64,
+    /// Shared, immutable copy: cloning the view is cheap.
+    pub document: Arc<PageDocument>,
+    /// Changes only when the document changed, so the preview redraws only then.
+    pub doc_revision: u64,
+    /// Set when bytes could no longer be saved (disk full, read-only folder).
+    pub storage_error: Option<String>,
+}
+
+/// Result of a reprint, shown by the Central.
+#[derive(Clone, Debug)]
+pub struct ReprintView {
+    pub job_id: String,
+    pub version: u32,
+    pub document: Arc<PageDocument>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Snapshot {
+    /// Increases on every publication.
+    pub revision: u64,
+    pub jobs: Vec<JobSummary>,
+    pub active: Option<ActiveView>,
+    pub reprint: Option<ReprintView>,
+    /// Latest messages (errors, recoveries, ignored events), oldest first. Never silent.
+    pub notices: Vec<String>,
+    pub retention: Option<RetentionWarning>,
+}
+
+/// Read side of the published snapshots; holds the lock only to clone an `Arc`.
+#[derive(Clone)]
+pub struct SnapshotHandle(Arc<Mutex<Arc<Snapshot>>>);
+
+impl SnapshotHandle {
+    pub fn get(&self) -> Arc<Snapshot> {
+        match self.0.lock() {
+            Ok(g) => g.clone(),
+            Err(p) => p.into_inner().clone(),
+        }
+    }
+    fn set(&self, s: Arc<Snapshot>) {
+        match self.0.lock() {
+            Ok(mut g) => *g = s,
+            Err(p) => *p.into_inner() = s,
+        }
+    }
+}
+
+struct ActiveJob {
+    id: String,
+    capture_job: u64,
+    engine: Box<dyn PrinterEngine>,
+    /// Bytes received (and fed to the engine).
+    fed: u64,
+    storage_error: Option<String>,
+    last_pages: u32,
+    last_diags: usize,
+}
+
+pub struct Spool {
+    archive: Archive,
+    factory: EngineFactory,
+    options: RenderOptions,
+    active: Option<ActiveJob>,
+    snapshot: SnapshotHandle,
+    snap_rev: u64,
+    notices: VecDeque<String>,
+    doc: Arc<PageDocument>,
+    doc_rev: u64,
+    doc_dirty: bool,
+    reprint: Option<ReprintView>,
+    last_doc_publish: Instant,
+    doc_interval: Duration,
+}
+
+fn summary(e: &JobEntry) -> JobSummary {
+    match e {
+        JobEntry::Valid(m) => JobSummary {
+            id: m.id.clone(),
+            title: m.title.clone(),
+            state: Some(m.state),
+            damaged: None,
+            started_at: m.started_at.clone(),
+            total_bytes: m.total_bytes,
+            pages: m.pages,
+            versions: m.versions.len() as u32,
+            close_reason: m.close_reason,
+        },
+        JobEntry::Damaged { id, reason } => JobSummary {
+            id: id.clone(),
+            title: String::new(),
+            state: None,
+            damaged: Some(reason.clone()),
+            started_at: String::new(),
+            total_bytes: 0,
+            pages: 0,
+            versions: 0,
+            close_reason: None,
+        },
+    }
+}
+
+fn diag_summaries(doc: &PageDocument) -> Vec<DiagnosticSummary> {
+    doc.diagnostics
+        .iter()
+        .take(100)
+        .map(|d| DiagnosticSummary {
+            offset: d.offset,
+            message: d.message.chars().take(200).collect(),
+        })
+        .collect()
+}
+
+/// First non-empty text line of the document, cleaned for a title.
+fn first_text_line(doc: &PageDocument) -> Option<String> {
+    for page in &doc.pages {
+        for run in &page.text {
+            let cleaned: String = run.text.chars().filter(|c| !c.is_control()).collect();
+            let line: String = cleaned.trim().chars().take(TITLE_CHARS).collect();
+            if !line.is_empty() {
+                return Some(line);
+            }
+        }
+    }
+    None
+}
+
+fn auto_title(doc: &PageDocument, started_at: &str) -> String {
+    let date = chrono::DateTime::parse_from_rfc3339(started_at)
+        .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_else(|_| started_at.to_string());
+    match first_text_line(doc) {
+        Some(l) => format!("{l} — {date}"),
+        None => format!("Impressão sem texto — {date}"),
+    }
+}
+
+fn storage_diag(offset: u64, why: &str) -> DiagnosticSummary {
+    DiagnosticSummary {
+        offset,
+        message: format!("armazenamento: bytes seguintes não foram gravados ({why})"),
+    }
+}
+
+impl Spool {
+    pub fn new(archive: Archive, factory: EngineFactory, options: RenderOptions) -> Spool {
+        let mut s = Spool {
+            archive,
+            factory,
+            options,
+            active: None,
+            snapshot: SnapshotHandle(Arc::new(Mutex::new(Arc::new(Snapshot::default())))),
+            snap_rev: 0,
+            notices: VecDeque::new(),
+            doc: Arc::new(PageDocument::default()),
+            doc_rev: 0,
+            doc_dirty: false,
+            reprint: None,
+            last_doc_publish: Instant::now(),
+            doc_interval: Duration::from_millis(50),
+        };
+        let events: Vec<String> = s
+            .archive
+            .recovery()
+            .iter()
+            .map(|r| match r {
+                RecoveryEvent::Interrupted {
+                    id,
+                    found_bytes,
+                    kept_bytes,
+                } => format!(
+                    "trabalho {id} interrompido; mantidos {kept_bytes} de {found_bytes} bytes (último checkpoint)"
+                ),
+                RecoveryEvent::Damaged { id, reason } => {
+                    format!("trabalho {id} danificado: {reason}")
+                }
+            })
+            .collect();
+        for e in events {
+            s.notice(e);
+        }
+        s.publish(true);
+        s
+    }
+
+    pub fn archive(&self) -> &Archive {
+        &self.archive
+    }
+
+    pub fn archive_mut(&mut self) -> &mut Archive {
+        &mut self.archive
+    }
+
+    /// Read handle for the UI.
+    pub fn snapshot_handle(&self) -> SnapshotHandle {
+        self.snapshot.clone()
+    }
+
+    /// Options frozen into jobs that start from now on.
+    pub fn set_options(&mut self, options: RenderOptions) {
+        self.options = options;
+    }
+
+    /// Minimum time between document copies while bytes keep arriving (default 50 ms).
+    pub fn set_document_interval(&mut self, d: Duration) {
+        self.doc_interval = d;
+    }
+
+    fn notice(&mut self, msg: String) {
+        if self.notices.len() >= MAX_NOTICES {
+            self.notices.pop_front();
+        }
+        self.notices.push_back(msg);
+    }
+
+    /// Consumes one card event.
+    pub fn handle(&mut self, event: CaptureEvent) {
+        match event {
+            CaptureEvent::Open {
+                job,
+                origin,
+                transport,
+            } => {
+                if let Some(prev) = self.active.as_ref().map(|a| a.capture_job) {
+                    self.notice(format!(
+                        "trabalho {prev} sem fechamento; fechado como Reset ao abrir o {job}"
+                    ));
+                    self.finish_active(CloseReason::Reset);
+                }
+                self.open_job(NewJob {
+                    capture_job: job,
+                    origin,
+                    transport,
+                    profile: crate::archive::PROFILE_LX310.to_string(),
+                    options: self.options,
+                });
+                self.publish(true);
+            }
+            CaptureEvent::Bytes { job, offset, data } => {
+                self.on_bytes(job, offset, &data);
+                self.publish(false);
+            }
+            CaptureEvent::Close { job, reason } => {
+                if self.active.as_ref().map(|a| a.capture_job) == Some(job) {
+                    self.finish_active(reason);
+                } else {
+                    self.notice(format!("Close do trabalho {job} ignorado (não está ativo)"));
+                }
+                self.publish(true);
+            }
+        }
+    }
+
+    fn open_job(&mut self, new: NewJob) {
+        let capture_job = new.capture_job;
+        let options = new.options;
+        let mut engine = (self.factory)();
+        engine.begin(options);
+        let (id, storage_error) = match self.archive.start_job(new) {
+            Ok(id) => (id, None),
+            Err(e) => {
+                // The preview still works; nothing can be saved for this job.
+                let msg = format!("não foi possível criar o trabalho no Arquivo: {e}");
+                self.notice(msg.clone());
+                (format!("sem-arquivo-{capture_job}"), Some(msg))
+            }
+        };
+        self.doc = Arc::new(PageDocument::default());
+        self.doc_rev += 1;
+        self.doc_dirty = false;
+        self.active = Some(ActiveJob {
+            id,
+            capture_job,
+            engine,
+            fed: 0,
+            storage_error,
+            last_pages: 0,
+            last_diags: 0,
+        });
+    }
+
+    fn on_bytes(&mut self, job: u64, offset: u64, data: &[u8]) {
+        let mut msgs = Vec::new();
+        let Some(a) = self.active.as_mut().filter(|a| a.capture_job == job) else {
+            self.notice(format!(
+                "{} bytes do trabalho {job} ignorados (trabalho não está ativo)",
+                data.len()
+            ));
+            return;
+        };
+        let mut data = data;
+        if offset < a.fed {
+            let skip = ((a.fed - offset) as usize).min(data.len());
+            msgs.push(format!(
+                "trabalho {job}: {skip} bytes repetidos descartados (offset {offset}, esperado {})",
+                a.fed
+            ));
+            data = &data[skip..];
+        } else if offset > a.fed {
+            msgs.push(format!(
+                "trabalho {job}: lacuna de {} bytes antes do offset {offset}",
+                offset - a.fed
+            ));
+        }
+        if !data.is_empty() {
+            if a.storage_error.is_none() {
+                if let Err(e) = self.archive.append(&a.id, data) {
+                    let msg = format!("falha ao gravar o trabalho {}: {e}", a.id);
+                    msgs.push(msg.clone());
+                    a.storage_error = Some(msg);
+                    // Force the progress record below so the manifest shows the problem.
+                    a.last_pages = u32::MAX;
+                }
+            }
+            a.engine.feed(a.fed, data);
+            a.fed += data.len() as u64;
+            if a.engine.take_revision() > 0 {
+                self.doc_rev += 1;
+                self.doc_dirty = true;
+            }
+            let doc = a.engine.document();
+            let (pages, diags) = (doc.pages.len() as u32, doc.diagnostics.len());
+            if pages != a.last_pages || diags != a.last_diags {
+                a.last_pages = pages;
+                a.last_diags = diags;
+                let mut list = Vec::new();
+                if let Some(e) = &a.storage_error {
+                    let at = self.archive.manifest(&a.id).map_or(0, |m| m.total_bytes);
+                    list.push(storage_diag(at, e));
+                }
+                list.extend(diag_summaries(doc));
+                let total = diags as u64 + u64::from(a.storage_error.is_some());
+                let _ = self.archive.set_progress(&a.id, pages, total, &list);
+            }
+        }
+        for m in msgs {
+            self.notice(m);
+        }
+    }
+
+    /// Ends the active job (if any) with `reason`.
+    pub fn finish_active(&mut self, reason: CloseReason) {
+        let Some(mut a) = self.active.take() else {
+            return;
+        };
+        a.engine.finish();
+        a.engine.take_revision();
+        let doc = a.engine.document().clone();
+        if self.archive.is_active(&a.id) {
+            let mut list = Vec::new();
+            if let Some(e) = &a.storage_error {
+                let at = self.archive.manifest(&a.id).map_or(0, |m| m.total_bytes);
+                list.push(storage_diag(at, e));
+            }
+            list.extend(diag_summaries(&doc));
+            let total = doc.diagnostics.len() as u64 + u64::from(a.storage_error.is_some());
+            let _ = self
+                .archive
+                .set_progress(&a.id, doc.pages.len() as u32, total, &list);
+            if let Err(e) = self.archive.finish_job(&a.id, reason) {
+                self.notice(format!("falha ao fechar o trabalho: {e}"));
+            }
+            let started = self
+                .archive
+                .manifest(&a.id)
+                .map(|m| m.started_at.clone())
+                .unwrap_or_default();
+            let title = auto_title(&doc, &started);
+            if let Err(e) = self.archive.set_auto_title(&a.id, &title) {
+                self.notice(format!("falha ao gravar o título: {e}"));
+            }
+        }
+        self.doc = Arc::new(doc);
+        self.doc_dirty = false;
+        self.doc_rev += 1;
+    }
+
+    /// User action "concluir trabalho".
+    pub fn finish_by_user(&mut self) {
+        self.finish_active(CloseReason::User);
+        self.publish(true);
+    }
+
+    /// Periodic work: checkpoints that are due and pending document copies.
+    pub fn tick(&mut self) {
+        for e in self.archive.checkpoint_if_due() {
+            self.notice(format!("checkpoint: {e}"));
+        }
+        self.publish(false);
+    }
+
+    /// Ends the active job as `Shutdown` and publishes (emulator exit).
+    pub fn shutdown(&mut self) {
+        self.finish_active(CloseReason::Shutdown);
+        self.publish(true);
+    }
+
+    /// Publishes right now (tests, and after user actions).
+    pub fn publish_now(&mut self) {
+        self.publish(true);
+    }
+
+    fn publish(&mut self, force: bool) {
+        if self.doc_dirty && (force || self.last_doc_publish.elapsed() >= self.doc_interval) {
+            if let Some(a) = &self.active {
+                self.doc = Arc::new(a.engine.document().clone());
+            }
+            self.doc_dirty = false;
+            self.last_doc_publish = Instant::now();
+        }
+        self.snap_rev += 1;
+        let active = self.active.as_ref().map(|a| ActiveView {
+            job_id: a.id.clone(),
+            capture_job: a.capture_job,
+            bytes: a.fed,
+            document: self.doc.clone(),
+            doc_revision: self.doc_rev,
+            storage_error: a.storage_error.clone(),
+        });
+        let snap = Snapshot {
+            revision: self.snap_rev,
+            jobs: self.archive.jobs().iter().map(summary).collect(),
+            active,
+            reprint: self.reprint.clone(),
+            notices: self.notices.iter().cloned().collect(),
+            retention: self.archive.retention_warning(),
+        };
+        self.snapshot.set(Arc::new(snap));
+    }
+
+    /// Renders the raw bytes of a closed job with `options` (no version is registered).
+    pub fn render(
+        &mut self,
+        job_id: &str,
+        options: RenderOptions,
+    ) -> Result<PageDocument, ArchiveError> {
+        if self.archive.is_active(job_id) {
+            return Err(ArchiveError::JobActive(job_id.to_string()));
+        }
+        let total = self
+            .archive
+            .manifest(job_id)
+            .ok_or_else(|| ArchiveError::NotFound(job_id.to_string()))?
+            .total_bytes;
+        if !self.archive.verify(job_id)? {
+            return Err(ArchiveError::Damaged {
+                id: job_id.to_string(),
+                reason: "SHA-256 de raw.bin não confere com o manifesto".into(),
+            });
+        }
+        let mut file = self.archive.open_raw(job_id)?.take(total);
+        let mut engine = (self.factory)();
+        engine.begin(options);
+        let mut buf = vec![0u8; REPRINT_CHUNK];
+        let mut offset = 0u64;
+        loop {
+            let n = file.read(&mut buf).map_err(|e| ArchiveError::Io {
+                path: self.archive.root().join(job_id),
+                source: e,
+            })?;
+            if n == 0 {
+                break;
+            }
+            engine.feed(offset, &buf[..n]);
+            offset += n as u64;
+        }
+        engine.finish();
+        Ok(engine.document().clone())
+    }
+
+    /// Reprint: renders the job's raw bytes with other options and records a new version.
+    /// `raw.bin` is only read.
+    pub fn reprint(&mut self, job_id: &str, options: RenderOptions) -> Result<u32, ArchiveError> {
+        let doc = self.render(job_id, options)?;
+        let version = self.archive.add_version(
+            job_id,
+            options,
+            doc.pages.len() as u32,
+            doc.diagnostics.len() as u64,
+        )?;
+        self.reprint = Some(ReprintView {
+            job_id: job_id.to_string(),
+            version,
+            document: Arc::new(doc),
+        });
+        self.publish(true);
+        Ok(version)
+    }
+
+    /// Renders an existing version (its frozen options).
+    pub fn render_version(
+        &mut self,
+        job_id: &str,
+        version: u32,
+    ) -> Result<PageDocument, ArchiveError> {
+        let opts = self
+            .archive
+            .manifest(job_id)
+            .and_then(|m| m.versions.iter().find(|v: &&JobVersion| v.id == version))
+            .map(|v| v.options)
+            .ok_or_else(|| ArchiveError::NotFound(format!("{job_id} v{version}")))?;
+        self.render(job_id, opts)
+    }
+
+    /// Explicit delete from the user; the active job is refused.
+    pub fn delete(&mut self, job_id: &str) -> Result<(), ArchiveError> {
+        let r = self.archive.delete(job_id);
+        if r.is_ok() && self.reprint.as_ref().is_some_and(|v| v.job_id == job_id) {
+            self.reprint = None;
+        }
+        self.publish(true);
+        r
+    }
+
+    pub fn set_title(&mut self, job_id: &str, title: &str) -> Result<(), ArchiveError> {
+        let r = self.archive.set_title(job_id, title);
+        self.publish(true);
+        r
+    }
+
+    pub fn set_note(&mut self, job_id: &str, note: &str) -> Result<(), ArchiveError> {
+        let r = self.archive.set_note(job_id, note);
+        self.publish(true);
+        r
+    }
+
+    /// Runs a command; false means "stop the thread".
+    fn run_command(&mut self, cmd: SpoolCommand) -> bool {
+        let result = match cmd {
+            SpoolCommand::FinishActive => {
+                self.finish_by_user();
+                Ok(())
+            }
+            SpoolCommand::Reprint { job_id, options } => self.reprint(&job_id, options).map(|_| ()),
+            SpoolCommand::SetTitle { job_id, title } => self.set_title(&job_id, &title),
+            SpoolCommand::SetNote { job_id, note } => self.set_note(&job_id, &note),
+            SpoolCommand::Delete { job_id } => self.delete(&job_id),
+            SpoolCommand::SetOptions(o) => {
+                self.set_options(o);
+                Ok(())
+            }
+            SpoolCommand::Shutdown => return false,
+        };
+        if let Err(e) = result {
+            self.notice(e.to_string());
+            self.publish(true);
+        }
+        true
+    }
+}
+
+/// User actions sent to a spool running on its own thread.
+#[derive(Clone, Debug)]
+pub enum SpoolCommand {
+    FinishActive,
+    Reprint {
+        job_id: String,
+        options: RenderOptions,
+    },
+    SetTitle {
+        job_id: String,
+        title: String,
+    },
+    SetNote {
+        job_id: String,
+        note: String,
+    },
+    Delete {
+        job_id: String,
+    },
+    SetOptions(RenderOptions),
+    /// Closes the active job as `Shutdown` and stops the thread.
+    Shutdown,
+}
+
+/// UI-side handle of a spool thread.
+#[derive(Clone)]
+pub struct SpoolHandle {
+    snapshot: SnapshotHandle,
+    commands: Sender<SpoolCommand>,
+}
+
+impl SpoolHandle {
+    pub fn snapshot(&self) -> Arc<Snapshot> {
+        self.snapshot.get()
+    }
+    /// False when the spool thread is gone.
+    pub fn send(&self, cmd: SpoolCommand) -> bool {
+        self.commands.send(cmd).is_ok()
+    }
+}
+
+/// The spool running on its own thread, fed by the card's channel.
+pub struct SpoolService {
+    handle: SpoolHandle,
+    join: JoinHandle<Spool>,
+}
+
+impl SpoolService {
+    /// Starts the thread. It stops on `SpoolCommand::Shutdown` or when `events` disconnects, closing
+    /// the active job as `Shutdown` either way.
+    pub fn spawn(mut spool: Spool, events: Receiver<CaptureEvent>) -> SpoolService {
+        let (tx, rx) = std::sync::mpsc::channel::<SpoolCommand>();
+        let handle = SpoolHandle {
+            snapshot: spool.snapshot_handle(),
+            commands: tx,
+        };
+        let join = std::thread::Builder::new()
+            .name("apple2-printer-spool".into())
+            .spawn(move || {
+                'run: loop {
+                    while let Ok(cmd) = rx.try_recv() {
+                        if !spool.run_command(cmd) {
+                            break 'run;
+                        }
+                    }
+                    match events.recv_timeout(Duration::from_millis(20)) {
+                        Ok(ev) => spool.handle(ev),
+                        Err(RecvTimeoutError::Timeout) => spool.tick(),
+                        Err(RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+                spool.shutdown();
+                spool
+            })
+            .expect("spawn spool thread");
+        SpoolService { handle, join }
+    }
+
+    pub fn handle(&self) -> SpoolHandle {
+        self.handle.clone()
+    }
+
+    /// Waits for the thread to stop (send `Shutdown` or drop the event sender first).
+    pub fn join(self) -> Option<Spool> {
+        self.join.join().ok()
+    }
+}
