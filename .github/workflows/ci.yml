@@ -30,9 +30,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Informational for now: the workspace has no rustfmt.toml and is not rustfmt-formatted.
-      - name: rustfmt (informational)
-        continue-on-error: true
+      - name: rustfmt
         run: cargo fmt --all -- --check
 
       - name: Clippy

@@ -30,9 +30,13 @@ Repositórios: [GitHub](https://github.com/ChicoFigueiredo/AppleII-Rust) · [Git
 | 8 | `apple2-debugger`: depurador completo sem interface | feito |
 | 9 | `applewin`: frontend (janela, barra, som, joystick, depurador na tela) | feito: todas as Cartas do AppleWin ligadas; diferenças em [docs/manual/12](docs/manual/12-diferencas-em-relacao-ao-applewin.md) |
 | 10 | Manual em português, ajuda no programa (F1), CONTRIBUTING | feito |
-| 11 | CI e empacotamento nas três plataformas | feito: CI e pacotes de release validados no Windows, Linux e macOS |
+| 11 | CI e empacotamento nas três plataformas | feito: CI e pacotes de release existem para Windows, Linux e macOS. Um CI verde não prova paridade com o AppleWin (veja "Conformidade e auditoria") |
 
 A lista honesta do que falta em relação ao AppleWin está em [docs/manual/12-diferencas-em-relacao-ao-applewin.md](docs/manual/12-diferencas-em-relacao-ao-applewin.md); o histórico de decisões fica em [docs/plano-final.md](docs/plano-final.md), [docs/pendencias.md](docs/pendencias.md) e [docs/adr](docs/adr).
+
+## Conformidade e auditoria
+
+"Feito" na tabela acima quer dizer que o código existe, não que a paridade com o AppleWin foi demonstrada. A verificação é medida contra o AppleWin num commit fixo, e cada item tem um Estado de verificação (`PASS` só com evidência). O índice, o baseline, as limitações conhecidas e a prontidão para release estão em [docs/conformance/README.md](docs/conformance/README.md).
 
 ## Baixar e compilar
 

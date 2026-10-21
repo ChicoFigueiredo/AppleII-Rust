@@ -29,3 +29,7 @@ Combinado com o usuário em 2026-10-19: Opus supervisiona e revisa, agentes Sonn
 1. **Onda 1** (6 em paralelo): vídeo, storage, áudio, cartas, cartas de host, debugger.
 2. **Onda 2**: frontend (shell, render, áudio, entrada), configuração e CLI, save-state YAML, UI do debugger, CI e empacotamento para Windows, Linux e macOS, testes de integração com imagens reais (DOS 3.3 e ProDOS dando boot).
 3. **Revisão final** e publicação.
+
+## Auditoria de paridade e conformidade
+
+Depois das ondas acima, a equipe de auditoria escreveu um plano para provar a paridade com o AppleWin e evoluir o produto: [docs/prompts/AppleII-Rust_Plano_Auditoria_Paridade_e_Evolucao.md](prompts/AppleII-Rust_Plano_Auditoria_Paridade_e_Evolucao.md). Ele será executado integralmente. As decisões sobre o Oráculo estão na [ADR 0004](adr/0004-oraculo-de-conformidade.md), e os resultados ficam em [docs/conformance](conformance/README.md).

@@ -1,0 +1,38 @@
+name: Conformance
+
+# Somente manual (Actions > Conformance > Run workflow): a cota de CI esta esgotada e so roda com autorizacao do dono.
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  conformance:
+    name: conformance (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # O corpus do AppleWin-Test (sem licenca) fica fora do Git, em target/conformance-cache/.
+      # Sem rede, os testes que dependem dele terminam em BLOCKED, nunca pulados em silencio.
+      - name: Conformance suite
+        # Comando provisorio: sera ajustado quando o harness (crates/apple2-conformance) estiver pronto.
+        run: cargo run --release -p apple2-conformance --bin conformance -- run --report target/conformance-report
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report
+          path: target/conformance-report
+          if-no-files-found: warn
