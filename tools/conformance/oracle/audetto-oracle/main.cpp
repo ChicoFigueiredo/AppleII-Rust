@@ -122,7 +122,8 @@ namespace
             stderr,
             "usage: audetto-oracle --model <apple2|apple2p|apple2jp|apple2e|apple2ee>\n"
             "                      (--cycles N | --frames N) --out FILE\n"
-            "                      [--disk IMAGE] [--state FILE.aws.yaml] [--memclear 0..7]\n"
+            "                      [--disk IMAGE] [--disk2 IMAGE] [--hdd IMAGE] [--hdd2 IMAGE] [--authentic]\n"
+            "                      [--state FILE.aws.yaml] [--memclear 0..7]\n"
             "                      [--cards disk2|none] [--meta key=value]...\n");
     }
 } // namespace
@@ -130,6 +131,8 @@ namespace
 int main(int argc, char **argv)
 {
     std::string modelName, outPath, disk, state, input = "none";
+    std::string disk2, hdd, hdd2; // second floppy, hard disks (slot 7); --authentic = "Enhance Disk Speed" off
+    bool authentic = false;
     uint64_t cycles = 0, frames = 0;
     int memclear = -100;
     std::string cards = "disk2";
@@ -149,6 +152,14 @@ int main(int argc, char **argv)
             outPath = argv[++i];
         else if (arg == "--disk" && hasValue)
             disk = argv[++i];
+        else if (arg == "--disk2" && hasValue)
+            disk2 = argv[++i];
+        else if (arg == "--hdd" && hasValue)
+            hdd = argv[++i];
+        else if (arg == "--hdd2" && hasValue)
+            hdd2 = argv[++i];
+        else if (arg == "--authentic")
+            authentic = true;
         else if (arg == "--state" && hasValue)
             state = argv[++i];
         else if (arg == "--memclear" && hasValue)
@@ -191,6 +202,9 @@ int main(int argc, char **argv)
         options.noAudio = true; // g_bDisableDirectSound*, no audio device is ever opened
         options.headless = true;
         options.disk1 = disk;
+        options.disk2 = disk2;
+        options.hardDisk1 = hdd;
+        options.hardDisk2 = hdd2;
         if (memclear != -100)
             options.memclear = memclear;
         if (!state.empty())
@@ -205,6 +219,8 @@ int main(int argc, char **argv)
         const RegistryContext registryContext(registry);
         registry->putDWord(REG_CONFIG, REGVALUE_APPLE2_TYPE, static_cast<uint32_t>(model));
         registry->putDWord(REG_CONFIG, REGVALUE_CPU_TYPE, static_cast<uint32_t>(ProbeMainCpuDefault(model)));
+        if (authentic)
+            registry->putDWord(REG_CONFIG, REGVALUE_ENHANCE_DISK_SPEED, 0);
         for (UINT slot = SLOT1; slot <= SLOT7; ++slot)
         {
             const SS_CARDTYPE type = (slot == SLOT6 && cards == "disk2") ? CT_Disk2 : CT_Empty;

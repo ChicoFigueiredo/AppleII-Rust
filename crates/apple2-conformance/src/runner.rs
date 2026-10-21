@@ -463,7 +463,10 @@ fn observe_once(
                 OracleKind::MemoryHash => sha256_hex(&memory_dump(&m)),
                 OracleKind::StateHash => sha256_hex(&state_dump(&m)),
                 OracleKind::Expr => String::new(),
-                OracleKind::Trace | OracleKind::FramebufferHash | OracleKind::AudioEvents => {
+                OracleKind::Trace
+                | OracleKind::TraceCheckpoints
+                | OracleKind::FramebufferHash
+                | OracleKind::AudioEvents => {
                     unreachable!()
                 }
             };
@@ -653,6 +656,10 @@ fn expected_text(case: &Case) -> String {
             }
         ),
         OracleKind::Expr => o.expect.join(" && "),
+        OracleKind::TraceCheckpoints => format!(
+            "checkpoints {} (boot do disco em passo sincronizado com o oráculo)",
+            o.trace.as_deref().unwrap_or("?")
+        ),
         OracleKind::AudioEvents => format!(
             "audio-events {} (timing {}){}",
             o.events.as_deref().unwrap_or("?"),
@@ -711,6 +718,9 @@ fn evaluate(
             "o modelo {} não tem ROM de sistema embutida",
             case.model
         ));
+    }
+    if case.oracle.kind == OracleKind::TraceCheckpoints {
+        return evaluate_disk(env, case);
     }
     if case.oracle.kind == OracleKind::AudioEvents {
         return audio_verdict(env, case, artifacts);
@@ -885,6 +895,47 @@ fn evaluate(
     }
 }
 
+/// `trace-checkpoints` cases: a Disk II boot in lock step with the oracle (see `disk.rs`).
+fn evaluate_disk(env: &Env, case: &Case) -> Verdict {
+    use crate::disk::{self, Checkpoints, Failure};
+    for (role, fx) in case.devices() {
+        let path = env.workspace.join(&fx.path);
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(_) => {
+                return Verdict::Blocked(format!(
+                    "{role} ausente: {} (imagem de terceiros fora do repositório; veja docs/conformance)",
+                    fx.path
+                ))
+            }
+        };
+        let h = sha256_hex(&bytes);
+        if h != fx.sha256 {
+            return Verdict::Blocked(format!(
+                "{role} {} com sha256 {h}, esperado {}",
+                fx.path, fx.sha256
+            ));
+        }
+    }
+    let rel = case.oracle.trace.as_deref().expect("validated");
+    let ck = match std::fs::read_to_string(env.root.join(rel))
+        .map_err(|e| e.to_string())
+        .and_then(|t| Checkpoints::parse(&t))
+    {
+        Ok(c) => c,
+        Err(e) => return Verdict::Blocked(format!("checkpoints {rel}: {e}")),
+    };
+    let mut rig = match disk::build(env, case) {
+        Ok(r) => r,
+        Err(e) => return Verdict::Fail(format!("erro ao montar a máquina: {e}"), None),
+    };
+    match disk::check(&mut rig, &ck) {
+        Ok(s) => Verdict::Pass(s),
+        Err(Failure::Blocked(c)) => Verdict::Blocked(c),
+        Err(Failure::Fail(msg, _)) => Verdict::Fail(msg, None),
+    }
+}
+
 /// Saves the observed state for a failing case; returns the diff artifact name.
 fn dump_actual(
     case: &Case,
@@ -908,7 +959,7 @@ fn dump_actual(
                 .is_some_and(|v| v.full_region() == Ok(true));
             (format!("{}.actual.png", case.id), png_bytes(r, full).ok()?)
         }
-        OracleKind::Trace | OracleKind::AudioEvents => return None,
+        OracleKind::Trace | OracleKind::TraceCheckpoints | OracleKind::AudioEvents => return None,
     };
     artifacts.push((name.clone(), bytes));
     Some(name)

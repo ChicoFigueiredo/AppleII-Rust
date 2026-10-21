@@ -1,0 +1,20 @@
+id = "disk-woz-wizardry3-boot"
+story = "HU-0301"
+criterion = "O boot de WOZ Wizardry III side B boot no Apple //e Enhanced com um Disk II no slot 6 executa a mesma sequência de instruções, ciclo a ciclo, que o AppleWin (tempo de nibble, motor, passo do braço, quarter tracks)"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: n/a. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-woz-wizardry3-boot (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 6000000
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/WOZ/Wizardry III side B - boot.woz"
+sha256 = "d7f82cacfe0972aa1744dec159d7a2b5d18a81b7d2e7c7d4a94310875aa85aab"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 6000000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-woz-wizardry3-boot.ckpt"

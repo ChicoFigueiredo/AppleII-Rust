@@ -6,6 +6,7 @@
 
 pub mod audio;
 pub mod case;
+pub mod disk;
 pub mod manifest;
 pub mod pcm;
 pub mod report;
