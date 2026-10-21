@@ -230,6 +230,7 @@ dependencies = [
 name = "apple2-printer"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "serde",
 ]
 
