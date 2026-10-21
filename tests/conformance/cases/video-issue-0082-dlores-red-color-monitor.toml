@@ -1,0 +1,21 @@
+id = "video-issue-0082-dlores-red-color-monitor"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0082-dlores-red em color-monitor a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-monitor"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0082-dlores-red.scene"
+scene_sha256 = "b9200eaaa09eb67b51b62c3f9a8c1f17b0c07901853661ded4c2146d173df01e"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "30f2f42011be13c2628ee670ffb05f8ba9f0dd1837381fb47fb69c6969441070"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0082-dlores-red.scene --video-type 3 --video-hz 60 --rgb-card 0 => fb_sha256_full=30f2f42011be13c2628ee670ffb05f8ba9f0dd1837381fb47fb69c6969441070 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

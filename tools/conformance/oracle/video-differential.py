@@ -47,6 +47,10 @@ CASE_SELECTION = [
     (("text80", "hires-bars", "dhires-noise", "lores", "hires-mixed", "midline-hgr-text-24",
       "midline-1443-hgr-then-text", "midline-1443-text-then-hgr"), [1, 2, 3, 4, 5], [50], [0], 0),  # PAL
     (("rgb-*",), [2], [60], [1, 2], 0),  # the other RGB cards
+    # one regression scene per upstream issue (docs/conformance/results/video.csv)
+    (("issue-*",), [1, 3], [60], [0], 0),
+    (("issue-0636-*", "issue-0828-*", "issue-0850-*", "issue-0851-*", "issue-1018-*", "issue-1435-*"), [2], [60], [0, 1, 2], 0),
+    (("issue-0082-*", "issue-0241-*", "issue-0516-*", "issue-1386-*"), [3, 4], [50], [0], 0),
     # VidHD (HU-0202): legacy modes centred in the 640x400 framebuffer, and Super Hi-Res
     (VIDHD_LEGACY, [1, 3, 4, 5, 8], [60], [0], 2),
     (("shr-*",), [0, 1, 3, 4, 5, 8], [60], [0], 2),

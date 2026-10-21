@@ -1,0 +1,21 @@
+id = "video-issue-0241-floatbus-dlores-text80-color-idealized"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0241-floatbus-dlores-text80 em color-idealized a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0241-floatbus-dlores-text80.scene"
+scene_sha256 = "1b9be57366cd0a9a9bfab41c5c5d391e9c3c36eb4b6cb7b6f90003bca7931256"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "73abfa5f141271e68feb749a962883a27286615ed8050a6355bb864e4fe42bee"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0241-floatbus-dlores-text80.scene --video-type 1 --video-hz 60 --rgb-card 0 => fb_sha256_full=73abfa5f141271e68feb749a962883a27286615ed8050a6355bb864e4fe42bee (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

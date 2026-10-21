@@ -1,0 +1,21 @@
+id = "video-issue-0851-rgb-fb-lores-mixed-color-rgb-le-chat-mauve-feline"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0851-rgb-fb-lores-mixed em color-rgb a 60 Hz com a carta le-chat-mauve-feline, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-rgb"
+hz = 60
+rgb_card = "le-chat-mauve-feline"
+region = "full"
+scene = "inputs/video/issue-0851-rgb-fb-lores-mixed.scene"
+scene_sha256 = "bc70a80a4b7707d2e36bdff03aec2241867f6a7c9fab46d22e43bb5c39a9470e"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "69d5ac6135eb859e2ed32da504aa908b2c509a7eea3d4e02a498d1acf0870d58"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0851-rgb-fb-lores-mixed.scene --video-type 2 --video-hz 60 --rgb-card 2 => fb_sha256_full=69d5ac6135eb859e2ed32da504aa908b2c509a7eea3d4e02a498d1acf0870d58 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

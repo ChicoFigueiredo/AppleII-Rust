@@ -1,0 +1,21 @@
+id = "video-issue-0850-rgb-seq-1-3-2-0-color-rgb-le-chat-mauve-feline"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0850-rgb-seq-1-3-2-0 em color-rgb a 60 Hz com a carta le-chat-mauve-feline, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-rgb"
+hz = 60
+rgb_card = "le-chat-mauve-feline"
+region = "full"
+scene = "inputs/video/issue-0850-rgb-seq-1-3-2-0.scene"
+scene_sha256 = "c47f43188224e4afa7b3ea236cd4bea3611029f909d0c9407e856011cdc3836c"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "d27053b4b6a811cd4a20cbe203ad84fa7336d5b41dfdb069f830171c06378854"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0850-rgb-seq-1-3-2-0.scene --video-type 2 --video-hz 60 --rgb-card 2 => fb_sha256_full=d27053b4b6a811cd4a20cbe203ad84fa7336d5b41dfdb069f830171c06378854 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

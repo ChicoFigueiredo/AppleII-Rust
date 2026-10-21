@@ -1,0 +1,21 @@
+id = "video-issue-0851-rgb-fb-lores-mixed-color-idealized"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0851-rgb-fb-lores-mixed em color-idealized a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0851-rgb-fb-lores-mixed.scene"
+scene_sha256 = "bc70a80a4b7707d2e36bdff03aec2241867f6a7c9fab46d22e43bb5c39a9470e"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "9f59c647218216dabd3aa9ca85fa0f8f5ec417bda7d3d525c722a72e3bef2793"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0851-rgb-fb-lores-mixed.scene --video-type 1 --video-hz 60 --rgb-card 0 => fb_sha256_full=9f59c647218216dabd3aa9ca85fa0f8f5ec417bda7d3d525c722a72e3bef2793 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"
