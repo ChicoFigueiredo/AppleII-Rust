@@ -166,6 +166,40 @@ _Avoid_: ROM de disco, dump
 O protocolo de blocos que a controladora de disco rígido expõe para o ProDOS.
 _Avoid_: HDD protocol
 
+## Impressão
+
+**Impressora virtual**:
+Uma impressora emulada, ligada à Carta de impressora, que recebe os bytes que o software do Apple II imprime e os transforma em Páginas, como faria a impressora física.
+_Avoid_: spooler, impressora PDF, Printer.txt
+
+**Perfil de impressora**:
+O modelo de impressora emulado (Epson LX-310, FX-80…), que decide quais comandos existem e como cada byte vira pontos no papel.
+_Avoid_: driver, tipo de impressora
+
+**Transporte**:
+O que a Carta de impressora faz com o byte antes de entregá-lo à impressora: 7 bits (a regra do AppleWin, que apaga o bit 7) ou 8 bits (o byte inteiro, necessário para gráficos).
+_Avoid_: codificação, modo raw
+
+**Trabalho de impressão**:
+Os bytes que a Carta entrega entre a primeira escrita e o fechamento (inatividade, reset da Máquina ou ação do usuário). Um avanço de formulário muda de Página, mas não encerra o Trabalho.
+_Avoid_: job, documento, arquivo de impressão
+
+**Página**:
+Uma folha do Papel com os pontos que as agulhas marcaram, em posições físicas.
+_Avoid_: tela, quadro
+
+**Papel**:
+O suporte em que o Trabalho é impresso: formulário contínuo zebrado com furos de trator, A4 ou Carta; define tamanho, margens e aparência.
+_Avoid_: formato de página
+
+**Fita**:
+A aparência da tinta escolhida para a Impressora virtual: nova (pontos nítidos e uniformes) ou usada (intensidade irregular, sempre igual para o mesmo Trabalho), e a cor, com opção de preto e branco nos Perfis coloridos.
+_Avoid_: tinta (sozinho), estilo
+
+**Arquivo de impressões**:
+O acervo permanente dos Trabalhos de impressão, com os bytes brutos, a data, o Modelo do Apple II, um título e uma nota pessoal, para reabrir e exportar a qualquer momento.
+_Avoid_: histórico, spool, lixeira
+
 ## Cartas especiais
 
 **CPU alternativa**:
