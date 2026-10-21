@@ -414,8 +414,8 @@ impl Debugger {
                 } else {
                     // RGBAswapBGRA: raw files are RGBA with opaque alpha.
                     let mut v = Vec::with_capacity(CHROMA_SIZE);
-                    for px in src.chunks_exact(4) {
-                        v.extend_from_slice(&[px[2], px[1], px[0], 255]);
+                    for i in (0..src.len()).step_by(4) {
+                        v.extend_from_slice(&[src[i + 2], src[i + 1], src[i], 255]);
                     }
                     v
                 };

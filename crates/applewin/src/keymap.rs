@@ -585,8 +585,19 @@ mod tests {
             debug_key(HostKey::Char('g'), NONE),
             Some(DebugKey::Char('g'))
         );
-        assert_eq!(debug_key(HostKey::Enter, NONE), Some(DebugKey::Enter));
-        assert_eq!(debug_key(HostKey::Up, NONE), Some(DebugKey::HistoryPrev));
+        assert_eq!(
+            debug_key(HostKey::Enter, NONE),
+            Some(DebugKey::plain(DbgKey::Enter))
+        );
+        // Up/Down move the disassembly cursor in AppleWin (Debug.cpp:9989), not the history
+        assert_eq!(
+            debug_key(HostKey::Up, NONE),
+            Some(DebugKey::plain(DbgKey::Up))
+        );
+        assert_eq!(
+            debug_key(HostKey::Char(' '), NONE),
+            Some(DebugKey::plain(DbgKey::Char(' ')))
+        );
         assert_eq!(debug_key(HostKey::F(3), NONE), None);
         assert_eq!(debug_key(HostKey::Char('c'), CTRL), None);
     }
