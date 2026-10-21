@@ -149,14 +149,17 @@ fn sam_dac_writes_drive_the_cone() {
 
 #[test]
 fn t1_counter_read_right_after_the_write_matches_appleworks_gh701() {
-    // GH#701: T1C := $FFFF, then LDA T1C_L (4 cycles) must read $FC.
+    // GH#701 / GH#833: T1C := $FFFF, then LDA T1C_L (4 cycles) reads $FD at the frozen AppleWin
+    // (audetto-oracle, case audio-issue-0833-t1-read). The AppleWin comment says $FC, but its
+    // SetTimerSyncEvent writes the counter as latch + opcode cycles in a USHORT ($0003), and the
+    // opcode's own 4 cycles then count as an underflow with the IRQ delay set.
     let (mut m, _bus) = setup(Variant::MockingboardC);
     let mut code = vec![0xA9, 0xFF, 0x8D, 0x05, 0xC4]; // LDA #$FF : STA T1CH (latch is $FFFF)
     code.extend([0xAD, 0x04, 0xC4, 0x85, 0x10]); // LDA T1CL : STA $10
     code.extend(spin_at(0x30A));
     load(&mut m, 0x300, &code);
     run_to(&mut m, 0x30A);
-    assert_eq!(m.peek(0x10), 0xFC);
+    assert_eq!(m.peek(0x10), 0xFD);
 }
 
 #[test]

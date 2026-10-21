@@ -678,6 +678,33 @@ Timer1 IRQ Pending: false\n    Timer2 IRQ Pending: false\n    Speech IRQ Pending
 }
 
 #[test]
+fn golden_mockingboard_c_v1_restarts_timer1_only_with_its_interrupt_enabled() {
+    // v1 has no "Timer1 Active": SY6522::StartTimer1_LoadStateV1 (6522.cpp:72) starts Timer1 only
+    // if IER.T1 is set, and Timer2 is never restarted (GH#309, AppleWin-Test Cybernoid-TimerAtC480).
+    let unit = |ier: &str| {
+        format!(
+            "    SY6522:\n{}    AY8910:\n{}    SSI263:\n      Duration / Phoneme: 0x00\n      Inflection: 0x00\n      \
+Rate / Inflection: 0x00\n      Control / Articulation / Amplitude: 0x00\n      Filter Frequency: 0x00\n      \
+Current Mode: 0x00\n    AY Current Register: 0x00\n    Timer1 IRQ Pending: false\n    \
+Timer2 IRQ Pending: false\n    Speech IRQ Pending: false\n",
+            via_old("", "0x4FE7").replace("IER: 0x40", &format!("IER: {ier}")),
+            ay_old(0),
+        )
+    };
+    let text = format!(
+        "4:\n  Card: Mockingboard C\n  Version: 1\n  State:\n    Unit0:\n{}    Unit1:\n{}",
+        indent(&unit("0x40"), 2),
+        indent(&unit("0x00"), 2)
+    );
+    let mut host = Host::new();
+    let (m, warnings) = load_card(&file_with_slots(&text), &mut host, 4);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let s = snapshot_in(&m, 4);
+    assert!(s.units[0].via.t1_active && !s.units[0].via.t2_active);
+    assert!(!s.units[1].via.t1_active && !s.units[1].via.t2_active);
+}
+
+#[test]
 fn golden_phasor_v8_swaps_the_ay_pairs() {
     // v5-8: unit file i holds AYs of both units (Mockingboard.cpp:1451).
     let unit = |a: u8, b: u8| {

@@ -1,0 +1,14 @@
+#audio_events=v1
+#oracle=audetto-oracle
+#card=mockingboard
+#slot=4
+#start_cycle=0
+6,IOW,4,05,FF
+10,IOR,4,04,FD
+19,IOW,4,04,FF
+23,IOW,4,05,FF
+27,IOR,4,04,FD
+33,IOW,4,05,FF
+37,IOR,4,04,FD
+45,IOW,4,05,FF
+49,IOR,4,04,FD

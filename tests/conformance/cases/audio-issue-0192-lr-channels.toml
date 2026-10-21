@@ -1,0 +1,20 @@
+id = "audio-issue-0192-lr-channels"
+story = "HU-0501"
+criterion = "Mockingboard: AY do 6522 em $C400 toca no canal esquerdo e o de $C480 no direito, como no AppleWin (GH#192)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-lr-channels.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/issue-lr-channels.bin"
+
+[run]
+cycles = 330000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0192-lr-channels"
+events = "reference-audio/audio-issue-0192-lr-channels.events"

@@ -364,8 +364,12 @@ impl Via {
             reg::T1CH => {
                 self.update_ifr(IXR_TIMER1, 0);
                 self.t1_latch = self.t1_latch & 0x00FF | (v as u16) << 8;
-                self.t1_counter = self.t1_latch;
-                self.last = now + adj as u64; // the opcode's own cycles are not counted
+                // SetTimerSyncEvent (6522.cpp:122): the counter is written as latch + opcode
+                // cycles, as a USHORT, and the opcode's own cycles are subtracted when it ends.
+                // For a latch >= $10000 - adj the sum wraps and that subtraction is seen as an
+                // underflow (counter $FFFF, IRQ delay set), which a following read shows (GH#701).
+                self.t1_counter = self.t1_latch.wrapping_add(adj);
+                self.last = now;
                 self.t1_active = true;
                 let latch = if self.mega && self.t1_latch == 0 {
                     0xFFFF
@@ -391,8 +395,8 @@ impl Via {
             reg::T2CH => {
                 self.update_ifr(IXR_TIMER2, 0);
                 self.t2_latch = self.t2_latch & 0x00FF | (v as u16) << 8;
-                self.t2_counter = self.t2_latch;
-                self.last = now + adj as u64;
+                self.t2_counter = self.t2_latch.wrapping_add(adj);
+                self.last = now;
                 self.t2_active = true;
                 let extra = if self.mega {
                     EXTRA_MEGA
@@ -566,6 +570,24 @@ mod tests {
         assert_eq!(v.read_at(reg::IFR, 7214 + 499, 4) & IXR_TIMER2, 0);
         assert_eq!(v.read_at(reg::IFR, 7214 + 508, 4) & IXR_TIMER2, 0);
         assert_eq!(v.read_at(reg::IFR, 7214 + 517, 4) & IXR_TIMER2, IXR_TIMER2);
+    }
+
+    /// GH#833 / GH#701, audetto-oracle (case `audio-issue-0833-t1-read`): `SetTimerSyncEvent`
+    /// stores latch + opcode cycles in a USHORT. With latch $FFFF and a 4-cycle STA the counter is
+    /// $0003; the opcode's own 4 cycles then underflow it (IRQ delay set) and the next 4-cycle
+    /// `LDA T1C_L` reads $FD, not the $FC the AppleWin comment promises. A latch that does not
+    /// wrap ($1000) reads latch - 3.
+    #[test]
+    fn t1_counter_written_as_latch_plus_opcode_cycles_wraps_like_applewin() {
+        let mut v = Via::new(false);
+        v.write_at(reg::T1CL, 0xFF, 0, 4);
+        v.write_at(reg::T1CH, 0xFF, 4, 4);
+        assert_eq!(v.read_at(reg::T1CL, 8, 4), 0xFD);
+        let mut v = Via::new(false);
+        v.write_at(reg::T1CL, 0x00, 0, 4);
+        v.write_at(reg::T1CH, 0x10, 4, 4);
+        assert_eq!(v.read_at(reg::T1CL, 8, 4), 0xFD);
+        assert_eq!(v.read_at(reg::T1CH, 20, 4), 0x0F);
     }
 
     #[test]

@@ -1,0 +1,18 @@
+id = "audio-issue-0765-6522-one-shot"
+story = "HU-0501"
+criterion = "GH#567/#765: 6522 one-shot e leitura de IER/IFR (fixture): eventos iguais ao AppleWin"
+model = "apple2e-enhanced"
+notes = "Fixture real do AppleWin-Test (corpus nao redistribuido); sem o cache o resultado e BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/6522-one-shot.aws.yaml"
+sha256 = "c03fb6a55347993f058bdb148418d20be2533c1c9cc703346b4e66e7e263af1b"
+
+[run]
+cycles = 50000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0765-6522-one-shot"
+events = "reference-audio/audio-issue-0765-6522-one-shot.events"

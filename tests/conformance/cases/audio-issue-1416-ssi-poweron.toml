@@ -1,0 +1,22 @@
+id = "audio-issue-1416-ssi-poweron"
+story = "HU-0502"
+criterion = "SSI263 (AP por padrao): fonema em power-down nao inicia, CTL=0 liga, CTL=1 silencia (GH#1416/#1412)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-ssi-poweron.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/issue-ssi-poweron.bin"
+
+[run]
+cycles = 300000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-1416-ssi-poweron"
+events = "reference-audio/audio-issue-1416-ssi-poweron.events"
+timing = "ssi"
+ssi_tolerance = 2621  # J_ssi = 1621 (oraculo a 1000 contra 250 Ciclos de fatia) + 1000

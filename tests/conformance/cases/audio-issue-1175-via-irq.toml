@@ -1,0 +1,20 @@
+id = "audio-issue-1175-via-irq"
+story = "HU-0501"
+criterion = "6522: IRQ de T1 com latch pequeno, IRQ na ultima ciclo do opcode e T1 dos dois 6522 em modo continuo (GH#1175/#1176/#685)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-via-irq.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/issue-via-irq.bin"
+
+[run]
+cycles = 80000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-1175-via-irq"
+events = "reference-audio/audio-issue-1175-via-irq.events"

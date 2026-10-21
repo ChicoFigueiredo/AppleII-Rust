@@ -780,14 +780,14 @@ impl MockingboardCard {
             if v.t1_active {
                 ctx.schedule_gated(
                     (u * 2) as u16,
-                    (v.t1_counter as i16 as i32 + extra).max(1),
+                    (v.t1_counter as i32 + extra).max(1),
                     !v.t1_gated,
                 );
             }
             if v.t2_active {
                 ctx.schedule_gated(
                     (u * 2) as u16 + 1,
-                    (v.t2_counter as i16 as i32 + extra).max(1),
+                    (v.t2_counter as i32 + extra).max(1),
                     !v.t2_gated,
                 );
             }

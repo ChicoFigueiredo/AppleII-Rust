@@ -276,7 +276,9 @@ fn load(
             us.ay_current_register[1] = u.u32("AY Current Register B")? as u8;
         }
         if version == 1 {
-            us.via.t1_active = false;
+            // SY6522::StartTimer1_LoadStateV1 (6522.cpp:72): Timer1 is restarted only if its
+            // interrupt is enabled; Timer2 is never restarted (GH#309 fixture Cybernoid).
+            us.via.t1_active = us.via.ier & 0x40 != 0;
             us.via.t2_active = false;
         } else if (2..=7).contains(&version) {
             us.via.t1_active = u.bool("Timer1 Active")?;

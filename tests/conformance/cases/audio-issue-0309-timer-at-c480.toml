@@ -1,0 +1,18 @@
+id = "audio-issue-0309-timer-at-c480"
+story = "HU-0501"
+criterion = "GH#309: Timer1 do 6522 em $C480 gera IRQ (fixture Cybernoid): eventos iguais ao AppleWin"
+model = "apple2e-enhanced"
+notes = "Fixture real do AppleWin-Test (corpus nao redistribuido); sem o cache o resultado e BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/Cybernoid-TimerAtC480.aws.yaml"
+sha256 = "100c97421b3a6eb4317ce29cb506aa3c71d2f878cc6efd48cacd8cdfe29f2f9f"
+
+[run]
+cycles = 60000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0309-timer-at-c480"
+events = "reference-audio/audio-issue-0309-timer-at-c480.events"
