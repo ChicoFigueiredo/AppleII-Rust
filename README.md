@@ -8,7 +8,7 @@ Repositórios: [GitHub](https://github.com/ChicoFigueiredo/AppleII-Rust) · [Git
 
 ## O que é emulado
 
-- Modelos: Apple ][, ][+, ][ J-Plus, //e, //e Enhanced e os clones Pravets 82/8M/8A, Base64A e TK3000 //e.
+- Modelos: Apple ][, ][+, ][ J-Plus, //e, //e Enhanced e os clones Pravets 82/8M/8A, Base64A e TK3000 //e. O Apple I está fora do escopo até decisão explícita do dono (ver [ADR 0005](docs/adr/0005-apple-i-fora-do-escopo-ate-decisao.md)).
 - Vídeo: texto, lo-res, hi-res, double lo-res/hi-res, 80 colunas, monitores monocromáticos, NTSC, PAL e placas RGB.
 - Memória: Language Card, Saturn 128K, cartas AUX (80 colunas, Extended 80 colunas, RamWorks III).
 - Discos: Disk II (DSK, DO, PO, NIB, WOZ, 2MG, gzip/zip) e disco rígido (ProDOS, SmartPort).
