@@ -38,6 +38,27 @@ cargo run --release -p apple2-conformance --bin conformance -- compare-trace ...
 
 O workflow `.github/workflows/conformance.yml` usa o primeiro comando, de forma provisória. Como toda a CI, é manual: ninguém o dispara sem autorização do dono.
 
+## Desempenho (HU-1001)
+
+O crate `crates/apple2-bench` (binário `apple2-bench`) mede nove cenários determinísticos (CPU pura, boot e texto, HGR, DHGR, NTSC monitor, NTSC TV, PAL, Disk II e Mockingboard), a latência de entrada e a decomposição do custo de um quadro.
+
+```sh
+# Medir (10 repetições por cenário, cada uma num processo novo) e gerar relatório e JSON
+cargo run --release -p apple2-bench -- --breakdown \
+  --json tests/conformance/reports/performance.json --report tests/conformance/reports/performance.md
+
+# Regravar o baseline (só ao mudar de propósito timing/vídeo/áudio, ou a máquina de referência)
+cargo run --release -p apple2-bench -- --no-latency --write-baseline tests/conformance/perf-baseline.json
+
+# Conferir contra o baseline (falha com código 1 em regressão; usado no conformance.yml)
+cargo run --release -p apple2-bench -- --check tests/conformance/perf-baseline.json --no-latency
+```
+
+- `perf-baseline.json` guarda, por cenário, o MHz mediano e o melhor (sobre o tempo de CPU da thread), o CV, a margem e a impressão digital (ciclos emulados, hash do último quadro, hash do áudio).
+- A margem é `max(15 %, 3 x CV)`; a explicação, o critério (mediana e melhor caso) e o modo entre máquinas estão em `crates/apple2-bench/src/report.rs`.
+- A impressão digital precisa ser idêntica: uma otimização que mude timing, vídeo ou áudio falha o `--check` antes de qualquer discussão de velocidade.
+- Meça em máquina ociosa. Um vizinho no mesmo núcleo físico custou ~30 % nos cenários Color TV; veja a nota em `reports/performance.md`.
+
 ## Política de cache e Fixtures
 
 - O repositório `AppleWin/AppleWin-Test` não tem licença. Ele **não** é copiado para o repositório nem redistribuído.

@@ -1,0 +1,19 @@
+[package]
+name = "apple2-bench"
+description = "Benchmarks por cenário, latência de entrada e detecção de regressão de desempenho (HU-1001)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "apple2-bench"
+path = "src/main.rs"
+
+[dependencies]
+applewin = { path = "../applewin" }
+apple2-audio = { path = "../apple2-audio" }
+apple2-core = { path = "../apple2-core" }
+apple2-config = { path = "../apple2-config" }
+apple2-video = { path = "../apple2-video" }
+serde_json = "1"
