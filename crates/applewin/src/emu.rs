@@ -336,6 +336,16 @@ impl Emulator {
             as usize
     }
 
+    /// Shows the host I/O errors the cards queued since the last frame (pcap, serial and printer
+    /// files that did not open: AUD-P-023/030/033). The emulation carries on with the card
+    /// disconnected, as AppleWin does; the message goes to the status line and to stderr.
+    fn show_host_io_errors(&mut self) {
+        for msg in apple2_hostio::diagnostics::drain() {
+            eprintln!("warning: {msg}");
+            self.say(msg);
+        }
+    }
+
     pub fn say(&mut self, msg: impl Into<String>) {
         self.message = msg.into();
         self.message_seq += 1;
@@ -348,6 +358,7 @@ impl Emulator {
 
     /// Runs one video frame and returns the audio it produced (interleaved stereo).
     pub fn run_frame(&mut self) -> (u64, Vec<f32>) {
+        self.show_host_io_errors();
         let cpf = self.cycles_per_frame();
         let cycles = match self.debugger.mode {
             RunMode::Running => self.video.run_frame(&mut self.machine),
