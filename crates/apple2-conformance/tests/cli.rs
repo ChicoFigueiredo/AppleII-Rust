@@ -122,7 +122,7 @@ fn run_all_writes_manifests_junit_and_summary() {
     }
     let s = std::fs::read_to_string(d.join("summary.md")).unwrap();
     assert!(
-        s.contains("| PASS | 12 |") || s.contains("| PASS | 7 |"),
+        s.contains("| PASS | 13 |") || s.contains("| PASS | 8 |"),
         "{s}"
     );
     assert!(s.contains("| FAIL | 0 |"));

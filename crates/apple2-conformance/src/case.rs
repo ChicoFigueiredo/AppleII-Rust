@@ -631,6 +631,29 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
     }
 
     #[test]
+    fn trace_without_reference_needs_a_determinism_case_with_repeats() {
+        let trace =
+            |authority: &str, repeat: u32| {
+                let t = GOOD
+                .replace("kind = \"text-hash\"", "kind = \"trace\"")
+                .replace("authority = \"regression\"", &format!("authority = \"{authority}\""))
+                .replace(
+                    "sha256 = \"0000000000000000000000000000000000000000000000000000000000000000\"",
+                    "",
+                )
+                .replace("frames = 3", &format!("frames = 3\nrepeat = {repeat}"));
+                toml::from_str::<Case>(&t).unwrap().validate()
+            };
+        assert!(trace("determinism", 10).is_ok());
+        assert!(trace("determinism", 1)
+            .unwrap_err()
+            .contains("oracle.trace"));
+        assert!(trace("regression", 10)
+            .unwrap_err()
+            .contains("oracle.trace"));
+    }
+
+    #[test]
     fn expression_parsing() {
         let e = Expr::parse("mem[0x0400] >= $A0").unwrap();
         assert_eq!(e.lhs, Operand::Mem(0x400));
