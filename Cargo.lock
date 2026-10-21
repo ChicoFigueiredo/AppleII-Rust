@@ -161,6 +161,16 @@ name = "apple2-cpu"
 version = "0.1.0"
 
 [[package]]
+name = "apple2-dap"
+version = "0.1.0"
+dependencies = [
+ "apple2-core",
+ "apple2-debugger",
+ "apple2-storage",
+ "serde_json",
+]
+
+[[package]]
 name = "apple2-debugger"
 version = "0.1.0"
 dependencies = [
@@ -181,6 +191,17 @@ dependencies = [
  "if-addrs",
  "pcap",
  "serialport",
+]
+
+[[package]]
+name = "apple2-rewind"
+version = "0.1.0"
+dependencies = [
+ "apple2-core",
+ "apple2-debugger",
+ "apple2-storage",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
