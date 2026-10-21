@@ -12,3 +12,6 @@ serde.workspace = true
 apple2-roms = { path = "../apple2-roms" }
 toml = "0.8"
 directories = "6"
+
+[dev-dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
