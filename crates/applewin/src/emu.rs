@@ -491,6 +491,9 @@ impl Emulator {
     }
 
     fn rebuild(&mut self, settings: Settings) {
+        // The new machine reopens the image files: the old one must write its pending track first
+        // (AUD-C-030; AppleWin's EjectDisk -> FlushCurrentTrack).
+        self.disks.flush(&mut self.machine);
         // The cards hold the bus they were built with, so build everything again with one bus.
         let bus = AudioBus::new(self.audio_rate, settings.to_machine_config().video_standard);
         match self.backend.build_machine(&settings, &bus) {
@@ -528,7 +531,8 @@ impl Emulator {
             if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
                 std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
             }
-            std::fs::write(path, &saved.text).map_err(|e| e.to_string())?;
+            apple2_savestate::write_atomic(path, saved.text.as_bytes())
+                .map_err(|e| format!("{}: {e}", path.display()))?;
             Ok(saved.warnings)
         });
         match r {
@@ -558,6 +562,9 @@ impl Emulator {
     fn try_load_state(&mut self, path: &Path) -> Result<Vec<String>, String> {
         crate::state_io::check_loadable(path)?;
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        // The loaded machine reopens the images the old one may still have a dirty track for
+        // (AUD-C-031; AppleWin flushes in LoadSnapshot through EjectDisk).
+        self.disks.flush(&mut self.machine);
         // The cards the state builds hold their own audio bus; the mixer must read the same one.
         let bus = AudioBus::new(
             self.audio_rate,

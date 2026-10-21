@@ -159,6 +159,14 @@ pub struct FixtureSpec {
     pub path: String,
     /// Expected SHA-256 (lowercase hex).
     pub sha256: String,
+    /// `true`: the fixture is an AppleWin `.aws.yaml` the machine is imported from; `run.cycles`
+    /// then counts from where the state stopped (the oracle's `--state ... --cycles N`).
+    #[serde(default)]
+    pub save_state: bool,
+    /// Directories (relative to the workspace root) searched for the disk images it names, after
+    /// the state's own directory and its parents.
+    #[serde(default)]
+    pub image_dirs: Vec<String>,
 }
 
 /// How long to run, from power-on. Exactly one of `frames` and `cycles`.
@@ -355,6 +363,11 @@ pub struct OracleSpec {
     /// the cache, which are not versioned: a different file is BLOCKED, not compared.
     #[serde(default)]
     pub trace_sha256: Option<String>,
+    /// Kind `trace` without a stored file: SHA-256 of the trace's data rows (the lines after the
+    /// `cycle,pc,...` header, each ended by a newline). A mismatch has no row-level diff;
+    /// regenerate the oracle trace to see it.
+    #[serde(default)]
+    pub trace_rows_sha256: Option<String>,
     /// Trace fields not compared (e.g. `["cycle"]`).
     #[serde(default)]
     pub ignore: Vec<String>,
@@ -438,6 +451,7 @@ impl Case {
         match o.kind {
             OracleKind::Trace
                 if o.trace.is_none()
+                    && o.trace_rows_sha256.is_none()
                     && !(o.authority == Authority::Determinism && self.run.repeat >= 2) =>
             {
                 return Err(

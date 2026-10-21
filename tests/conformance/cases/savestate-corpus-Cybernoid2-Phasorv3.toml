@@ -1,0 +1,20 @@
+id = "savestate-corpus-Cybernoid2-Phasorv3"
+story = "HU-0401"
+criterion = "Importar o save-state real Cybernoid2(Phasorv3).aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/Cybernoid2(Phasorv3).aws.yaml"
+sha256 = "ac53e30c50b0d140e4862650dc9b68c87c969df699f168f6b46f35c7e4a75391"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Cybernoid2(Phasorv3).aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "828de8e253e6bf5289af2e3369325ef2d2b6a424ca1c16732698742700ab2fc2"

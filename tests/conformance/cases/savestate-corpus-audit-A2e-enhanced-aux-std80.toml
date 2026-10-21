@@ -1,0 +1,20 @@
+id = "savestate-corpus-audit-A2e-enhanced-aux-std80"
+story = "HU-0401"
+criterion = "Importar o save-state real audit-A2e-enhanced-aux-std80.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/audit-A2e-enhanced-aux-std80.aws.yaml"
+sha256 = "ff268c7d1c161c9c3e50d07613b11ab10b54c3ba9f3c0595ce26472f3d186025"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state audit-A2e-enhanced-aux-std80.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "6da9ab6a1e500d599377445f4889bde9bc7613ce196c90f78cc32a124c0af0a1"

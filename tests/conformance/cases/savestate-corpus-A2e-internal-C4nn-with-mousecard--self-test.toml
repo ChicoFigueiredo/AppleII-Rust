@@ -1,0 +1,20 @@
+id = "savestate-corpus-A2e-internal-C4nn-with-mousecard--self-test"
+story = "HU-0401"
+criterion = "Importar o save-state real A2e-internal-C4nn-with-mousecard-(self test).aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/A2e-internal-C4nn-with-mousecard-(self test).aws.yaml"
+sha256 = "1f39c29b2a30c5a29d6520a832da358215850cfa15087501c74e5e81c7d07654"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state A2e-internal-C4nn-with-mousecard-(self test).aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "7f05d082ba2282ea4d199be1813f83674db8ba46c01c1cd61ffd4bc15df98855"

@@ -1,0 +1,20 @@
+id = "savestate-corpus-Buttons_KeyData_AnyKeyDown-Test"
+story = "HU-0401"
+criterion = "Importar o save-state real Buttons_KeyData_AnyKeyDown-Test.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Buttons_KeyData_AnyKeyDown-Test.aws.yaml"
+sha256 = "35611a2895c158541dee2560f6c4167ca70bb35a3d388946da3e2c712a615cfc"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Buttons_KeyData_AnyKeyDown-Test.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "96fffda3697a4e41025c46e172c211e1184fffca080b0e68575a6b131f84d7a2"

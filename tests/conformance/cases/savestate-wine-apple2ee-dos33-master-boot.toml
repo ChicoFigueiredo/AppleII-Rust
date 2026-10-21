@@ -1,0 +1,20 @@
+id = "savestate-wine-apple2ee-dos33-master-boot"
+story = "HU-0401"
+criterion = "Importar o save-state real apple2ee-dos33-master-boot.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "tests/conformance/inputs/applewin-real/apple2ee-dos33-master-boot.aws.yaml"
+sha256 = "880986d4275116e49280342997de7df14030b5ab63b3813245a29a21c3d82052"
+save_state = true
+image_dirs = ["tests/conformance/inputs/applewin-real"]
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state apple2ee-dos33-master-boot.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "678513c0879961848536e2e5cc9892b9caee3baf7b3f9619d23835d3fe646b71"

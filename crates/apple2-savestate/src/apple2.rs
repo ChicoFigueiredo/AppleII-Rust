@@ -491,6 +491,7 @@ pub fn apply_apple2(
     st: &mut MachineState,
     unit: &Apple2Unit,
     lcs: &[LcLoad],
+    power_on_ram: &[u8],
     warnings: &mut Vec<String>,
 ) -> Result<(), Error> {
     let s = unit.state;
@@ -515,6 +516,8 @@ pub fn apply_apple2(
         st.cpu.a = c.u32("A")? as u8;
         st.cpu.x = c.u32("X")? as u8;
         st.cpu.y = c.u32("Y")? as u8;
+        // CPU.cpp:963 ORs AF_RESERVED|AF_BREAK; the Rust register keeps B clear and the trace
+        // (`TraceRow`) and the writer (`P | 0x30`) show it set, so only U is forced here.
         st.cpu.p = ((c.u32("P")? as u8) | 0x20) & !0x10;
         st.cpu.sp = c.u32("S")? as u8;
         st.cpu.pc = c.u32("PC")? as u16;
@@ -606,7 +609,10 @@ pub fn apply_apple2(
 
     // Main memory (Memory.cpp:2905)
     let mm = s.need_sub("Main Memory")?;
+    // MemReset() ran before the load: bytes the file does not list keep the power-on pattern.
     let mut img = vec![0u8; 0x10000];
+    let n = power_on_ram.len().min(0xC000);
+    img[..n].copy_from_slice(&power_on_ram[..n]);
     mm.load_memory(&mut img)?;
     st.memory.main[..0xC000].copy_from_slice(&img[..0xC000]);
     let lc_bytes = st.memory.lc.len();

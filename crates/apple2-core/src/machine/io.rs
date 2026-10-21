@@ -13,7 +13,9 @@ impl Board {
     /// Cycle of the frame the video scanner is at for an access now: the start of the executing
     /// instruction (AppleWin advances the scanner after each opcode, cpu6502.h:385).
     fn scan_cycle(&self) -> u32 {
-        (self.cycles_in_frame + self.cycles_per_frame - self.opcode_ticks) % self.cycles_per_frame
+        (self.cycles_in_frame % self.cycles_per_frame + self.cycles_per_frame
+            - self.opcode_ticks % self.cycles_per_frame)
+            % self.cycles_per_frame
     }
 
     /// Value read from an address nobody drives: the byte the video generator is fetching from

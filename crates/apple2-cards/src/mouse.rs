@@ -438,6 +438,15 @@ fn clamp(v: &mut i32, (min, max): (i32, i32)) -> i32 {
     }
 }
 
+impl MouseCard {
+    /// Re-arms the VBL event from the machine's current frame position. A save-state load puts
+    /// the video counter back after the card was inserted, so the event inserted then (relative
+    /// to a fresh frame) is stale; AppleWin builds the card after `g_dwCyclesThisFrame` is loaded.
+    pub fn rearm_vbl(&mut self, ctx: &mut CardCtx) {
+        ctx.schedule(VBL_TOKEN, ctx.cycles_until_vblank() as i32);
+    }
+}
+
 impl Card for MouseCard {
     fn name(&self) -> &'static str {
         "Mouse Card"

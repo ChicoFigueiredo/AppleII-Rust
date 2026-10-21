@@ -152,6 +152,8 @@ dependencies = [
  "apple2-audio",
  "apple2-cards",
  "apple2-core",
+ "apple2-cpu",
+ "apple2-hostio",
  "apple2-savestate",
  "apple2-storage",
  "apple2-video",

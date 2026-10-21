@@ -33,6 +33,13 @@ pub trait LoadHost {
         default_card(name, slot, model)
     }
 
+    /// `g_nMemoryClearType` and `getRandomTime()`: the power-on RAM pattern `MemReset` lays down
+    /// before a save-state's `Main Memory` is read (see [`crate::powerup`]). The default is
+    /// AppleWin's pattern with the oracle's deterministic draw, so a load is reproducible.
+    fn ram_init(&mut self) -> apple2_core::RamInit {
+        apple2_core::RamInit::default()
+    }
+
     /// Creates the No-Slot Clock (`MemInsertNoSlotClock`). The default reads a fixed time;
     /// override to supply the host clock. `None` leaves the machine without one.
     fn make_no_slot_clock(&mut self) -> Option<Box<dyn apple2_core::hooks::RomTap>> {

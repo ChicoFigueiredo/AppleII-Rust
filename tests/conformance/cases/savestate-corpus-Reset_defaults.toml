@@ -1,0 +1,20 @@
+id = "savestate-corpus-Reset_defaults"
+story = "HU-0401"
+criterion = "Importar o save-state real Reset_defaults.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Reset_defaults.aws.yaml"
+sha256 = "b6b4cf5c5c2bab599061cbefd88e94b17940ff1b7c98450ab4c1cdf385bbde27"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Reset_defaults.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "27c292736b7517d35a5ad06c5a725e042e5689a88d09cde22caf37aa9dd4501e"

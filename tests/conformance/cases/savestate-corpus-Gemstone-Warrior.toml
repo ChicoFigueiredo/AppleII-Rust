@@ -1,0 +1,20 @@
+id = "savestate-corpus-Gemstone-Warrior"
+story = "HU-0401"
+criterion = "Importar o save-state real Gemstone Warrior.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Gemstone Warrior.aws.yaml"
+sha256 = "afee08df16e292460b2da09ad194b8289a4d5efb7bf9ae6b3ca8076611ee4eb5"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Gemstone Warrior.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "ce64c6abcfcd92d6b2eedd79ab37de88f0237ea8759ab737df0e108b6ff3fb20"

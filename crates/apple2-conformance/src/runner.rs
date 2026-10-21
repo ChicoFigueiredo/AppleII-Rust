@@ -281,7 +281,18 @@ pub fn generate_trace(
     meta: &[(&str, &str)],
     disk2: Option<&Disk2Setup>,
 ) -> Result<Vec<u8>, String> {
-    let mut m = build_machine(cfg, disk2)?;
+    let m = build_machine(cfg, disk2)?;
+    generate_trace_from(m, run, events, meta)
+}
+
+/// Like [`generate_trace`] from a machine already built (for example imported from a save-state).
+/// `run.cycles` is an absolute cycle count, as in [`drive`].
+pub fn generate_trace_from(
+    mut m: Machine,
+    run: &RunSpec,
+    events: &[InputEvent],
+    meta: &[(&str, &str)],
+) -> Result<Vec<u8>, String> {
     let mut w = TraceWriter::new(Vec::new(), meta).map_err(|e| e.to_string())?;
     drive(
         &mut m,
@@ -388,14 +399,62 @@ pub fn framebuffer_rgba(r: &Renderer, full: bool) -> Vec<u8> {
     out
 }
 
+/// The machine a case starts from: power-on, or imported from its save-state fixture. The run is
+/// counted from the start state, so a state case's `cycles` become absolute here.
+fn start_machine(
+    env: &Env,
+    case: &Case,
+    disk2: Option<&Disk2Setup>,
+) -> Result<(Machine, RunSpec), String> {
+    let mut run = case.run.clone();
+    match case.fixture.as_ref().filter(|f| f.save_state) {
+        None => {
+            let cfg = machine_config(case)?;
+            Ok((build_machine(cfg, disk2)?, run))
+        }
+        Some(fx) => {
+            let dirs = fixture_dirs(env, fx);
+            let imp = crate::state::import_file(&env.workspace.join(&fx.path), &dirs)?;
+            if !imp.missing.is_empty() {
+                return Err(format!("imagens ausentes: {}", imp.missing.join(", ")));
+            }
+            if run.frames.is_some() {
+                return Err("um caso com save-state conta em run.cycles, não em frames".into());
+            }
+            run.cycles = run.cycles.map(|c| c + imp.machine.cycles());
+            Ok((imp.machine, run))
+        }
+    }
+}
+
+fn fixture_dirs(env: &Env, fx: &crate::case::FixtureSpec) -> Vec<PathBuf> {
+    fx.image_dirs
+        .iter()
+        .map(|d| env.workspace.join(d))
+        .collect()
+}
+
+/// SHA-256 of the data rows of a trace given as text (header and `#` lines skipped).
+pub fn trace_rows_sha256(text: &str) -> String {
+    let mut rows = String::new();
+    for line in text.lines() {
+        if line.starts_with('#') || line.starts_with("cycle,") || line.is_empty() {
+            continue;
+        }
+        rows.push_str(line);
+        rows.push('\n');
+    }
+    sha256_hex(rows.as_bytes())
+}
+
 fn observe_once(
+    env: &Env,
     case: &Case,
     env_meta: &[(String, String)],
     disk2: Option<&Disk2Setup>,
     scene: Option<&Scene>,
 ) -> Result<Observed, String> {
-    let cfg = machine_config(case)?;
-    let mut m = build_machine(cfg, disk2)?;
+    let (mut m, run) = start_machine(env, case, disk2)?;
     let vidhd = case.video.as_ref().and_then(|v| v.vidhd_slot);
     if let Some(slot) = vidhd {
         install_vidhd(&mut m, slot)?;
@@ -413,7 +472,7 @@ fn observe_once(
             let mut w = TraceWriter::new(Vec::new(), &meta).map_err(|e| e.to_string())?;
             drive(
                 &mut m,
-                &case.run,
+                &run,
                 &case.input,
                 Hooks {
                     trace: Some(&mut w),
@@ -440,7 +499,7 @@ fn observe_once(
             } else {
                 drive(
                     &mut m,
-                    &case.run,
+                    &run,
                     &case.input,
                     Hooks {
                         trace: None,
@@ -457,7 +516,7 @@ fn observe_once(
             })
         }
         _ => {
-            drive(&mut m, &case.run, &case.input, Hooks::default())?;
+            drive(&mut m, &run, &case.input, Hooks::default())?;
             let value = match kind {
                 OracleKind::TextHash => sha256_hex(text_dump(&m).as_bytes()),
                 OracleKind::MemoryHash => sha256_hex(&memory_dump(&m)),
@@ -741,11 +800,25 @@ fn evaluate(
                 ))
             }
             Ok(_) if matches!(case.disk2_slot(), Ok(Some(_))) => {}
-            Ok(_) => {
+            Ok(_) if !fx.save_state => {
                 return Verdict::Blocked(format!(
-                    "fixture {} presente e íntegra, mas o harness só a carrega como disco de um cartão `N:disk2`",
+                    "fixture {} presente e íntegra, mas o harness só a carrega como disco de um cartão `N:disk2` ou como save-state",
                     fx.path
                 ))
+            }
+            Ok(_) => {
+                // A save-state: the images it names must exist, or the case cannot run.
+                let dirs = fixture_dirs(env, fx);
+                match crate::state::import_file(&env.workspace.join(&fx.path), &dirs) {
+                    Err(e) => return Verdict::Blocked(format!("save-state não importa: {e}")),
+                    Ok(i) if !i.missing.is_empty() => {
+                        return Verdict::Blocked(format!(
+                            "imagem de disco ausente: {}",
+                            i.missing.join(", ")
+                        ))
+                    }
+                    Ok(_) => {}
+                }
             }
         }
     }
@@ -806,7 +879,7 @@ fn evaluate(
     let mut first: Option<Observed> = None;
     let mut last: Option<Observed> = None;
     for run in 1..=case.run.repeat {
-        let obs = match observe_once(case, &meta, disk2.as_ref(), scene.as_ref()) {
+        let obs = match observe_once(env, case, &meta, disk2.as_ref(), scene.as_ref()) {
             Ok(o) => o,
             Err(e) => return Verdict::Fail(format!("erro na execução {run}: {e}"), None),
         };
@@ -858,8 +931,21 @@ fn evaluate(
             Verdict::Pass(format!("trace sha256={}{rep}", obs.value))
         }
         OracleKind::Trace => {
-            let reference = reference.expect("loaded");
             let actual_bytes = obs.trace.expect("trace case");
+            let Some(reference) = reference else {
+                let want = case.oracle.trace_rows_sha256.clone().unwrap_or_default();
+                let got = trace_rows_sha256(&String::from_utf8_lossy(&actual_bytes));
+                return if got == want {
+                    Verdict::Pass(format!("linhas do trace com sha256 {got}{rep}"))
+                } else {
+                    let name = format!("{}.actual.csv", case.id);
+                    artifacts.push((name.clone(), actual_bytes));
+                    Verdict::Fail(
+                        format!("sha256 das linhas do trace {got}, esperado {want}"),
+                        Some(name),
+                    )
+                };
+            };
             let actual = TraceReader::read(&actual_bytes[..]).expect("own trace parses");
             let opts = CompareOptions {
                 context_lines: case.oracle.context_lines.unwrap_or(8),

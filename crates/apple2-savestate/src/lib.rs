@@ -23,11 +23,14 @@
 pub mod apple2;
 pub mod cards;
 pub mod ext;
+pub mod fsio;
 pub mod host;
 mod misc;
+pub mod powerup;
 pub mod yaml;
 
 pub use apple2::RgbCardState;
+pub use fsio::{write_atomic, write_atomic_with};
 pub use host::{default_card, ImageRequest, LoadHost};
 
 use apple2_core::{CardKind, Machine, MachineConfig};
@@ -402,7 +405,8 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
             st.interrupts.set_irq(apple2_core::IrqSource::Mouse, true);
         }
     }
-    apple2::apply_apple2(&mut st, &a2, &lc_loads, ctx.warnings)?;
+    let power_on = powerup::power_on_ram(&ctx.host.ram_init());
+    apple2::apply_apple2(&mut st, &a2, &lc_loads, &power_on, ctx.warnings)?;
     if let Some(a) = &aux {
         apple2::load_aux_memory(&mut st, a)?;
     }
@@ -435,6 +439,12 @@ fn rearm_card_events(m: &mut Machine) {
     for slot in 0..8u8 {
         m.with_card(slot, |c, ctx| {
             cards::mockingboard::rearm(c, ctx);
+            if let Some(mc) = c
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<apple2_cards::MouseCard>())
+            {
+                mc.rearm_vbl(ctx);
+            }
             if let Some(d) = c
                 .as_any()
                 .and_then(|a| a.downcast_ref::<apple2_storage::disk2::Disk2Card>())

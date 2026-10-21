@@ -1,0 +1,20 @@
+id = "savestate-corpus-4Play-slot4"
+story = "HU-0401"
+criterion = "Importar o save-state real 4Play-slot4.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/4Play-slot4.aws.yaml"
+sha256 = "76a29aa8d023e0f5935cbeb588560fd9cf38c05a0ee90ecc0391cecbcfaad10c"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state 4Play-slot4.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "be89ae7ab9d632b74a30245aaaa389504a25a1e8af5d6bb098e4746a9d2188b8"

@@ -1,0 +1,20 @@
+id = "savestate-wine-apple2p-applesoft-prompt"
+story = "HU-0401"
+criterion = "Importar o save-state real apple2p-applesoft-prompt.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2plus"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "tests/conformance/inputs/applewin-real/apple2p-applesoft-prompt.aws.yaml"
+sha256 = "b1e1fd355de61399ac57fed97748a35435b072dcb07b38a5444a5daf0ed238c1"
+save_state = true
+image_dirs = ["tests/conformance/inputs/applewin-real"]
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state apple2p-applesoft-prompt.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "b8331c1a827b7fab7ca085f98171e3c4d2865404756c0889e2f91d5487c3068e"

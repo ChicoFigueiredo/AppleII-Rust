@@ -181,20 +181,32 @@ impl<'a> Map<'a> {
 fn strip_comment(line: &str) -> &str {
     let b = line.as_bytes();
     let mut quote = 0u8;
-    for i in 0..b.len() {
+    let mut i = 0;
+    while i < b.len() {
         match b[i] {
             b'"' | b'\'' if quote == 0 && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b':') => {
                 quote = b[i]
             }
             q if q == quote => quote = 0,
-            b'\\' if quote == b'"' => {}
+            b'\\' if quote == b'"' => i += 1,
             b'#' if quote == 0 && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b'\t') => {
                 return &line[..i]
             }
             _ => {}
         }
+        i += 1;
     }
     line
+}
+
+/// Whether a plain scalar could be misread by libyaml (or by [`strip_comment`]).
+fn needs_quotes(v: &str) -> bool {
+    v.contains('#')
+        || v.contains(": ")
+        || v.ends_with(':')
+        || v.ends_with(' ')
+        || v.starts_with(|c: char| " -?:,[]{}&*!|>'\"%@`".contains(c))
+        || v.chars().any(|c| c.is_control())
 }
 
 fn unquote(v: &str) -> String {
@@ -206,7 +218,9 @@ fn unquote(v: &str) -> String {
         while let Some(c) = it.next() {
             if c == '\\' {
                 match it.next() {
-                    Some('\\') => out.push_str("\\\\"), // AppleWin undoes the doubling itself
+                    // libyaml's double-quoted scalar: `\\` is one backslash. The doubling of the
+                    // GH#1499/#1510 scheme is undone afterwards by `Map::string`.
+                    Some('\\') => out.push('\\'),
                     Some('"') => out.push('"'),
                     Some('n') => out.push('\n'),
                     Some('t') => out.push('\t'),
@@ -233,6 +247,8 @@ fn unquote(v: &str) -> String {
 /// Parses an AppleWin save-state document into its top-level entries (`File_hdr`, repeated
 /// `Unit`, ...). Sequences and flow style are rejected, like `YamlHelper::ParseMap`.
 pub fn parse(text: &str) -> Result<Vec<(String, Node)>, Error> {
+    // libyaml accepts a UTF-8 byte-order mark (GH#838 was a file libyaml could not decode).
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
     // (line number, indent, content) of the meaningful lines.
     let lines: Vec<(usize, usize, &str)> = text
         .lines()
@@ -382,21 +398,37 @@ impl Writer {
         self.line(&format!("{key}: {v:.6}"));
     }
 
-    /// `SaveString`: empty becomes `""`, backslashes are doubled (GH#1499) and a string with `#`
-    /// is quoted (GH#1066).
+    /// `SaveString`. Empty becomes `""`. AppleWin's reader (`LoadString`, GH#1510) collapses every
+    /// `\\` of the value libyaml gives it into `\`, so a backslash must always be doubled to
+    /// survive: the UNC text `\\srv\x` is written `\\\\srv\\x`. AppleWin's own writer skips the
+    /// doubling when the text already has a `\\` and so loses a backslash per round trip
+    /// (AUD-C-020); this writer does not, and AppleWin still reads back the original text.
+    ///
+    /// A string with `#` (GH#1066), `: `, a leading indicator or control characters goes in double
+    /// quotes; there libyaml unescapes once more, hence the second doubling.
     pub fn string(&mut self, key: &str, v: &str) {
-        let mut s = if v.is_empty() {
-            "\"\"".to_string()
-        } else {
-            v.to_string()
-        };
-        if s.contains('\\') && !s.contains("\\\\") {
-            s = s.replace('\\', "\\\\");
+        if v.is_empty() {
+            self.line(&format!("{key}: \"\""));
+            return;
         }
-        if s.contains('#') {
-            self.line(&format!("{key}: \"{s}\""));
+        let doubled = v.replace('\\', "\\\\");
+        if needs_quotes(v) {
+            // libyaml halves the backslashes of a quoted scalar before `LoadString` collapses
+            // them: the text is only written once-doubled (as AppleWin does) while the collapse
+            // cannot touch it, i.e. when it has no `\\` of its own.
+            let q = if v.contains("\\\\") {
+                doubled.replace('\\', "\\\\")
+            } else {
+                doubled
+            };
+            let q = q
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+                .replace('\t', "\\t");
+            self.line(&format!("{key}: \"{q}\""));
         } else {
-            self.line(&format!("{key}: {s}"));
+            self.line(&format!("{key}: {doubled}"));
         }
     }
 

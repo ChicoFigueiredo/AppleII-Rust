@@ -5,7 +5,7 @@ use crate::host::ImageRequest;
 use crate::yaml::{Map, Writer};
 use crate::Error;
 use apple2_core::Card;
-use apple2_storage::hdd::{HardDiskCard, HddSnapshot, HddUnitSnapshot};
+use apple2_storage::hdd::{HardDiskCard, HdcFirmware, HdcMode, HddSnapshot, HddUnitSnapshot};
 
 /// `kUNIT_VERSION` (Harddisk.cpp:1277).
 const VERSION: u32 = 6;
@@ -65,6 +65,21 @@ fn load(
     let Some(mut card) = make(ctx, "Hard Disk Controller", slot) else {
         return Ok(None);
     };
+    // Harddisk.cpp:1455: a state older than v5 does not carry the firmware; v1-v3 ran
+    // Hddrvr.bin and v4 Hddrvr-v2.bin (InitializeIO picks them through m_saveStateFirmwareV1/V2).
+    if version < 5 {
+        let fw = if version < 4 {
+            HdcFirmware::HddrvrV1
+        } else {
+            HdcFirmware::HddrvrV2
+        };
+        card = Box::new(HardDiskCard::with_firmware(
+            slot,
+            ctx.model,
+            HdcMode::Default,
+            fw,
+        ));
+    }
     let Some(c) = card
         .as_any_mut()
         .and_then(|a| a.downcast_mut::<HardDiskCard>())
@@ -144,5 +159,8 @@ fn load(
         s.units.push((unit, snap));
     }
     c.apply_snapshot(&s);
+    if version < 5 {
+        c.fixup_unit_num(); // Harddisk.cpp:1447
+    }
     Ok(Some(card))
 }

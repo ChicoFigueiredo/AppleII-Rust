@@ -70,7 +70,11 @@ tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 500000 
 #   --disk2 imagem.dsk  Disk II drive 2
 #   --hdd imagem.hdv    controlador de disco rígido no slot 7, unidade 1 (--hdd2: unidade 2)
 #   --authentic         "Enhance Disk Speed" desligado (velocidade autêntica do Disk II)
-#   --state x.aws.yaml  carrega save-state antes de rodar (o modelo vem do arquivo; "cycle" continua do valor salvo)
+#   --state x.aws.yaml  carrega save-state antes de rodar (o modelo vem do arquivo; "cycle" continua do valor salvo).
+#                       O script adapta o arquivo com state-compat.py (remove a unidade Game I/O v4, que o fork não
+#                       conhece), roda com a cwd numa pasta temporária que tem links para as imagens de disco do
+#                       diretório do estado e de ORACLE_IMAGE_DIRS (lista separada por ':'), como o AppleWin as procura.
+#   ORACLE_BIN=/caminho binário do oráculo (por padrão o do cache; outro agente pode recompilá-lo)
 #   --memclear 0..7     padrão de preenchimento da RAM (padrão do AppleWin: 2)
 #   --cards disk2|none
 ```

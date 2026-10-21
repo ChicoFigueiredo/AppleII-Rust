@@ -164,8 +164,9 @@ pub fn settings_from_dump(dump: &RegDump) -> Settings {
         };
     }
     s.machine.cpu = match r.n(c, "CPU Type") {
+        // Utilities.cpp:145-148: default CPU_65C02; any value other than CPU_6502 (1) is 65C02.
         Some(1) => CpuType::Cpu6502,
-        _ => CpuType::Auto,
+        _ => CpuType::Cpu65C02,
     };
 
     // Joysticks (with the pre-1.24 fallback)

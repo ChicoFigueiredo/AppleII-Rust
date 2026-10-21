@@ -174,7 +174,12 @@ impl Machine {
         b.interrupts = s.interrupts;
         (b.cycles, b.cycles_in_frame, b.frames, b.pending) =
             (s.cycles, s.cycles_in_frame, s.frames, s.pending);
+        // AppleWin keeps `g_dwCyclesThisFrame` modulo the frame length after every slice
+        // (Frame.cpp / CommonFrame::Execute); a file can carry any value (AUD-C-060).
+        b.cycles_in_frame %= b.cycles_per_frame;
         (b.opcode_ticks, b.opcode_pc, b.opcode) = (s.opcode_ticks, s.opcode_pc, s.opcode);
+        b.opcode_ticks %= b.cycles_per_frame;
+        b.pending = b.pending.min(1 << 16);
         let c = &mut self.cpu;
         let cs = &s.cpu;
         (c.a, c.x, c.y, c.sp, c.pc, c.p, c.cycles) =

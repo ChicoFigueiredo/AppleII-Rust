@@ -19,7 +19,7 @@ if [ -z "${ORACLE_CACHE:-}" ]; then
   ORACLE_CACHE="$(dirname "$COMMON")/target/conformance-cache"
 fi
 CLONE="$ORACLE_CACHE/oracle/audetto-AppleWin"
-BIN="$ORACLE_CACHE/oracle/build/audetto-oracle"
+BIN="${ORACLE_BIN:-$ORACLE_CACHE/oracle/build/audetto-oracle}"
 [ -x "$BIN" ] || { echo "run-audetto-oracle: $BIN not found; run build-audetto-oracle.sh" >&2; exit 1; }
 
 MODEL="" OUT="" ARGS=()
@@ -61,6 +61,7 @@ META=("${ROM_META[@]}"
   --meta "fork_sha=$FORK_SHA"
   --meta "fork_url=https://github.com/audetto/AppleWin")
 
+case "$OUT" in ""|/*) ;; *) OUT="$PWD/$OUT" ;; esac
 TARGET="${OUT:-/dev/stdout}"
 if [ -n "$OUT" ]; then
   mkdir -p "$(dirname "$OUT")"
@@ -72,5 +73,24 @@ fi
 # that stray writes (screenshots, logs) cannot leak into the user's profile.
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"; [ -n "$OUT" ] && rm -f "$TMP"' EXIT
-HOME="$SCRATCH" "$BIN" "${ARGS[@]}" "${META[@]}" --out "$TMP" 1>&2
+# A --state file written by a newer AppleWin than the fork is adapted first (see state-compat.py);
+# the fixture hash in the metadata stays that of the original file.
+for ((i = 0; i < ${#ARGS[@]}; i++)); do
+  if [ "${ARGS[i]}" = "--state" ]; then
+    # Disk images are looked up next to the save-state: link the neighbours into the scratch dir.
+    STATE_DIR="$(cd "$(dirname "${ARGS[i+1]}")" && pwd)"
+    # ORACLE_IMAGE_DIRS (colon-separated) adds more directories to look in.
+    IFS=: read -r -a SEARCH_DIRS <<< "$STATE_DIR:${ORACLE_IMAGE_DIRS:-}"
+    for d in "${SEARCH_DIRS[@]}"; do
+      [ -n "$d" ] && [ -d "$d" ] || continue
+      for f in "$(cd "$d" && pwd)"/*; do
+        case "$f" in *.aws.yaml) ;; *) [ -f "$f" ] && ln -sf "$f" "$SCRATCH/$(basename "$f")" ;; esac
+      done
+    done
+    python3 -I "$HERE/state-compat.py" "${ARGS[i+1]}" "$SCRATCH/state.aws.yaml"
+    ARGS[i+1]="$SCRATCH/state.aws.yaml"
+  fi
+done
+# cwd = the scratch dir: AppleWin opens the images named in a save-state relative to the cwd.
+(cd "$SCRATCH" && HOME="$SCRATCH" "$BIN" "${ARGS[@]}" "${META[@]}" --out "$TMP" 1>&2)
 if [ -n "$OUT" ]; then mv "$TMP" "$OUT"; else cat "$TMP" > "$TARGET"; rm -f "$TMP"; fi

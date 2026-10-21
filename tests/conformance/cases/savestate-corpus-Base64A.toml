@@ -1,0 +1,20 @@
+id = "savestate-corpus-Base64A"
+story = "HU-0401"
+criterion = "Importar o save-state real Base64A.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "base64a"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Base64A.aws.yaml"
+sha256 = "8ec12eb91c5844c7d479c6bfb6eac05fcbccc7dad9102fe32159c5312a450e96"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Base64A.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "d77de782134cbb0c22025c7a68bdc189fe4c0c35977f336227d59cb5986d215c"

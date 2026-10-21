@@ -333,13 +333,14 @@ impl Bus for Board {
     }
 
     fn tick(&mut self) {
-        self.cycles += 1;
+        self.cycles = self.cycles.wrapping_add(1);
         self.pending += 1;
         self.opcode_ticks += 1;
         self.cycles_in_frame += 1;
-        if self.cycles_in_frame == self.cycles_per_frame {
+        // `>=`, not `==`: a loaded state can carry a counter past the frame length (AUD-C-060).
+        if self.cycles_in_frame >= self.cycles_per_frame {
             self.cycles_in_frame = 0;
-            self.frames += 1;
+            self.frames = self.frames.wrapping_add(1);
         }
     }
 

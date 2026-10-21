@@ -6,7 +6,7 @@ use apple2_conformance::manifest::TestResult;
 use apple2_conformance::pcm;
 use apple2_conformance::report::{counts, write_report};
 use apple2_conformance::runner::{
-    generate_trace, load_cases, read_trace, run_case, Disk2Setup, Env,
+    generate_trace, generate_trace_from, load_cases, read_trace, run_case, Disk2Setup, Env,
 };
 use apple2_conformance::trace::{compare_with, parse_field_list, CompareOptions};
 use apple2_conformance::Case;
@@ -16,7 +16,8 @@ use std::process::ExitCode;
 const USAGE: &str = "\
 uso:
   conformance run (--all | --case ID [--case ID ...]) --report DIR [--root DIR]
-  conformance trace --model M (--frames N | --cycles N) [--cpu 6502|65C02] [--cards none|disk2] [--disk IMAGEM] [--memclear N] [--deterministic-ram | --ram-seed N] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
+  conformance check-import FILE.aws.yaml [--image-dir DIR]...
+  conformance trace (--model M | --state FILE.aws.yaml [--image-dir DIR]...) (--frames N | --cycles N) [--cpu 6502|65C02] [--cards none|disk2] [--disk IMAGEM] [--memclear N] [--deterministic-ram | --ram-seed N] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
   conformance scene-fb [--scene FILE] --model M --frames N [--type T] [--hz 50|60] [--rgb-card C] [--vidhd SLOT] [--memclear N] --out PREFIX
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
   conformance audio-run --case ID --out-dir DIR [--root DIR] [--trace]
@@ -36,6 +37,7 @@ fn main() -> ExitCode {
         Some("run") => cmd_run(&args[1..]),
         Some("trace") => cmd_trace(&args[1..]),
         Some("diff") => cmd_diff(&args[1..]),
+        Some("check-import") => cmd_check_import(&args[1..]),
         Some("scene-fb") => cmd_scene_fb(&args[1..]),
         Some("audio-run") => cmd_audio_run(&args[1..]),
         Some("pcm-compare") => cmd_pcm_compare(&args[1..]),
@@ -148,6 +150,7 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
     let (mut with_disk2, mut disk) = (false, None::<PathBuf>);
     let mut ram_seed: Option<u32> = None;
     let mut inputs = Vec::new();
+    let (mut state, mut image_dirs) = (None, Vec::<PathBuf>::new());
     let mut extra_meta: Vec<(&str, &str)> = Vec::new();
     let mut a = Args::new(rest);
     while let Some(arg) = a.next() {
@@ -158,6 +161,8 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
                     .ok_or("--meta precisa de chave=valor")?,
             ),
             "--model" => model = Some(a.value(arg)?),
+            "--state" => state = Some(PathBuf::from(a.value(arg)?)),
+            "--image-dir" => image_dirs.push(PathBuf::from(a.value(arg)?)),
             "--frames" => frames = Some(a.value(arg)?.parse::<u64>().map_err(|e| e.to_string())?),
             "--cycles" => cycles = Some(a.value(arg)?.parse::<u64>().map_err(|e| e.to_string())?),
             "--cpu" => cpu = Some(a.value(arg)?),
@@ -185,8 +190,19 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
             o => return Err(format!("argumento desconhecido `{o}`")),
         }
     }
-    let model_name = model.ok_or("--model é obrigatório")?;
     let out = out.ok_or("-o ARQUIVO é obrigatório")?;
+    if let Some(state) = state {
+        return trace_from_state(
+            &state,
+            &image_dirs,
+            cycles,
+            frames,
+            &inputs,
+            &extra_meta,
+            &out,
+        );
+    }
+    let model_name = model.ok_or("--model ou --state é obrigatório")?;
     let run = RunSpec {
         frames,
         cycles,
@@ -245,6 +261,105 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
     let rows = bytes.iter().filter(|&&b| b == b'\n').count();
     println!("{}: {} bytes, {} linhas", out.display(), bytes.len(), rows);
     Ok(0)
+}
+
+/// `trace --state`: imports the save-state and traces `cycles` cycles from where it stopped (the
+/// oracle's `--state --cycles N` counts the same way).
+fn trace_from_state(
+    state: &std::path::Path,
+    image_dirs: &[PathBuf],
+    cycles: Option<u64>,
+    frames: Option<u64>,
+    inputs: &[InputEvent],
+    extra_meta: &[(&str, &str)],
+    out: &std::path::Path,
+) -> Result<u8, String> {
+    let cycles = match (cycles, frames) {
+        (Some(c), None) => c,
+        _ => return Err("--state exige --cycles N (e não aceita --frames)".into()),
+    };
+    let imported = apple2_conformance::state::import_file(state, image_dirs)?;
+    if !imported.missing.is_empty() {
+        return Err(format!(
+            "BLOCKED: imagens ausentes: {}",
+            imported.missing.join(", ")
+        ));
+    }
+    let machine = imported.machine;
+    let start = machine.cycles();
+    let cpu_name = if machine.config().is_cmos() {
+        "65C02"
+    } else {
+        "6502"
+    };
+    let model = format!("{:?}", machine.config().model);
+    let sha = apple2_conformance::runner::file_sha256(state)?;
+    let fixture = format!("{sha}  state");
+    let (start_s, cycles_s) = (start.to_string(), cycles.to_string());
+    let mut meta = vec![
+        ("source", "apple2-rust"),
+        ("model", model.as_str()),
+        ("cpu", cpu_name),
+        ("cycles", cycles_s.as_str()),
+        ("start_cycle", start_s.as_str()),
+        ("fixture_sha256", fixture.as_str()),
+    ];
+    meta.extend_from_slice(extra_meta);
+    let run = RunSpec {
+        frames: None,
+        cycles: Some(start.saturating_add(cycles)),
+        repeat: 1,
+    };
+    let bytes = generate_trace_from(machine, &run, inputs, &meta)?;
+    if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(out, &bytes).map_err(|e| format!("{}: {e}", out.display()))?;
+    println!(
+        "{}: {} bytes, {} linhas",
+        out.display(),
+        bytes.len(),
+        bytes.iter().filter(|&&b| b == b'\n').count()
+    );
+    Ok(0)
+}
+
+/// `check-import`: compares a freshly imported save-state with its own YAML (HU-0401).
+/// Exit code 0 when nothing differs, 1 otherwise, 2 when an image is missing (BLOCKED).
+fn cmd_check_import(rest: &[String]) -> Result<u8, String> {
+    let (mut file, mut dirs) = (None, Vec::<PathBuf>::new());
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        match arg {
+            "--image-dir" => dirs.push(PathBuf::from(a.value(arg)?)),
+            o if o.starts_with("--") => return Err(format!("argumento desconhecido `{o}`")),
+            f => file = Some(PathBuf::from(f)),
+        }
+    }
+    let file = file.ok_or("check-import precisa de FILE.aws.yaml")?;
+    let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let mut imp = apple2_conformance::state::import_file(&file, &dirs)?;
+    if !imp.missing.is_empty() {
+        println!("BLOCKED: imagens ausentes: {}", imp.missing.join(", "));
+        return Ok(2);
+    }
+    let mut diffs = apple2_conformance::import_check::direct_checks(&text, &mut imp.machine)?;
+    let imp2 = apple2_conformance::state::import_file(&file, &dirs)?;
+    diffs.extend(apple2_conformance::import_check::tree_diff(
+        &text,
+        &imp2.machine,
+    )?);
+    for d in &diffs {
+        println!("DIFF {d}");
+    }
+    println!(
+        "{}: {} diferenças, {} avisos do carregador",
+        file.display(),
+        diffs.len(),
+        imp.warnings.len()
+    );
+    Ok(u8::from(!diffs.is_empty()))
 }
 
 fn cmd_diff(rest: &[String]) -> Result<u8, String> {

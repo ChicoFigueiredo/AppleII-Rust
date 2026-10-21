@@ -21,6 +21,14 @@ use std::io::{Read, Write};
 pub const KEY: &str = "AppleII-Rust Extension";
 pub const VERSION: u32 = 1;
 
+/// Ceiling for `Length` (the deflated JSON). A real state is a few MiB (an 8 MiB RamWorks deflates
+/// to well under 1 MiB); a larger value is a damaged or hostile file (AUD-C-010).
+pub const MAX_COMPRESSED_LEN: u64 = 64 * 1024 * 1024;
+/// Ceiling for the inflated JSON, so a small zlib stream cannot expand without bound (AUD-C-010).
+pub const MAX_JSON_LEN: u64 = 256 * 1024 * 1024;
+/// Bytes per `Data` line, as written by [`Writer::memory_wide`].
+const BYTES_PER_LINE: u64 = 64;
+
 /// What the block carries.
 pub struct Extension {
     pub state: MachineState,
@@ -62,14 +70,36 @@ pub fn read(apple2_state: Map) -> Result<Option<Extension>, Error> {
     if m.u32("Version")? != VERSION || m.string("Format")? != "json+zlib" {
         return Ok(None); // written by another version: fall back to the AppleWin units
     }
-    let len = m.u64("Length")? as usize;
+    let len = m.u64("Length")?;
+    if len > MAX_COMPRESSED_LEN {
+        return Err(Error::Format(format!(
+            "{KEY}: Length {len} exceeds the limit of {MAX_COMPRESSED_LEN} bytes"
+        )));
+    }
+    let data = m.need_sub("Data")?;
+    // The declared length cannot exceed what the Data block can hold: the buffer is sized by the
+    // lines actually present, never by the number the file claims.
+    let capacity = (data.entries.len() as u64).saturating_mul(BYTES_PER_LINE);
+    if len > capacity {
+        return Err(Error::Format(format!(
+            "{KEY}: Length {len} is larger than the Data block ({} lines)",
+            data.entries.len()
+        )));
+    }
+    let len = len as usize;
     let mut buf = vec![0u8; len.div_ceil(8) * 8];
-    m.need_sub("Data")?.load_memory(&mut buf)?;
+    data.load_memory(&mut buf)?;
     buf.truncate(len);
     let mut json = Vec::new();
     ZlibDecoder::new(&buf[..])
+        .take(MAX_JSON_LEN + 1)
         .read_to_end(&mut json)
         .map_err(|e| Error::Format(format!("{KEY}: {e}")))?;
+    if json.len() as u64 > MAX_JSON_LEN {
+        return Err(Error::Format(format!(
+            "{KEY}: decompressed data exceeds the limit of {MAX_JSON_LEN} bytes"
+        )));
+    }
     let state: MachineState =
         serde_json::from_slice(&json).map_err(|e| Error::Format(format!("{KEY}: {e}")))?;
     let mut cards = Vec::new();

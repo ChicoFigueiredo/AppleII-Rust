@@ -303,7 +303,9 @@ impl HardDiskCard {
         n
     }
 
-    fn fixup_unit_num(&mut self) {
+    /// `FixupUnitNum` (Harddisk.cpp): older firmwares can write the unit register with slot 0.
+    /// `LoadSnapshot` calls it for states older than v5 (after [`Self::apply_snapshot`]).
+    pub fn fixup_unit_num(&mut self) {
         // Older firmwares can write unitNum with 0x00.
         if self.is_firmware_v1_or_2 && self.unit_num >> 4 != self.slot {
             self.unit_num = (self.unit_num & 0x8F) | (self.slot << 4);

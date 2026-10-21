@@ -1,0 +1,20 @@
+id = "savestate-corpus-RamWorksIII-256KB"
+story = "HU-0401"
+criterion = "Importar o save-state real RamWorksIII-256KB.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Memory/RamWorksIII-256KB.aws.yaml"
+sha256 = "fee8f84de45d1e1d0b94597ef25999dcea41b686f934632de49b2aeb9e9445ba"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state RamWorksIII-256KB.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "8a896ce75c046b8cd01019e714190d8a65972726b1e8d50f29ba97e201598e68"
