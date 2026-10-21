@@ -232,6 +232,11 @@ pub struct KeyboardState {
     host_caps: bool,
     scroll: bool,
     any_down: bool,
+    /// Right Alt (AltGr) is held. AppleWin gets no `WM_CHAR` while it is down.
+    altgr_down: bool,
+    /// `-altgr-sends-wmchar` (`g_bAltGrSendsWM_CHAR`, Keyboard.cpp:55): off by default, so
+    /// AltGr + key is dropped; on, it is delivered (GH#558, GH#625; Keyboard.cpp:231).
+    altgr_sends_char: bool,
 }
 
 impl Default for KeyboardState {
@@ -253,7 +258,20 @@ impl KeyboardState {
             host_caps: false,
             scroll: false,
             any_down: false,
+            altgr_down: false,
+            altgr_sends_char: false,
         }
+    }
+
+    /// Right Alt (AltGr) went down or up. [`crate::input::InputRouter`] calls this itself because
+    /// the game port consumes the Alt keys before they reach [`KeyboardState::handle`].
+    pub fn set_altgr_down(&mut self, down: bool) {
+        self.altgr_down = down;
+    }
+
+    /// Turns `-altgr-sends-wmchar` on or off.
+    pub fn set_altgr_sends_char(&mut self, on: bool) {
+        self.altgr_sends_char = on;
     }
 
     pub fn caps_lock(&self) -> bool {
@@ -263,6 +281,7 @@ impl KeyboardState {
     /// Releases everything (window lost focus): keeps stuck keys from lingering.
     pub fn release_all(&mut self) -> Vec<KeyEvent> {
         self.held.clear();
+        self.altgr_down = false;
         if self.any_down {
             self.any_down = false;
             return vec![KeyEvent::AnyKeyDown(false)];
@@ -306,6 +325,8 @@ impl KeyboardState {
             HostKey::Char('v' | 'V') if pressed && mods.ctrl && mods.shift && !mods.alt => {
                 out.push(KeyEvent::Paste)
             }
+            // AltGr + character: AppleWin drops it unless `-altgr-sends-wmchar` (Keyboard.cpp:231)
+            HostKey::Char(_) if pressed && self.altgr_down && !self.altgr_sends_char => {}
             _ if pressed => {
                 if let Some(ev) = self.press_event(input.key, mods) {
                     out.push(ev);

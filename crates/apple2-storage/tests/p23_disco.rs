@@ -157,10 +157,24 @@ fn gh1482_raw_apl_binary_gives_a_boot_program() {
     assert_eq!(code, vec![0xA9, 0x01, 0x60]);
 }
 
-/// GH#312, #641, #1300: o port nunca mantém o arquivo aberto/travado: dois montes de somente
-/// leitura funcionam (o AppleWin abre com `FILE_SHARE_READ`, DiskImageHelper.cpp:1848-1849) e
-/// outro programa pode gravar no arquivo de uma imagem montada (o AppleWin a8f0d1d não permite,
-/// :1862-1863; o port é um superconjunto).
+/// Quantos descritores abertos do processo apontam para `path` (Linux: `/proc/self/fd`).
+#[cfg(target_os = "linux")]
+fn open_handles_to(path: &std::path::Path) -> usize {
+    let target = std::fs::canonicalize(path).unwrap();
+    std::fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|e| std::fs::read_link(e.ok()?.path()).ok())
+        .filter(|l| *l == target)
+        .count()
+}
+
+/// GH#312, #641, #1300: o port nunca mantém o arquivo aberto/travado. O AppleWin abre com
+/// `FILE_SHARE_READ` (DiskImageHelper.cpp:1848-1849) e não deixa outro programa gravar na imagem
+/// montada (:1862-1863); no Windows isso é uma trava de compartilhamento, que só existe enquanto
+/// há um handle aberto. O teste prova a causa no Linux: com imagens montadas (duas somente
+/// leitura e uma de leitura e escrita) não resta nenhum descritor aberto para o arquivo, e outro
+/// programa pode regravá-lo. Que não haja trava no Windows decorre de não haver handle, mas
+/// esta suíte só roda no Linux.
 #[test]
 fn gh312_gh641_gh1300_mounted_files_are_not_locked() {
     let dir = std::env::temp_dir().join(format!("p23-lock-{}", std::process::id()));
@@ -172,12 +186,18 @@ fn gh312_gh641_gh1300_mounted_files_are_not_locked() {
     assert!(a.is_write_protected() && b.is_write_protected());
     let rw = DiskImage::open_path(&p, Class::Floppy, false).unwrap();
     assert!(!rw.is_write_protected());
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        open_handles_to(&p),
+        0,
+        "imagem montada não mantém o arquivo aberto"
+    );
     // Outro programa (CiderPress, Cadius) grava no arquivo enquanto a imagem está montada.
     let mut changed = disk(DOS33);
     changed[0x1234] ^= 0xFF;
     std::fs::write(&p, &changed).unwrap();
     assert_eq!(std::fs::read(&p).unwrap(), changed);
-    drop(rw);
+    drop((a, b, rw));
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -521,8 +541,13 @@ fn gh1264_prodos_status_returns_block_count_in_x_and_y() {
 }
 
 /// GH#515: com o HDC no slot 7 vazio e um disquete em uso, plugar a imagem e reiniciar a frio
-/// inicia o ProDOS do HD em um só boot (o autostart varre do slot 7 para baixo). O oráculo não
-/// pluga imagem com a máquina rodando, então o teste é só do port.
+/// inicia o ProDOS do HD em um só boot (o autostart varre do slot 7 para baixo). C++ do a8f0d1d
+/// reproduzido: `HarddiskInterfaceCard::Insert` (Harddisk.cpp:439-475) pluga com a máquina
+/// rodando e nada mais é preciso; `Reset(powerCycle)` (:198-204) só zera erros e a fila, sem
+/// apagar a imagem; o firmware inicia pelo HD quando o status do volume responde sem erro
+/// (`firmware/HDD-SmartPort`, `Cn_Bootstrap`; `hddrvr.a65:215-222` `hdboot2`). Oráculo: C++
+/// transcrito; o oráculo executável não pluga imagem com a máquina rodando, mas o estado depois
+/// do plug (HDC com imagem, disquete em S6) é o do `--hdd --disk` dele.
 #[test]
 fn gh515_plugging_a_hard_disk_then_cold_boot_boots_from_it() {
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
@@ -542,6 +567,116 @@ fn gh515_plugging_a_hard_disk_then_cold_boot_boots_from_it() {
     run_until(&mut m, 900, "ProDOS em S7,D1 depois de plugar", |m| {
         screen_has(m, "S7,D1:/PRODOS.2.4.3")
     });
+    assert!(
+        !screen_has(&m, "DOS VERSION 3.3"),
+        "um só reboot basta: o disquete não inicia de novo"
+    );
+}
+
+fn at_prompt(m: &Machine) -> bool {
+    screen(m).lines().any(|l| l.starts_with(']'))
+}
+
+/// Digita `cmd`, espera o motor parar e o prompt voltar.
+fn dos_command(m: &mut Machine, cmd: &str) {
+    type_text(m, cmd);
+    type_text(m, "\n");
+    for _ in 0..30 {
+        m.run_frame();
+    }
+    run_until(m, 900, cmd, |m| {
+        !m.card::<Disk2Card>(6).unwrap().is_motor_on()
+    });
+    for _ in 0..90 {
+        m.run_frame();
+    }
+}
+
+/// GH#821: o `_ASSERT(0)` de `Disk2InterfaceCard::ReadTrack()` (Disk.cpp:312-326) dispara quando
+/// a cabeça está além do número de trilhas de uma imagem que não aceita "zero trilhas". O roteiro
+/// da própria issue (comentário em Disk.cpp:318-323): DOS 3.3 Master no D1, disco em branco no
+/// D2, `INIT HELLO,D2`, `RUN HELLO`, reiniciar com F2 e `RUN HELLO,D2`. No AppleWin de release o
+/// ramo marca a trilha como sem dados e volta (:324-325); o port tem de formatar o disco, e o
+/// HELLO gravado tem de rodar depois do reinício. O INIT roda no DOS 3.3 real, em cópias em
+/// memória do BLANK.DSK (140K sem formatação) e de um disco de zero bytes (imagem vazia, o caso
+/// que `ImageIsZeroTracksValidForThisType` protege).
+#[test]
+fn gh821_init_on_a_blank_disk_then_reboot_and_run_hello_from_d2() {
+    for (nome, blank) in [("BLANK.DSK", disk("BLANK.DSK")), ("vazio", Vec::new())] {
+        let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
+        let mut c = Disk2Card::new();
+        c.insert_disk(0, DiskImage::from_bytes("m.dsk", disk(DOS33)).unwrap());
+        c.insert_disk(1, DiskImage::from_bytes("b.dsk", blank).unwrap());
+        assert!(m.insert_card(6, Box::new(c)));
+        m.power_cycle();
+        run_until(&mut m, 1500, "DOS 3.3 prompt", |m| {
+            screen_has(m, "DOS VERSION 3.3") && at_prompt(m)
+        });
+        dos_command(&mut m, "NEW");
+        dos_command(&mut m, "10 PRINT \"OLA DO D2\"");
+        type_text(&mut m, "INIT HELLO,D2\n");
+        let mut started = false;
+        run_until(&mut m, 6000, "fim do INIT", |m| {
+            let c = m.card::<Disk2Card>(6).unwrap();
+            started |= c.is_motor_on() && c.current_drive() == 1;
+            started
+                && !c.is_motor_on()
+                && screen(m).lines().filter(|l| l.starts_with(']')).count() >= 4
+        });
+        for _ in 0..120 {
+            m.run_frame();
+        }
+        // F2: reinicia a máquina com as mesmas imagens, e o HELLO gravado roda do D2
+        m.power_cycle();
+        run_until(&mut m, 1500, "DOS 3.3 de novo", |m| {
+            screen_has(m, "DOS VERSION 3.3") && at_prompt(m)
+        });
+        dos_command(&mut m, "RUN HELLO,D2");
+        assert!(screen_has(&m, "OLA DO D2"), "{nome}:\n{}", screen(&m));
+        dos_command(&mut m, "CATALOG,D2");
+        assert!(screen_has(&m, "DISK VOLUME 254"), "{nome}:\n{}", screen(&m));
+    }
+}
+
+/// GH#323 (PR #370 do AppleWin): com o botão 0 (Open Apple) apertado no boot, o firmware do HDC
+/// pula o disco rígido. Oráculo: firmware transcrito do a8f0d1d, `firmware/HDD/hddrvr.a65:218-219`
+/// (`bit BUTTON0 / bmi BootSlot6`: vai ao boot do slot 6) e `firmware/HDD-SmartPort`
+/// `Cn_Bootstrap` (`bit IO_IIE_OPENAPPLE / bmi Cn_Sloop`: segue a varredura de slots). Os bytes
+/// dos três firmwares do port são idênticos aos do a8f0d1d (SHA-256 em rom-provenance.md). O
+/// oráculo executável (`--hdd`) não tem como apertar o botão, então só confirma o controle.
+/// Montagem: HDC no slot 7 com ProDOS, Disk II no slot 6 com DOS 3.3.
+#[test]
+fn gh323_open_apple_at_boot_skips_the_hard_disk() {
+    for (mode, nome) in [
+        (HdcMode::Default, "SmartPort"),
+        (HdcMode::BlockMode2Devices, "bloco"),
+    ] {
+        for pressed in [false, true] {
+            let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
+            let mut f = Disk2Card::new();
+            f.insert_disk(0, DiskImage::from_bytes("m.dsk", disk(DOS33)).unwrap());
+            assert!(m.insert_card(6, Box::new(f)));
+            let mut h = HardDiskCard::new(7, Model::Apple2eEnhanced, mode);
+            h.insert(0, prodos_hdv());
+            assert!(m.insert_card(7, Box::new(h)));
+            m.power_cycle();
+            m.set_open_apple(pressed); // segurado desde antes do boot
+            if pressed {
+                run_until(&mut m, 700, &format!("{nome}: DOS 3.3 do slot 6"), |m| {
+                    screen_has(m, "DOS VERSION 3.3")
+                });
+                assert!(
+                    !screen_has(&m, "PRODOS"),
+                    "{nome}: o HD foi pulado com o Open Apple"
+                );
+            } else {
+                run_until(&mut m, 900, &format!("{nome}: ProDOS do HD"), |m| {
+                    screen_has(m, "S7,D1:/PRODOS.2.4.3")
+                });
+                assert!(!screen_has(&m, "DOS VERSION 3.3"), "{nome}: controle");
+            }
+        }
+    }
 }
 
 /// GH#460: o reset (Ctrl+Reset) desliga o motor e as chaves mas o drive ainda gira até 1 s; a

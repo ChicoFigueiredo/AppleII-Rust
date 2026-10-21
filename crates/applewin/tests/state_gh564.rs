@@ -1,6 +1,12 @@
 //! GH#564: "Save State On Exit" must save the state of the *restarted* machine. A hardware
 //! configuration change restarts the emulator (ApplySettings rebuilds the machine); quitting
 //! afterwards has to write the new machine, not skip the save or write the old one.
+//!
+//! C++ (AppleWin a8f0d1d) reproduced: `WM_DESTROY` saves only `if (!g_bRestart)`
+//! (WinFrame.cpp:1086-1088, "GH#564: Only save-state on shutdown (not on a restart)"), so a
+//! hardware restart writes nothing; `Snapshot_Startup` loads the file once (`bDone`,
+//! SaveState.cpp:570-579) so the restart does not reload the old state; `Snapshot_Shutdown`
+//! (SaveState.cpp:582-593) saves the machine that is running at the real exit.
 
 use apple2_config::Settings;
 use apple2_core::Model;
@@ -27,6 +33,8 @@ fn gh564_save_state_on_exit_after_a_hardware_restart_saves_the_new_machine() {
         a.run_frame();
     }
     assert_eq!(a.machine.save_state().config.model, Model::Apple2Plus);
+    // the restart itself writes nothing (WinFrame.cpp:1087) and does not reload an old state
+    assert!(!path.exists(), "the restart must not save");
     assert!(!a.apply(Command::Shutdown));
     let text = std::fs::read_to_string(&path).expect("o estado foi salvo ao sair");
     assert!(

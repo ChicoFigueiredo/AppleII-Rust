@@ -105,7 +105,8 @@ As cartas sem nome em `-sN` (mouse, SAM, Z80, Uthernet, 4Play, SNES MAX, Mocking
 | Opção | Efeito |
 |---|---|
 | `-no-di` | Desativa o DirectInput (Windows) |
-| `-no-hook-system-key`, `-hook-alt-tab`, `-hook-altgr-control`, `-altgr-sends-wmchar`, `-no-hook-alt` | Teclas do sistema e Alt (relevantes só no Windows) |
+| `-no-hook-system-key`, `-hook-alt-tab`, `-hook-altgr-control`, `-no-hook-alt` | Teclas do sistema e Alt (relevantes só no Windows) |
+| `-altgr-sends-wmchar` | Entrega a tecla digitada com o AltGr apertado (padrão: descartar, como o AppleWin) |
 | `-capslock=off` | Inicia com o Caps Lock do Apple desligado |
 | `-left-alt-control-buttons`, `-right-alt-control-buttons` | Alt como botões |
 | `-swap-buttons` | Troca os botões 0 e 1 |

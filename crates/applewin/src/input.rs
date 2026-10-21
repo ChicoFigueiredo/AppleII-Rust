@@ -53,8 +53,10 @@ pub struct InputRouter {
 
 impl InputRouter {
     pub fn new(settings: &Settings) -> Self {
+        let mut kbd = KeyboardState::with_caps(settings.keyboard.caps_lock);
+        kbd.set_altgr_sends_char(settings.keyboard.altgr_sends_char);
         InputRouter {
-            kbd: KeyboardState::with_caps(settings.keyboard.caps_lock),
+            kbd,
             joy: JoySystem::new(JoyConfig::from_settings(settings)),
             last_joy: None,
             last_pads: None,
@@ -91,6 +93,9 @@ impl InputRouter {
         }
         if input.key == HostKey::ScrollLock {
             out.push(Routed::ScrollLock { pressed, repeat });
+        }
+        if input.key == HostKey::AltRight {
+            self.kbd.set_altgr_down(pressed);
         }
         // the game port takes its keys first (AppleWin JoyProcessKey)
         match self.joy.process_key(input, pressed, repeat) {
