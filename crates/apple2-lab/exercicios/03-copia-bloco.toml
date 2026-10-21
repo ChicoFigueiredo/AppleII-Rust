@@ -1,0 +1,44 @@
+titulo = "Cópia de bloco"
+enunciado = """
+Copie N bytes (N em $0300, de 1 a 16) do bloco que começa em $0400
+para o bloco que começa em $0500. Não escreva além do N-ésimo byte.
+Termine com BRK.
+"""
+dica = "LDA $0400,X e STA $0500,X copiam um byte por vez; INX e CPX controlam o laço."
+org = 0x0800
+
+[[caso]]
+nome = "copiar 8 bytes"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "08"
+[[caso.entrada.memoria]]
+endereco = 0x0400
+bytes = "11 22 33 44 55 66 77 88 99 AA"
+[[caso.esperado.memoria]]
+endereco = 0x0500
+bytes = "11 22 33 44 55 66 77 88 00 00"
+
+[[caso]]
+nome = "copiar 1 byte"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "01"
+[[caso.entrada.memoria]]
+endereco = 0x0400
+bytes = "FE FF"
+[[caso.esperado.memoria]]
+endereco = 0x0500
+bytes = "FE 00"
+
+[[caso]]
+nome = "copiar 16 bytes"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "10"
+[[caso.entrada.memoria]]
+endereco = 0x0400
+bytes = "00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 99"
+[[caso.esperado.memoria]]
+endereco = 0x0500
+bytes = "00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 00"
