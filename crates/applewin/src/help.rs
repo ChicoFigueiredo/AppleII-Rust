@@ -25,6 +25,9 @@ pub const MANUAL: &[&str] = &[
     include_str!("../../../docs/manual/11-solucao-de-problemas.md"),
     include_str!("../../../docs/manual/12-diferencas-em-relacao-ao-applewin.md"),
     include_str!("../../../docs/manual/13-creditos-e-licenca.md"),
+    include_str!("../../../docs/manual/14-laboratorio.md"),
+    include_str!("../../../docs/manual/15-depuracao-dap-vscode.md"),
+    include_str!("../../../docs/manual/16-depuracao-temporal.md"),
 ];
 
 /// A block of the Markdown subset.
@@ -809,7 +812,7 @@ mod tests {
     #[test]
     fn embedded_manual_parses_and_is_searchable() {
         let docs: Vec<Doc> = MANUAL.iter().map(|m| parse(m)).collect();
-        assert_eq!(docs.len(), 14);
+        assert_eq!(docs.len(), 17);
         for d in &docs {
             assert_ne!(d.title, "?", "every page starts with a # title");
             assert!(d.blocks.len() > 2);

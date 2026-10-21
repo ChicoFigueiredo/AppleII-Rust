@@ -1,5 +1,7 @@
 # Matriz de capacidades: periféricos (wave0)
 
+> **Superada.** Esta tabela é o retrato da wave 0 (SHA `6da6048`, 20/10/2026) e muitos estados mudaram depois (por exemplo, Saturn, save-state, depurador, vídeo, áudio). O estado vigente está em [capability-matrix.md](../capability-matrix.md).
+
 Código `6da6048`; oráculo AppleWin `a8f0d1d`. Regra do plano: IMPLEMENTED não é PASS. PASS só aparece onde há teste que reproduz o comportamento do oráculo (código C++ lido ou repro da issue); nenhuma linha tem comparação diferencial automática com o binário do AppleWin (ver `wave0-peripherals.md`, §3.2). IDs `AUD-P-NNN` apontam para a tabela de achados.
 
 | Componente | Modelo | Estado | Evidência | Divergência |

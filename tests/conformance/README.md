@@ -2,7 +2,7 @@
 
 Esta pasta guarda o que a suíte de conformidade lê e produz. A estratégia, a política de comparação e os formatos estão em [docs/conformance/test-oracles.md](../../docs/conformance/test-oracles.md). O Oráculo e a política de Fixtures estão na [ADR 0004](../../docs/adr/0004-oraculo-de-conformidade.md).
 
-O harness é escrito no crate `crates/apple2-conformance`, binário `conformance`. Enquanto ele não existe, esta página descreve a intenção; os comandos abaixo estão marcados "a definir".
+O harness é escrito no crate `crates/apple2-conformance`, binário `conformance`.
 
 ## Estrutura
 
@@ -23,20 +23,22 @@ Os `cases/video-*.toml` são casos `framebuffer-hash` com `authority = "applewin
 
 ## Como rodar
 
-Tudo abaixo é **a definir**: os nomes dos subcomandos dependem do harness.
-
 ```sh
-# Rodar a suíte inteira (a definir)
-cargo run --release -p apple2-conformance --bin conformance -- run --report target/conformance-report
+cargo build --release -p apple2-conformance
 
-# Baixar o corpus para o cache (a definir)
-cargo run --release -p apple2-conformance --bin conformance -- fetch
+# Rodar todos os casos (cases/*.toml) e gerar o relatório (JUnit e manifestos)
+./target/release/conformance run --all --report target/conformance-report
 
-# Comparar um Trace de referência (a definir)
-cargo run --release -p apple2-conformance --bin conformance -- compare-trace ...
+# Um caso só
+./target/release/conformance run --case audio-ay-tone --report target/conformance-report
+
+# Baixar o corpus AppleWin-Test (SHA fixo) para o cache; sem ele, os casos que o usam ficam BLOCKED
+tools/conformance/fetch-applewin-test.sh
 ```
 
-O workflow `.github/workflows/conformance.yml` usa o primeiro comando, de forma provisória. Como toda a CI, é manual: ninguém o dispara sem autorização do dono.
+Saída: `PASS`, `FAIL` ou `BLOCKED` por caso; os casos com `known_divergence` (PCM do AY e do alto-falante, SSI263 na fase +666, #1176) terminam em FAIL por desenho e fazem o comando sair com código diferente de zero. As contagens e os relatórios por área estão em [docs/conformance/relatorio-final.md](../../docs/conformance/relatorio-final.md).
+
+O workflow `conformance.yml` roda `conformance run --all`. Como toda a CI, é manual: ninguém o dispara sem autorização do dono.
 
 ## Desempenho (HU-1001)
 

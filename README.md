@@ -38,6 +38,8 @@ A lista honesta do que falta em relação ao AppleWin está em [docs/manual/12-d
 
 "Feito" na tabela acima quer dizer que o código existe, não que a paridade com o AppleWin foi demonstrada. A verificação é medida contra o AppleWin num commit fixo, e cada item tem um Estado de verificação (`PASS` só com evidência). O índice, o baseline, as limitações conhecidas e a prontidão para release estão em [docs/conformance/README.md](docs/conformance/README.md).
 
+**Estado de conformidade (21/10/2026, pré-lançamento `0.2.0-alpha.1`).** Contra o AppleWin num commit fixo: trace de CPU idêntico em quatro Modelos e mais de 10 milhões de vetores de hardware; 1.573 telas idênticas pixel a pixel; mais de 103 milhões de instruções de disco idênticas; 79 de 115 save-states reais importados com o mesmo trace; eventos de áudio idênticos. Continuam em FAIL o PCM do Mockingboard e do alto-falante (5 casos), o #1176 do 6522, um pixel do Color Monitor PAL (#241) e 9 save-states reais; Windows e macOS nativos e o hardware físico nunca foram testados (BLOCKED). A nota de autoavaliação é 76 de 100 e a recomendação é **alpha**; não é uma versão estável. Tudo, com provas e limitações, está no [relatório final de conformidade](docs/conformance/relatorio-final.md) e em [lacunas e limitações conhecidas](docs/conformance/gaps-and-known-limitations.md).
+
 ## Baixar e compilar
 
 Instale o [Rust](https://rustup.rs) (versão estável recente) e o Git. Clone o repositório:

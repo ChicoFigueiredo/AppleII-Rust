@@ -34,7 +34,7 @@ BLOCKERS = [
 ]
 # Known causes of FAIL, from the first divergence.
 CAUSES = [
-    ("Saturn", "Saturn: contagem de bancos do Saturn (AUD-C-001), fora da fronteira deste agente"),
+    ("Saturn", "Saturn: o byte lido de um banco restaurado do estado difere do oráculo (a contagem de bancos, AUD-C-001, já foi corrigida; causa raiz ainda não investigada)"),
     ("Mockingboard", "temporização do VIA 6522 / IRQ do Mockingboard após o load (primeira divergência no IFR ou no ciclo da IRQ)"),
     ("dazzledraw", "IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado"),
     ("SNES_MAX", "SNES MAX: bit de dados do controle lido no meio da leitura"),
