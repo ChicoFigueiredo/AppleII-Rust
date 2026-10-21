@@ -251,6 +251,9 @@ impl Emulator {
         mut backend: Box<dyn Backend>,
         audio_rate: u32,
     ) -> Result<Self, String> {
+        // AppleWin's CardManager refuses what it cannot build and ignores what is invalid in a slot;
+        // here the first is an error and the second a visible warning (AUD-P-019/020).
+        let slot_warnings = crate::factory::check_slots(&settings)?;
         let bus = AudioBus::new(audio_rate, settings.to_machine_config().video_standard);
         let mut machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
@@ -261,7 +264,7 @@ impl Emulator {
         let speed = speed_from_settings(&settings);
         let settings_caps = settings.keyboard.caps_lock; // `-capslock=off`
         machine.set_caps_lock(settings_caps);
-        Ok(Emulator {
+        let mut emu = Emulator {
             settings,
             backend,
             machine,
@@ -287,7 +290,11 @@ impl Emulator {
             copied_seq: 0,
             mhz: 0.0,
             underruns: 0,
-        })
+        };
+        if !slot_warnings.is_empty() {
+            emu.say(slot_warnings.join("\n"));
+        }
+        Ok(emu)
     }
 
     /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
