@@ -192,21 +192,58 @@ impl Drive {
     }
 }
 
-/// Seeded xorshift standing in for the C library `rand()` AppleWin uses (reproducible runs).
+/// The C library `rand()` of glibc (TYPE_3 additive feedback generator) after `srand(1)`, which is
+/// what AppleWin's `rand()` calls in Disk.cpp return when it runs on Linux (GH#748 empty-drive
+/// latch, `AddJitter`, `AddTrackSeamJitter`, the MC3470 fake bits). Reproducing it keeps the
+/// Disk II trace identical to the conformance oracle, and a run reproducible.
 #[derive(Clone, Copy)]
-struct Rng(u32);
+struct Rng {
+    state: [u32; 31],
+    front: u8,
+    rear: u8,
+}
+
+/// glibc `RAND_MAX`.
+const RAND_MAX: u32 = 0x7FFF_FFFF;
 
 impl Rng {
-    fn next(&mut self) -> u32 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 17;
-        self.0 ^= self.0 << 5;
-        self.0
+    /// `srand(seed)`.
+    fn new(seed: u32) -> Rng {
+        let mut state = [0u32; 31];
+        let mut word = if seed == 0 { 1 } else { seed as i32 };
+        state[0] = word as u32;
+        for s in state.iter_mut().skip(1) {
+            let (hi, lo) = (word / 127_773, word % 127_773);
+            word = 16_807 * lo - 2_836 * hi;
+            if word < 0 {
+                word += 0x7FFF_FFFF;
+            }
+            *s = word as u32;
+        }
+        let mut r = Rng {
+            state,
+            front: 3,
+            rear: 0,
+        };
+        for _ in 0..310 {
+            r.next();
+        }
+        r
     }
 
-    /// `rand() < RAND_THRESHOLD(num, den)`.
+    /// `rand()`.
+    fn next(&mut self) -> u32 {
+        let (f, r) = (self.front as usize, self.rear as usize);
+        self.state[f] = self.state[f].wrapping_add(self.state[r]);
+        let out = self.state[f] >> 1;
+        self.front = ((f + 1) % 31) as u8;
+        self.rear = ((r + 1) % 31) as u8;
+        out
+    }
+
+    /// `rand() < RAND_THRESHOLD(num, den)` (the non-Windows definition, Disk.h).
     fn chance(&mut self, num: u32, den: u32) -> bool {
-        self.next() % den < num
+        self.next() < (RAND_MAX / den) * num
     }
 }
 
@@ -283,7 +320,7 @@ impl Disk2Card {
             defer_stepper: true,
             t00s00_pattern_idx: 0,
             found_t00s00_pattern: false,
-            rng: Rng(0x2545_F491),
+            rng: Rng::new(1),
             events: Vec::new(),
         };
         c.reset_switches();
@@ -1218,7 +1255,7 @@ impl Disk2Card {
     fn encode(&self) -> Vec<u8> {
         let mut o = Vec::new();
         let b = |o: &mut Vec<u8>, v: bool| o.push(v as u8);
-        o.push(1); // version
+        o.push(2); // version
         o.push(self.curr_drive as u8);
         o.push(self.magnet_states);
         b(&mut o, self.enhance_disk);
@@ -1233,7 +1270,11 @@ impl Disk2Card {
         b(&mut o, self.deferred_stepper_event);
         o.push(self.deferred_stepper_address);
         o.extend(self.deferred_stepper_cycles.to_le_bytes());
-        o.extend(self.rng.0.to_le_bytes());
+        for w in self.rng.state {
+            o.extend(w.to_le_bytes());
+        }
+        o.push(self.rng.front);
+        o.push(self.rng.rear);
         b(&mut o, self.is_13_sector_firmware);
         b(&mut o, self.force_13_sector_firmware);
         for d in &self.drives {
@@ -1282,7 +1323,8 @@ impl Disk2Card {
             }
         }
         let mut r = R(s);
-        if r.u8()? != 1 {
+        let version = r.u8()?;
+        if !(1..=2).contains(&version) {
             return None;
         }
         self.curr_drive = (r.u8()? as usize).min(1);
@@ -1299,7 +1341,18 @@ impl Disk2Card {
         self.deferred_stepper_event = r.bool()?;
         self.deferred_stepper_address = r.u8()?;
         self.deferred_stepper_cycles = r.u64()?;
-        self.rng = Rng(r.u32()?.max(1));
+        if version == 1 {
+            r.u32()?; // old xorshift state: restart the C `rand()` sequence
+            self.rng = Rng::new(1);
+        } else {
+            let mut rng = Rng::new(1);
+            for w in &mut rng.state {
+                *w = r.u32()?;
+            }
+            rng.front = r.u8()? % 31;
+            rng.rear = r.u8()? % 31;
+            self.rng = rng;
+        }
         self.is_13_sector_firmware = r.bool()?;
         self.force_13_sector_firmware = r.bool()?;
         for d in &mut self.drives {
@@ -1655,5 +1708,66 @@ pub mod manager {
                 c.flush();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod rng_tests {
+    use super::Rng;
+
+    /// glibc `srand(1); rand()` x 5: the sequence the conformance oracle's Disk II consumes.
+    #[test]
+    fn rng_is_glibc_rand_after_srand_1() {
+        let mut r = Rng::new(1);
+        let v: Vec<u32> = (0..5).map(|_| r.next()).collect();
+        assert_eq!(
+            v,
+            [
+                1_804_289_383,
+                846_930_886,
+                1_681_692_777,
+                1_714_636_915,
+                1_957_747_793
+            ]
+        );
+    }
+
+    #[test]
+    fn rng_state_survives_a_save_state_and_version_1_restarts_the_sequence() {
+        use super::Disk2Card;
+        let mut card = Disk2Card::new();
+        for _ in 0..1000 {
+            card.rng.next();
+        }
+        let bytes = card.encode();
+        let mut loaded = Disk2Card::new();
+        assert!(loaded.decode(&bytes).is_some());
+        assert_eq!(loaded.rng.next(), card.rng.next());
+        assert_eq!(loaded.rng.next(), card.rng.next());
+        // Version 1 stored a 4-byte xorshift state where version 2 stores 31 words + 2 indices.
+        let mut probe = Disk2Card::new();
+        let before = probe.encode();
+        probe.rng.state[0] ^= 1;
+        let at = before
+            .iter()
+            .zip(&probe.encode())
+            .position(|(x, y)| x != y)
+            .unwrap();
+        let mut v1 = bytes.clone();
+        v1[0] = 1;
+        v1.drain(at + 4..at + 31 * 4 + 2);
+        let mut old = Disk2Card::new();
+        assert!(old.decode(&v1).is_some());
+        assert_eq!(old.rng.next(), Rng::new(1).next());
+    }
+
+    #[test]
+    fn chance_uses_the_non_windows_rand_threshold() {
+        // first rand() = 1804289383 is not < (2147483647 / 10) * 5 = 1073741820
+        assert!(!Rng::new(1).chance(5, 10));
+        // second = 846930886 is
+        let mut r = Rng::new(1);
+        r.next();
+        assert!(r.chance(5, 10));
     }
 }
