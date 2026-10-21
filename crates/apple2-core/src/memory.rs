@@ -5,6 +5,7 @@
 //! of the page inside it. The tables are rebuilt only when a paging flag or the RamWorks bank
 //! changes, so every access is an O(1) lookup without allocation.
 
+use crate::ram_init::{Draw, RamInit};
 use crate::{AuxCardKind, Model};
 use serde::{Deserialize, Serialize};
 
@@ -100,13 +101,21 @@ pub struct Memory {
     vidhd_aux: Vec<u8>,
     rd: [Page; 256],
     wr: [Page; 256],
+    ram_init: RamInit,
+    draw: Draw,
 }
 
 impl Memory {
     /// `rom` is the model's image: 16K //e = 4K internal Cx ROM + 12K; 48K Base64A = 4 pages of
     /// 12K; 12K otherwise (Memory.cpp:2105-2118). `has_lc`: ][-family with a Language Card in
     /// slot 0, else ROM only (LanguageCard.cpp:626).
-    pub fn new(model: Model, rom: &[u8], aux: AuxCardKind, has_lc: bool) -> Self {
+    pub fn new(
+        model: Model,
+        rom: &[u8],
+        aux: AuxCardKind,
+        has_lc: bool,
+        ram_init: RamInit,
+    ) -> Self {
         let (cx_rom, sys) = if rom.len() == CX_ROM_SIZE + SYS_ROM_SIZE {
             (rom[..CX_ROM_SIZE].to_vec(), &rom[CX_ROM_SIZE..])
         } else if rom.len() > SYS_ROM_SIZE && !rom.len().is_multiple_of(SYS_ROM_SIZE) {
@@ -146,14 +155,23 @@ impl Memory {
             vidhd_aux: Vec::new(),
             rd: [NONE; 256],
             wr: [NONE; 256],
+            ram_init,
+            draw: Draw::new(ram_init.random),
         };
+        m.fill_main_ram();
         m.update_paging();
         m
+    }
+
+    /// `MemReset`: the power-on pattern in main RAM (aux RAM stays zero, as in AppleWin).
+    fn fill_main_ram(&mut self) {
+        crate::ram_init::fill_main_ram(&mut self.main, &self.ram_init, &mut self.draw);
     }
 
     /// Power-cycle: RAM cleared, flags back to the model default, RamWorks bank 0 (GH#1414).
     pub fn power_cycle(&mut self) {
         self.main.fill(0);
+        self.fill_main_ram();
         self.aux.fill(0);
         self.lc.fill(0);
         self.lc_region = 0;

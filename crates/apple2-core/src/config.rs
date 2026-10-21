@@ -46,6 +46,11 @@ pub struct MachineConfig {
     /// follows the model (Utilities.cpp:145, `SetMainCpu`).
     #[serde(default)]
     pub cpu_cmos: Option<bool>,
+    /// Power-on RAM pattern (`-memclear N`) and the source of its "random" bytes. `for_model`
+    /// leaves RAM blank; use [`crate::RamInit::APPLEWIN_DETERMINISTIC`] (conformance) or the
+    /// `Settings` (frontends, with a seed) to get AppleWin's `MIP_FF_FF_00_00`.
+    #[serde(default)]
+    pub ram_init: crate::RamInit,
 }
 
 /// A full Saturn 128K (`kMaxSaturnBanks`).
@@ -116,6 +121,7 @@ impl MachineConfig {
             use_freeze_f8: false,
             custom_f8_rom: None,
             cpu_cmos: None,
+            ram_init: crate::RamInit::ZERO,
         }
     }
 

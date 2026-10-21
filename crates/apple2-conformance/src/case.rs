@@ -18,10 +18,15 @@ pub struct Case {
     /// `"6502"`, `"65C02"` or `"auto"` (the model's CPU, the default).
     #[serde(default)]
     pub cpu: Option<String>,
-    /// Cards as `"slot:kind"`, e.g. `"0:language-card-16k"`. When present it replaces the
-    /// model's default slots; `[]` means no cards.
+    /// Cards as `"slot:kind"`, e.g. `"0:language-card-16k"` or `"6:disk2"` (Disk II, drive 1
+    /// loaded from `fixture`). When present it replaces the model's default slots; `[]` means no
+    /// cards.
     #[serde(default)]
     pub cards: Option<Vec<String>>,
+    /// `-memclear N` (`g_nMemoryClearType`, -1..=7); default 2 (`MIP_FF_FF_00_00`). The "random"
+    /// bytes are always the deterministic ones (draw = 0), as in the oracle.
+    #[serde(default)]
+    pub memclear: Option<i32>,
     #[serde(default)]
     pub fixture: Option<FixtureSpec>,
     pub run: RunSpec,
@@ -221,9 +226,15 @@ pub struct OracleSpec {
     /// agree with each other.
     #[serde(default)]
     pub sha256: Option<String>,
-    /// Reference trace, relative to `tests/conformance/` (kind `trace`).
+    /// Reference trace, relative to `tests/conformance/` (kind `trace`). It may point to the
+    /// cache (`../../target/conformance-cache/...`); when absent the result is BLOCKED and the
+    /// message carries `source` (the command that regenerates it).
     #[serde(default)]
     pub trace: Option<String>,
+    /// Expected SHA-256 of the reference trace file (kind `trace`). Mandatory for traces kept in
+    /// the cache, which are not versioned: a different file is BLOCKED, not compared.
+    #[serde(default)]
+    pub trace_sha256: Option<String>,
     /// Trace fields not compared (e.g. `["cycle"]`).
     #[serde(default)]
     pub ignore: Vec<String>,
@@ -266,6 +277,12 @@ impl Case {
         parse_model(&self.model)?;
         self.cpu_override()?;
         self.card_slots()?;
+        self.disk2_slot()?;
+        if let Some(n) = self.memclear {
+            if !(-1..=7).contains(&n) {
+                return Err(format!("memclear {n}: expected -1..=7"));
+            }
+        }
         let o = &self.oracle;
         match o.kind {
             OracleKind::Trace if o.trace.is_none() => return Err("oracle.trace required".into()),
@@ -307,6 +324,13 @@ impl Case {
                 ));
             }
         }
+        if let Some(h) = &o.trace_sha256 {
+            if !is_sha256_hex(h) {
+                return Err(format!(
+                    "oracle.trace_sha256 `{h}` is not 64 lowercase hex digits"
+                ));
+            }
+        }
         crate::trace::parse_field_list(&o.ignore.join(","))?;
         Ok(())
     }
@@ -323,6 +347,23 @@ impl Case {
             Some("65c02") => Ok(Some(true)),
             Some(o) => Err(format!("cpu `{o}`: expected 6502, 65C02 or auto")),
         }
+    }
+
+    /// Slot of the Disk II card (`"6:disk2"`), if the case has one.
+    pub fn disk2_slot(&self) -> Result<Option<u8>, String> {
+        let mut found = None;
+        for c in self.cards.iter().flatten() {
+            if let Some((n, "disk2")) = c.split_once(':').map(|(n, k)| (n.trim(), k.trim())) {
+                let n: u8 = n.parse().map_err(|_| format!("card `{c}`: bad slot"))?;
+                if !(1..=7).contains(&n) {
+                    return Err(format!("card `{c}`: Disk II slot must be 1-7"));
+                }
+                if found.replace(n).is_some() {
+                    return Err("only one Disk II is supported".into());
+                }
+            }
+        }
+        Ok(found)
     }
 
     /// Parsed `cards`, `None` when the case keeps the model's default slots.
@@ -343,6 +384,7 @@ impl Case {
                 return Err(format!("card `{c}`: slot must be 0-7"));
             }
             let kind = match kind.trim() {
+                "disk2" => continue,
                 "language-card-16k" => CardKind::LanguageCard16K,
                 "saturn-128k" => CardKind::Saturn128K,
                 k => return Err(format!("card kind `{k}` unknown")),

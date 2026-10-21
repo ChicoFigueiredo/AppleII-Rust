@@ -59,6 +59,20 @@ Jogos e software de terceiros só entram com licença adequada e procedimento re
 
 Linhas começadas por `#` são metadados, por exemplo `# model=apple2e-enhanced` e `# rom_sha256=...`. Sugere-se também registrar `applewin_sha`, a origem do Trace (executável e opções) e a versão do formato nos metadados.
 
+### Convenções do Trace v1
+
+O gerador Rust (`conformance trace`) e o oráculo (`audetto-oracle`) seguem as mesmas convenções; sem elas os dois traces não coincidem mesmo com a CPU correta.
+
+1. **`p` com os bits 4 e 5 ligados.** O AppleWin mantém B (bit 4) e o bit reservado (bit 5) sempre em 1 em `regs.ps`; o P após o reset é `34`. O registrador do núcleo Rust não muda (`24` após o reset); é só a representação: `TraceRow::from_machine` grava `p | 0x30` (`trace::P_FIXED_BITS`).
+2. **Interrupção não gera linha.** No oráculo o gancho roda depois do Fetch do opcode; IRQ e NMI tomadas não fazem Fetch, logo não geram linha, e a linha seguinte é a primeira instrução do tratador. No Rust a entrada na interrupção é um `Machine::step`; o `TraceWriter` consulta `Machine::next_step_is_interrupt_entry()` (consulta pura, sem custo quando não usada) e não grava linha para esse passo.
+3. **`op` é o opcode buscado.** Em `$C100-$CFFF` (ROM de cartão) o `peek` não lê a ROM sem efeito colateral; o `TraceWriter` usa o opcode que a CPU de fato buscou.
+4. **RAM de power-on.** O padrão do AppleWin (`g_nMemoryClearType` = `MIP_FF_FF_00_00`, opção `-memclear N`, 0 a 7, mais -1 para sorteado) vale nos dois lados, com o sorteio de `getRandomTime()` fixo em 0 (`xx28/xx29/xx68/xx69` = `00`, `$4E`=`$4F`=`20`). No Rust: `MachineConfig::ram_init` (`RamInit`, `RandomSource::Zero` ou `Seed(n)`; o núcleo nunca lê o relógio, ADR 0001). `conformance trace --memclear N` e `--deterministic-ram` (padrão); `--ram-seed N` sorteia. A RAM auxiliar do //e fica zerada nos dois (o AppleWin só preenche `memmain`).
+5. **Relógio de vídeo.** O oráculo avança o relógio de vídeo NTSC a cada opcode (`CpuExecute(..., bVideoUpdate=true)`), como o AppleWin do Windows. Com `false` (padrão dos frontends headless do fork) o relógio fica em (0,0) para sempre e todo floating bus lê o mesmo endereço do scanner, o que o AppleWin real nunca faz (HU-0103).
+6. **Lotes de 1 ms.** O oráculo roda `CpuExecute(1020)` e chama `Card::Update(ciclos)` ao fim de cada lote; o `TraceWriter` chama `Machine::update_cards` a cada 1020 ciclos (`trace::BATCH_CYCLES`). O Disk II conta nesse `Update` o atraso de 1 s do motor desligado.
+7. **Disk II.** `--cards disk2` (slot 6) e `--disk IMAGEM` (drive 1, protegido contra escrita) no Rust; o oráculo usa o mesmo cartão (`--cards disk2`, padrão). Os bytes "aleatórios" do Disk II vêm do `rand()` da glibc após `srand(1)`, igual nos dois.
+
+Casos `authority = "applewin"`: `tests/conformance/cases/trace-applewin-*.toml`. Os de 500 mil ciclos têm o trace versionado; os maiores (2 e 5 milhões) ficam em `target/conformance-cache/reference-traces/` e o caso guarda o SHA-256 (`trace_sha256`) e o comando para regenerá-los em `source`; sem o arquivo, o resultado é BLOCKED com esse comando. O `applewin_sha` do manifesto vem do cabeçalho `#applewin_sha` do trace de referência. Registro das divergências encontradas: `docs/conformance/audit/cpu-trace-differential.md`.
+
 Exemplo (valores ilustrativos do formato, não de uma execução real):
 
 ```csv

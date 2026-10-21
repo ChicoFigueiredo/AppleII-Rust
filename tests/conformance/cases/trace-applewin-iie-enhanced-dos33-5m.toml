@@ -1,0 +1,20 @@
+id = "trace-applewin-iie-enhanced-dos33-5m"
+story = "HU-0101"
+criterion = "Os 5.000.000 primeiros ciclos do boot do DOS 3.3 com disco coincidem instrução a instrução (ciclo, PC, opcode, A, X, Y, SP, P) com o AppleWin (HU-0103: inclui o floating bus lido pelo boot)"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+notes = "Convenções do Trace v1 em docs/conformance/test-oracles.md (P com bits 4 e 5, interrupções sem linha, RAM FF FF 00 00 determinística, relógio de vídeo avançando a cada opcode). Registro das divergências: docs/conformance/audit/cpu-trace-differential.md."
+
+[fixture]
+path = "assets/disks/DOS 3.3 System Master - 680-0210-A.dsk"
+sha256 = "caca91990b148e20062c887f0301a957b477353fbacf4e4a011f8fb3beab46a9"
+
+[run]
+cycles = 5000000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "Oráculo audetto-oracle (fork audetto/AppleWin a1e20c0362f392dc25f1a3b218d2f84d4f1a25da, AppleWin upstream 3e8054b4627624398e4589f7f27b3d40a6b9718e, port base a8f0d1d40f551ad9e010522c29c2891e33c88275). Regenerar: tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 5000000 --disk \"assets/disks/DOS 3.3 System Master - 680-0210-A.dsk\" --out target/conformance-cache/reference-traces/applewin-apple2ee-dos33-5m.csv"
+trace = "../../target/conformance-cache/reference-traces/applewin-apple2ee-dos33-5m.csv"
+trace_sha256 = "13af08ef0a5749a64b8d0a9217d1f08a4a1725b356131dcfe5ff841d3670373d"
