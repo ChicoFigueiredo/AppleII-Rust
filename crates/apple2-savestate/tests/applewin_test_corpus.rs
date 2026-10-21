@@ -31,7 +31,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 const FRAME_CYCLES: u64 = 17_030;
-const DEFAULT_CACHE: &str = "/mnt/d/Chico/AppleRust/target/conformance-cache/applewin-test";
+/// Cache padrão, relativo à raiz do workspace; `APPLEWIN_TEST_CACHE` substitui.
+const DEFAULT_CACHE: &str = "target/conformance-cache/applewin-test";
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Outcome {
@@ -160,9 +161,9 @@ fn load_and_run(path: &Path, dirs: Vec<PathBuf>) -> Result<Vec<String>, Error> {
 fn applewin_test_corpus() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest.join("../..");
-    let cache = PathBuf::from(
-        std::env::var("APPLEWIN_TEST_CACHE").unwrap_or_else(|_| DEFAULT_CACHE.to_string()),
-    );
+    let cache = std::env::var("APPLEWIN_TEST_CACHE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| root.join(DEFAULT_CACHE));
     let index = root.join("tests/conformance/inputs/applewin-test-index.csv");
     if !cache.join("v2").is_dir() || !index.is_file() {
         println!("BLOCKED: corpus ausente; rode tools/conformance/fetch-applewin-test.sh");
