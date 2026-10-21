@@ -1,4 +1,5 @@
 #format=trace-checkpoints-v1
+#case=disk-woz-gruds-in-space-boot
 #model=apple2e-enhanced
 #memclear=0
 #every=2000
@@ -6,7 +7,7 @@
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=bb92f7f576d25081c543184082a77f1f6ee7dba019709a61b31e483f5f5211f2
+#oracle_trace_sha256=d6a9db1cf28ec64dadaaa4a91ea36538dde696086c41b06d5fd95eb4b25a5ebf
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33

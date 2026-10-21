@@ -8,16 +8,17 @@
 //! forced to the oracle's and the event is counted. Everything else (cycle, pc, opcode, registers
 //! after a deterministic read such as the data latch, the Disk II ROM, RAM) must be identical.
 //!
-//! usage: disk_follow --model M --disk IMAGE --oracle FILE.csv [--memclear N] [--limit N]
+//! usage: disk_follow --case tests/conformance/cases/ID.toml --oracle FILE.csv [--limit N]
 //!        [--emit-ckpt FILE.ckpt [--every N]]   (writes the checkpoint file the harness case uses)
+//! The machine is built exactly as the harness builds it for the case (`disk::build`).
 //! exit status: 0 = identical (modulo counted floating-bus syncs), 1 = real divergence.
 
-use apple2_conformance::case::parse_model;
-use apple2_conformance::disk::{self, Check, Checkpoints, Sync};
+use apple2_conformance::disk::{self, Check, Checkpoints, Stepper, Sync};
+use apple2_conformance::runner::Env;
 use apple2_conformance::sha256::sha256_hex;
 use apple2_conformance::trace::{TraceReader, TraceRow};
+use apple2_conformance::Case;
 use apple2_core::observer::{AccessKind, AccessObserver};
-use apple2_core::MachineConfig;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -51,24 +52,18 @@ fn main() {
             .and_then(|i| args.get(i + 1))
             .cloned()
     };
-    let model_name = get("--model").expect("--model");
-    let model = parse_model(&model_name).expect("model");
-    let disk_path = get("--disk").expect("--disk");
+    let case_path = get("--case").expect("--case");
     let oracle = get("--oracle").expect("--oracle");
-    let memclear: u32 = get("--memclear").map_or(2, |v| v.parse().unwrap());
     let limit: usize = get("--limit").map_or(usize::MAX, |v| v.parse().unwrap());
     let every: u64 = get("--every").map_or(2000, |v| v.parse().unwrap());
     let emit = get("--emit-ckpt");
 
+    let case = Case::load(std::path::Path::new(&case_path)).expect("case");
+    let env = Env::detect(None);
     let oracle_bytes = std::fs::read(&oracle).expect("oracle trace");
     let tr = TraceReader::read_file(std::path::Path::new(&oracle)).expect("oracle trace");
-    let mut m = disk::power_on(
-        MachineConfig::for_model(model),
-        &disk_path,
-        std::fs::read(&disk_path).expect("disk"),
-        memclear,
-    )
-    .expect("machine");
+    let mut m = disk::build(&env, &case).expect("machine");
+    let mut stepper = Stepper::default();
     let log = Log::default();
     m.set_access_observer(Some(Box::new(log.clone())));
 
@@ -80,6 +75,7 @@ fn main() {
     let mut verdict = None;
     let n = tr.rows.len().min(limit);
     for (i, want) in tr.rows.iter().enumerate().take(n) {
+        stepper.skip_interrupt_entries(&mut m);
         let mut got = TraceRow::from_machine(&m);
         got.p |= 0x30;
         let cx_pc = (0xC000..0xD000).contains(&want.pc);
@@ -132,7 +128,7 @@ fn main() {
         }
         hash = disk::fold_row(hash, want.cycle, want.pc, want.a, want.x, want.y, want.sp, want.p);
         log.0.borrow_mut().clear();
-        m.run_cycles(1); // like a 1 ms slice: also runs Card::update (motor spin-down)
+        stepper.step(&mut m);
         rows += 1;
     }
     println!("rows matched: {rows} of {n}");
@@ -152,8 +148,9 @@ fn main() {
         let ck = Checkpoints {
             meta: vec![
                 meta("format", disk::FORMAT.into()),
-                meta("model", model_name),
-                meta("memclear", memclear.to_string()),
+                meta("case", case.id.clone()),
+                meta("model", case.model.clone()),
+                meta("memclear", case.memclear.unwrap_or(2).to_string()),
                 meta("every", every.to_string()),
                 meta("rows", n.to_string()),
                 meta(
@@ -172,9 +169,10 @@ fn main() {
                 meta(
                     "oracle_command",
                     format!(
-                        "run-audetto-oracle.sh --model {} --cycles {} --disk <fixture> --memclear {memclear}",
+                        "run-audetto-oracle.sh --model {} --cycles {} --disk <fixture> --memclear {}",
                         tr.meta("model").unwrap_or("?"),
-                        tr.meta("cycles").unwrap_or("?")
+                        tr.meta("cycles").unwrap_or("?"),
+                        case.memclear.unwrap_or(2)
                     ),
                 ),
             ],

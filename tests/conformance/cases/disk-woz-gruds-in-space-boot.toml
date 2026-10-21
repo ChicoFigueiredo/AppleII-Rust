@@ -2,7 +2,9 @@ id = "disk-woz-gruds-in-space-boot"
 story = "HU-0301"
 criterion = "O boot de WOZ Gruds in Space side A no Apple //e Enhanced com um Disk II no slot 6 executa a mesma sequência de instruções, ciclo a ciclo, que o AppleWin (tempo de nibble, motor, passo do braço, quarter tracks)"
 model = "apple2e-enhanced"
-notes = "Imagem de terceiros do corpus AppleWin-Test (não versionada; fica em target/conformance-cache, ver tools/conformance/fetch-applewin-test.sh): sem ela o caso fica BLOCKED. Referência: 6000000 ciclos do oráculo AppleWin (fork audetto, memclear 0, RAM de power-on determinística), reduzidos a checkpoints a cada 2000 instruções com hash encadeado de todas as linhas. As leituras do barramento flutuante que divergem estão listadas como 'sync' (achado separado em docs/conformance/audit/disk-differential.md). Regerar: tools/conformance/oracle/run-audetto-oracle.sh + cargo run --release -p apple2-storage --example disk_follow -- --emit-ckpt."
+cards = ["6:disk2"]
+memclear = 0
+notes = "Imagem de terceiros do corpus AppleWin-Test (não versionada; fica em target/conformance-cache, ver tools/conformance/fetch-applewin-test.sh): sem ela o caso fica BLOCKED. Referência: 6000000 ciclos do oráculo AppleWin (fork audetto, memclear 0, RAM de power-on determinística), reduzidos a checkpoints a cada 2000 instruções com hash encadeado de todas as linhas. Regerar: tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0 e cargo run --release -p apple2-storage --example disk_follow -- --case <este arquivo> --oracle <trace> --emit-ckpt <ckpt>."
 
 [fixture]
 path = "target/conformance-cache/applewin-test/v2/WOZ/Gruds in Space side A.woz"

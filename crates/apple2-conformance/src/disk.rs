@@ -7,10 +7,11 @@
 //!
 //! ```text
 //! #key=value          metadata (model, memclear, disk, oracle_trace_sha256, rows, ...)
-//! sync,ROW,A,X,Y,P    the video scanner's floating bus is a separate finding (see
-//!                     docs/conformance/audit/disk-differential.md): before ROW the registers
-//!                     are forced to the oracle's, because the instruction before it read a
-//!                     floating-capable address and the Rust byte differed
+//! sync,ROW,A,X,Y,P    before ROW the registers are forced to the oracle's (the previous
+//!                     instruction read a floating-bus address and the byte differed). The
+//!                     shipped cases have none: with the oracle's video clock running (see
+//!                     docs/conformance/audit/cpu-trace-differential.md, D4) the floating bus
+//!                     agrees byte for byte.
 //! ck,ROW,CYCLE,PC,A,X,Y,SP,P,HASH
 //!                     state before instruction ROW, and the FNV-1a hash of every row before it
 //! ```
@@ -18,9 +19,10 @@
 //! The hash covers `(cycle, pc, a, x, y, sp, p|0x30)` of every oracle row, so a pass means the
 //! whole instruction stream, cycle by cycle, equals the oracle's up to the listed syncs.
 
-use apple2_core::{Machine, MachineConfig};
-use apple2_storage::disk2::Disk2Card;
-use apple2_storage::image::DiskImage;
+use crate::case::Case;
+use crate::runner::{build_machine, machine_config, Disk2Setup, Env};
+use crate::trace::BATCH_CYCLES;
+use apple2_core::Machine;
 use std::collections::VecDeque;
 
 pub const FORMAT: &str = "trace-checkpoints-v1";
@@ -173,53 +175,20 @@ pub fn fold_row(h: u64, cycle: u64, pc: u16, a: u8, x: u8, y: u8, sp: u8, p: u8)
 
 pub const HASH_SEED: u64 = 0xCBF2_9CE4_8422_2325;
 
-/// `MemReset()` with the oracle patch (Memory.cpp:2342-2435; `audetto-trace.patch`): for
-/// `memclear` 2 `FF FF 00 00` in $0000-$BFFF with the "random" exceptions fixed at 00; for 0 all
-/// zeros; then RNDL/RNDH = $20 and three spots set to 0.
-pub fn applewin_power_on_ram(m: &mut Machine, memclear: u32) {
-    if memclear == 2 {
-        for a in (0..0xC000u32).step_by(4) {
-            m.poke_main(a as u16, 0xFF);
-            m.poke_main(a as u16 + 1, 0xFF);
-        }
-        for base in (0..0xC000u32).step_by(512) {
-            for off in [0x28u32, 0x29, 0x68, 0x69] {
-                m.poke_main((base + off) as u16, 0);
-            }
-        }
-    }
-    for (a, v) in [
-        (0x4Eu16, 0x20u8),
-        (0x4F, 0x20),
-        (0x620B, 0),
-        (0xBFFD, 0),
-        (0xBFFE, 0),
-        (0xBFFF, 0),
-    ] {
-        m.poke_main(a, v);
-    }
-}
-
-/// The machine of a disk boot case: `cfg`, a Disk II in slot 6 with `bytes` in drive 1, power
-/// cycled, RAM filled like the oracle's.
-pub fn power_on(
-    cfg: MachineConfig,
-    disk_name: &str,
-    bytes: Vec<u8>,
-    memclear: u32,
-) -> Result<Machine, String> {
-    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
-    let mut card = Disk2Card::new();
-    card.insert_disk(
-        0,
-        DiskImage::from_bytes(disk_name, bytes).map_err(|e| format!("imagem: {e}"))?,
-    );
-    if !m.insert_card(6, Box::new(card)) {
-        return Err("slot 6 recusou o Disk II".into());
-    }
-    m.power_cycle();
-    applewin_power_on_ram(&mut m, memclear);
-    Ok(m)
+/// The machine of a disk boot case: the case's configuration (model, cards, `memclear` with the
+/// oracle's deterministic RAM, see `runner::machine_config`) and its Disk II with the fixture in
+/// drive 1 (slot of `cards = ["N:disk2"]`, default 6), power cycled.
+pub fn build(env: &Env, case: &Case) -> Result<Machine, String> {
+    let cfg = machine_config(case)?;
+    let fx = case
+        .fixture
+        .as_ref()
+        .ok_or("o caso de disco precisa de fixture")?;
+    let setup = Disk2Setup {
+        slot: case.disk2_slot()?.unwrap_or(6),
+        image: Some(env.workspace.join(&fx.path)),
+    };
+    build_machine(cfg, Some(&setup))
 }
 
 /// Why a checkpoint run did not pass.
@@ -229,13 +198,40 @@ pub enum Failure {
     Fail(String, String),
 }
 
+/// Steps like the oracle: interrupt entries produce no row, and the cards are updated at the end
+/// of every 1 ms batch (`trace::BATCH_CYCLES`; the Disk II counts its motor-off delay there).
+#[derive(Default)]
+pub struct Stepper {
+    batch: u64,
+}
+
+impl Stepper {
+    /// Takes the interrupt entry that is due, if any, so that `m` is at the next row.
+    pub fn skip_interrupt_entries(&mut self, m: &mut Machine) {
+        while m.next_step_is_interrupt_entry() {
+            self.step(m);
+        }
+    }
+
+    /// One instruction (or interrupt entry).
+    pub fn step(&mut self, m: &mut Machine) {
+        self.batch += m.step() as u64;
+        if self.batch >= BATCH_CYCLES {
+            m.update_cards(self.batch);
+            self.batch = 0;
+        }
+    }
+}
+
 /// Runs `m` against `ck`. Ok(summary) when every checkpoint agrees.
 pub fn check(m: &mut Machine, ck: &Checkpoints) -> Result<String, Failure> {
+    let mut stepper = Stepper::default();
     let mut syncs: VecDeque<Sync> = ck.syncs.iter().copied().collect();
     let mut checks: VecDeque<Check> = ck.checks.iter().copied().collect();
     let total = ck.rows();
     let mut h = HASH_SEED;
     for row in 0..total {
+        stepper.skip_interrupt_entries(m);
         if syncs.front().is_some_and(|s| s.row == row) {
             let s = syncs.pop_front().unwrap();
             let c = m.cpu_mut();
@@ -258,8 +254,7 @@ pub fn check(m: &mut Machine, ck: &Checkpoints) -> Result<String, Failure> {
             }
         }
         h = fold_row(h, cycle, pc, a, x, y, sp, p);
-        // like a 1 ms slice: also runs Card::update (motor spin-down)
-        m.run_cycles(1);
+        stepper.step(m);
     }
     Ok(format!(
         "{total} instruções, {} checkpoints e {} sincronizações do barramento flutuante idênticos ao oráculo",

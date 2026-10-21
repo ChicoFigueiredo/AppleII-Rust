@@ -1,4 +1,5 @@
 #format=trace-checkpoints-v1
+#case=disk-woz-run-for-it-boot
 #model=apple2e-enhanced
 #memclear=0
 #every=2000
@@ -6,7 +7,7 @@
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=768bf9ddaf548bfaabb99bba8d00e6933a3758d8fbedb630cc0bbf41c0ff2fdc
+#oracle_trace_sha256=01b612ef908e7361374c9da57d59d941f8e02029e8d6ca6f608a01c5474793cc
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33

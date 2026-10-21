@@ -2,7 +2,9 @@ id = "disk-dos33-boot-apple2plus-memclear2"
 story = "HU-0301"
 criterion = "O boot de DOS 3.3 System Master no Apple ][+ com um Disk II no slot 6 executa a mesma sequência de instruções, ciclo a ciclo, que o AppleWin (tempo de nibble, motor, passo do braço, quarter tracks)"
 model = "apple2plus"
-notes = "Imagem livre versionada em assets/disks. Referência: 8000000 ciclos do oráculo AppleWin (fork audetto, memclear 2, RAM de power-on determinística), reduzidos a checkpoints a cada 2000 instruções com hash encadeado de todas as linhas. As leituras do barramento flutuante que divergem estão listadas como 'sync' (achado separado em docs/conformance/audit/disk-differential.md). Regerar: tools/conformance/oracle/run-audetto-oracle.sh + cargo run --release -p apple2-storage --example disk_follow -- --emit-ckpt."
+cards = ["0:language-card-16k", "6:disk2"]
+memclear = 2
+notes = "Imagem livre versionada em assets/disks. Referência: 8000000 ciclos do oráculo AppleWin (fork audetto, memclear 2, RAM de power-on determinística), reduzidos a checkpoints a cada 2000 instruções com hash encadeado de todas as linhas. Regerar: tools/conformance/oracle/run-audetto-oracle.sh --model apple2p --cycles 8000000 --disk <fixture> --memclear 2 e cargo run --release -p apple2-storage --example disk_follow -- --case <este arquivo> --oracle <trace> --emit-ckpt <ckpt>."
 
 [fixture]
 path = "assets/disks/DOS 3.3 System Master - 680-0210-A.dsk"

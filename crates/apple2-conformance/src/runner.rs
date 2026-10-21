@@ -601,7 +601,7 @@ fn evaluate(
         ));
     }
     if case.oracle.kind == OracleKind::TraceCheckpoints {
-        return evaluate_disk(env, case, cfg);
+        return evaluate_disk(env, case);
     }
     if let Some(fx) = &case.fixture {
         let p = env.workspace.join(&fx.path);
@@ -765,7 +765,7 @@ fn evaluate(
 }
 
 /// `trace-checkpoints` cases: a Disk II boot in lock step with the oracle (see `disk.rs`).
-fn evaluate_disk(env: &Env, case: &Case, cfg: MachineConfig) -> Verdict {
+fn evaluate_disk(env: &Env, case: &Case) -> Verdict {
     use crate::disk::{self, Checkpoints, Failure};
     let fx = case.fixture.as_ref().expect("validated");
     let path = env.workspace.join(&fx.path);
@@ -793,8 +793,7 @@ fn evaluate_disk(env: &Env, case: &Case, cfg: MachineConfig) -> Verdict {
         Ok(c) => c,
         Err(e) => return Verdict::Blocked(format!("checkpoints {rel}: {e}")),
     };
-    let memclear = ck.meta("memclear").and_then(|v| v.parse().ok()).unwrap_or(2);
-    let mut m = match disk::power_on(cfg, &fx.path, bytes, memclear) {
+    let mut m = match disk::build(env, case) {
         Ok(m) => m,
         Err(e) => return Verdict::Fail(format!("erro ao montar a máquina: {e}"), None),
     };
