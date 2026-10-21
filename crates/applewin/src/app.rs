@@ -1,6 +1,6 @@
 //! The winit application: window, input routing, actions, audio and gamepad glue.
 
-use crate::actions::{action_for, Action};
+use crate::actions::{action_for_mode, Action};
 use crate::audio::AudioOut;
 use crate::backend::BackendFactory;
 use crate::emu::{self, default_state_path, Command, EmuHandle, EmuStatus};
@@ -397,16 +397,27 @@ impl App {
         }
     }
 
+    /// The mouse wheel over the debugger is Up/Down with the current modifiers (WinFrame.cpp:1647).
+    fn debugger_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+        let dy = match delta {
+            winit::event::MouseScrollDelta::LineDelta(_, y) => y,
+            winit::event::MouseScrollDelta::PixelDelta(p) => p.y as f32,
+        };
+        if let Some(k) = crate::keymap::wheel_debug_key(dy, self.mods()) {
+            self.emu.send(Command::Debug(k));
+        }
+    }
+
     fn keyboard(&mut self, ev: &winit::event::KeyEvent) {
         let pressed = ev.state == ElementState::Pressed;
         let input = host::key_input(ev, self.mods);
         let mods = self.mods();
         if pressed && !ev.repeat {
-            if let Some(a) = action_for(input.key, mods) {
+            if let Some(a) = action_for_mode(input.key, mods, self.status.debugger_active) {
                 self.do_action(a);
                 return;
             }
-        } else if action_for(input.key, mods).is_some() {
+        } else if action_for_mode(input.key, mods, self.status.debugger_active).is_some() {
             return; // repeats and releases of bound keys
         }
         if self.status.debugger_active {
@@ -801,6 +812,9 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::Focused(false) => self.release_inputs(),
             WindowEvent::KeyboardInput { event, .. } if !egui_wants_keys => self.keyboard(&event),
+            WindowEvent::MouseWheel { delta, .. } if self.status.debugger_active => {
+                self.debugger_wheel(delta)
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = Some((
                     position.x as f32 / self.egui_ctx.pixels_per_point(),

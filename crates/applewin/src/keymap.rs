@@ -205,6 +205,23 @@ pub fn debug_key(key: HostKey, mods: Mods) -> Option<DebugKey> {
     Some(DebugKey::Press(k, m))
 }
 
+/// The wheel over the debugger: up is `VK_UP`, down is `VK_DOWN`, keeping the modifiers.
+pub fn wheel_debug_key(dy: f32, mods: Mods) -> Option<DebugKey> {
+    let k = match dy {
+        d if d > 0.0 => DbgKey::Up,
+        d if d < 0.0 => DbgKey::Down,
+        _ => return None,
+    };
+    Some(DebugKey::Press(
+        k,
+        DbgMods {
+            shift: mods.shift,
+            ctrl: mods.ctrl,
+            alt: mods.alt,
+        },
+    ))
+}
+
 /// Stateful translator: tracks held keys (for AKD), the Caps Lock and Scroll Lock toggles.
 #[derive(Debug)]
 pub struct KeyboardState {

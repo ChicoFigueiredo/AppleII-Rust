@@ -436,6 +436,45 @@ fn aud_p_035_empty_enter_toggles_the_full_screen_console() {
     assert!(e.debugger().console.input().is_empty());
 }
 
+/// HU-0801. A roda do mouse sobre o depurador é Cima/Baixo com os modificadores (WinFrame.cpp:1647).
+#[test]
+fn wheel_is_up_and_down_with_modifiers() {
+    use applewin_shell::keymap::wheel_debug_key;
+    let shift = Mods {
+        shift: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        wheel_debug_key(1.0, shift),
+        Some(DebugKey::Press(
+            DbgKey::Up,
+            DbgMods {
+                shift: true,
+                ..Default::default()
+            }
+        ))
+    );
+    assert_eq!(
+        wheel_debug_key(-3.0, Mods::default()),
+        Some(DebugKey::plain(DbgKey::Down))
+    );
+    assert_eq!(wheel_debug_key(0.0, Mods::default()), None);
+}
+
+/// HU-0801. Com o depurador na tela, Ctrl+0/1/3 são marcadores, não atalhos de velocidade.
+#[test]
+fn ctrl_digits_reach_the_debugger_not_the_speed_shortcuts() {
+    use applewin_shell::actions::action_for_mode;
+    let ctrl = Mods {
+        ctrl: true,
+        ..Default::default()
+    };
+    for d in ['0', '1', '3'] {
+        assert!(action_for_mode(HostKey::Char(d), ctrl, false).is_some());
+        assert!(action_for_mode(HostKey::Char(d), ctrl, true).is_none());
+    }
+}
+
 // ---------------------------------------------------------------- UI
 
 /// HU-0802. Ctrl+Print Screen: AppleWin copia 40 ou 80 colunas (aux+principal) e a página 2
