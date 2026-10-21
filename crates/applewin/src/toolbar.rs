@@ -158,6 +158,11 @@ pub fn drive_text(n: usize, d: &DriveStatus, sector: Option<u8>) -> String {
 /// Window title, like AppleWin's `GetAppModeTitle` text: model, mode, speed.
 pub fn title(s: &EmuStatus) -> String {
     let mut t = format!("AppleII-Rust - {}", s.model);
+    // GetAppleWindowTitle (Utilities.cpp:507-514): the video mode is part of the title, always,
+    // not only after F9 (GH#343: the Win32 title lost it after a full-screen round trip).
+    if !s.video.is_empty() {
+        t.push_str(&format!(" - {}", s.video));
+    }
     if s.paused {
         t.push_str(" - PAUSED");
     } else if s.debugger_active {
@@ -232,5 +237,27 @@ mod tests {
         s.paused = false;
         s.full_speed = true;
         assert!(title(&s).ends_with("MAX SPEED"));
+    }
+
+    /// GH#343: F6 (full screen), F2, F6 again must not lose the video mode in the title.
+    #[test]
+    fn title_keeps_the_video_mode_across_fullscreen_round_trip() {
+        use crate::actions::{action_for, Action};
+        use crate::keymap::{HostKey, Mods};
+        let s = EmuStatus {
+            model: "Apple2eEnhanced".into(),
+            video: "Color (NTSC Monitor)".into(),
+            speed_label: "1.0x".into(),
+            ..Default::default()
+        };
+        let before = title(&s);
+        assert_eq!(
+            before,
+            "AppleII-Rust - Apple2eEnhanced - Color (NTSC Monitor)"
+        );
+        let m = Mods::default();
+        assert_eq!(action_for(HostKey::F(6), m), Some(Action::ToggleFullscreen));
+        assert_eq!(action_for(HostKey::F(2), m), Some(Action::Reboot));
+        assert_eq!(title(&s), before);
     }
 }

@@ -178,7 +178,10 @@ impl UiState {
             crate::overlay::paint(
                 ctx,
                 rect,
-                &crate::overlay::Overlay::new(status, toolbar_visible, self.mouse),
+                &crate::overlay::Overlay::new(status, toolbar_visible, self.mouse)
+                    .with_subunit_status(
+                        !fullscreen || self.applied.video.fullscreen_show_subunit_status,
+                    ),
             );
         }
         self.disk.drive_menu(
