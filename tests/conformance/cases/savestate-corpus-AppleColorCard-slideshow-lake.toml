@@ -2,7 +2,7 @@ id = "savestate-corpus-AppleColorCard-slideshow-lake"
 story = "HU-0401"
 criterion = "Importar o save-state real AppleColorCard-slideshow-lake.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
 model = "apple2e-enhanced"
-notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
 
 [fixture]
 path = "target/conformance-cache/applewin-test/v2/RGB card/AppleColorCard-slideshow-lake.aws.yaml"
@@ -16,5 +16,5 @@ cycles = 100000
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state AppleColorCard-slideshow-lake.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+source = "AppleWin (fork audetto a1e20c0) --state AppleColorCard-slideshow-lake.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
 trace_rows_sha256 = "52be34f0be26f968f2d3f375afc49731cc81a1aa7a64f1589aa75f7659137fe5"

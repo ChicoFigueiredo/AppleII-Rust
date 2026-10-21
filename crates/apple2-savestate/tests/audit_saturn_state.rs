@@ -35,7 +35,6 @@ fn eight_bank_saturn_round_trips() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-001; remover ignore quando corrigido"]
 fn saturn_with_four_banks_keeps_its_size_through_load() {
     // C++ LanguageCard.cpp:499/:518 grava e le o total real de bancos (4 = 64K). Aqui o nucleo
     // fixa 8 (language_card.rs:116): ao ler um arquivo do AppleWin com 4 bancos, os bancos 4-7
@@ -54,4 +53,33 @@ fn saturn_with_four_banks_keeps_its_size_through_load() {
     assert_ne!(four, text, "campo nao encontrado");
     let loaded = load_aws_yaml(&four, &mut NoImages).unwrap();
     assert_eq!(saturn_banks(&loaded.machine), Some(4));
+}
+
+#[test]
+fn four_bank_saturn_is_saved_and_reloaded_with_four_banks() {
+    // #1486/#1495, AUD-C-003: o save grava o total configurado (LanguageCard.cpp:499) e o
+    // conteudo de cada banco; reler e salvar de novo nao infla para 8 bancos.
+    let mut cfg = MachineConfig::for_model(Model::Apple2Plus);
+    cfg.slots[4] = Some(CardKind::Saturn128K);
+    cfg.saturn_banks[4] = 4;
+    let mut m = Machine::new(cfg);
+    {
+        use apple2_cpu::Bus;
+        m.board_mut().read(0xC0C3);
+        m.board_mut().read(0xC0C3);
+        m.board_mut().read(0xC0C7); // bank 3 (selector 4+3)
+        m.board_mut().write(0xD000, 0x33);
+    }
+    let opts = SaveOptions {
+        extension: false,
+        ..Default::default()
+    };
+    let text = save_aws_yaml(&m, &opts).unwrap().text;
+    assert!(text.contains("Num Saturn Banks: 0x04"), "{text}");
+    assert!(!text.contains("Memory Bank04"));
+    let loaded = load_aws_yaml(&text, &mut NoImages).unwrap();
+    assert_eq!(saturn_banks(&loaded.machine), Some(4));
+    let again = save_aws_yaml(&loaded.machine, &opts).unwrap().text;
+    assert!(again.contains("Num Saturn Banks: 0x04"));
+    assert!(again.contains("Active Saturn Bank: 0x03"));
 }

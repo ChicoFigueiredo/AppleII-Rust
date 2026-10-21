@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -31,6 +32,7 @@
 #include "SaveState.h"
 #include "Speaker.h"
 
+#include "audio.h"
 #include "linux/context.h"
 #include "linux/paddle.h"
 #include "linux/registryclass.h"
@@ -44,7 +46,6 @@ namespace
     FILE *g_out = nullptr;
     uint64_t g_limit = 0; // trace lines are written only while cycle < g_limit
     uint64_t g_lines = 0;
-    bool g_videoUpdate = false; // --video-update: advance the NTSC video scanner (floating bus) per opcode
 
     void traceHook(uint64_t cycle, uint16_t pc, uint8_t op, uint8_t a, uint8_t x, uint8_t y, uint8_t sp, uint8_t p)
     {
@@ -71,19 +72,24 @@ namespace
             return IDOK;
         }
 
-        std::shared_ptr<SoundBuffer> CreateSoundBuffer(uint32_t, uint32_t, int, const char *) override
+        std::shared_ptr<SoundBuffer> CreateSoundBuffer(uint32_t size, uint32_t rate, int channels, const char *name) override
         {
-            return nullptr;
+            return audio_oracle::createSoundBuffer(size, rate, channels, name); // nullptr unless --audio-* is given
         }
 
         // Same batching as CommonFrame::Execute (1 ms slices), but with no video rendering.
         void RunUntil(const uint64_t endCycle)
         {
             const UINT clksPerFrame = NTSC_GetCyclesPerFrame();
-            const uint32_t slice = static_cast<uint32_t>(g_fCurrentCLK6502 * (1.0 / 1000.0));
+            const uint32_t slice = audio_oracle::slice(static_cast<uint32_t>(g_fCurrentCLK6502 * (1.0 / 1000.0)));
             while (g_nCumulativeCycles < endCycle)
             {
-                const uint32_t executed = CpuExecute(slice, g_videoUpdate);
+                // bVideoUpdate = true keeps the NTSC video clock (g_nVideoClockHorz/Vert) running. With
+                // false (the headless frontends' choice) the clock stays at 0,0 forever and every
+                // floating-bus read ($C056, $C050, unclaimed $C0xx...) returns the byte of one fixed
+                // scanner address, which the real AppleWin never does. Rendering still goes to the
+                // (unused) framebuffer; nothing is presented.
+                const uint32_t executed = CpuExecute(slice, true);
                 GetCardMgr().Update(executed);
                 SpkrUpdate(executed);
                 g_dwCyclesThisFrame = (g_dwCyclesThisFrame + executed) % clksPerFrame;
@@ -145,12 +151,13 @@ int main(int argc, char **argv)
             state = argv[++i];
         else if (arg == "--memclear" && hasValue)
             memclear = std::atoi(argv[++i]);
-        else if (arg == "--video-update")
-            g_videoUpdate = true;
         else if (arg == "--cards" && hasValue)
             cards = argv[++i];
         else if (arg == "--meta" && hasValue)
             meta.emplace_back(argv[++i]);
+        else if (audio_oracle::parseArg(i, argc, argv))
+        {
+        }
         else
         {
             usage();
@@ -197,7 +204,7 @@ int main(int argc, char **argv)
         for (UINT slot = SLOT1; slot <= SLOT7; ++slot)
         {
             const SS_CARDTYPE type = (slot == SLOT6 && cards == "disk2") ? CT_Disk2 : CT_Empty;
-            RegSetConfigSlotNewCardType(slot, type);
+            RegSetConfigSlotNewCardType(slot, audio_oracle::cardTypeFor(slot, type));
         }
 
         const LoggerContext loggerContext(false);
@@ -207,6 +214,7 @@ int main(int argc, char **argv)
 
         g_bDisableDirectSound = true;
         g_bDisableDirectSoundMockingboard = true;
+        audio_oracle::begin();
 
         const uint64_t start = g_nCumulativeCycles;
         const uint64_t total = cycles ? cycles : frames * NTSC_GetCyclesPerFrame();
@@ -230,10 +238,12 @@ int main(int argc, char **argv)
         std::fprintf(g_out, "#start_cycle=%" PRIu64 "\n", start);
         std::fprintf(g_out, "#memclear=%d\n", g_nMemoryClearType);
         std::fprintf(g_out, "#ram_init=deterministic (xx28,xx29,xx68,xx69 of pages 00-BF = 00; $4E,$4F = 20)\n");
+        std::fprintf(g_out, "#video_clock=advanced after every opcode (CpuExecute bVideoUpdate=true), as in the Windows AppleWin\n");
         std::fprintf(g_out, "#cards=%s\n", cards.c_str());
         std::fprintf(g_out, "#input=%s\n", input.c_str());
-        std::fprintf(g_out, "#disk=%s\n", disk.empty() ? "none" : disk.c_str());
-        std::fprintf(g_out, "#state=%s\n", state.empty() ? "none" : state.c_str());
+        // Only the file name: the full path depends on the machine that generated the trace.
+        std::fprintf(g_out, "#disk=%s\n", disk.empty() ? "none" : std::filesystem::path(disk).filename().string().c_str());
+        std::fprintf(g_out, "#state=%s\n", state.empty() ? "none" : std::filesystem::path(state).filename().string().c_str());
         for (const std::string &m : meta)
             std::fprintf(g_out, "#%s\n", m.c_str());
         std::fprintf(g_out, "cycle,pc,op,a,x,y,sp,p\n");
@@ -243,6 +253,7 @@ int main(int argc, char **argv)
         g_pfnCpuTraceHook = nullptr;
 
         std::fclose(g_out);
+        audio_oracle::end();
         std::fprintf(stderr, "[oracle] %" PRIu64 " instructions, final cycle %" PRIu64 "\n", g_lines,
             static_cast<uint64_t>(g_nCumulativeCycles));
     }

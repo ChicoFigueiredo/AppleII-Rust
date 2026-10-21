@@ -1,0 +1,759 @@
+# ntsc-ay8913-chunks: clk 1020484, ay8913, seed 2
+clk 1020484
+type ay8913
+reset
+w 7 56 0
+w 8 15 0
+w 9 12 0
+w 10 9 0
+w 0 254 0
+w 1 1 0
+w 2 127 0
+w 3 0 0
+w 4 64 0
+w 5 0 0
+w 7 26 577
+frame 43
+w 7 52 181
+w 12 47 455
+w 3 33 890
+frame 44
+frame 43
+w 10 1 51
+w 3 59 70
+frame 43
+w 13 0 330
+w 7 56 794
+w 7 9 863
+frame 44
+frame 43
+w 0 3 70
+frame 44
+w 3 92 566
+w 5 136 603
+frame 43
+frame 43
+w 5 177 596
+frame 44
+w 1 126 141
+w 10 31 886
+frame 43
+w 4 36 73
+frame 44
+w 13 15 104
+w 2 8 240
+w 7 60 330
+frame 43
+w 7 39 393
+frame 43
+w 4 22 646
+w 13 6 741
+w 4 245 839
+frame 44
+w 13 7 324
+w 8 25 751
+frame 43
+w 0 187 149
+frame 44
+frame 43
+w 0 243 266
+w 0 236 351
+w 13 7 703
+frame 43
+w 10 28 317
+w 4 157 1010
+frame 44
+frame 43
+w 6 10 287
+w 9 23 753
+frame 44
+w 1 126 178
+w 11 1 482
+w 1 29 693
+frame 43
+w 12 173 353
+w 9 1 805
+frame 43
+w 6 20 70
+w 11 2 98
+frame 44
+frame 43
+frame 44
+w 13 2 603
+frame 43
+w 6 27 919
+frame 43
+w 7 2 907
+w 6 20 986
+frame 44
+w 2 166 623
+frame 43
+w 8 13 112
+w 12 1 243
+frame 44
+frame 43
+w 4 122 426
+w 2 213 908
+frame 43
+w 10 11 472
+frame 44
+w 7 4 420
+w 1 228 425
+w 12 2 915
+frame 43
+w 0 205 193
+w 6 24 373
+frame 44
+w 0 248 26
+w 5 7 322
+w 3 44 719
+frame 43
+w 6 15 188
+w 6 8 603
+frame 43
+w 10 18 281
+w 8 0 929
+frame 44
+w 0 156 156
+w 4 210 269
+w 6 21 814
+frame 43
+frame 44
+w 7 36 367
+frame 43
+w 9 10 54
+w 4 57 111
+w 4 59 667
+frame 43
+frame 44
+w 7 52 199
+w 9 4 370
+w 3 16 789
+frame 43
+w 13 11 100
+w 0 170 563
+w 1 255 694
+frame 44
+w 6 16 351
+w 2 87 590
+frame 43
+w 13 8 114
+w 6 2 392
+w 10 24 816
+frame 43
+w 13 14 767
+frame 44
+w 0 141 365
+frame 43
+frame 44
+frame 43
+w 6 16 324
+w 10 11 592
+frame 43
+w 13 6 768
+frame 44
+w 3 14 382
+w 10 3 478
+frame 43
+w 4 219 205
+w 5 90 330
+frame 44
+w 1 42 16
+frame 43
+frame 43
+w 2 207 195
+w 8 19 269
+w 1 119 491
+frame 44
+w 2 20 504
+frame 43
+frame 44
+w 1 30 375
+frame 43
+w 10 9 454
+w 3 5 464
+frame 43
+w 13 11 131
+w 0 40 809
+w 6 5 931
+frame 44
+frame 43
+frame 44
+w 4 9 336
+w 5 116 458
+w 1 81 520
+frame 43
+w 5 69 780
+frame 43
+frame 44
+frame 43
+w 7 33 389
+w 11 1 548
+w 10 11 554
+frame 44
+frame 43
+frame 43
+w 12 0 32
+w 12 2 384
+w 5 184 740
+frame 44
+w 0 147 208
+w 8 3 545
+w 11 3 549
+frame 43
+w 9 11 332
+w 1 49 931
+w 9 5 947
+frame 44
+w 7 26 403
+w 10 19 922
+frame 43
+w 7 31 623
+frame 43
+w 6 18 256
+w 13 7 1000
+frame 44
+w 5 180 88
+w 7 14 507
+w 7 38 717
+frame 43
+w 12 1 433
+frame 44
+frame 43
+w 1 2 467
+frame 43
+w 4 87 774
+w 11 215 906
+w 8 26 983
+frame 44
+w 6 13 691
+w 3 155 762
+w 6 26 830
+frame 43
+w 9 31 699
+frame 44
+w 11 106 85
+frame 43
+w 1 178 76
+w 10 0 145
+w 6 21 405
+frame 43
+frame 44
+w 10 7 348
+w 3 249 652
+frame 43
+w 9 14 95
+frame 44
+frame 43
+w 3 153 630
+frame 43
+w 3 131 531
+frame 44
+frame 43
+w 10 19 55
+w 11 1 625
+frame 44
+frame 43
+w 8 0 260
+w 0 5 621
+w 4 168 978
+frame 43
+frame 44
+w 6 4 493
+w 12 95 922
+frame 43
+w 5 33 86
+w 10 16 711
+w 8 8 838
+frame 44
+w 6 14 19
+w 11 2 699
+frame 43
+w 7 15 64
+w 10 0 333
+w 3 29 471
+frame 43
+frame 44
+w 8 0 747
+w 0 71 860
+frame 43
+frame 44
+frame 43
+w 6 15 79
+w 8 5 338
+w 13 3 912
+frame 43
+frame 44
+frame 43
+w 6 23 154
+w 13 9 405
+w 13 6 593
+frame 44
+w 8 25 523
+frame 43
+w 12 0 54
+frame 43
+frame 44
+w 10 14 210
+w 1 197 492
+w 10 6 665
+frame 43
+w 13 2 245
+w 0 164 381
+frame 44
+w 7 62 311
+w 11 181 598
+frame 43
+w 10 30 348
+w 9 19 964
+frame 43
+w 4 0 559
+w 1 206 880
+w 2 237 1008
+frame 44
+w 8 2 77
+w 7 40 802
+frame 43
+w 5 222 296
+w 3 98 449
+w 13 1 818
+frame 44
+w 2 203 744
+w 12 0 963
+frame 43
+w 11 3 200
+w 7 56 588
+w 6 11 938
+frame 43
+frame 44
+w 7 37 195
+w 5 78 424
+frame 43
+w 3 134 356
+w 10 31 852
+w 12 103 864
+frame 44
+w 2 200 442
+w 10 30 877
+frame 43
+w 10 1 403
+w 4 4 592
+frame 43
+frame 44
+w 10 17 34
+w 0 175 988
+frame 43
+w 1 129 538
+frame 44
+frame 43
+w 2 161 244
+w 10 25 689
+w 4 13 702
+frame 43
+w 5 31 67
+w 2 204 339
+w 6 10 440
+frame 44
+w 9 14 347
+w 7 51 738
+w 3 7 913
+frame 43
+w 3 145 153
+frame 44
+w 5 254 614
+frame 43
+w 9 1 881
+w 6 23 971
+frame 43
+w 8 26 730
+w 8 15 966
+w 9 2 971
+frame 44
+w 10 29 28
+w 8 7 168
+w 6 4 354
+frame 43
+w 1 142 725
+w 3 198 939
+frame 44
+frame 43
+frame 43
+frame 44
+w 11 156 189
+frame 43
+frame 44
+w 12 131 548
+frame 43
+w 10 11 160
+w 2 68 773
+frame 43
+frame 44
+w 10 30 470
+frame 43
+frame 44
+frame 43
+w 9 29 451
+frame 43
+w 3 199 392
+w 4 81 553
+frame 44
+w 1 157 754
+frame 43
+frame 44
+w 1 109 450
+w 13 3 765
+frame 43
+w 6 19 127
+w 5 84 194
+w 7 5 529
+frame 43
+frame 44
+w 10 31 356
+frame 43
+w 8 24 445
+w 3 52 973
+frame 44
+frame 43
+w 10 29 574
+frame 43
+w 7 27 108
+w 9 20 193
+frame 44
+w 6 16 75
+w 13 5 798
+w 5 61 965
+frame 43
+w 4 57 60
+w 6 17 257
+w 7 51 884
+frame 44
+w 7 2 481
+frame 43
+w 11 1 326
+w 12 163 589
+frame 43
+w 10 20 137
+w 3 160 161
+w 5 111 707
+frame 44
+w 2 72 189
+w 1 242 328
+w 6 9 424
+frame 43
+frame 44
+frame 43
+frame 43
+w 12 120 123
+w 11 3 206
+w 10 14 798
+frame 44
+w 10 26 282
+w 1 99 536
+frame 43
+w 1 16 609
+frame 44
+frame 43
+w 6 29 298
+w 8 28 474
+w 9 6 553
+frame 43
+frame 44
+frame 43
+w 7 41 482
+w 13 14 488
+frame 44
+w 6 7 762
+frame 43
+w 4 168 472
+w 5 150 519
+frame 43
+w 12 2 306
+w 13 9 842
+frame 44
+frame 43
+w 4 186 424
+frame 44
+w 1 72 144
+w 7 41 515
+w 6 21 593
+frame 43
+w 3 227 100
+w 8 23 390
+w 2 177 652
+frame 43
+frame 44
+w 5 112 196
+w 7 34 990
+frame 43
+frame 44
+w 10 20 786
+w 7 11 788
+w 7 32 870
+frame 43
+w 13 2 367
+w 10 20 443
+w 3 99 585
+frame 43
+frame 44
+frame 43
+w 1 1 352
+w 13 5 498
+frame 44
+w 11 1 351
+w 12 3 589
+w 6 11 908
+frame 43
+w 10 6 592
+w 0 101 782
+frame 43
+w 1 101 226
+w 5 175 529
+frame 44
+frame 43
+w 0 249 461
+frame 44
+frame 43
+w 3 18 715
+w 2 132 733
+w 7 43 805
+frame 43
+w 9 30 748
+w 9 3 999
+frame 44
+frame 43
+w 0 200 282
+w 13 4 307
+w 7 45 496
+frame 44
+w 5 77 670
+frame 43
+frame 43
+w 4 126 972
+frame 44
+w 6 10 567
+w 3 98 650
+frame 43
+w 11 122 286
+w 1 95 442
+w 0 53 720
+frame 44
+w 13 6 248
+w 7 12 279
+w 13 1 322
+frame 43
+w 3 191 498
+w 2 75 861
+frame 43
+w 9 13 285
+frame 44
+w 2 200 98
+w 7 12 179
+w 5 234 695
+frame 43
+w 7 36 85
+w 7 5 482
+frame 44
+w 5 49 355
+w 7 63 468
+w 11 1 596
+frame 43
+frame 43
+frame 44
+w 2 37 654
+w 13 15 857
+w 12 141 971
+frame 43
+w 8 17 295
+frame 44
+frame 43
+frame 43
+w 5 234 64
+w 2 37 629
+w 4 71 872
+frame 44
+frame 43
+frame 44
+w 10 6 101
+w 10 15 367
+w 0 171 804
+frame 43
+w 13 13 797
+frame 43
+w 4 15 420
+frame 44
+frame 43
+w 10 26 107
+frame 44
+w 10 22 376
+w 7 34 614
+w 5 107 870
+frame 43
+frame 43
+w 5 69 1000
+frame 44
+w 3 253 251
+w 3 90 657
+frame 43
+frame 44
+frame 43
+frame 43
+w 13 9 399
+w 9 0 893
+frame 44
+w 8 25 481
+w 2 215 661
+w 3 248 890
+frame 43
+w 13 9 776
+frame 44
+w 3 10 459
+w 5 132 614
+frame 43
+w 1 182 875
+w 9 0 929
+frame 43
+w 10 7 456
+w 0 245 791
+frame 44
+w 13 15 169
+w 9 7 342
+w 5 200 360
+frame 43
+w 6 11 51
+w 6 28 65
+w 5 104 67
+frame 44
+w 6 23 301
+w 7 49 515
+frame 43
+w 8 19 982
+frame 43
+w 8 30 996
+frame 44
+w 13 1 215
+frame 43
+w 6 22 85
+w 7 49 368
+w 6 10 569
+frame 44
+w 10 15 254
+w 6 28 523
+w 1 38 695
+frame 43
+frame 43
+w 13 10 265
+w 11 3 858
+frame 44
+frame 43
+w 7 17 6
+w 9 24 1002
+frame 44
+w 9 10 521
+w 6 11 802
+w 6 4 855
+frame 43
+w 9 2 329
+w 6 6 440
+frame 43
+w 13 4 147
+w 1 62 501
+frame 44
+w 9 9 735
+frame 43
+frame 44
+w 2 220 175
+w 4 179 913
+frame 43
+frame 43
+frame 44
+w 6 27 733
+w 6 0 909
+w 3 79 952
+frame 43
+frame 44
+frame 43
+w 1 9 282
+w 10 18 518
+w 3 57 786
+frame 43
+w 2 87 363
+w 11 3 453
+frame 44
+w 10 9 90
+w 13 1 432
+w 2 146 850
+frame 43
+w 4 93 893
+w 6 16 907
+frame 44
+w 4 138 266
+w 10 17 714
+frame 43
+w 4 250 433
+w 13 15 899
+frame 43
+w 0 140 205
+w 0 47 806
+w 1 132 827
+frame 44
+w 0 178 10
+frame 43
+w 2 75 650
+frame 44
+frame 43
+w 10 11 346
+w 6 21 513
+w 2 43 917
+frame 43
+w 3 210 78
+frame 44
+w 5 221 756
+frame 43
+w 8 10 918
+frame 44
+w 13 4 264
+w 0 118 312
+w 9 26 880
+frame 43
+w 0 248 253
+frame 43
+frame 44
+w 7 11 11
+w 7 56 481
+frame 43
+w 7 6 639
+w 11 0 802
+w 4 30 967
+frame 44
+frame 43
+w 12 0 968
+frame 43
+frame 44
+frame 43
+w 1 141 321
+w 6 0 542
+frame 44
+w 7 29 39
+w 6 23 132
+w 6 13 943
+frame 43
+w 10 5 275
+w 11 167 365
+w 3 58 986
+frame 43
+w 0 214 93
+w 12 1 627
+w 13 0 657
+frame 44
+frame 43
+w 3 3 331
+w 7 15 387
+frame 44
+w 3 167 519
+frame 43
+w 4 148 739
+frame 43
+w 3 55 145
+w 4 51 200
+w 7 13 576
+frame 44

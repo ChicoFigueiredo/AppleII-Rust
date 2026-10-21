@@ -4,9 +4,11 @@
 
 #![forbid(unsafe_code)]
 
+pub mod audio;
 pub mod case;
 pub mod import_check;
 pub mod manifest;
+pub mod pcm;
 pub mod report;
 pub mod runner;
 pub mod sha256;

@@ -1,0 +1,42 @@
+titulo = "Modo decimal (BCD)"
+enunciado = """
+$0300 e $0301 guardam dois números em BCD (cada nibble é um dígito: $19 é "19").
+Some os dois no modo decimal: o resultado de dois dígitos vai em $0302 e o
+"vai um" (0 ou 1) em $0303. No final o modo decimal deve estar desligado (flag D = 0).
+Termine com BRK.
+"""
+dica = "SED liga o modo decimal e CLD o desliga. Para ler o carry em A, use LDA #0 seguido de ROL A."
+org = 0x0800
+
+[[caso]]
+nome = "19 + 23 = 42"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "19 23"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "42 00"
+[caso.esperado.flags]
+d = false
+
+[[caso]]
+nome = "58 + 67 = 125 (25 e vai um)"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "58 67"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "25 01"
+[caso.esperado.flags]
+d = false
+
+[[caso]]
+nome = "99 + 01 = 100 (00 e vai um)"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "99 01"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "00 01"
+[caso.esperado.flags]
+d = false

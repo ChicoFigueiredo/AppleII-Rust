@@ -15,5 +15,5 @@ cycles = 20000
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state irq-pending.aws.yaml --cycles 20000 --video-update; ver tools/conformance/savestate-compare.py"
+source = "AppleWin (fork audetto a1e20c0) --state irq-pending.aws.yaml --cycles 20000; ver tools/conformance/savestate-compare.py"
 trace_rows_sha256 = "d0e191daad4a212b0a37ca939e7231faf6b2cd0ae2a026b7001f0be081981318"

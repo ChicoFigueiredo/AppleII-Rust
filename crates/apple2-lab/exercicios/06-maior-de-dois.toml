@@ -1,0 +1,35 @@
+titulo = "O maior de dois números"
+enunciado = """
+Guarde em $0302 o maior dos dois números sem sinal que estão em $0300 e $0301.
+Termine com BRK. O desafio: faça com no máximo 40 ciclos.
+"""
+dica = "CMP deixa o carry ligado quando A é maior ou igual ao operando (BCS desvia nesse caso)."
+org = 0x0800
+max_ciclos = 40
+
+[[caso]]
+nome = "primeiro maior"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "90 10"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "90"
+
+[[caso]]
+nome = "segundo maior"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "10 FF"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "FF"
+
+[[caso]]
+nome = "iguais"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "42 42"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "42"

@@ -29,6 +29,7 @@ mod misc;
 pub mod powerup;
 pub mod yaml;
 
+pub use apple2::RgbCardState;
 pub use fsio::{write_atomic, write_atomic_with};
 pub use host::{default_card, ImageRequest, LoadHost};
 
@@ -70,6 +71,9 @@ pub struct SaveOptions {
     /// Add the `AppleII-Rust Extension` block (exact resume in our loader). Off gives a file made
     /// only of AppleWin units.
     pub extension: bool,
+    /// RGB card registers from the video renderer (`Renderer::rgb_registers`), written in the
+    /// aux card's `AppleColor RGB Adaptor` map. The machine core does not hold them.
+    pub rgb: RgbCardState,
 }
 
 impl Default for SaveOptions {
@@ -78,6 +82,7 @@ impl Default for SaveOptions {
             date_stamp: String::new(),
             app_version: format!("AppleII-Rust {}", env!("CARGO_PKG_VERSION")),
             extension: true,
+            rgb: RgbCardState::default(),
         }
     }
 }
@@ -95,6 +100,9 @@ pub struct Loaded {
     pub machine: Machine,
     /// Non-fatal problems: missing images, cards the host could not build, unknown units...
     pub warnings: Vec<String>,
+    /// RGB card registers found in the aux unit, for `Renderer::set_rgb_registers` (None when
+    /// the file has no RGB block).
+    pub rgb: Option<RgbCardState>,
 }
 
 /// Writes `machine` as an AppleWin save-state (`Snapshot_SaveState`).
@@ -127,7 +135,7 @@ pub fn save_aws_yaml(machine: &Machine, opts: &SaveOptions) -> Result<Saved, Err
     if let Some(e) = ext_err {
         return Err(e);
     }
-    apple2::save_aux(&mut w, &st);
+    apple2::save_aux(&mut w, &st, &opts.rgb);
 
     // Unit: Slots
     enum Entry<'a> {
@@ -323,6 +331,10 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     if let Some(e) = &extension {
         cfg = e.state.config.clone();
     }
+    // The file's `Num Saturn Banks` is the card's real size (LanguageCard.cpp:499/:518).
+    for l in lc_loads.iter().filter(|l| l.active_bank.is_some()) {
+        cfg.saturn_banks[l.slot as usize] = l.banks.len().clamp(1, 8) as u8;
+    }
     let mut machine =
         Machine::try_new(cfg.clone()).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut inserted = [false; 8];
@@ -393,10 +405,7 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
             st.interrupts.set_irq(apple2_core::IrqSource::Mouse, true);
         }
     }
-    let power_on = {
-        let pattern = ctx.host.memory_init_pattern();
-        powerup::power_on_ram(pattern, &mut || ctx.host.power_on_random())
-    };
+    let power_on = powerup::power_on_ram(&ctx.host.ram_init());
     apple2::apply_apple2(&mut st, &a2, &lc_loads, &power_on, ctx.warnings)?;
     if let Some(a) = &aux {
         apple2::load_aux_memory(&mut st, a)?;
@@ -416,7 +425,12 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
             .map_err(|e| Error::Unsupported(e.to_string()))?;
         rearm_card_events(&mut machine);
     }
-    Ok(Loaded { machine, warnings })
+    let rgb = aux.as_ref().and_then(|a| a.rgb);
+    Ok(Loaded {
+        machine,
+        warnings,
+        rgb,
+    })
 }
 
 /// Re-creates the synchronous events a card keeps pending in AppleWin's save-state (the Disk II

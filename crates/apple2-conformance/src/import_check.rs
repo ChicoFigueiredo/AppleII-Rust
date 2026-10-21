@@ -11,7 +11,7 @@
 //!   numbers (`0x0A` = `10`); a field the file has and the re-save lacks is a difference.
 
 use apple2_core::memory::mf;
-use apple2_core::{Machine, Model};
+use apple2_core::Machine;
 use apple2_cpu::Bus;
 use apple2_savestate::yaml::{self, Node};
 use apple2_savestate::{save_aws_yaml, SaveOptions};
@@ -369,11 +369,7 @@ pub fn direct_checks(text: &str, machine: &mut Machine) -> Result<Vec<Diff>, Str
     let st = machine.save_state();
     let want_main = sub(a2, "Main Memory").map(|m| decode_memory(m, 0x10000));
     if let Some((want, seen)) = want_main {
-        let len = if model == Model::Apple2 && want.len() > 0xC000 {
-            0xC000
-        } else {
-            0xC000
-        };
+        let len = 0xC000;
         bank_diff(
             "Main Memory/0000-BFFF",
             &want[..len],

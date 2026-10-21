@@ -246,8 +246,11 @@ fn floating_bus_follows_page2_hires_mixed_and_80store() {
     assert_eq!(read(&mut m, 100, 29), 1); // TEXT page 1
     bus_write(&mut m, 0xC055); // PAGE2
     assert_eq!(read(&mut m, 100, 29), 2);
-    bus_write(&mut m, 0xC001); // 80STORE: PAGE2 no longer shows page 2
-    assert_eq!(read(&mut m, 100, 29), 1);
+    // 80STORE: PAGE2 no longer shows page 2. AppleWin indexes the CPU read image (`mem`, see
+    // Memory.cpp:2460 and AUD-C-050), where 80STORE+PAGE2 maps the AUX text page: aux byte.
+    m.poke_aux(0x062C, 7);
+    bus_write(&mut m, 0xC001);
+    assert_eq!(read(&mut m, 100, 29), 7);
     bus_write(&mut m, 0xC000);
     bus_write(&mut m, 0xC054);
     bus_write(&mut m, 0xC050); // graphics (LORES)

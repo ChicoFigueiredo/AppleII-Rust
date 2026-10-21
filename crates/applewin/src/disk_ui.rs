@@ -177,6 +177,14 @@ impl DiskUi {
                     ev.push(UiEvent::Action(Action::DriveSelect(d as u8)));
                     close = true;
                 }
+                if ui
+                    .button("Insert disk image (read only)...")
+                    .on_hover_text("Open as Read Only: the disk is mounted write-protected")
+                    .clicked()
+                {
+                    ev.push(UiEvent::PickDiskReadOnly(d));
+                    close = true;
+                }
                 ui.add_enabled_ui(st.image.is_some(), |ui| {
                     if ui.button("Eject").clicked() {
                         ev.push(UiEvent::EjectDisk(d));
@@ -294,8 +302,9 @@ impl DiskUi {
     }
 }
 
-/// Hard disk controller units of the applied settings. Changing an image rebuilds the machine
-/// (there is no hot-plug in the emulation thread yet), so it goes through `UiEvent::Apply`.
+/// Hard disk controller units of the applied settings. Changing an image is hot (AppleWin
+/// `HarddiskInterfaceCard::Insert`): it goes through `UiEvent::ApplyLive` and the machine keeps
+/// running (see [`crate::hotswap`]).
 fn hdd_section(ui: &mut egui::Ui, settings: &Settings, ev: &mut Vec<UiEvent>) {
     let Some((slot, images)) = settings
         .slots
@@ -310,7 +319,7 @@ fn hdd_section(ui: &mut egui::Ui, settings: &Settings, ev: &mut Vec<UiEvent>) {
         return;
     };
     ui.separator();
-    ui.strong(format!("Hard disks (slot {slot}) - restarts the emulator"));
+    ui.strong(format!("Hard disks (slot {slot})"));
     for (u, img) in images.iter().enumerate() {
         ui.horizontal(|ui| {
             let name = img
@@ -327,7 +336,7 @@ fn hdd_section(ui: &mut egui::Ui, settings: &Settings, ev: &mut Vec<UiEvent>) {
                     )
                     .pick_file()
                 {
-                    ev.push(UiEvent::Apply(Box::new(with_hdd(
+                    ev.push(UiEvent::ApplyLive(Box::new(with_hdd(
                         settings,
                         slot,
                         u,
@@ -336,7 +345,9 @@ fn hdd_section(ui: &mut egui::Ui, settings: &Settings, ev: &mut Vec<UiEvent>) {
                 }
             }
             if img.is_some() && ui.small_button("Unplug").clicked() {
-                ev.push(UiEvent::Apply(Box::new(with_hdd(settings, slot, u, None))));
+                ev.push(UiEvent::ApplyLive(Box::new(with_hdd(
+                    settings, slot, u, None,
+                ))));
             }
         });
     }

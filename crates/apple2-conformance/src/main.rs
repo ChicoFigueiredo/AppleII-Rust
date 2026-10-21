@@ -1,10 +1,12 @@
 //! `conformance`: run declarative cases, generate and diff reference traces.
 
+use apple2_conformance::audio;
 use apple2_conformance::case::{parse_model, InputEvent, RunSpec};
 use apple2_conformance::manifest::TestResult;
+use apple2_conformance::pcm;
 use apple2_conformance::report::{counts, write_report};
 use apple2_conformance::runner::{
-    generate_trace, generate_trace_from, load_cases, read_trace, run_case, Env,
+    generate_trace, generate_trace_from, load_cases, read_trace, run_case, Disk2Setup, Env,
 };
 use apple2_conformance::trace::{compare_with, parse_field_list, CompareOptions};
 use apple2_conformance::Case;
@@ -14,12 +16,17 @@ use std::process::ExitCode;
 const USAGE: &str = "\
 uso:
   conformance run (--all | --case ID [--case ID ...]) --report DIR [--root DIR]
-  conformance trace (--model M | --state FILE.aws.yaml [--image-dir DIR]...) (--frames N | --cycles N) [--cpu 6502|65C02] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
+  conformance trace (--model M | --state FILE.aws.yaml [--image-dir DIR]...) (--frames N | --cycles N) [--cpu 6502|65C02] [--cards none|disk2] [--disk IMAGEM] [--memclear N] [--deterministic-ram | --ram-seed N] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
   conformance check-import FILE.aws.yaml [--image-dir DIR]...
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
+  conformance audio-run --case ID --out-dir DIR [--root DIR] [--trace]
+  conformance pcm-compare ESPERADO.pcm OBTIDO.pcm [--channels N] [--f-tol X --rms-tol X --peak-tol X]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
-Código de saída de `run`: 0 se tudo PASS, 1 se algum FAIL, 2 se algum BLOCKED (sem FAIL).
+Código de saída de `run`: 0 se tudo PASS, 1 se algum FAIL sem `known_divergence`, 2 se algum BLOCKED (sem FAIL),
+3 se os únicos FAIL são divergências conhecidas (`oracle.known_divergence`); o FAIL continua FAIL no manifesto.
+--memclear N: padrão de RAM do power-on (-1 aleatório, 0-7; padrão 2 = FF FF 00 00, como o AppleWin).
+--deterministic-ram (padrão): sorteio = 0 e $4E=$4F=$20, idêntico ao oráculo; --ram-seed N sorteia a partir de N.
 TEXT aceita \\r \\n \\\\ e \\xNN. Modelos: apple2 apple2plus apple2jplus apple2e apple2e-enhanced
 pravets82 pravets8m pravets8a tk3000e base64a.";
 
@@ -30,6 +37,8 @@ fn main() -> ExitCode {
         Some("trace") => cmd_trace(&args[1..]),
         Some("diff") => cmd_diff(&args[1..]),
         Some("check-import") => cmd_check_import(&args[1..]),
+        Some("audio-run") => cmd_audio_run(&args[1..]),
+        Some("pcm-compare") => cmd_pcm_compare(&args[1..]),
         Some("-h" | "--help" | "help") => {
             println!("{USAGE}");
             Ok(0)
@@ -99,6 +108,7 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
             .collect::<Result<_, _>>()?
     };
     let mut outcomes = Vec::new();
+    let mut unexpected_fail = false;
     for c in selected {
         let o = run_case(&env, c);
         println!(
@@ -108,6 +118,9 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
             o.seconds,
             o.manifest.actual.lines().next().unwrap_or("")
         );
+        if o.manifest.result == TestResult::Fail && c.oracle.known_divergence.is_none() {
+            unexpected_fail = true;
+        }
         outcomes.push(o);
     }
     write_report(&report, &outcomes).map_err(|e| format!("{}: {e}", report.display()))?;
@@ -118,10 +131,12 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
         .map(|r| format!("{r}={}", c[r]))
         .collect();
     println!("relatório em {} ({})", report.display(), line.join(" "));
-    Ok(if c[&TestResult::Fail] > 0 {
+    Ok(if unexpected_fail {
         1
     } else if c[&TestResult::Blocked] > 0 {
         2
+    } else if c[&TestResult::Fail] > 0 {
+        3
     } else {
         0
     })
@@ -129,6 +144,9 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
 
 fn cmd_trace(rest: &[String]) -> Result<u8, String> {
     let (mut model, mut frames, mut cycles, mut cpu, mut out) = (None, None, None, None, None);
+    let mut memclear = 2i32;
+    let (mut with_disk2, mut disk) = (false, None::<PathBuf>);
+    let mut ram_seed: Option<u32> = None;
     let mut inputs = Vec::new();
     let (mut state, mut image_dirs) = (None, Vec::<PathBuf>::new());
     let mut extra_meta: Vec<(&str, &str)> = Vec::new();
@@ -146,6 +164,25 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
             "--frames" => frames = Some(a.value(arg)?.parse::<u64>().map_err(|e| e.to_string())?),
             "--cycles" => cycles = Some(a.value(arg)?.parse::<u64>().map_err(|e| e.to_string())?),
             "--cpu" => cpu = Some(a.value(arg)?),
+            "--cards" => match a.value(arg)? {
+                "disk2" => with_disk2 = true,
+                "none" => with_disk2 = false,
+                o => return Err(format!("--cards `{o}`: use none ou disk2")),
+            },
+            "--disk" => {
+                disk = Some(PathBuf::from(a.value(arg)?));
+                with_disk2 = true;
+            }
+            "--memclear" => {
+                memclear = a.value(arg)?.parse::<i32>().map_err(|e| e.to_string())?;
+                if !(-1..=7).contains(&memclear) {
+                    return Err("--memclear: use -1 a 7".into());
+                }
+            }
+            "--deterministic-ram" => ram_seed = None,
+            "--ram-seed" => {
+                ram_seed = Some(a.value(arg)?.parse::<u32>().map_err(|e| e.to_string())?)
+            }
             "--input" => inputs.push(InputEvent::parse_cli(a.value(arg)?)?),
             "-o" | "--output" => out = Some(PathBuf::from(a.value(arg)?)),
             o => return Err(format!("argumento desconhecido `{o}`")),
@@ -180,6 +217,14 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
         Some("65C02") | Some("65c02") => Some(true),
         Some(o) => return Err(format!("--cpu `{o}`: use 6502, 65C02 ou auto")),
     };
+    cfg.ram_init = apple2_core::RamInit {
+        pattern: memclear,
+        random: ram_seed.map_or(
+            apple2_core::RandomSource::Zero,
+            apple2_core::RandomSource::Seed,
+        ),
+    };
+    let memclear_s = memclear.to_string();
     let rom_sha = model
         .system_rom()
         .map(apple2_conformance::sha256::sha256_hex)
@@ -194,13 +239,19 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
         ("source", "apple2-rust"),
         ("model", model_name),
         ("cpu", cpu_name),
+        ("memclear", memclear_s.as_str()),
+        ("cards", if with_disk2 { "disk2" } else { "none" }),
         ("rom_sha256", rom_sha.as_str()),
     ];
     if !input_desc.is_empty() {
         meta.push(("input", input_desc.as_str()));
     }
     meta.extend(extra_meta);
-    let bytes = generate_trace(cfg, &run, &inputs, &meta)?;
+    let disk2 = with_disk2.then(|| Disk2Setup {
+        slot: 6,
+        image: disk.clone(),
+    });
+    let bytes = generate_trace(cfg, &run, &inputs, &meta, disk2.as_ref())?;
     if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
@@ -346,4 +397,107 @@ fn cmd_diff(rest: &[String]) -> Result<u8, String> {
             Ok(1)
         }
     }
+}
+
+/// Runs an `audio-events` case on the Rust machine and writes `ID.events`, `ID.mb.pcm`,
+/// `ID.spkr.pcm` (and `ID.trace.csv` with `--trace`) to DIR, without comparing anything.
+fn cmd_audio_run(rest: &[String]) -> Result<u8, String> {
+    let (mut id, mut out, mut root, mut with_trace) = (None, None, None, false);
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        match arg {
+            "--case" => id = Some(a.value(arg)?.to_string()),
+            "--out-dir" => out = Some(PathBuf::from(a.value(arg)?)),
+            "--root" => root = Some(PathBuf::from(a.value(arg)?)),
+            "--trace" => with_trace = true,
+            o => return Err(format!("argumento desconhecido `{o}`")),
+        }
+    }
+    let id = id.ok_or("--case ID é obrigatório")?;
+    let out = out.ok_or("--out-dir DIR é obrigatório")?;
+    let env = Env::detect(root.as_deref());
+    let cases = load_cases(&env.root.join("cases"))?;
+    let case = cases
+        .iter()
+        .find(|c| c.id == id)
+        .ok_or_else(|| format!("caso `{id}` não existe"))?;
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let mut tw = if with_trace {
+        Some(
+            apple2_conformance::TraceWriter::new(Vec::new(), &[("source", "apple2-rust")])
+                .map_err(|e| e.to_string())?,
+        )
+    } else {
+        None
+    };
+    let run = audio::run(case, &env, tw.as_mut())?;
+    let lines: Vec<String> = run.events.iter().map(|(c, e)| e.line(*c)).collect();
+    let w = |name: String, bytes: &[u8]| {
+        std::fs::write(out.join(&name), bytes).map_err(|e| format!("{name}: {e}"))
+    };
+    w(
+        format!("{id}.events"),
+        audio::render_lines(&lines).as_bytes(),
+    )?;
+    let le = |v: &[i16]| v.iter().flat_map(|s| s.to_le_bytes()).collect::<Vec<u8>>();
+    w(format!("{id}.mb.pcm"), &le(&run.mb_pcm))?;
+    w(format!("{id}.spkr.pcm"), &le(&run.spkr_pcm))?;
+    if let Some(t) = tw {
+        w(
+            format!("{id}.trace.csv"),
+            &t.finish().map_err(|e| e.to_string())?,
+        )?;
+    }
+    println!(
+        "{id}: {} eventos, {} quadros de PCM do Mockingboard, {} do alto-falante, {} ciclos",
+        lines.len(),
+        run.mb_pcm.len() / 2,
+        run.spkr_pcm.len(),
+        run.final_cycle
+    );
+    for wmsg in &run.warnings {
+        eprintln!("aviso: {wmsg}");
+    }
+    Ok(0)
+}
+
+/// Prints the PCM metrics of two raw s16le files (used to calibrate the limits with the oracle
+/// against itself). The limits only matter for the verdict line.
+fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
+    let (mut files, mut channels) = (Vec::new(), 2usize);
+    let mut l = pcm::Limits {
+        f_tol: 0.01,
+        rms_tol: 0.02,
+        peak_tol: 0.02,
+    };
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        let num = |v: &str| v.parse::<f64>().map_err(|e| e.to_string());
+        match arg {
+            "--channels" => {
+                channels = a
+                    .value(arg)?
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| e.to_string())?
+            }
+            "--f-tol" => l.f_tol = num(a.value(arg)?)?,
+            "--rms-tol" => l.rms_tol = num(a.value(arg)?)?,
+            "--peak-tol" => l.peak_tol = num(a.value(arg)?)?,
+            f if !f.starts_with("--") => files.push(PathBuf::from(f)),
+            o => return Err(format!("argumento desconhecido `{o}`")),
+        }
+    }
+    let [e, o] = files.as_slice() else {
+        return Err("pcm-compare precisa de ESPERADO.pcm e OBTIDO.pcm".into());
+    };
+    let rd = |p: &PathBuf| {
+        std::fs::read(p)
+            .map(|b| pcm::read_s16le(&b))
+            .map_err(|e| format!("{}: {e}", p.display()))
+    };
+    let m = pcm::measure(&rd(e)?, &rd(o)?, channels);
+    println!("{}", audio::describe_measures(&m));
+    let v = pcm::decide(&m, &l);
+    println!("{v:?}");
+    Ok(u8::from(matches!(v, pcm::Verdict::Fail(_))))
 }

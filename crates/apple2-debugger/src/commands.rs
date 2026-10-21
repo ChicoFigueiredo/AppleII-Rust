@@ -88,13 +88,14 @@ impl Debugger {
             let hex_prefix_ok = nlen >= 2 && chars[..nlen - 1].iter().all(|c| is_hex(*c));
             if hex_prefix_ok {
                 let last = chars[nlen - 1].to_ascii_uppercase();
-                let addr = hex_prefix(&name[..name.len() - 1]);
+                let stem: String = chars[..nlen - 1].iter().collect();
+                let addr = hex_prefix(&stem);
                 if last == 'G' {
                     m.cpu_mut().pc = addr;
                     self.exit(m);
                     return upd::ALL;
                 } else if last == 'L' && !name.eq_ignore_ascii_case("cl") {
-                    raw[0].text = name[..name.len() - 1].to_string();
+                    raw[0].text = stem;
                     raw.insert(
                         0,
                         Arg {
@@ -308,11 +309,11 @@ impl Debugger {
             BreakpointSave => self.cmd_bp_save(a),
             BreakpointChange => self.cmd_bp_change(m, a),
             // Config
-            Benchmark => self.not_available("BENCHMARK (needs the frontend)"),
+            Benchmark => self.cmd_benchmark(m),
             ConfigBw | ConfigColor | ConfigMonochrome => self.cmd_config_color(a, cmd),
             ConfigDisasm => self.cmd_config_disasm(a),
-            ConfigFont => self.not_available("FONT (the frontend owns fonts)"),
-            ConfigHcolor => self.not_available("HCOLOR (needs the video crate)"),
+            ConfigFont => self.cmd_config_font(a),
+            ConfigHcolor => self.cmd_config_hcolor(a),
             ConfigLoad => self.cmd_config_load(m, a),
             ConfigSave => self.cmd_config_save(m, a),
             ConfigGetDebugDir => self.cmd_pwd(a),
@@ -326,7 +327,7 @@ impl Debugger {
             CursorPageDown256 => self.cursor_page(m, false, 256),
             CursorPageDown4k => self.cursor_page(m, false, 4096),
             // Cycles
-            CyclesInfo => self.cmd_cycles_info(a),
+            CyclesInfo => self.cmd_cycles_info(m, a),
             CyclesReset => self.cmd_cycles_reset(m),
             // Disassembler data
             DisasmData | DefineDataByte1 => self.cmd_define_data(m, a, crate::disasm::Nop::Byte1),
@@ -341,7 +342,7 @@ impl Debugger {
             DefineAddrWord => self.cmd_define_data(m, a, crate::disasm::Nop::Address),
             DisasmCode => self.cmd_disasm_code(m, a),
             DisasmList => self.cmd_disasm_list(),
-            Disk => self.not_available("DISK (the storage crate is wired by the frontend)"),
+            Disk => self.cmd_disk(m, a),
             // Flags
             FlagClear | FlagSet => self.cmd_flag_list(m, a, cmd == FlagSet),
             FlagClrC | FlagClrZ | FlagClrI | FlagClrD | FlagClrB | FlagClrR | FlagClrV
@@ -370,7 +371,7 @@ impl Debugger {
             MemorySearch | MemorySearchHex => self.cmd_memory_search(m, a),
             MemoryFindResults => self.search_display(),
             MemoryFill => self.cmd_memory_fill(m, a),
-            Ntsc => self.not_available("NTSC (needs the video crate)"),
+            Ntsc => self.cmd_ntsc(a),
             TextSave => self.cmd_text_save(m, a),
             // Output / scripts
             OutputCalc => self.cmd_calc(a),
@@ -379,7 +380,8 @@ impl Debugger {
             OutputPrint => self.cmd_print(a),
             OutputPrintf => self.cmd_printf(a),
             OutputRun => self.cmd_run(m, a),
-            Source | Sync => self.not_available("SOURCE/SYNC (source level debugging)"),
+            Source => self.cmd_source(m, a),
+            Sync => self.cmd_sync(),
             // Symbols
             SymbolsLookup => self.cmd_symbols(m, a),
             SymbolsRom | SymbolsApplesoft | SymbolsAssembly | SymbolsUser1 | SymbolsUser2
@@ -421,13 +423,6 @@ impl Debugger {
             ZeropagePointerSave => self.cmd_zp_save(a),
             Startup => self.cmd_startup(m),
         }
-    }
-
-    pub(crate) fn not_available(&mut self, what: &str) -> Update {
-        self.console.print(&format!(
-            "{CHC_WARNING}Not available in the debugger core: {CHC_DEFAULT}{what}"
-        ));
-        upd::CONSOLE_DISPLAY
     }
 
     /// `Help_Arg_1`: usage for the command that was just run.

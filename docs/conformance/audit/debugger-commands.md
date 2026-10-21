@@ -8,30 +8,34 @@ Estados: IMPLEMENTED (código existe), PASS (teste concorda com o oráculo), FAI
 
 | Tecla (AppleWin) | Ação no AppleWin (Debug.cpp) | Estado no port | Evidência no port | ID |
 |---|---|---|---|---|
-| Espaço (console vazio) | Trace: `CmdTrace` (:9770-9784) | FAIL | `keymap.rs:153` entrega `Char(' ')` ao console; `aud_p_035_space_traces_one_instruction_in_the_debugger` (ignorado) reproduz | AUD-P-035 |
-| Shift+Espaço | Step out: `CmdStepOut` | FAIL | sem tradução; o comando `RTS` equivale | AUD-P-035 |
-| Ctrl+Espaço | Step over: `CmdStepOver` | FAIL | `debug_key` devolve `None` com Ctrl (keymap.rs:149); o comando `P` equivale | AUD-P-035 |
-| Tab (console vazio) | `CmdCursorJumpPC(CENTER)`; com texto: completar comando; Ctrl+Tab/Ctrl+Shift+Tab: ciclar janelas | FAIL | `HostKey::Tab` cai em `_ => return None` (keymap.rs:161) | AUD-P-035 |
-| Seta-direita | `CmdCursorFollowTarget(TOP)`; segue RTS/RTI (#1456) e salto | FAIL (tecla) / IMPLEMENTED (função) | `Debugger::cursor_follow_target` (cmd_exec.rs:58) existe e passa o repro de #1456 (`aud_p_037_follow_target_on_rts_wraps_the_stack_page_gh1456`); nenhuma tecla a chama | AUD-P-037 |
-| Ctrl+Seta-direita | `CmdCursorSetPC` (PC := cursor); #1460 | IMPLEMENTED (comando `=`) / FAIL (tecla) | comando `=` OK e atualiza alvos (`aud_p_037_set_pc_from_cursor_updates_targets_gh1460`) | AUD-P-037 |
-| Shift+Seta-direita | `CmdCursorJumpPC(TOP)` | FAIL (tecla) | o comando `.` equivale (centrado) | AUD-P-035 |
-| Alt+Seta-direita | `CmdCursorJumpPC(CENTER)` | FAIL (tecla) |  | AUD-P-035 |
-| Seta-esquerda / Shift+Seta-esquerda | `CmdCursorJumpRetAddr` (centro / topo) | FAIL (tecla) / IMPLEMENTED (comando `RET`) | cmd_exec.rs:51 | AUD-P-035 |
-| Seta-cima / Seta-baixo (console vazio) | Linha acima/abaixo no disassembly (`CmdCursorLineUp/Down`); Shift = 1 byte; Ctrl+Baixo = `CmdCursorRunUntil` | FAIL (diverge) | `keymap.rs:156-157`: Up/Down viram histórico de comandos. As funções `cursor_line_up/down` existem (cmd_exec.rs:67,85) sem tecla | AUD-P-036 |
-| PgUp/PgDn | Cursor por página; Shift = 256 bytes, Ctrl = 4K; com texto: rolar histórico do console | FAIL (diverge) | `keymap.rs:159-160` rola o console 4 linhas. `cursor_page` existe (cmd_exec.rs:131) sem tecla | AUD-P-036 |
-| Home / End | Cursor em $0000 / $8000 (console: rolar ao início/fim) | FAIL | sem tradução | AUD-P-035 |
-| Enter (vazio) | Alterna console em tela cheia; no montador sai dele | FAIL | `Enter` sempre executa a linha (`input_enter`) | AUD-P-035 |
-| Enter (com texto) | Executa o comando | IMPLEMENTED | emu.rs:634; `crates/applewin/tests/debugger.rs` |  |
-| Backspace / Esc | Apagar caractere / limpar linha (Esc com paginação: pula) | IMPLEMENTED | keymap.rs:154-158 |  |
-| ~ (Ctrl+~) | Insere "~" (Ctrl: console em tela cheia) | FAIL (Ctrl+~) | `debug_key` devolve `None` com Ctrl | AUD-P-035 |
-| Ctrl+0..9 / Ctrl+Shift+0..9 | Ir ao marcador / criar marcador (`CmdBookmarkGoto/Add`) | FAIL (teclas) / IMPLEMENTED (BMG/BMA) | comandos existem; teclas não | AUD-P-035 |
-| 0..9 (vendo a saída de vídeo) | Mostra páginas 0-5/9 do vídeo (`_ViewOutput`) | FAIL | comandos `HGR0..`/`TEXT..` existem (`cmd_view`); a tecla não | AUD-P-035 |
+| Espaço (linha vazia) | Trace: `CmdTrace` (:9848-9867) | PASS | `keys.rs` `process_key`; `aud_p_035_space_traces_one_instruction_in_the_debugger`, `space_family_traces_steps_out_and_steps_over` | AUD-P-035 |
+| Espaço (com texto ou montador) | Insere o espaço na linha (`DebuggerInputConsoleChar`, :9544-9550) | PASS | `space_is_text_only_when_the_line_is_not_empty` | AUD-P-035 |
+| Shift+Espaço | Step out: `CmdStepOut` (:9859) | PASS | `space_family_traces_steps_out_and_steps_over` | AUD-P-035 |
+| Ctrl+Espaço | Step over: `CmdStepOver` (:9862) | PASS | idem | AUD-P-035 |
+| Tab (linha vazia) | `CmdCursorJumpPC(CENTER)` (:9845); com texto: completar (`ConsoleInputTabCompletion` é um stub vazio); Ctrl+Tab / Ctrl+Shift+Tab: ciclar janelas | PASS | `arrows_tab_and_alignment`, `ctrl_digits_are_bookmarks_and_ctrl_tilde_toggles_the_console` (o ciclo percorre código, dados e console: `WINDOW_INFO`/`WINDOW_NULL` não têm o que mostrar) | AUD-P-035 |
+| Seta-direita | `CmdCursorFollowTarget(TOP)` (:10059); segue RTS/RTI (#1456) e salto | PASS | `Debugger::cursor_follow_target_at`; `aud_p_037_follow_target_on_rts_wraps_the_stack_page_gh1456`, `arrows_tab_and_alignment` | AUD-P-037 |
+| Ctrl+Seta-direita | `CmdCursorSetPC` (:10051); #1460 | PASS | `aud_p_037_set_pc_from_cursor_updates_targets_gh1460`, `aud_p_035_navigation_keys_move_the_cursor` | AUD-P-037 |
+| Shift+Seta-direita | `CmdCursorJumpPC(TOP)` (:10054) | PASS | `arrows_tab_and_alignment` | AUD-P-035 |
+| Alt+Seta-direita | `CmdCursorJumpPC(CENTER)` (:10057) | PASS | `aud_p_035_navigation_keys_move_the_cursor` | AUD-P-035 |
+| Seta-esquerda / Shift+Seta-esquerda | `CmdCursorJumpRetAddr` (centro / topo) (:10062-10066) | PASS | `arrows_tab_and_alignment` | AUD-P-035 |
+| Seta-cima / Seta-baixo (linha vazia) | Linha acima/abaixo no disassembly (`CmdCursorLineUp/Down`); Shift = 1 byte; Ctrl+Baixo = `CmdCursorRunUntil` (:9989-10047) | PASS | `up_and_down_move_the_cursor_and_ctrl_down_runs_until_it`, `aud_p_036_existing_debug_keys` | AUD-P-036 |
+| Seta-cima / Seta-baixo (janela do console, ou com texto + Shift) | Rola o console 1 linha (`ConsoleScrollUp/Dn(1)`); com texto sem Shift não faz nada (o AppleWin tem "TODO: FIXME: Scroll through console input history", então o histórico por setas deixou de existir) | PASS | `console_window_keys_only_scroll` | AUD-P-036 |
+| PgUp/PgDn | Cursor por página; Shift = 256 bytes, Ctrl = 4K; com texto: rolar 3 linhas do console; Shift+texto ou janela do console: página do console (:9929-9987) | PASS | `page_keys_move_the_cursor_or_scroll_the_console` | AUD-P-036 |
+| Home / End | Cursor em $0000 / $8000; na janela do console ou Shift+texto: rolar ao início/fim (:9869-9927) | PASS | `home_and_end_go_to_zero_and_8000`, `console_window_keys_only_scroll` | AUD-P-035 |
+| Enter (vazio) | Alterna console em tela cheia; no montador sai dele (:9788-9799) | PASS | `aud_p_035_empty_enter_toggles_the_full_screen_console` | AUD-P-035 |
+| Enter (com texto) | Executa o comando | PASS | `crates/applewin/tests/debugger.rs` |  |
+| Backspace / Esc | Apagar caractere / limpar linha (Esc com paginação do console: pula) | IMPLEMENTED | `keys.rs`. A paginação de saída longa (`g_nConsoleBuffer`, `ConsoleBufferTryUnpause`) não existe no port: o console é um buffer rolável e nada fica retido | |
+| ~ | Insere "~" (:9822) | PASS | `ctrl_digits_are_bookmarks_and_ctrl_tilde_toggles_the_console` | AUD-P-035 |
+| Ctrl+~ | Console em tela cheia (:9816) | PASS | idem | AUD-P-035 |
+| Ctrl+0..9 / Ctrl+Shift+0..9 | Ir ao marcador / criar marcador (`CmdBookmarkGoto/Add`) (:10069-10090) | PASS | `ctrl_digits_are_bookmarks_and_ctrl_tilde_toggles_the_console`; `actions::action_for_mode` impede que Ctrl+0/1/3 virem atalhos de velocidade com o depurador na tela (no AppleWin só valem rodando, WinFrame.cpp:1336-1393) | AUD-P-035 |
+| 0..9 (vendo a saída de vídeo) | Páginas 0-8 e 9 (modo atual); qualquer outra tecla volta ao depurador (:9658-9740) | IMPLEMENTED (estado) | `output_view_digits_pick_a_page_and_other_keys_leave`. O port muda `output_view` como os comandos `HGRn`; o frontend continua mostrando a saída corrente da máquina, sem forçar a página (limitação que já valia para os comandos `HGR0..`) | AUD-P-035 |
+| Roda do mouse | `DebuggerProcessKey(VK_UP/VK_DOWN)` (WinFrame.cpp:1647) | PASS | `keymap::wheel_debug_key` + um braço `MouseWheel` em `app.rs` (`debugger_wheel`); teste `wheel_is_up_and_down_with_modifiers` | AUD-P-035 |
 | F7 (entrar/sair) | `ToggleDebugger` | IMPLEMENTED | actions.rs:72 |  |
 | Ctrl+F11 (passo) | Sem equivalente: WinFrame.cpp:1286 só trata F11 sem Ctrl (save-state); o port acrescentou `Action::Step` | EXTENSÃO | actions.rs:78, emu.rs:567 |  |
 
 ## 2. Comandos (`g_aCommands[]`, 251 entradas)
 
-Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
+Contagem: 0 FAIL, 249 IMPLEMENTED, 2 N/A (total 251). Atualizado pela HU-0801: os 17 FAIL da wave0 foram resolvidos (7 eram linhas de ajuda de atalho, hoje teclas; 1 é N/A no oráculo).
 
 | Comando | Ação (CMD_) | Entrada no port | Estado | Observação |
 |---|---|---|---|---|
@@ -77,27 +81,27 @@ Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
 | `BPV` | CMD_BREAKPOINT_ADD_VIDEO | `BreakpointAddVideo` | IMPLEMENTED |  |
 | `BPC` | CMD_BREAKPOINT_CLEAR | `BreakpointClear` | IMPLEMENTED |  |
 | `BPD` | CMD_BREAKPOINT_DISABLE | `BreakpointDisable` | IMPLEMENTED |  |
-| `BPEDIT` | CMD_BREAKPOINT_EDIT | `BreakpointEdit` | FAIL | só pede redesenho (commands.rs:306); no AppleWin é editor de breakpoints |
+| `BPEDIT` | CMD_BREAKPOINT_EDIT | `BreakpointEdit` | IMPLEMENTED | idêntico ao C++: `CmdBreakpointEdit` só devolve `UPDATE_DISASM \| UPDATE_BREAKPOINTS` (Debug.cpp:1986). A observação "é editor" da wave0 estava errada; teste `sync_and_bpedit_do_what_applewin_does` |
 | `BPE` | CMD_BREAKPOINT_ENABLE | `BreakpointEnable` | IMPLEMENTED |  |
 | `BPL` | CMD_BREAKPOINT_LIST | `BreakpointList` | IMPLEMENTED |  |
 | `BPSAVE` | CMD_BREAKPOINT_SAVE | `BreakpointSave` | IMPLEMENTED |  |
 | `BPCHANGE` | CMD_BREAKPOINT_CHANGE | `BreakpointChange` | IMPLEMENTED |  |
-| `BENCHMARK` | CMD_BENCHMARK | `Benchmark` | FAIL | `dispatch` imprime "Not available in the debugger core: BENCHMARK (needs the frontend)" (commands.rs:311); o botão da UI também está desativado (pages.rs:540) |
+| `BENCHMARK` | CMD_BENCHMARK | `Benchmark` | IMPLEMENTED | `cmd_host.rs`: `CpuSetupBenchmark` (programa de opcodes em $0300, A=X=Y=0, SP=$FF, PC=$0300, cursor no PC) e, em seguida, uma execução cronometrada de 1.000.000 de ciclos que imprime ciclos, segundos, MHz e o múltiplo do clock real. Diferença conhecida: no AppleWin o primeiro `BENCHMARK` cai em `CmdBenchmarkStop` (sai do depurador e mede com `GetTickCount` + o sinal de alto-falante do disco de benchmark, Speaker.cpp:112); isso depende de Win32 e do disco, então o port mede por conta própria. Teste `benchmark_loads_the_program_and_measures_mhz` |
 | `BW` | CMD_CONFIG_BW | `ConfigBw` | IMPLEMENTED |  |
 | `COLOR` | CMD_CONFIG_COLOR | `ConfigColor` | IMPLEMENTED |  |
 | `DISASM` | CMD_CONFIG_DISASM | `ConfigDisasm` | IMPLEMENTED |  |
-| `FONT` | CMD_CONFIG_FONT | `ConfigFont` | FAIL | imprime "Not available" (commands.rs:314) |
-| `HCOLOR` | CMD_CONFIG_HCOLOR | `ConfigHcolor` | FAIL | imprime "Not available" (commands.rs:315) |
+| `FONT` | CMD_CONFIG_FONT | `ConfigFont` | IMPLEMENTED | Igual ao AppleWin com `USE_APPLE_FONT` (a via GDI `OLD_FONT` está compilada fora, então `CmdConfigSetFont` só redesenha): `FONT` lista as 4 fontes (nome vazio, A:7 M:7), `FONT *` mostra linhas/px, `FONT MODE n` valida 0-2, `FONT LOAD/SAVE` não fazem nada. A fonte GDI por nome/tamanho não existe aqui (justificativa: o depurador desenha com a fonte de vídeo do Apple //e). Teste `font_prints_the_apple_font_cell_and_validates_mode` |
+| `HCOLOR` | CMD_CONFIG_HCOLOR | `ConfigHcolor` | IMPLEMENTED | Idêntico ao C++, que só valida os argumentos (1 ou 4, cor < `NUM_DEBUG_COLORS`) e não altera nada (corpo comentado com "TODO/FIXME", Debug.cpp:2950). Teste `hcolor_validates_like_applewin` |
 | `LOAD` | CMD_CONFIG_LOAD | `ConfigLoad` | IMPLEMENTED |  |
 | `MONO` | CMD_CONFIG_MONOCHROME | `ConfigMonochrome` | IMPLEMENTED |  |
 | `SAVE` | CMD_CONFIG_SAVE | `ConfigSave` | IMPLEMENTED |  |
 | `PWD` | CMD_CONFIG_GET_DEBUG_DIR | `ConfigGetDebugDir` | IMPLEMENTED |  |
 | `CD` | CMD_CONFIG_SET_DEBUG_DIR | `ConfigSetDebugDir` | IMPLEMENTED |  |
 | `RET` | CMD_CURSOR_JUMP_RET_ADDR | `CursorJumpRetAddr` | IMPLEMENTED |  |
-| `^` | CMD_CURSOR_LINE_UP | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
-| `Shift ^` | CMD_CURSOR_LINE_UP_1 | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
-| `v` | CMD_CURSOR_LINE_DOWN | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
-| `Shift v` | CMD_CURSOR_LINE_DOWN_1 | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
+| `^` | CMD_CURSOR_LINE_UP | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Seta-cima funciona (`keys.rs`), ver §1 |
+| `Shift ^` | CMD_CURSOR_LINE_UP_1 | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Shift+Seta-cima funciona (`keys.rs`), ver §1 |
+| `v` | CMD_CURSOR_LINE_DOWN | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Seta-baixo funciona (`keys.rs`), ver §1 |
+| `Shift v` | CMD_CURSOR_LINE_DOWN_1 | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Shift+Seta-baixo funciona (`keys.rs`), ver §1 |
 | `PAGEUP` | CMD_CURSOR_PAGE_UP | `CursorPageUp` | IMPLEMENTED |  |
 | `PAGEUP256` | CMD_CURSOR_PAGE_UP_256 | `CursorPageUp256` | IMPLEMENTED |  |
 | `PAGEUP4K` | CMD_CURSOR_PAGE_UP_4K | `CursorPageUp4k` | IMPLEMENTED |  |
@@ -119,7 +123,7 @@ Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
 | `ASC` | CMD_DEFINE_DATA_STR | `DefineDataStr` | IMPLEMENTED |  |
 | `DF` | CMD_DEFINE_DATA_FLOAT | `DefineDataFloat` | IMPLEMENTED |  |
 | `DA` | CMD_DEFINE_ADDR_WORD | `DefineAddrWord` | IMPLEMENTED |  |
-| `DISK` | CMD_DISK | `Disk` | FAIL | imprime "Not available" (commands.rs:344) |
+| `DISK` | CMD_DISK | `Disk` | IMPLEMENTED | `cmd_host.rs`: `DISK INFO`, `DISK SLOT [n]`, `DISK n EJECT`, `DISK n PROTECT [0\|1]` e `DISK n <READ\|INFO\|SLOT> "arquivo"` (monta protegido contra escrita) sobre o `Disk2Card` do slot. Mantida a esquisitice do AppleWin: o nome da imagem vai no 3º argumento e o 2º precisa ser uma das palavras (a ajuda diz `DISK # "file"`, o código não aceita). `READ`/`WRITE` de setor são TODO no AppleWin. Acessores novos em `Disk2Card`: `current_bit_offset`, `current_extra_cycles`, `current_shift_reg`, `current_phase_string`. Teste `disk_shows_and_controls_the_drives` |
 | `CL` | CMD_FLAG_CLEAR | `FlagClear` | IMPLEMENTED |  |
 | `CLC` | CMD_FLAG_CLR_C | `FlagClrC` | IMPLEMENTED |  |
 | `CLZ` | CMD_FLAG_CLR_Z | `FlagClrZ` | IMPLEMENTED |  |
@@ -159,7 +163,7 @@ Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
 | `@` | CMD_MEMORY_FIND_RESULTS | `MemoryFindResults` | IMPLEMENTED |  |
 | `SH` | CMD_MEMORY_SEARCH_HEX | `MemorySearchHex` | IMPLEMENTED |  |
 | `F` | CMD_MEMORY_FILL | `MemoryFill` | IMPLEMENTED |  |
-| `NTSC` | CMD_NTSC | `Ntsc` | FAIL | imprime "Not available" (commands.rs:373) |
+| `NTSC` | CMD_NTSC | `Ntsc` | IMPLEMENTED (parcial) | `NTSC SAVE [arquivo]` grava a tabela de matiz (4 fases x 4096 x 32 bits) em `.data` (RGBA, padrão `AppleWinNTSC4096x4@32.data`) ou `.bmp` 64x256x32, no mesmo layout do C++; `NTSC RESET` imprime o aviso (as tabelas nunca mudam). `NTSC LOAD` faz as mesmas validações (tamanho, 32 bpp, 64x256/64x1/16x1) mas **não aplica** a paleta: `apple2_video::chroma` constrói a tabela uma vez (`OnceLock`) e o renderer não tem gancho para trocá-la; mudar isso é trabalho no crate de vídeo. Teste `ntsc_save_writes_raw_and_bmp_palettes` |
 | `TSAVE` | CMD_TEXT_SAVE | `TextSave` | IMPLEMENTED |  |
 | `CALC` | CMD_OUTPUT_CALC | `OutputCalc` | IMPLEMENTED |  |
 | `ECHO` | CMD_OUTPUT_ECHO | `OutputEcho` | IMPLEMENTED |  |
@@ -167,8 +171,8 @@ Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
 | `PRINT` | CMD_OUTPUT_PRINT | `OutputPrint` | IMPLEMENTED |  |
 | `PRINTF` | CMD_OUTPUT_PRINTF | `OutputPrintf` | IMPLEMENTED |  |
 | `RUN` | CMD_OUTPUT_RUN | `OutputRun` | IMPLEMENTED |  |
-| `SOURCE` | CMD_SOURCE | `Source` | FAIL | imprime "Not available" (commands.rs:382) |
-| `SYNC` | CMD_SYNC | `Sync` | FAIL | imprime "Not available" (commands.rs:382) |
+| `SOURCE` | CMD_SOURCE | `Source` | IMPLEMENTED | `SOURCE [MEM] [SYM] arquivo...` lê a listagem do montador, grava os bytes na memória (`MEM`), cria símbolos na tabela Src2 (`SYM`, linhas `EQU`/`DFB`) e guarda o mapa endereço->linha; `SOURCE` sem argumentos desliga. O C++ perde o último caractere do rótulo (`sName[nLen - 1] = 0`) e o port reproduz isso. Não há janela de código-fonte desenhada (`DrawSubWindow_Source` é vazia no AppleWin; `SOURCE2` não é desenhada aqui). Teste `source_reads_listing_symbols_and_bytes` |
+| `SYNC` | CMD_SYNC | `Sync` | IMPLEMENTED | Idêntico ao C++: `CmdSync` é um `// TODO` que só devolve `UPDATE_CONSOLE_DISPLAY` (Debug.cpp:7079) |
 | `SYM` | CMD_SYMBOLS_LOOKUP | `SymbolsLookup` | IMPLEMENTED |  |
 | `SYMMAIN` | CMD_SYMBOLS_ROM | `SymbolsRom` | IMPLEMENTED |  |
 | `SYMBASIC` | CMD_SYMBOLS_APPLESOFT | `SymbolsApplesoft` | IMPLEMENTED |  |
@@ -242,9 +246,9 @@ Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
 | `ZPL` | CMD_ZEROPAGE_POINTER_LIST | `ZeropagePointerList` | IMPLEMENTED |  |
 | `ZPSAVE` | CMD_ZEROPAGE_POINTER_SAVE | `ZeropagePointerSave` | IMPLEMENTED |  |
 | `STARTUP` | CMD_STARTUP | `Startup` | IMPLEMENTED |  |
-| `->` | CMD_CURSOR_JUMP_PC | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
-| `Ctrl ->` | CMD_CURSOR_SET_PC | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
-| `Shift ->` | CMD_CURSOR_JUMP_PC | `-` | FAIL | só existe como linha de ajuda de atalho no AppleWin; o port não tem a linha nem a tecla |
+| `->` | CMD_CURSOR_JUMP_PC | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Seta-direita funciona (`keys.rs`), ver §1 |
+| `Ctrl ->` | CMD_CURSOR_SET_PC | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Ctrl+Seta-direita funciona (`keys.rs`), ver §1 |
+| `Shift ->` | CMD_CURSOR_JUMP_PC | `-` | IMPLEMENTED (tecla) | linha de ajuda sem função no AppleWin (`pFunction` NULL); no port a tecla Shift+Seta-direita funciona (`keys.rs`), ver §1 |
 | `INPUT` | CMD_IN | `In` | IMPLEMENTED |  |
 | `RC` | CMD_FLAG_CLR_C | `FlagClrC` | IMPLEMENTED |  |
 | `RZ` | CMD_FLAG_CLR_Z | `FlagClrZ` | IMPLEMENTED |  |
@@ -283,21 +287,21 @@ Contagem: 17 FAIL, 233 IMPLEMENTED, 1 N/A (total 251)
 | `TEXT42` | CMD_VIEW_TEXT42 | `ViewText42` | IMPLEMENTED |  |
 | `WINDOW` | CMD_WINDOW | `Window` | IMPLEMENTED |  |
 | `ZAP` | CMD_NOP | `Nop` | IMPLEMENTED |  |
-| `BENCH` | CMD_BENCHMARK | `Benchmark` | FAIL | alias de BENCHMARK |
-| `EXITBENCH` | CMD_BENCHMARK | `-` | FAIL | ausente da tabela do port |
+| `BENCH` | CMD_BENCHMARK | `Benchmark` | IMPLEMENTED | alias de BENCHMARK (no AppleWin chama `CmdBenchmarkStart`) |
+| `EXITBENCH` | CMD_BENCHMARK | `-` | N/A | A entrada tem `pFunction` NULL (Debugger_Commands.cpp:400, comentário "CmdBenchmarkStop") e `FindCommand` ignora entradas sem função (Debug.cpp:8152): no AppleWin o comando também é ilegal. Teste `exitbench_is_not_a_command_like_in_applewin` |
 | `MDB` | CMD_MEM_MINI_DUMP_HEX_1 | `MemMiniDumpHex1` | IMPLEMENTED |  |
 
 ## 3. Issues citadas na HU-0801
 
 | Issue | Situação no AppleWin a8f0d1d | Situação no port | Estado |
 |---|---|---|---|
-| #1460 Ctrl-Right não atualiza alvos | corrigida (fechada em 2026-01-01) | os alvos são calculados no `render` a partir do PC; o comando `=` funciona | PASS (função), FAIL (sem tecla) |
-| #1456 Right-arrow deve seguir RTS | corrigida (2026-01-01) | `target_address` trata RTS/RTI com a volta da pilha (disasm.rs:363-375) | PASS (função), FAIL (sem tecla) |
-| #1451 Right-arrow não localiza a instrução atual (doc diz Alt+Right/Tab) | corrigida (2026-05-23); mapeamento atual: Tab = centro no PC, Alt+Right = centro, Shift+Right = topo, Right = seguir alvo | nenhuma dessas teclas existe | FAIL |
+| #1460 Ctrl-Right não atualiza alvos | corrigida (fechada em 2026-01-01) | os alvos são calculados no `render` a partir do PC; o comando `=` funciona | PASS (função e tecla) |
+| #1456 Right-arrow deve seguir RTS | corrigida (2026-01-01) | `target_address` trata RTS/RTI com a volta da pilha (disasm.rs:363-375) | PASS (função e tecla) |
+| #1451 Right-arrow não localiza a instrução atual (doc diz Alt+Right/Tab) | corrigida (2026-05-23); mapeamento atual: Tab = centro no PC, Alt+Right = centro, Shift+Right = topo, Right = seguir alvo | Tab, Alt+Direita, Shift+Direita e Direita implementadas em `keys.rs` | PASS |
 
 ## 4. Reprodução
 
 ```
-cargo test -p applewin --test audit_wave0_peripherals -- --include-ignored aud_p_035
-cargo test -p apple2-debugger --test audit_wave0_debugger
+cargo test -p applewin --test audit_wave0_peripherals aud_p_035 aud_p_036
+cargo test -p apple2-debugger --test audit_wave0_debugger --test hu0801
 ```

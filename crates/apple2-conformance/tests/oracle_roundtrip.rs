@@ -82,7 +82,7 @@ fn compare_text_in(text: &str, tag: &str, cycles: u64, image_dirs: Vec<PathBuf>)
     let st = Command::new(root().join("tools/conformance/oracle/run-audetto-oracle.sh"))
         .args(["--state"])
         .arg(&state)
-        .args(["--cycles", &cycles.to_string(), "--video-update", "--out"])
+        .args(["--cycles", &cycles.to_string(), "--out"])
         .arg(&out)
         .status()
         .unwrap();

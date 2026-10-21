@@ -1,0 +1,46 @@
+titulo = "Laço com contador: soma de 1 até N"
+enunciado = """
+O byte em $0300 contém N (de 0 a 20).
+Calcule 1 + 2 + ... + N usando um laço que conta X de N até 1,
+e guarde o resultado em $0301. Para N = 0 o resultado é 0.
+Termine com BRK.
+"""
+dica = "DEX liga a flag Z quando X chega a zero; BNE repete o laço enquanto Z estiver desligada."
+org = 0x0800
+max_instrucoes = 1000
+
+[[caso]]
+nome = "N = 0"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "00"
+[[caso.esperado.memoria]]
+endereco = 0x0301
+bytes = "00"
+
+[[caso]]
+nome = "N = 1"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "01"
+[[caso.esperado.memoria]]
+endereco = 0x0301
+bytes = "01"
+
+[[caso]]
+nome = "N = 10 (soma 55)"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "0A"
+[[caso.esperado.memoria]]
+endereco = 0x0301
+bytes = "37"
+
+[[caso]]
+nome = "N = 20 (soma 210)"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "14"
+[[caso.esperado.memoria]]
+endereco = 0x0301
+bytes = "D2"

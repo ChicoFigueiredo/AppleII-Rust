@@ -60,7 +60,7 @@ def run_one(args):
             d = os.path.dirname(d)
             parents.append(d)
         env["ORACLE_IMAGE_DIRS"] = ":".join(list(image_dirs) + parents)
-        o = subprocess.run([ORACLE, "--state", state, "--cycles", str(cycles), "--video-update", "--out", o_out],
+        o = subprocess.run([ORACLE, "--state", state, "--cycles", str(cycles), "--out", o_out],
                            capture_output=True, text=True, timeout=600, env=env)
         if o.returncode != 0 or not os.path.exists(o_out):
             err = (o.stderr.strip().splitlines() or ["?"])[-1]

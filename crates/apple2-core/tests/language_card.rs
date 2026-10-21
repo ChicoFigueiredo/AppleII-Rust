@@ -346,7 +346,7 @@ fn reset_restores_the_e_card_and_clears_its_latch() {
 }
 
 #[test]
-fn saturn_is_write_protected_after_power_cycle_and_on_e_reset_and_goes_to_bank_zero() {
+fn saturn_is_write_protected_after_power_cycle_and_on_e_reset_keeping_its_bank() {
     let mut m = saturn_only(Model::Apple2Plus, 4);
     rd(&mut m, 0xC0C3);
     rd(&mut m, 0xC0C3);
@@ -356,7 +356,9 @@ fn saturn_is_write_protected_after_power_cycle_and_on_e_reset_and_goes_to_bank_z
     assert_eq!(m.board().lc.saturn_bank(4), Some(3));
     m.power_cycle();
     assert_eq!(m.board().lc.flags(4).unwrap() & mf::WRITERAM, 0);
-    assert_eq!(m.board().lc.saturn_bank(4), Some(0));
+    // AUD-C-006: LanguageCardUnit::Reset (LanguageCard.cpp:89-100) never touches the active
+    // bank, and ResetMachineState only calls CardManager::Reset(true): the bank survives.
+    assert_eq!(m.board().lc.saturn_bank(4), Some(3));
 
     let mut e = saturn_only(Model::Apple2e, 4);
     rd(&mut e, 0xC0C3);

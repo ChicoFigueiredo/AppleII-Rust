@@ -20,6 +20,10 @@ pub const HEADER: &str = "cycle,pc,op,a,x,y,sp,p";
 /// Value of the `format` metadata key written by [`TraceWriter`].
 pub const FORMAT_ID: &str = "apple2-trace-v1";
 
+/// Trace v1 records `p` with bits 4 (B) and 5 (reserved) set, as AppleWin keeps them in
+/// `regs.ps`. The CPU register itself is unchanged; this is only its representation.
+pub const P_FIXED_BITS: u8 = 0x30;
+
 /// A column of the trace.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Field {
@@ -103,7 +107,7 @@ impl TraceRow {
             x: c.x,
             y: c.y,
             sp: c.sp,
-            p: c.p,
+            p: c.p | P_FIXED_BITS,
         }
     }
 
@@ -169,7 +173,13 @@ impl TraceRow {
 pub struct TraceWriter<W: Write> {
     out: W,
     rows: u64,
+    /// Cycles executed since the last [`Machine::update_cards`].
+    batch: u64,
 }
+
+/// Length of the oracle's execution batch (`CpuExecute` slice of 1 ms at 1.0205 MHz). Cards are
+/// updated at the end of each one: the Disk II counts its motor-off delay there.
+pub const BATCH_CYCLES: u64 = 1020;
 
 impl<W: Write> TraceWriter<W> {
     /// Starts a trace: writes `# format=...`, the given metadata (`key=value`, in order) and the
@@ -186,7 +196,11 @@ impl<W: Write> TraceWriter<W> {
             writeln!(out, "# {k}={v}")?;
         }
         writeln!(out, "{HEADER}")?;
-        Ok(TraceWriter { out, rows: 0 })
+        Ok(TraceWriter {
+            out,
+            rows: 0,
+            batch: 0,
+        })
     }
 
     /// Records the state `m` is in right now (call before running the instruction).
@@ -200,27 +214,23 @@ impl<W: Write> TraceWriter<W> {
     }
 
     /// Records, then executes one instruction; returns its cycles. This is how a trace is
-    /// "attached" to a [`Machine`] without any hook in the core.
+    /// "attached" to a [`Machine`] without any hook in the core. A step that only enters an
+    /// interrupt (IRQ/NMI) writes no row, like the oracle (see the Trace v1 conventions).
     pub fn step(&mut self, m: &mut Machine) -> io::Result<u32> {
+        let enters_interrupt = m.next_step_is_interrupt_entry();
         let mut row = TraceRow::from_machine(m);
-        let in_cx = (0xC100..0xD000).contains(&row.pc);
-        if in_cx {
-            // `peek` cannot read the slot/internal Cx ROM; `peek_code` can, without side effects.
-            row.op = m.peek_code(row.pc);
-        }
         let cycles = m.step();
-        if m.cpu().interrupt_entered {
-            // An IRQ/NMI entry fetches no opcode: like the oracle's hook (after the fetch), it
-            // gets no row of its own.
+        self.batch += cycles as u64;
+        if self.batch >= BATCH_CYCLES {
+            m.update_cards(self.batch);
+            self.batch = 0;
+        }
+        if enters_interrupt {
             return Ok(cycles);
         }
-        if in_cx {
-            // The byte the CPU really fetched; a card-firmware hook fetches nothing and keeps
-            // the ROM byte.
-            let (pc, op) = m.board().current_opcode();
-            if pc == row.pc {
-                row.op = op;
-            }
+        if (0xC100..=0xCFFF).contains(&row.pc) {
+            // `peek` cannot read slot ROM without side effects: take the opcode the CPU fetched.
+            row.op = m.cpu().opcode;
         }
         self.record_row(&row)?;
         Ok(cycles)

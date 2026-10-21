@@ -1,0 +1,21 @@
+[package]
+name = "apple2-dap"
+description = "Debug Adapter Protocol server (stdio) for the AppleII-Rust headless machine, for VS Code"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "apple2_dap"
+path = "src/lib.rs"
+
+[[bin]]
+name = "applewin-dap"
+path = "src/main.rs"
+
+[dependencies]
+apple2-core = { path = "../apple2-core" }
+apple2-debugger = { path = "../apple2-debugger" }
+apple2-storage = { path = "../apple2-storage" }
+serde_json = "1"

@@ -1,6 +1,6 @@
 # Importação de save-states reais do AppleWin (HU-0401)
 
-Gerado por `tools/conformance/savestate-report.py` a partir de `savestate-compare.py`. Oráculo: AppleWin (fork audetto no SHA fixo, ver `docs/adr/0004-oraculo-de-conformidade.md`) carregando o mesmo YAML (`run-audetto-oracle.sh --state ... --cycles 100000 --video-update`). Corpus AppleWin-Test: SHA `4b113ce8cff1426bda5595cac9cb04776adfbb5d` (não redistribuído).
+Gerado por `tools/conformance/savestate-report.py` a partir de `savestate-compare.py`. Oráculo: AppleWin (fork audetto no SHA fixo, ver `docs/adr/0004-oraculo-de-conformidade.md`) carregando o mesmo YAML (`run-audetto-oracle.sh --state ... --cycles 100000`). Corpus AppleWin-Test: SHA `4b113ce8cff1426bda5595cac9cb04776adfbb5d` (não redistribuído).
 
 Duas verificações por arquivo:
 
@@ -11,8 +11,8 @@ Duas verificações por arquivo:
 
 | resultado | arquivos |
 |---|---|
-| PASS | 75 |
-| FAIL | 13 |
+| PASS | 76 |
+| FAIL | 12 |
 | BLOCKED | 27 |
 | total | 115 |
 
@@ -117,7 +117,7 @@ Duas verificações por arquivo:
 | v2/Memory/RamWorks_r4.aws.yaml | PASS | 100000 | PASS | 27890 instruções idênticas; rows_sha256=e0f02a5bb2baca14780201b34646d335d277d0ea1b27cd409871006cb85f883a |
 | v2/Memory/Saturn128-Bank3-2.aws.yaml | PASS | 100000 | PASS | 27993 instruções idênticas; rows_sha256=1bd771b4011afa5840c5ffc15547cf610a8bef6d0bb07b96a70c5232e8965cad |
 | v2/Memory/Saturn128.aws.yaml | FAIL | 406 | PASS | Saturn: contagem de bancos do Saturn (AUD-C-001), fora da fronteira deste agente \| linha 118: oráculo 30645974,2ADB,EE,32,00,03,EC,34 / rust 30645974,2ADB,EE,00,00,03,EC,36 |
-| v2/Memory/Saturn64.aws.yaml | FAIL | 406 | FAIL (1) | Saturn: contagem de bancos do Saturn (AUD-C-001), fora da fronteira deste agente \| linha 118: oráculo 22561764,28F7,EE,46,00,03,EE,34 / rust 22561764,28F7,EE,00,00,03,EE,36 |
+| v2/Memory/Saturn64.aws.yaml | FAIL | 406 | PASS | Saturn: contagem de bancos do Saturn (AUD-C-001), fora da fronteira deste agente \| linha 118: oráculo 22561764,28F7,EE,46,00,03,EE,34 / rust 22561764,28F7,EE,00,00,03,EE,36 |
 | v2/Mockingboard/6522-one-shot.aws.yaml | FAIL | 115 | PASS | linha 32: oráculo 122820435,6195,C5,00,06,04,EC,36 / rust 122820435,6195,C5,0C,06,04,EC,34 |
 | v2/Mockingboard/Cybernoid(MBv3).aws.yaml | PASS | 100000 | PASS | 29874 instruções idênticas; rows_sha256=8b3cb6e3f4bfd26571f437a9ca73bed76aeb3be0dfee55344cc6188012819e73 |
 | v2/Mockingboard/Cybernoid-TimerAtC480.aws.yaml | FAIL | 109 | PASS | linha 27: oráculo 1874074031,C3FA,2C,00,00,01,E7,36 / rust 1874074024,C28E,10,00,00,01,EA,32 |
@@ -130,7 +130,7 @@ Duas verificações por arquivo:
 | v2/Mockingboard/SSI263-4x_phonemes_playing_continuously-alt.aws.yaml | PASS | 100000 | PASS | 26700 instruções idênticas; rows_sha256=937775f136c9e02f8a1c53878b79ef06ce79f6f74746bde7958bcfde3e20ea71 |
 | v2/Mockingboard/SSI263-4x_phonemes_playing_continuously.aws.yaml | PASS | 100000 | PASS | 26700 instruções idênticas; rows_sha256=adfb57cd6770f9311c3b06d2e200543161a23ae9ccb35abced002331c13ffa71 |
 | v2/Mockingboard/SSI263-test.aws.yaml | FAIL | 109 | PASS | linha 30: oráculo 78000058,646F,C5,00,06,04,EE,36 / rust 78000058,646F,C5,0C,06,04,EE,34 |
-| v2/Mockingboard/irq-pending.aws.yaml | FAIL | 65519 | PASS | linha 19178: oráculo 158104785,605E,29,40,8A,0D,F4,35 / rust 158104785,605E,29,00,8A,0D,F4,37 |
+| v2/Mockingboard/irq-pending.aws.yaml | PASS | 100000 | PASS | 28395 instruções idênticas; rows_sha256=3c7f29eb2ed24d7bf9703d29c4e39dd7186c5a491f8bc00eedf47663b8570231 |
 | v2/Mockingboard/phasor-fugue(v9).aws.yaml | PASS | 100000 | PASS | 31766 instruções idênticas; rows_sha256=ee5a8d138bda4c790baa17c51426daf447232c2b13c6cb9b8f81bc39d26d685b |
 | v2/Mockingboard/phasor-fugue.aws.yaml | PASS | 100000 | FAIL (1) | 31766 instruções idênticas; rows_sha256=ee5a8d138bda4c790baa17c51426daf447232c2b13c6cb9b8f81bc39d26d685b |
 | v2/Mockingboard/phasor-speech.aws.yaml | PASS | 100000 | FAIL (1) | 28572 instruções idênticas; rows_sha256=1c90d0db6a802b6854abd7b70afe88cb8f935beae04a4430ff79eba46bc5a76c |
@@ -144,5 +144,5 @@ Duas verificações por arquivo:
 - Controlador de HDD de estados antigos: Hddrvr.bin (v1-3) e Hddrvr-v2.bin (v4) em vez do firmware SmartPort; `FixupUnitNum`.
 - Barramento flutuante lia a RAM principal; o AppleWin lê a imagem de leitura da CPU (aux com RAMRD), AUD-C-050.
 - Entrada de IRQ/NMI não gera linha de trace (o oráculo registra depois do fetch do opcode); opcode em `$C100-$CFFF` vem do fetch real.
-- Ferramental: o oráculo precisava de `--video-update` (sem ele o scanner de vídeo ficava parado e o barramento flutuante era constante), da cwd com as imagens e de `state-compat.py` (remove a unidade Game I/O v4 que o fork não conhece).
+- Ferramental: o oráculo precisava de o `CpuExecute(slice, true)` do oráculo (sem ele o scanner de vídeo ficava parado e o barramento flutuante era constante), da cwd com as imagens e de `state-compat.py` (remove a unidade Game I/O v4 que o fork não conhece).
 

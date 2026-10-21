@@ -96,7 +96,7 @@ def main():
     md = ["# Importação de save-states reais do AppleWin (HU-0401)", "",
           "Gerado por `tools/conformance/savestate-report.py` a partir de `savestate-compare.py`. "
           "Oráculo: AppleWin (fork audetto no SHA fixo, ver `docs/adr/0004-oraculo-de-conformidade.md`) "
-          f"carregando o mesmo YAML (`run-audetto-oracle.sh --state ... --cycles {cycles} --video-update`). "
+          f"carregando o mesmo YAML (`run-audetto-oracle.sh --state ... --cycles {cycles}`). "
           "Corpus AppleWin-Test: SHA `4b113ce8cff1426bda5595cac9cb04776adfbb5d` (não redistribuído).", "",
           "Duas verificações por arquivo:", "",
           "1. **Formato** (`conformance check-import`): logo após importar, registradores, flags, memória principal e AUX "
@@ -122,7 +122,7 @@ def main():
            "- Controlador de HDD de estados antigos: Hddrvr.bin (v1-3) e Hddrvr-v2.bin (v4) em vez do firmware SmartPort; `FixupUnitNum`.",
            "- Barramento flutuante lia a RAM principal; o AppleWin lê a imagem de leitura da CPU (aux com RAMRD), AUD-C-050.",
            "- Entrada de IRQ/NMI não gera linha de trace (o oráculo registra depois do fetch do opcode); opcode em `$C100-$CFFF` vem do fetch real.",
-           "- Ferramental: o oráculo precisava de `--video-update` (sem ele o scanner de vídeo ficava parado e o barramento flutuante era constante), "
+           "- Ferramental: o oráculo precisava de o `CpuExecute(slice, true)` do oráculo (sem ele o scanner de vídeo ficava parado e o barramento flutuante era constante), "
            "da cwd com as imagens e de `state-compat.py` (remove a unidade Game I/O v4 que o fork não conhece).", ""]
     out = os.path.join(ROOT, "tests/conformance/reports/savestate-import.md")
     open(out, "w").write("\n".join(md) + "\n")
@@ -155,7 +155,7 @@ def main():
 story = "HU-0401"
 criterion = "Importar o save-state real {os.path.basename(name)} e rodar {cycles} ciclos gera o mesmo trace do AppleWin (Trace v1)"
 model = "{model}"
-notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles {cycles} --video-update. Hash das linhas do trace do oráculo."
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles {cycles}. Hash das linhas do trace do oráculo."
 
 [fixture]
 path = "{fpath}"
@@ -169,7 +169,7 @@ cycles = {cycles}
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state {os.path.basename(name)} --cycles {cycles} --video-update; ver tools/conformance/savestate-compare.py"
+source = "AppleWin (fork audetto a1e20c0) --state {os.path.basename(name)} --cycles {cycles}; ver tools/conformance/savestate-compare.py"
 trace_rows_sha256 = "{m.group(1)}"
 '''
         open(os.path.join(cdir, cid + ".toml"), "w").write(toml)

@@ -2,6 +2,8 @@
 # source=apple2-rust
 # model=apple2plus
 # cpu=6502
+# memclear=2
+# cards=none
 # rom_sha256=fc3e9d41e9428534a883df5aa10eb55b73ea53d2fcbb3ee4f39bed1b07a82905
 # authority=regression
 # note=saida anterior da propria Maquina Rust; NAO e oraculo do AppleWin
@@ -15,9 +17,9 @@ cycle,pc,op,a,x,y,sp,p
 25,FB2F,A9,FF,FF,FF,FA,B4
 27,FB31,85,00,FF,FF,FA,36
 30,FB33,AD,00,FF,FF,FA,36
-34,FB36,AD,00,FF,FF,FA,36
-38,FB39,AD,00,FF,FF,FA,36
-42,FB3C,A9,00,FF,FF,FA,36
+34,FB36,AD,FF,FF,FF,FA,B4
+38,FB39,AD,FF,FF,FF,FA,B4
+42,FB3C,A9,FF,FF,FF,FA,B4
 44,FB3E,F0,00,FF,FF,FA,36
 47,FB4B,85,00,FF,FF,FA,36
 50,FB4D,A9,00,FF,FF,FA,36

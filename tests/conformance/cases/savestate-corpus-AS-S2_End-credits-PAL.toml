@@ -2,7 +2,7 @@ id = "savestate-corpus-AS-S2_End-credits-PAL"
 story = "HU-0401"
 criterion = "Importar o save-state real AS-S2_End credits(PAL).aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
 model = "apple2e-enhanced"
-notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
 
 [fixture]
 path = "target/conformance-cache/applewin-test/v2/AS-S2_End credits(PAL).aws.yaml"
@@ -16,5 +16,5 @@ cycles = 100000
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state AS-S2_End credits(PAL).aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+source = "AppleWin (fork audetto a1e20c0) --state AS-S2_End credits(PAL).aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
 trace_rows_sha256 = "2b7e6484dd5c209318438c04085b99369d6570eaba02684ef98ccc0ad96385b4"

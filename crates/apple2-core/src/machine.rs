@@ -377,8 +377,9 @@ impl Machine {
             &rom,
             config.aux_card,
             config.slots[0].is_some(),
+            config.ram_init,
         );
-        let mut lc = LanguageCards::new(is_e, &config.slots);
+        let mut lc = LanguageCards::new(is_e, &config.slots, &config.saturn_banks);
         lc.attach(&mut memory);
         // Kinds backed by `LanguageCards`; a new `CardKind` forces a decision here.
         for kind in config.slots.iter().flatten() {
@@ -528,15 +529,6 @@ impl Machine {
             .unwrap_or_else(|| self.board.floating_bus())
     }
 
-    /// Like [`Machine::peek`] but also right for `$C100-$CFFF` (slot, expansion and internal ROM).
-    pub fn peek_code(&mut self, addr: u16) -> u8 {
-        if (0xC100..0xD000).contains(&addr) {
-            self.board.peek_cx(addr)
-        } else {
-            self.peek(addr)
-        }
-    }
-
     /// Writes as the CPU would under the current paging (ROM and I/O ignore it).
     pub fn poke(&mut self, addr: u16, value: u8) {
         if !(0xC000..0xD000).contains(&addr) {
@@ -551,6 +543,11 @@ impl Machine {
 
     pub fn poke_main(&mut self, addr: u16, value: u8) {
         self.board.memory.poke_main(addr, value);
+    }
+
+    /// Language Card RAM bank 1 at `$D000-$DFFF` whatever the paging (frontend status only).
+    pub fn peek_lc_bank1(&self, addr: u16) -> u8 {
+        self.board.memory.peek_lc_bank1(addr)
     }
 
     /// Aux RAM of the current RamWorks bank, ignoring paging.
@@ -773,17 +770,37 @@ impl Machine {
         self.reset_cpu_and_board(true);
     }
 
+    /// Whether the next [`Machine::step`] only enters an interrupt (NMI or IRQ) instead of
+    /// fetching an opcode. Pure query that mirrors the decision in `step`; it costs nothing
+    /// unless called. The conformance trace uses it: AppleWin's hook runs after the opcode
+    /// fetch, so the oracle writes no row for an interrupt entry.
+    pub fn next_step_is_interrupt_entry(&self) -> bool {
+        if self.board.cpu_owner.is_some() || self.cpu.stopped {
+            return false;
+        }
+        // The NMI line never reaches the CPU (see `step`); only a latent `nmi_pending` counts.
+        if self.cpu.nmi_pending() {
+            return true;
+        }
+        let irq = self.board.interrupts.irq_line();
+        if !irq || self.cpu.p & FLAG_I != 0 {
+            return false;
+        }
+        // An IRQ that appeared on the last cycle of the previous opcode waits one opcode.
+        !(self.irq_on_last_opcode_cycle && !self.irq_defer_1_opcode)
+    }
+
     /// Executes one instruction (or interrupt entry); returns the cycles it took.
     pub fn step(&mut self) -> u32 {
         if let Some(n) = self.step_alt_cpu() {
             return n;
         }
         self.board.opcode_ticks = 0;
-        let nmi = self.board.interrupts.nmi_line();
-        if nmi && !self.nmi_line {
-            self.cpu.nmi();
-        }
-        self.nmi_line = nmi;
+        // AppleWin has no NMI: `NMI()` is dead code (`ENABLE_NMI_SUPPORT` is commented out,
+        // CPU.cpp:400-441, "Not used - so don't enable") and no card calls `CpuNmiAssert`
+        // (CPU.cpp:893; the only definition, nothing else in the tree references it). The
+        // line is tracked for the state snapshot but never delivered to the CPU (AUD-C-054).
+        self.nmi_line = self.board.interrupts.nmi_line();
 
         // CPU.cpp IRQ(): an IRQ that appeared on the previous opcode's last cycle waits one opcode.
         let mut irq = self.board.interrupts.irq_line();
@@ -828,13 +845,20 @@ impl Machine {
         Some(n)
     }
 
+    /// End of an execution batch: tells every card how many cycles ran since the last call
+    /// (AppleWin `GetCardMgr().Update(executedCycles)`). `run_cycles`/`run_frame` call it by
+    /// themselves; a caller that drives [`Machine::step`] directly (a tracer) calls it per batch.
+    pub fn update_cards(&mut self, cycles: u64) {
+        self.board.for_each_card(|c, ctx| c.update(cycles, ctx));
+    }
+
     /// Runs whole instructions until at least `n` cycles passed; returns the cycles executed.
     pub fn run_cycles(&mut self, n: u64) -> u64 {
         let mut done = 0;
         while done < n {
             done += self.step() as u64;
         }
-        self.board.for_each_card(|c, ctx| c.update(done, ctx));
+        self.update_cards(done);
         done
     }
 
@@ -1073,12 +1097,33 @@ mod tests {
     }
 
     #[test]
-    fn nmi_is_edge_triggered_through_the_interrupt_lines() {
+    fn nmi_line_never_reaches_the_cpu_as_in_applewin() {
+        // AUD-C-054: AppleWin's NMI() is compiled out and nothing asserts it.
         let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
         m.board_mut().interrupts.set_nmi(SRC, true);
-        m.step();
-        assert_eq!(m.cpu().pc, 0x500);
-        m.run_cycles(100); // line stays high: no retrigger, handler loops
-        assert_eq!(m.peek(0x11), 1, "handler entered once, not re-triggered");
+        assert!(!m.next_step_is_interrupt_entry());
+        m.run_cycles(100);
+        assert_eq!(m.peek(0x11), 0, "the NMI handler never ran");
+        assert_ne!(m.cpu().pc, 0x500);
+        m.board_mut().interrupts.set_nmi(SRC, false);
+        m.board_mut().interrupts.set_nmi(SRC, true); // a fresh edge changes nothing either
+        m.run_cycles(100);
+        assert_eq!(m.peek(0x11), 0);
+    }
+
+    #[test]
+    fn lc_bank1_can_be_peeked_whatever_the_paging() {
+        use crate::memory::mf;
+        let mut m = machine(Model::Apple2eEnhanced, VideoStandard::Ntsc);
+        // LC RAM readable and writable, bank 1
+        let mode = (m.memmode() & !(mf::BANK2)) | mf::HIGHRAM | mf::WRITERAM;
+        m.board_mut().memory.set_memmode(mode);
+        m.poke(0xD356, 9);
+        // back to ROM: the CPU no longer sees it, the frontend peek still does
+        let mode = m.memmode() & !mf::HIGHRAM;
+        m.board_mut().memory.set_memmode(mode);
+        assert_ne!(m.peek(0xD356), 9);
+        assert_eq!(m.peek_lc_bank1(0xD356), 9);
+        assert_eq!(m.peek_lc_bank1(0x0356), 0, "outside $D000-$DFFF");
     }
 }

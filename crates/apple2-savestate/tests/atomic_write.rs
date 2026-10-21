@@ -49,7 +49,7 @@ fn a_write_error_midway_keeps_the_last_valid_save() {
     std::fs::hard_link(&t, &twin).unwrap();
     let r = write_atomic_with(&t, |f| {
         f.write_all(b"HALF OF THE NEW FI")?; // the "crash" comes after a partial write
-        Err(io::Error::new(io::ErrorKind::Other, "disco cheio simulado"))
+        Err(io::Error::other("disco cheio simulado"))
     });
     assert!(r.is_err());
     assert_eq!(std::fs::read_to_string(&t).unwrap(), "LAST VALID SAVE");

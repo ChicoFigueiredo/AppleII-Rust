@@ -96,7 +96,7 @@ fn mutate(text: &str, rng: &mut Rng) -> String {
             text[..c].to_string()
         }
         // value replaced by a hostile one (type swapped, huge, negative)
-        1 | 2 | 3 => {
+        1..=3 => {
             let mut v: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
             for _ in 0..1 + rng.below(3) {
                 let i = rng.below(v.len());

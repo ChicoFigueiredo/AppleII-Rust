@@ -4,7 +4,7 @@
 # usage: run-audetto-oracle.sh --model <apple2|apple2p|apple2jp|apple2e|apple2ee>
 #                              (--cycles N | --frames N) [--out FILE]
 #                              [--disk IMAGE] [--state FILE.aws.yaml]
-#                              [--memclear 0..7] [--cards disk2|none] [--video-update]
+#                              [--memclear 0..7] [--cards disk2|none]
 # Without --out the CSV goes to stdout. Run build-audetto-oracle.sh first.
 set -euo pipefail
 
@@ -25,9 +25,9 @@ MODEL="" OUT="" ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --model) MODEL="$2"; ARGS+=("$1" "$2"); shift 2 ;;
-    --out)   OUT="$2"; shift 2 ;;
-    --cycles|--frames|--disk|--state|--memclear|--cards) ARGS+=("$1" "$2"); shift 2 ;;
-    --video-update) ARGS+=("$1"); shift ;;
+    --out)   OUT="$(realpath -m "$2")"; shift 2 ;;   # absolute: the oracle may change directory
+    --disk|--state) ARGS+=("$1" "$(realpath "$2")"); shift 2 ;;
+    --cycles|--frames|--memclear|--cards) ARGS+=("$1" "$2"); shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done

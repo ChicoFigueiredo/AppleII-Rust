@@ -40,6 +40,37 @@ impl Env {
     }
 }
 
+impl Env {
+    /// Where a reference file lives. Paths into `target/conformance-cache/` are not versioned and
+    /// a worktree has its own `target/`: when the file is not in this workspace, the cache of the
+    /// main checkout (the parent of the git common dir, where the oracle scripts put it) is tried;
+    /// `CONFORMANCE_CACHE` (the cache directory itself) takes precedence over both.
+    pub fn resolve_reference(&self, rel: &str) -> PathBuf {
+        const CACHE: &str = "target/conformance-cache/";
+        let local = self.root.join(rel);
+        let Some(at) = rel.find(CACHE) else {
+            return local;
+        };
+        let tail = &rel[at + CACHE.len()..];
+        if let Ok(dir) = std::env::var("CONFORMANCE_CACHE") {
+            return Path::new(&dir).join(tail);
+        }
+        if local.exists() {
+            return local;
+        }
+        command_line(Command::new("git").current_dir(&self.workspace).args([
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ]))
+        .and_then(|common| {
+            let p = Path::new(&common).parent()?.join(CACHE).join(tail);
+            p.exists().then_some(p)
+        })
+        .unwrap_or(local)
+    }
+}
+
 fn command_line(cmd: &mut Command) -> Option<String> {
     let out = cmd.output().ok()?;
     if !out.status.success() {
@@ -86,10 +117,40 @@ pub struct Outcome {
 pub fn machine_config(case: &Case) -> Result<MachineConfig, String> {
     let mut cfg = MachineConfig::for_model(case.model());
     cfg.cpu_cmos = case.cpu_override()?;
+    cfg.ram_init = apple2_core::RamInit::APPLEWIN_DETERMINISTIC;
+    if let Some(n) = case.memclear {
+        cfg.ram_init.pattern = n;
+    }
     if let Some(slots) = case.card_slots()? {
         cfg.slots = slots;
     }
     Ok(cfg)
+}
+
+/// A Disk II in `slot`, drive 1 loaded from `image` (opened write-protected: a trace never
+/// modifies the file).
+#[derive(Clone, Debug)]
+pub struct Disk2Setup {
+    pub slot: u8,
+    pub image: Option<PathBuf>,
+}
+
+/// Builds the machine of `cfg` and installs the Disk II, if any.
+pub fn build_machine(cfg: MachineConfig, disk2: Option<&Disk2Setup>) -> Result<Machine, String> {
+    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    if let Some(d) = disk2 {
+        let mut card = apple2_storage::disk2::Disk2Card::new();
+        if let Some(p) = &d.image {
+            card.insert_path(0, p, true)
+                .map_err(|e| format!("{}: {e:?}", p.display()))?;
+        }
+        if !m.insert_card(d.slot, Box::new(card)) {
+            return Err(format!("slot {} refused the Disk II", d.slot));
+        }
+        // The card is installed after power-on: redo it so it sees the reset.
+        m.power_cycle();
+    }
+    Ok(m)
 }
 
 pub fn cards_description(cfg: &MachineConfig) -> String {
@@ -214,8 +275,9 @@ pub fn generate_trace(
     run: &RunSpec,
     events: &[InputEvent],
     meta: &[(&str, &str)],
+    disk2: Option<&Disk2Setup>,
 ) -> Result<Vec<u8>, String> {
-    let m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let m = build_machine(cfg, disk2)?;
     generate_trace_from(m, run, events, meta)
 }
 
@@ -276,12 +338,16 @@ struct Observed {
 
 /// The machine a case starts from: power-on, or imported from its save-state fixture. The run is
 /// counted from the start state, so a state case's `cycles` become absolute here.
-fn start_machine(env: &Env, case: &Case) -> Result<(Machine, RunSpec), String> {
+fn start_machine(
+    env: &Env,
+    case: &Case,
+    disk2: Option<&Disk2Setup>,
+) -> Result<(Machine, RunSpec), String> {
     let mut run = case.run.clone();
     match case.fixture.as_ref().filter(|f| f.save_state) {
         None => {
             let cfg = machine_config(case)?;
-            Ok((Machine::try_new(cfg).map_err(|e| e.to_string())?, run))
+            Ok((build_machine(cfg, disk2)?, run))
         }
         Some(fx) => {
             let dirs = fixture_dirs(env, fx);
@@ -318,8 +384,13 @@ pub fn trace_rows_sha256(text: &str) -> String {
     sha256_hex(rows.as_bytes())
 }
 
-fn observe_once(env: &Env, case: &Case, env_meta: &[(String, String)]) -> Result<Observed, String> {
-    let (mut m, run) = start_machine(env, case)?;
+fn observe_once(
+    env: &Env,
+    case: &Case,
+    env_meta: &[(String, String)],
+    disk2: Option<&Disk2Setup>,
+) -> Result<Observed, String> {
+    let (mut m, run) = start_machine(env, case, disk2)?;
     let kind = case.oracle.kind;
     match kind {
         OracleKind::Trace => {
@@ -371,7 +442,9 @@ fn observe_once(env: &Env, case: &Case, env_meta: &[(String, String)]) -> Result
                 OracleKind::MemoryHash => sha256_hex(&memory_dump(&m)),
                 OracleKind::StateHash => sha256_hex(&state_dump(&m)),
                 OracleKind::Expr => String::new(),
-                OracleKind::Trace | OracleKind::FramebufferHash => unreachable!(),
+                OracleKind::Trace | OracleKind::FramebufferHash | OracleKind::AudioEvents => {
+                    unreachable!()
+                }
             };
             Ok(Observed {
                 value,
@@ -432,7 +505,7 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
         user_story: case.story.clone(),
         acceptance_criterion: case.criterion.clone(),
         applewin_sha: (o.authority == Authority::Applewin)
-            .then(|| std::env::var("CONFORMANCE_APPLEWIN_SHA").ok())
+            .then(|| reference_applewin_sha(env, case))
             .flatten(),
         rust_sha: env.rust_sha.clone(),
         fixture_sha256: case.fixture.as_ref().map(|f| f.sha256.clone()),
@@ -474,7 +547,10 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
         }
         Verdict::Fail(actual, diff) => {
             mf.result = TestResult::Fail;
-            mf.actual = actual;
+            mf.actual = match &case.oracle.known_divergence {
+                Some(id) => format!("{actual} [divergência conhecida {id}]"),
+                None => actual,
+            };
             mf.diff_artifact = diff;
         }
         Verdict::Blocked(cause) => {
@@ -487,6 +563,35 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
         artifacts,
         seconds: started.elapsed().as_secs_f64(),
     }
+}
+
+/// `applewin_sha` of the manifest: the `#applewin_sha` of the reference trace header, else
+/// `CONFORMANCE_APPLEWIN_SHA`.
+fn reference_applewin_sha(env: &Env, case: &Case) -> Option<String> {
+    use std::io::BufRead;
+    let from_header = case.oracle.trace.as_ref().and_then(|rel| {
+        let f = std::fs::File::open(env.resolve_reference(rel)).ok()?;
+        std::io::BufReader::new(f)
+            .lines()
+            .map_while(Result::ok)
+            .take_while(|l| l.starts_with('#'))
+            .find_map(|l| {
+                let (k, v) = l.trim_start_matches('#').trim_start().split_once('=')?;
+                (k.trim() == "applewin_sha").then(|| v.trim().to_string())
+            })
+    });
+    from_header.or_else(|| std::env::var("CONFORMANCE_APPLEWIN_SHA").ok())
+}
+
+/// The Disk II of the case, with the fixture as drive 1.
+fn disk2_setup(env: &Env, case: &Case) -> Result<Option<Disk2Setup>, String> {
+    let Some(slot) = case.disk2_slot()? else {
+        return Ok(None);
+    };
+    Ok(Some(Disk2Setup {
+        slot,
+        image: case.fixture.as_ref().map(|f| env.workspace.join(&f.path)),
+    }))
 }
 
 fn expected_text(case: &Case) -> String {
@@ -502,6 +607,14 @@ fn expected_text(case: &Case) -> String {
             }
         ),
         OracleKind::Expr => o.expect.join(" && "),
+        OracleKind::AudioEvents => format!(
+            "audio-events {} (timing {}){}",
+            o.events.as_deref().unwrap_or("?"),
+            o.timing.as_deref().unwrap_or("exact"),
+            o.pcm
+                .as_deref()
+                .map_or(String::new(), |p| format!(", PCM {p}"))
+        ),
         k => {
             let name = match k {
                 OracleKind::TextHash => "text-hash",
@@ -553,6 +666,9 @@ fn evaluate(
             case.model
         ));
     }
+    if case.oracle.kind == OracleKind::AudioEvents {
+        return audio_verdict(env, case, artifacts);
+    }
     if let Some(fx) = &case.fixture {
         let p = env.workspace.join(&fx.path);
         match file_sha256(&p) {
@@ -568,9 +684,10 @@ fn evaluate(
                     fx.path, fx.sha256
                 ))
             }
+            Ok(_) if matches!(case.disk2_slot(), Ok(Some(_))) => {}
             Ok(_) if !fx.save_state => {
                 return Verdict::Blocked(format!(
-                    "fixture {} presente e íntegra, mas o harness v1 ainda não carrega fixtures na Máquina",
+                    "fixture {} presente e íntegra, mas o harness só a carrega como disco de um cartão `N:disk2` ou como save-state",
                     fx.path
                 ))
             }
@@ -592,12 +709,27 @@ fn evaluate(
     }
     let reference = match (&case.oracle.kind, &case.oracle.trace) {
         (OracleKind::Trace, Some(rel)) => {
-            let p = env.root.join(rel);
+            let p = env.resolve_reference(rel);
+            if !p.exists() {
+                return Verdict::Blocked(format!(
+                    "trace de referência ausente: {rel}. Para gerá-lo: {}",
+                    case.oracle.source
+                ));
+            }
+            if let Some(want) = &case.oracle.trace_sha256 {
+                match file_sha256(&p) {
+                    Ok(h) if h == *want => {}
+                    Ok(h) => {
+                        return Verdict::Blocked(format!(
+                            "trace de referência {rel} com sha256 {h}, esperado {want}. Para regenerar: {}",
+                            case.oracle.source
+                        ))
+                    }
+                    Err(e) => return Verdict::Blocked(e),
+                }
+            }
             match TraceReader::read_file(&p) {
                 Ok(t) => Some(t),
-                Err(e) if !p.exists() => {
-                    return Verdict::Blocked(format!("trace de referência ausente: {rel} ({e})"))
-                }
                 Err(e) => return Verdict::Blocked(format!("trace de referência ilegível: {e}")),
             }
         }
@@ -619,11 +751,15 @@ fn evaluate(
         ("cards".to_string(), mf.cards_slots.clone()),
     ];
     let _ = &cfg;
+    let disk2 = match disk2_setup(env, case) {
+        Ok(d) => d,
+        Err(e) => return Verdict::Blocked(e),
+    };
 
     let mut first: Option<Observed> = None;
     let mut last: Option<Observed> = None;
     for run in 1..=case.run.repeat {
-        let obs = match observe_once(env, case, &meta) {
+        let obs = match observe_once(env, case, &meta, disk2.as_ref()) {
             Ok(o) => o,
             Err(e) => return Verdict::Fail(format!("erro na execução {run}: {e}"), None),
         };
@@ -669,6 +805,10 @@ fn evaluate(
                 let diff = dump_actual(case, &obs, artifacts);
                 Verdict::Fail(format!("falharam: {}", bad.join("; ")), diff)
             }
+        }
+        OracleKind::Trace if reference.is_none() => {
+            // Determinism case: no reference, the runs only had to agree (checked above).
+            Verdict::Pass(format!("trace sha256={}{rep}", obs.value))
         }
         OracleKind::Trace => {
             let actual_bytes = obs.trace.expect("trace case");
@@ -740,7 +880,7 @@ fn dump_actual(
             let r = obs.renderer.as_ref()?;
             (format!("{}.actual.png", case.id), png_bytes(r).ok()?)
         }
-        OracleKind::Trace => return None,
+        OracleKind::Trace | OracleKind::AudioEvents => return None,
     };
     artifacts.push((name.clone(), bytes));
     Some(name)
@@ -749,4 +889,133 @@ fn dump_actual(
 /// Re-exported for the CLI: loads a trace file.
 pub fn read_trace(path: &Path) -> Result<Trace, String> {
     TraceReader::read_file(path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// `audio-events` cases: run the program (or save-state) and compare events and PCM with the
+/// oracle's recording. A missing fixture or reference is BLOCKED, never PASS.
+fn audio_verdict(env: &Env, case: &Case, artifacts: &mut Vec<(String, Vec<u8>)>) -> Verdict {
+    use crate::audio::{self, Timing};
+    if let Some(fx) = &case.fixture {
+        let p = env.workspace.join(&fx.path);
+        match file_sha256(&p) {
+            Err(_) => {
+                return Verdict::Blocked(format!(
+                    "fixture ausente: {} (esperada no cache de fixtures; veja docs/conformance)",
+                    fx.path
+                ))
+            }
+            Ok(h) if h != fx.sha256 => {
+                return Verdict::Blocked(format!(
+                    "fixture {} com sha256 {h}, esperado {}",
+                    fx.path, fx.sha256
+                ))
+            }
+            Ok(_) => {}
+        }
+    }
+    let o = &case.oracle;
+    let expected = match o.events.as_deref() {
+        None => String::new(),
+        Some(ev_rel) => match audio::read_reference(&env.root, ev_rel) {
+            Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+            Err(e) => {
+                return Verdict::Blocked(format!(
+                    "referência do oráculo ausente: {e} (gere com tools/conformance/audio/run-oracle-case.py)"
+                ))
+            }
+        },
+    };
+    let run = match audio::run(case, env, None) {
+        Ok(r) => r,
+        Err(e) => return Verdict::Fail(format!("erro na execução: {e}"), None),
+    };
+    let actual_lines: Vec<String> = run.events.iter().map(|(c, e)| e.line(*c)).collect();
+    artifacts.push((
+        format!("{}.actual.events", case.id),
+        audio::render_lines(&actual_lines).into_bytes(),
+    ));
+    let timing = match o.timing.as_deref() {
+        Some("ssi") => Timing::Ssi {
+            tolerance: o.ssi_tolerance.expect("validated"),
+        },
+        _ => Timing::Exact,
+    };
+    let mut summary = String::new();
+    if o.events.is_some() {
+        summary = match audio::compare_events(
+            &audio::lines_of(&expected),
+            &actual_lines,
+            timing,
+            run.final_cycle,
+        ) {
+            Ok(s) => s,
+            Err(report) => {
+                let name = format!("{}.events-diff.txt", case.id);
+                artifacts.push((name.clone(), report.clone().into_bytes()));
+                return Verdict::Fail(
+                    format!("eventos: {}", report.lines().next().unwrap_or("")),
+                    Some(name),
+                );
+            }
+        };
+    }
+    if let (Some(rel), Some(l)) = (&o.pcm, o.pcm_limits) {
+        let limits: crate::pcm::Limits = l.into();
+        let bytes = match audio::read_reference(&env.root, rel) {
+            Ok(b) => b,
+            Err(e) => return Verdict::Blocked(format!("PCM de referência ausente: {e}")),
+        };
+        let spec = case.audio.clone().unwrap_or_default();
+        let (verdict, m) = audio::compare_pcm(&bytes, &run, &spec, &limits);
+        let detail = audio::describe_measures(&m);
+        match verdict {
+            crate::pcm::Verdict::Exact => {
+                summary.push_str(&format!("; PCM idêntico ({detail})"));
+            }
+            crate::pcm::Verdict::Tolerance => {
+                summary.push_str(&format!("; PCM dentro da tolerância ({detail})"));
+            }
+            crate::pcm::Verdict::Fail(why) => {
+                let name = format!("{}.pcm-diff.txt", case.id);
+                artifacts.push((name.clone(), format!("{why}\n{detail}\n").into_bytes()));
+                return Verdict::Fail(format!("PCM fora do limiar: {why} ({detail})"), Some(name));
+            }
+        }
+    }
+    if let Some(pat) = &o.silent_after {
+        let exp = audio::lines_of(&expected);
+        let Some(line) = exp
+            .iter()
+            .rev()
+            .find(|l| l.split_once(',').is_some_and(|x| x.1 == pat))
+        else {
+            return Verdict::Fail(
+                format!("silent_after `{pat}`: o oráculo não tem esse evento"),
+                None,
+            );
+        };
+        let c: u64 = line
+            .split(',')
+            .next()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(0);
+        let clock = apple2_audio::SampleClock::new(44_100, apple2_core::VideoStandard::Ntsc);
+        let from = clock.frames_at(c) as usize + 2;
+        let tail = run.mb_pcm.get(from * 2..).unwrap_or(&[]);
+        let loud = tail.iter().filter(|&&s| s != 0).count();
+        if loud > 0 {
+            return Verdict::Fail(
+                format!("PCM não é silêncio depois de `{pat}` (ciclo {c}): {loud} amostras não nulas de {}", tail.len()),
+                None,
+            );
+        }
+        summary.push_str(&format!(
+            "; silêncio exato depois de `{pat}` (ciclo {c}, {} amostras)",
+            tail.len()
+        ));
+    }
+    for w in &run.warnings {
+        summary.push_str(&format!("; aviso: {w}"));
+    }
+    Verdict::Pass(summary)
 }

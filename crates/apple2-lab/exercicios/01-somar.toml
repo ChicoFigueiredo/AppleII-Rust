@@ -1,0 +1,44 @@
+titulo = "Somar dois números"
+enunciado = """
+Os bytes em $0300 e $0301 são dois números sem sinal.
+Some os dois e guarde o byte baixo do resultado em $0302.
+Se a soma passar de 255, o carry (flag C) deve terminar ligado.
+Termine o programa com BRK.
+"""
+dica = "Lembre-se de limpar o carry (CLC) antes de somar com ADC."
+cpu = "6502"
+org = 0x0800
+
+[[caso]]
+nome = "5 + 7"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "05 07"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "0C"
+[caso.esperado.flags]
+c = false
+
+[[caso]]
+nome = "200 + 100 passa de 255 (carry ligado)"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "C8 64"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "2C"
+[caso.esperado.flags]
+c = true
+
+[[caso]]
+nome = "zero mais zero"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "00 00"
+[[caso.esperado.memoria]]
+endereco = 0x0302
+bytes = "00"
+[caso.esperado.flags]
+z = true
+c = false

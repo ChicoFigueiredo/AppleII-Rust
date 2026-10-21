@@ -28,8 +28,18 @@ pub struct SavedState {
 }
 
 pub fn save_machine(machine: &apple2_core::Machine) -> Result<SavedState, String> {
+    save_machine_with_rgb(machine, apple2_savestate::RgbCardState::default())
+}
+
+/// Like [`save_machine`], with the RGB card registers of the renderer (`Renderer::rgb_registers`,
+/// `RenderConfig::rgb_invert_bit7`) for the aux card's `AppleColor RGB Adaptor` map (AUD-P-005).
+pub fn save_machine_with_rgb(
+    machine: &apple2_core::Machine,
+    rgb: apple2_savestate::RgbCardState,
+) -> Result<SavedState, String> {
     let opts = SaveOptions {
         date_stamp: date_stamp(),
+        rgb,
         ..Default::default()
     };
     let saved = apple2_savestate::save_aws_yaml(machine, &opts).map_err(|e| e.to_string())?;

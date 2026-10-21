@@ -33,16 +33,11 @@ pub trait LoadHost {
         default_card(name, slot, model)
     }
 
-    /// `g_nMemoryClearType`: the power-on RAM pattern `MemReset` lays down before a save-state's
-    /// `Main Memory` is read (see [`crate::powerup`]). The default is AppleWin's.
-    fn memory_init_pattern(&mut self) -> u32 {
-        crate::powerup::DEFAULT_PATTERN
-    }
-
-    /// `getRandomTime()` for the power-on pattern. The default is 0, which makes a load
-    /// reproducible (and is what the conformance oracle does).
-    fn power_on_random(&mut self) -> u32 {
-        0
+    /// `g_nMemoryClearType` and `getRandomTime()`: the power-on RAM pattern `MemReset` lays down
+    /// before a save-state's `Main Memory` is read (see [`crate::powerup`]). The default is
+    /// AppleWin's pattern with the oracle's deterministic draw, so a load is reproducible.
+    fn ram_init(&mut self) -> apple2_core::RamInit {
+        apple2_core::RamInit::default()
     }
 
     /// Creates the No-Slot Clock (`MemInsertNoSlotClock`). The default reads a fixed time;

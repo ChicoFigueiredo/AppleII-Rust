@@ -1,0 +1,20 @@
+id = "savestate-corpus-irq-pending"
+story = "HU-0401"
+criterion = "Importar o save-state real irq-pending.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/irq-pending.aws.yaml"
+sha256 = "c8d56f6a5a0adafc10862374d480a13f76dcee5353bf36ddcea6065678167e85"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state irq-pending.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "3c7f29eb2ed24d7bf9703d29c4e39dd7186c5a491f8bc00eedf47663b8570231"

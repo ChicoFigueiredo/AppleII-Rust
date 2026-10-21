@@ -19,7 +19,8 @@ impl Board {
     }
 
     /// Value read from an address nobody drives: the byte the video generator is fetching from
-    /// RAM through the CPU read image (`MemReadFloatingBus`, Memory.cpp:2458-2476).
+    /// the CPU read image (`MemReadFloatingBus`, Memory.cpp:2458-2476), which is the auxiliary RAM
+    /// while RAMRD is on (AUD-C-050; see [`crate::memory::Memory::peek_floating_image`]).
     pub fn floating_bus(&self) -> u8 {
         let m = self.memory.memmode();
         let sw = Switches {
@@ -28,11 +29,8 @@ impl Board {
             hires: m & mf::HIRES != 0,
             page2: m & mf::PAGE2 != 0 && m & mf::STORE80 == 0,
         };
-        // MemReadFloatingBus (Memory.cpp:2473): `pMain = MemGetMainPtr(0)` is `mem`, the CPU's read
-        // image, so with RAMRD (or 80STORE+PAGE2 on the text/hires pages) the video generator
-        // "sees" aux RAM. Real hardware reads main; the oracle wins (AUD-C-050).
-        let addr = self.scanner.address(self.scan_cycle(), sw);
-        self.memory.read(addr).unwrap_or(0)
+        self.memory
+            .peek_floating_image(self.scanner.address(self.scan_cycle(), sw))
     }
 
     // ---- Keyboard, speaker, game port. ----
@@ -181,43 +179,6 @@ impl Board {
                     0
                 }
             },
-            _ => self.floating_bus(),
-        }
-    }
-
-    /// The byte the CPU would fetch at `addr` in `$C100-$CFFF`, without moving the slot/expansion
-    /// ROM selection (`slots.select`) or the No-Slot Clock. For tracers and debuggers.
-    pub fn peek_cx(&mut self, addr: u16) -> u8 {
-        let m = self.memory.memmode();
-        let (intcxrom, slotc3rom) = (m & mf::INTCXROM != 0, m & mf::SLOTC3ROM != 0);
-        if addr < 0xC800 {
-            let slot = (addr >> 8) as u8 & 7;
-            if self.is_e && (intcxrom || (!slotc3rom && slot == 3)) {
-                return self
-                    .memory
-                    .internal_cx(addr)
-                    .unwrap_or_else(|| self.floating_bus());
-            }
-            if self.slots.card(slot).is_none() && !self.lc.has_slot(slot) {
-                return self.floating_bus();
-            }
-            return self
-                .card_call(slot, |c, x| c.slot_rom_read(addr as u8, x))
-                .unwrap_or(0);
-        }
-        if self.is_e && (intcxrom || self.slots.intc8rom()) {
-            return self
-                .memory
-                .internal_cx(addr)
-                .unwrap_or_else(|| self.floating_bus());
-        }
-        match self.slots.expansion() {
-            ExpansionRom::Slot(slot) => self
-                .card_call(slot, |c, x| {
-                    c.expansion_rom()
-                        .map_or(x.floating_bus, |r| r[expansion_offset(addr)])
-                })
-                .unwrap_or_else(|| self.floating_bus()),
             _ => self.floating_bus(),
         }
     }

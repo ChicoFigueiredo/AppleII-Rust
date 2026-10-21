@@ -134,8 +134,6 @@ pub struct Cpu {
     /// An NMOS HLT/KIL opcode was executed (AppleWin `regs.bJammed`): the PC is left on the
     /// opcode, so it re-executes (2 cycles) until reset; interrupts are still serviced.
     pub jammed: bool,
-    /// The last [`Cpu::step`] was an NMI/IRQ entry, not an instruction (no opcode was fetched).
-    pub interrupt_entered: bool,
 }
 
 impl Cpu {
@@ -147,7 +145,7 @@ impl Cpu {
             y: 0xFF,
             sp: 0xFF,
             pc: 0,
-            p: FLAG_U | FLAG_B | FLAG_I, // AppleWin keeps AF_BREAK always set (CPU.cpp)
+            p: FLAG_U | FLAG_I,
             cycles: 0,
             variant,
             irq: false,
@@ -156,7 +154,6 @@ impl Cpu {
             waiting: false,
             opcode: 0,
             jammed: false,
-            interrupt_entered: false,
         }
     }
 
@@ -182,7 +179,7 @@ impl Cpu {
         // CPU.cpp CpuReset(): I set (the 65C02 also clears D), the other flags and A/X/Y are
         // kept, and S drops by 3 as the three suppressed pushes would have done.
         self.sp = self.sp.wrapping_sub(3);
-        self.p |= FLAG_U | FLAG_B | FLAG_I;
+        self.p |= FLAG_U | FLAG_I;
         if self.is_cmos() {
             self.p &= !FLAG_D;
         }
@@ -739,7 +736,6 @@ impl Cpu {
     /// Executes one instruction (or services one interrupt); returns cycles used.
     pub fn step<B: Bus>(&mut self, bus: &mut B) -> u32 {
         let start = self.cycles;
-        self.interrupt_entered = false;
         if self.stopped {
             self.idle(bus);
             return 1;
@@ -750,7 +746,6 @@ impl Cpu {
             self.idle(bus);
             self.idle(bus);
             self.interrupt(bus, VEC_NMI, false);
-            self.interrupt_entered = true;
             return (self.cycles - start) as u32;
         }
         if self.irq {
@@ -759,7 +754,6 @@ impl Cpu {
                 self.idle(bus);
                 self.idle(bus);
                 self.interrupt(bus, VEC_IRQ, false);
-                self.interrupt_entered = true;
                 return (self.cycles - start) as u32;
             }
         }
@@ -1085,8 +1079,7 @@ impl Cpu {
             0x28 => {
                 self.idle(bus);
                 self.idle(bus);
-                // cpu_instructions.inl PLP/RTI: `POP | AF_RESERVED | AF_BREAK` (B always reads as 1).
-                self.p = self.pull(bus) | FLAG_U | FLAG_B;
+                self.p = (self.pull(bus) | FLAG_U) & !FLAG_B;
             }
             0xDA if cmos => {
                 self.idle(bus);
@@ -1161,8 +1154,7 @@ impl Cpu {
             0x40 => {
                 self.idle(bus);
                 self.idle(bus);
-                // cpu_instructions.inl PLP/RTI: `POP | AF_RESERVED | AF_BREAK` (B always reads as 1).
-                self.p = self.pull(bus) | FLAG_U | FLAG_B;
+                self.p = (self.pull(bus) | FLAG_U) & !FLAG_B;
                 let lo = self.pull(bus) as u16;
                 let hi = self.pull(bus) as u16;
                 self.pc = lo | (hi << 8);

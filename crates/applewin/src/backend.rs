@@ -31,7 +31,15 @@ pub struct DriveStatus {
 
 /// Disk images: implemented on top of `apple2-storage` + the Disk II card later.
 pub trait DiskSink {
-    fn insert(&mut self, machine: &mut Machine, drive: usize, path: &Path) -> Result<(), String>;
+    /// `read_only`: "Open as Read Only" (`IMAGE_FORCE_WRITE_PROTECTED`); otherwise the file's own
+    /// attribute decides (`IMAGE_USE_FILES_WRITE_PROTECT_STATUS`).
+    fn insert(
+        &mut self,
+        machine: &mut Machine,
+        drive: usize,
+        path: &Path,
+        read_only: bool,
+    ) -> Result<(), String>;
     fn eject(&mut self, machine: &mut Machine, drive: usize);
     fn swap(&mut self, machine: &mut Machine);
     /// Drive menu "Write protected" check box.
@@ -43,12 +51,35 @@ pub trait DiskSink {
     }
     /// Writes dirty tracks back (before saving a state or quitting).
     fn flush(&mut self, _machine: &mut Machine) {}
+    /// The selected drive and the sector the guest OS says it is working on ("S??" monitor,
+    /// AppleWin `GetTrackSector`): `None` when DOS 3.3 / ProDOS do not name this controller.
+    /// Reads memory without side effects.
+    fn guest_sector(&self, _machine: &Machine) -> (usize, Option<u8>) {
+        (0, None)
+    }
+}
+
+/// AppleWin `Win32Frame::GetTrackSector` (WinFrame.cpp:638-704): the sector is not a hardware
+/// value, it is what the RWTS of DOS 3.3 (`$B7E9/B7EC/B7ED`) or ProDOS (LC bank 1
+/// `$D356/D357/D359`) keeps for the controller in `slot`.
+pub fn guest_sector(m: &Machine, slot: u8) -> Option<u8> {
+    let slot_of = |b: u8| b / 16;
+    let (s, track, sector) = if m.peek(0xBF00) != 0x4C {
+        (slot_of(m.peek(0xB7E9)), m.peek(0xB7EC), m.peek(0xB7ED))
+    } else {
+        (
+            slot_of(m.peek_lc_bank1(0xD359)),
+            m.peek_lc_bank1(0xD356),
+            m.peek_lc_bank1(0xD357),
+        )
+    };
+    (s == slot && track < 40 && sector < 16).then_some(sector)
 }
 
 pub struct NullDisks;
 
 impl DiskSink for NullDisks {
-    fn insert(&mut self, _: &mut Machine, _: usize, _: &Path) -> Result<(), String> {
+    fn insert(&mut self, _: &mut Machine, _: usize, _: &Path, _: bool) -> Result<(), String> {
         Err("no disk controller available yet (apple2-storage not plugged in)".into())
     }
     fn eject(&mut self, _: &mut Machine, _: usize) {}
@@ -115,11 +146,17 @@ pub struct Disk2Sink {
 }
 
 impl DiskSink for Disk2Sink {
-    fn insert(&mut self, m: &mut Machine, drive: usize, path: &Path) -> Result<(), String> {
+    fn insert(
+        &mut self,
+        m: &mut Machine,
+        drive: usize,
+        path: &Path,
+        read_only: bool,
+    ) -> Result<(), String> {
         let card = m
             .card_mut::<Disk2Card>(self.slot)
             .ok_or("no Disk II card in this slot")?;
-        card.insert_path(drive, path, false)
+        card.insert_path(drive, path, read_only)
             .map_err(|e| format!("{}: {e:?}", path.display()))
     }
     fn eject(&mut self, m: &mut Machine, drive: usize) {
@@ -155,6 +192,12 @@ impl DiskSink for Disk2Sink {
     }
     fn wants_full_speed(&self, m: &Machine) -> bool {
         apple2_storage::disk2::manager::is_condition_for_full_speed(m)
+    }
+    fn guest_sector(&self, m: &Machine) -> (usize, Option<u8>) {
+        let drive = m
+            .card::<Disk2Card>(self.slot)
+            .map_or(0, Disk2Card::current_drive);
+        (drive, guest_sector(m, self.slot))
     }
     fn flush(&mut self, m: &mut Machine) {
         apple2_storage::disk2::manager::flush_all(m);

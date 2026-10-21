@@ -2,7 +2,7 @@ id = "savestate-corpus-A2e"
 story = "HU-0401"
 criterion = "Importar o save-state real A2e.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
 model = "apple2e"
-notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
 
 [fixture]
 path = "target/conformance-cache/applewin-test/v2/Video ROM/A2e.aws.yaml"
@@ -16,5 +16,5 @@ cycles = 100000
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state A2e.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+source = "AppleWin (fork audetto a1e20c0) --state A2e.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
 trace_rows_sha256 = "5f487a0478fc8dca5de1e455c40728b1ac5cc993b4bc7cb381d27d37bb869e44"

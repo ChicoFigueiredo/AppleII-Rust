@@ -1,8 +1,20 @@
-//! Zilog Z80 core for the Microsoft SoftCard (replaces AppleWin's Z80VICE port, same behaviour:
-//! no interrupts are delivered, as `z80_mainloop` ignores IRQ/NMI). Instruction timing is in
-//! T-states; documented and the common undocumented opcodes (IXH/IXL, SLL, DDCB register copies,
+//! Zilog Z80 core for the Microsoft SoftCard (replaces AppleWin's Z80VICE port). Instruction
+//! timing is in T-states; documented and the common undocumented opcodes (IXH/IXL, SLL, DDCB register copies,
 //! flag bits 3 and 5) are implemented. MEMPTR (WZ) is modelled (beyond Z80VICE, which ignores
 //! flags 3/5 of `BIT` altogether), so `BIT n,(HL)` takes flags 3/5 from WZ high.
+//!
+//! Interrupts (HU-0601): the core implements the hardware semantics, IM 0/1/2, NMI (IFF1 saved
+//! into IFF2 only by the IRQ path, as on silicon), HALT that waits for an interrupt (4 T-states
+//! per step, like internal NOPs), EI with a one-instruction delay, DI and RETN/RETI. Inputs are
+//! [`Z80::irq`] (level) and [`Z80::nmi`] (edge). AppleWin's `z80_mainloop` never delivers IRQ or
+//! NMI (Z80VICE/z80.cpp:470 and :5540) and the SoftCard does NOT wire these lines, so on the
+//! Machine nothing observable changes; the lines exist for the core only.
+//!
+//! Undefined `ED xx` opcodes are 8 T-state NOPs, as on hardware, and are tallied so a caller can
+//! report them ([`Z80::undefined_ed_total`]). Repeating block instructions (LDIR, LDDR, CPIR,
+//! CPDR, INIR, INDR, OTIR, OTDR) reproduce the 2018 "block instruction flags" findings by David
+//! Banks (hoglet): while the instruction repeats, flags 3/5 come from PC high and the I/O block
+//! instructions adjust PF and HF.
 
 use crate::state::{Dec, Enc};
 
@@ -63,6 +75,23 @@ pub struct Z80 {
     pub halted: bool,
     /// MEMPTR (WZ), the hidden register behind `BIT n,(HL)` flags 3/5.
     pub wz: u16,
+    /// Flags as left by the previous instruction when it modified F, else 0 (the hidden "Q"
+    /// latch that decides flags 3/5 of SCF/CCF).
+    pub q: u8,
+    /// Set by `setf` during the current instruction (feeds `q`).
+    pub fw: bool,
+    /// `LD A,I` / `LD A,R` was the previous instruction (an IRQ accepted right after it clears PF).
+    pub p: bool,
+    /// `EI` was the previous instruction: maskable interrupts are not accepted yet.
+    pub ei: bool,
+    /// Level of the maskable interrupt line (`irq(true)` asserts it).
+    pub irq_line: bool,
+    /// Byte the interrupting device puts on the data bus (RST opcode in IM 0, vector in IM 2).
+    pub irq_data: u8,
+    /// Pending NMI edge.
+    pub nmi_pending: bool,
+    /// How many times each undefined `ED xx` opcode ran (never panics, never silent).
+    pub undefined_ed: [u32; 256],
 }
 
 impl Default for Z80 {
@@ -95,6 +124,14 @@ impl Default for Z80 {
             im: 0,
             halted: false,
             wz: 0,
+            q: 0,
+            fw: false,
+            p: false,
+            ei: false,
+            irq_line: false,
+            irq_data: 0xFF,
+            nmi_pending: false,
+            undefined_ed: [0; 256],
         }
     }
 }
@@ -119,6 +156,40 @@ impl Z80 {
         self.iff2 = false;
         self.im = 0;
         self.halted = false;
+        self.ei = false;
+        self.nmi_pending = false;
+    }
+
+    /// Sets the level of the maskable interrupt line. It is level triggered: the interrupt is
+    /// taken whenever IFF1 is set and the line is still asserted at an instruction boundary.
+    pub fn irq(&mut self, line: bool) {
+        self.irq_line = line;
+    }
+
+    /// Raises an NMI edge (served at the next instruction boundary, regardless of IFF1).
+    pub fn nmi(&mut self) {
+        self.nmi_pending = true;
+    }
+
+    /// Total undefined `ED xx` opcodes executed so far.
+    pub fn undefined_ed_total(&self) -> u64 {
+        self.undefined_ed.iter().map(|&n| u64::from(n)).sum()
+    }
+
+    /// `(opcode, count)` of every undefined `ED xx` opcode executed (explicit report, no panic).
+    pub fn undefined_ed_report(&self) -> Vec<(u8, u32)> {
+        (0..=255u8)
+            .filter_map(|op| match self.undefined_ed[op as usize] {
+                0 => None,
+                n => Some((op, n)),
+            })
+            .collect()
+    }
+
+    /// Writes F and records that this instruction modified the flags.
+    fn setf(&mut self, f: u8) {
+        self.f = f;
+        self.fw = true;
     }
 
     pub fn af(&self) -> u16 {
@@ -281,7 +352,7 @@ impl Z80 {
             f |= FC;
         }
         self.a = r;
-        self.f = f;
+        self.setf(f);
     }
 
     /// SUB/SBC/CP: returns the result; `cp` takes flags 3/5 from the operand and keeps A.
@@ -304,7 +375,7 @@ impl Z80 {
         if !cp {
             self.a = r;
         }
-        self.f = f;
+        self.setf(f);
     }
 
     fn alu(&mut self, op: u8, v: u8) {
@@ -315,15 +386,15 @@ impl Z80 {
             3 => self.sub(v, self.f & FC != 0, false),
             4 => {
                 self.a &= v;
-                self.f = szp(self.a) | FH;
+                self.setf(szp(self.a) | FH);
             }
             5 => {
                 self.a ^= v;
-                self.f = szp(self.a);
+                self.setf(szp(self.a));
             }
             6 => {
                 self.a |= v;
-                self.f = szp(self.a);
+                self.setf(szp(self.a));
             }
             _ => self.sub(v, false, true),
         }
@@ -338,7 +409,7 @@ impl Z80 {
         if v == 0x7F {
             f |= FPV;
         }
-        self.f = f;
+        self.setf(f);
         r
     }
 
@@ -351,7 +422,7 @@ impl Z80 {
         if v == 0x80 {
             f |= FPV;
         }
-        self.f = f;
+        self.setf(f);
         r
     }
 
@@ -370,7 +441,7 @@ impl Z80 {
         if sum > 0xFFFF {
             f |= FC;
         }
-        self.f = f;
+        self.setf(f);
         r
     }
 
@@ -390,7 +461,7 @@ impl Z80 {
         if sum > 0xFFFF {
             f |= FC;
         }
-        self.f = f;
+        self.setf(f);
         self.set_hl(r);
     }
 
@@ -410,7 +481,7 @@ impl Z80 {
         if diff > 0xFFFF {
             f |= FC;
         }
-        self.f = f;
+        self.setf(f);
         self.set_hl(r);
     }
 
@@ -427,7 +498,7 @@ impl Z80 {
             6 => (v << 1 | 1, v >> 7),
             _ => (v >> 1, v & 1),
         };
-        self.f = szp(r) | c;
+        self.setf(szp(r) | c);
         r
     }
 
@@ -449,25 +520,88 @@ impl Z80 {
             a.wrapping_add(corr)
         };
         let hf = if n { h && a & 0xF < 6 } else { a & 0xF > 9 };
-        self.f = szp(r) | (self.f & FN) | if hf { FH } else { 0 } | if carry { FC } else { 0 };
+        self.setf(szp(r) | (self.f & FN) | if hf { FH } else { 0 } | if carry { FC } else { 0 });
         self.a = r;
     }
 
     /// Executes one instruction; returns its T-states.
     pub fn step(&mut self, bus: &mut dyn Z80Bus) -> u32 {
-        if self.halted {
-            self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
-            return 4; // keeps executing NOPs
+        let ei_delay = std::mem::take(&mut self.ei);
+        let p = std::mem::take(&mut self.p);
+        if self.nmi_pending {
+            self.nmi_pending = false;
+            self.q = 0;
+            return self.accept_interrupt(bus, true, false);
         }
-        let op = self.fetch_op(bus);
-        match op {
-            0xDD => self.prefixed(bus, Pfx::Ix),
-            0xFD => self.prefixed(bus, Pfx::Iy),
-            _ => self.main(bus, op, Pfx::Hl),
+        if self.irq_line && self.iff1 && !ei_delay {
+            self.q = 0;
+            return self.accept_interrupt(bus, false, p);
+        }
+        self.fw = false;
+        let t = if self.halted {
+            self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+            4 // waits for an interrupt, executing internal NOPs
+        } else {
+            let op = self.fetch_op(bus);
+            match op {
+                0xDD => self.prefixed(bus, Pfx::Ix),
+                0xFD => self.prefixed(bus, Pfx::Iy),
+                _ => self.main(bus, op, Pfx::Hl),
+            }
+        };
+        self.q = if self.fw { self.f } else { 0 };
+        t
+    }
+
+    /// Interrupt acknowledge: NMI (11 T, to $0066) or maskable IRQ per the interrupt mode.
+    fn accept_interrupt(&mut self, bus: &mut dyn Z80Bus, nmi: bool, after_ld_a_ir: bool) -> u32 {
+        if self.halted {
+            self.halted = false; // PC already points past the HALT
+        }
+        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+        if nmi {
+            self.iff1 = false; // IFF2 keeps the old IFF1 so RETN can restore it
+            self.push(bus, self.pc);
+            self.pc = 0x66;
+            self.wz = self.pc;
+            return 11;
+        }
+        self.iff1 = false;
+        self.iff2 = false;
+        if after_ld_a_ir {
+            self.f &= !FPV; // silicon bug: the IRQ samples IFF2 as 0
+        }
+        self.push(bus, self.pc);
+        match self.im {
+            2 => {
+                let vec = u16::from(self.i) << 8 | u16::from(self.irq_data);
+                self.pc = Self::rd16(bus, vec);
+                self.wz = self.pc;
+                19
+            }
+            1 => {
+                self.pc = 0x38;
+                self.wz = self.pc;
+                13
+            }
+            _ => {
+                // IM 0: the device supplies an instruction; only RST n is modelled. Anything
+                // else (CALL needs further data-bus bytes) falls back to RST 38h, which is what a
+                // floating bus (0xFF) executes.
+                let t = if self.irq_data & 0xC7 == 0xC7 {
+                    self.irq_data & 0x38
+                } else {
+                    0x38
+                };
+                self.pc = u16::from(t);
+                self.wz = self.pc;
+                13
+            }
         }
     }
 
     fn prefixed(&mut self, bus: &mut dyn Z80Bus, p: Pfx) -> u32 {
+        self.q = 0; // a prefix is not a flag-writing instruction
         let op = self.fetch_op(bus);
         match op {
             0xDD | 0xFD | 0xED => {
@@ -644,35 +778,40 @@ impl Z80 {
                         0 => {
                             let c = self.a >> 7;
                             self.a = self.a.rotate_left(1);
-                            self.f = (self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c;
+                            self.setf((self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c);
                         }
                         1 => {
                             let c = self.a & 1;
                             self.a = self.a.rotate_right(1);
-                            self.f = (self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c;
+                            self.setf((self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c);
                         }
                         2 => {
                             let c = self.a >> 7;
                             self.a = self.a << 1 | (self.f & FC);
-                            self.f = (self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c;
+                            self.setf((self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c);
                         }
                         3 => {
                             let c = self.a & 1;
                             self.a = self.a >> 1 | (self.f & FC) << 7;
-                            self.f = (self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c;
+                            self.setf((self.f & (FS | FZ | FPV)) | (self.a & (FY | FX)) | c);
                         }
                         4 => self.daa(),
                         5 => {
                             self.a = !self.a;
-                            self.f =
-                                (self.f & (FS | FZ | FPV | FC)) | FH | FN | (self.a & (FY | FX));
+                            self.setf(
+                                (self.f & (FS | FZ | FPV | FC)) | FH | FN | (self.a & (FY | FX)),
+                            );
                         }
-                        6 => self.f = (self.f & (FS | FZ | FPV)) | FC | (self.a & (FY | FX)),
+                        6 => {
+                            let xy = ((self.q ^ self.f) | self.a) & (FY | FX);
+                            self.setf((self.f & (FS | FZ | FPV)) | FC | xy);
+                        }
                         _ => {
                             let old_c = self.f & FC;
-                            self.f = (self.f & (FS | FZ | FPV))
-                                | if old_c != 0 { FH } else { FC }
-                                | (self.a & (FY | FX));
+                            let xy = ((self.q ^ self.f) | self.a) & (FY | FX);
+                            self.setf(
+                                (self.f & (FS | FZ | FPV)) | if old_c != 0 { FH } else { FC } | xy,
+                            );
                         }
                     }
                     4
@@ -681,7 +820,6 @@ impl Z80 {
             1 => {
                 if op == 0x76 {
                     self.halted = true;
-                    self.pc = self.pc.wrapping_sub(1);
                     return 4;
                 }
                 if y == 6 {
@@ -818,6 +956,7 @@ impl Z80 {
                 _ => {
                     self.iff1 = true;
                     self.iff2 = true;
+                    self.ei = true; // maskable interrupts wait one more instruction
                     4
                 }
             },
@@ -913,7 +1052,7 @@ impl Z80 {
         if n == 7 && set {
             f |= FS;
         }
-        self.f = f;
+        self.setf(f);
     }
 
     /// `DD CB d op` / `FD CB d op`: always operates on (IX+d); other registers get a copy too.
@@ -945,7 +1084,7 @@ impl Z80 {
                 0 => {
                     let v = bus.io_in(self.bc());
                     self.wz = self.bc().wrapping_add(1);
-                    self.f = (self.f & FC) | szp(v);
+                    self.setf((self.f & FC) | szp(v));
                     if y != 6 {
                         self.set8(y, Pfx::Hl, v);
                     }
@@ -1005,10 +1144,13 @@ impl Z80 {
                     2 | 3 => {
                         let v = if y == 2 { self.i } else { self.r };
                         self.a = v;
-                        self.f = (self.f & FC)
-                            | sz(v)
-                            | (v & (FY | FX))
-                            | if self.iff2 { FPV } else { 0 };
+                        self.p = true;
+                        self.setf(
+                            (self.f & FC)
+                                | sz(v)
+                                | (v & (FY | FX))
+                                | if self.iff2 { FPV } else { 0 },
+                        );
                         9
                     }
                     4 | 5 => {
@@ -1021,15 +1163,22 @@ impl Z80 {
                         };
                         bus.write(self.hl(), new_m);
                         self.a = new_a;
-                        self.f = (self.f & FC) | szp(new_a);
+                        self.setf((self.f & FC) | szp(new_a));
                         18
                     }
-                    _ => 8,
+                    _ => self.undefined_ed_op(op),
                 },
             },
             2 if z < 4 && y >= 4 => self.block(bus, y, z),
-            _ => 8,
+            _ => self.undefined_ed_op(op),
         }
+    }
+
+    /// Undefined `ED xx`: an 8 T-state NOP on hardware, tallied for explicit reporting.
+    fn undefined_ed_op(&mut self, op: u8) -> u32 {
+        let n = &mut self.undefined_ed[op as usize];
+        *n = n.saturating_add(1);
+        8
     }
 
     /// LDI/LDD/LDIR/LDDR, CPI.., INI.., OUTI.. (`y` 4-7 selects inc/dec and repeat, `z` the family).
@@ -1044,6 +1193,7 @@ impl Z80 {
             }
         };
         let mut again;
+        let mut data = 0u8;
         let start = self.pc.wrapping_sub(2);
         match z {
             0 => {
@@ -1054,10 +1204,12 @@ impl Z80 {
                 let bc = self.bc().wrapping_sub(1);
                 self.set_bc(bc);
                 let n = self.a.wrapping_add(v);
-                self.f = (self.f & (FS | FZ | FC))
-                    | if bc != 0 { FPV } else { 0 }
-                    | (n & FX)
-                    | if n & 2 != 0 { FY } else { 0 };
+                self.setf(
+                    (self.f & (FS | FZ | FC))
+                        | if bc != 0 { FPV } else { 0 }
+                        | (n & FX)
+                        | if n & 2 != 0 { FY } else { 0 },
+                );
                 again = bc != 0;
             }
             1 => {
@@ -1068,18 +1220,21 @@ impl Z80 {
                 let bc = self.bc().wrapping_sub(1);
                 self.set_bc(bc);
                 let n = r.wrapping_sub(h as u8);
-                self.f = (self.f & FC)
-                    | FN
-                    | sz(r)
-                    | if h { FH } else { 0 }
-                    | if bc != 0 { FPV } else { 0 }
-                    | (n & FX)
-                    | if n & 2 != 0 { FY } else { 0 };
+                self.setf(
+                    (self.f & FC)
+                        | FN
+                        | sz(r)
+                        | if h { FH } else { 0 }
+                        | if bc != 0 { FPV } else { 0 }
+                        | (n & FX)
+                        | if n & 2 != 0 { FY } else { 0 },
+                );
                 again = bc != 0 && r != 0;
                 self.wz = step(self.wz);
             }
             2 => {
                 let v = bus.io_in(self.bc());
+                data = v;
                 self.wz = step(self.bc());
                 bus.write(self.hl(), v);
                 self.b = self.b.wrapping_sub(1);
@@ -1094,6 +1249,7 @@ impl Z80 {
             }
             _ => {
                 let v = bus.read(self.hl());
+                data = v;
                 self.b = self.b.wrapping_sub(1);
                 bus.io_out(self.bc(), v);
                 self.wz = step(self.bc());
@@ -1104,12 +1260,35 @@ impl Z80 {
         }
         again &= repeat;
         if again {
+            self.repeat_flags(z, start, data);
             self.pc = start;
             self.wz = start.wrapping_add(1);
             21
         } else {
             16
         }
+    }
+
+    /// Flags of a block instruction that is going to repeat (hoglet, 2018): F3/F5 come from PC
+    /// high (PC already rewound to the instruction); INIR/INDR/OTIR/OTDR also fix PF and HF.
+    fn repeat_flags(&mut self, z: u8, start: u16, data: u8) {
+        let mut f = (self.f & !(FY | FX)) | ((start >> 8) as u8 & (FY | FX));
+        if z >= 2 {
+            let b = self.b;
+            let par = |v: u8| u8::from(parity(v & 7));
+            if f & FC != 0 {
+                if data & 0x80 != 0 {
+                    f ^= (par(b.wrapping_sub(1)) ^ 1) * FPV;
+                    f = (f & !FH) | if b & 0x0F == 0 { FH } else { 0 };
+                } else {
+                    f ^= (par(b.wrapping_add(1)) ^ 1) * FPV;
+                    f = (f & !FH) | if b & 0x0F == 0x0F { FH } else { 0 };
+                }
+            } else {
+                f ^= (par(b) ^ 1) * FPV;
+            }
+        }
+        self.setf(f);
     }
 
     fn io_block_flags(&mut self, v: u8, k: u16) {
@@ -1123,7 +1302,7 @@ impl Z80 {
         if parity((k as u8 & 7) ^ self.b) {
             f |= FPV;
         }
-        self.f = f;
+        self.setf(f);
     }
 
     pub fn save(&self, e: &mut Enc) {

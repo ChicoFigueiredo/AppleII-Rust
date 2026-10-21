@@ -71,7 +71,7 @@ tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 500000 
 #                       O script adapta o arquivo com state-compat.py (remove a unidade Game I/O v4, que o fork não
 #                       conhece), roda com a cwd numa pasta temporária que tem links para as imagens de disco do
 #                       diretório do estado e de ORACLE_IMAGE_DIRS (lista separada por ':'), como o AppleWin as procura.
-#   --video-update      avança o scanner de vídeo do NTSC a cada instrução. SEM ele o barramento flutuante fica
+#        avança o scanner de vídeo do NTSC a cada instrução. SEM ele o barramento flutuante fica
 #                       parado num endereço; use sempre que a RAM não for zero (todo save-state real).
 #   ORACLE_BIN=/caminho binário do oráculo (por padrão o do cache; outro agente pode recompilá-lo com o main.cpp dele)
 #   --memclear 0..7     padrão de preenchimento da RAM (padrão do AppleWin: 2)
@@ -83,6 +83,26 @@ Cache (fora do Git, compartilhado entre worktrees): `target/conformance-cache/or
 ## Formato (v1)
 
 Linhas `#chave=valor` (UTF-8, antes do cabeçalho): `trace_format`, `oracle`, `model`, `cpu`, `frames` (se pedido), `cycles`, `start_cycle`, `memclear`, `cards`, `input`, `disk`, `state`, `rom_sha256`, `applewin_sha`, `port_base_applewin_sha`, `fork_sha`, `fork_url` (e `fixture_sha256` com disco/save-state). Depois `cycle,pc,op,a,x,y,sp,p` e uma linha por instrução: `cycle` decimal, `pc` com 4 dígitos hexa maiúsculos, os demais com 2. Finais de linha `\n`.
+
+## Relógio de vídeo (alteração do frontend `main.cpp`, HU-0103)
+
+A primeira versão do oráculo chamava `CpuExecute(slice, false)` (como `CommonFrame::Execute` quando `noVideoUpdate`). Com `bVideoUpdate = false` o `g_nVideoClockHorz/Vert` do NTSC nunca avança e toda leitura do floating bus (`$C056`, `$C050`, `$C0xx` sem dono) devolve o byte de um único endereço do scanner. O AppleWin do Windows sempre atualiza o vídeo, então isto era um artefato do frontend headless do fork, não comportamento do AppleWin. `main.cpp` agora chama `CpuExecute(slice, true)`; o patch `audetto-trace.patch` e o código do AppleWin não mudaram. Os traces de referência foram regenerados (o cabeçalho ganhou `#video_clock=`). O Rust já avançava o scanner a cada opcode.
+
+Outros ajustes do script/frontend: `--out`, `--disk` e `--state` viram caminhos absolutos no `run-audetto-oracle.sh` (o oráculo muda de diretório ao carregar o disco; um `--out` relativo falhava); o cabeçalho grava só o nome do arquivo em `#disk=`/`#state=`. O caminho `--disk` foi exercitado: DOS 3.3 System Master, 5.000.000 de ciclos no //e Enhanced, 1.821.912 instruções.
+
+## Traces grandes (não versionados)
+
+Ficam em `target/conformance-cache/reference-traces/`; os casos `trace-applewin-*` guardam o SHA-256 e o comando. Todos com `--cards disk2` (padrão), `--memclear 2`, determinísticos:
+
+| Arquivo | Comando | Instruções | SHA-256 |
+|---|---|---|---|
+| `applewin-apple2p-boot-2m.csv` | `--model apple2p --cycles 2000000` | 776.083 | `bedaa4d48ada5cce077e16faf0c3ee36d46285e64c66e11562069d9cd23f1a49` |
+| `applewin-apple2ee-boot-2m.csv` | `--model apple2ee --cycles 2000000` | 776.044 | `a000df3a0f159f993aab254c692b2fbfd3ffc10a2942d116c5f8abe3d69f61d4` |
+| `applewin-apple2-boot-2m.csv` | `--model apple2 --cycles 2000000` | 547.232 | `c77401fa9732c6b7dfa90d7bdd7a7849b09724d20f9b86f8cb93b718834b1a7d` |
+| `applewin-apple2e-boot-2m.csv` | `--model apple2e --cycles 2000000` | 776.050 | `bf80669fa23f3403179db72d8fbdc6e92fd7b50809094bb5c0a8b4877b702e37` |
+| `applewin-apple2ee-dos33-5m.csv` | `--model apple2ee --cycles 5000000 --disk "assets/disks/DOS 3.3 System Master - 680-0210-A.dsk"` | 1.821.912 | `13af08ef0a5749a64b8d0a9217d1f08a4a1725b356131dcfe5ff841d3670373d` |
+
+Os mesmos hashes estão em `tests/conformance/cases/trace-applewin-*.toml`.
 
 ## Traces versionados
 
@@ -118,3 +138,25 @@ Commits upstream entre o merge-base e a base do port (`3e8054b..a8f0d1d`, 22 com
 - `6c579da5` `-no-joystick<1|2>`; `56c95d31` `-ssc-tcp-port`; `3057ddf8`/`daf813dc` versão no save-state; `18303d49` PNG em vez de BMP.
 
 Nenhum desses altera o fluxo de CPU do boot sem disco, mas qualquer comparação de leituras de `$C061-$C063` ou de save-states com campos novos (`Shift Key Mod`, versão) pode divergir.
+
+## Áudio (HU-0501, HU-0502)
+
+`audetto-audio.patch` (aplicado depois de `audetto-trace.patch`) acrescenta ao fork pontos de observação de áudio, todos nulos por padrão: acessos à página da carta (`IOR`/`IOW`), escritas e leituras de registrador do AY, transições do IRQ (`IS_6522`, `IS_SPEECH`), toques do alto-falante, início e fim de fonema do SSI263 e o PCM do Mockingboard, do alto-falante e do SSI263 (`source/audio_hook.h`). `audetto-oracle/audio.cpp` os liga a um arquivo de eventos (`audio-events v1`, ver [test-oracles.md](../../../docs/conformance/test-oracles.md)) e a arquivos PCM brutos.
+
+Como o AppleWin só roda o código de som quando há um dispositivo de áudio, o oráculo usa um "DirectSound virtual": um buffer circular cujo cursor de reprodução anda com os Ciclos emulados (o do Mockingboard começa com 3/8 de silêncio, o do SSI263 vazio). O alto-falante não ganha voz (uma voz traria o `g_nCpuCyclesFeedback` e mexeria no relógio da CPU); o PCM dele é retirado da fila do próprio `SpkrUpdate`.
+
+Opções (todas `--audio-*`; qualquer uma liga o módulo):
+
+```sh
+tools/conformance/oracle/run-audetto-oracle.sh --model apple2p --cycles 250000 --out trace.csv \
+    --cards none --audio-card mockingboard --audio-slot 4 \
+    --audio-program tests/conformance/audio/programs/ay-tone.bin --audio-load 300 --audio-pc 300 \
+    --audio-events ay-tone.events --audio-mb-pcm ay-tone.mb.pcm --audio-spkr-pcm ay-tone.spkr.pcm
+#   --audio-card mockingboard|phasor|megaaudio|sdmusic     --audio-ay-socket N=empty|ay8910|ay8912|ay8913|ym2149
+#   --audio-bad6522 a|b   --audio-ssi263 N=empty|ssi263p|ssi263ap   --audio-sc01 on|off
+#   --audio-slice N        lote de CPU em Ciclos (padrão: clk/1000), usado na calibração
+#   --audio-ssi-pcm PREFIXO   PCM mono de 22,05 kHz de cada SSI263
+#   --audio-ay-script FILE --audio-ay-out FILE   autoteste do núcleo do AY (sem máquina)
+```
+
+`--state FILE.aws.yaml` funciona (a fixture define as cartas; os eventos têm Ciclo relativo ao fim do carregamento). Os casos e as referências: `tests/conformance/cases/audio-*.toml`, `tests/conformance/reference-audio/`; regenerar com `tools/conformance/audio/run-oracle-case.py CASO` e `run-ay-core.py`. Os programas 6502 (`tests/conformance/audio/programs/*.s`) são montados por `tools/conformance/audio/build-programs.sh`.
