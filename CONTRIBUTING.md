@@ -6,7 +6,7 @@ Obrigado por querer ajudar. O projeto é um porte do AppleWin para Rust, com o o
 
 1. Leia o [README](README.md) e o [manual](docs/manual/00-indice.md).
 2. Leia o [GLOSSARY.md](GLOSSARY.md). **Use os termos do glossário** em código, comentários, commits e documentação (Modelo, Máquina, Ciclo, Quadro, Carta, Slot, Soft switch, Floating bus, Fila de colagem, e assim por diante). Termos a evitar estão listados em cada verbete.
-3. Leia os ADRs em [docs/adr](docs/adr): núcleo headless e determinístico (0001), ROMs embutidas (0002) e thread de emulação e ritmo (0003). Eles explicam por que certas coisas não podem ser feitas de outro jeito.
+3. Leia os ADRs em [docs/adr](docs/adr): núcleo headless e determinístico (0001), ROMs embutidas (0002), thread de emulação e ritmo (0003) e oráculo de conformidade (0004). Eles explicam por que certas coisas não podem ser feitas de outro jeito.
 4. Veja [docs/plano-final.md](docs/plano-final.md) e [docs/pendencias.md](docs/pendencias.md) para o que está em aberto.
 
 ## Ambiente
@@ -32,8 +32,11 @@ Mantenha cada alteração dentro do crate a que ela pertence. `apple2-core` só 
 ```sh
 cargo test --workspace --release
 cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all -- --check      # informativo por enquanto
+cargo fmt --all -- --check      # obrigatório; bloqueia a CI
 ```
+
+- `cargo fmt --all -- --check` é obrigatório: rode `cargo fmt --all` antes de cada commit. A CI falha se houver diferença.
+- **Nenhum item vira `PASS` sem evidência.** O Estado de verificação (`IMPLEMENTED`, `PASS`, `FAIL`, `UNVERIFIED`, `NOT_APPLICABLE`, `BLOCKED`) de um recurso só muda para `PASS` com um teste executado contra o Oráculo e o Manifesto de execução que o registra. Código existente é `IMPLEMENTED`, não `PASS`; dúvida é `UNVERIFIED`. Veja [docs/conformance](docs/conformance/README.md).
 
 - Escreva os testes primeiro sempre que possível (TDD): um teste que falha, a correção mínima, e depois a limpeza.
 - O clippy precisa passar **sem avisos**. Valide localmente (`cargo test --workspace --release` e `cargo clippy --workspace --all-targets -- -D warnings`). A CI (Linux, Windows e macOS no GitHub; Linux no GitLab) é **somente manual**: roda apenas quando o dono do repositório a dispara, porque a cota de minutos é limitada. Pushes e PRs não disparam CI.
