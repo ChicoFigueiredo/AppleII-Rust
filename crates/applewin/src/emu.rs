@@ -371,8 +371,21 @@ impl Emulator {
     /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
     pub fn effective_full_speed(&self) -> bool {
         self.full_speed
-            || self.disks.wants_full_speed(&self.machine)
+            || (self.disks.wants_full_speed(&self.machine) && !self.sound_prevents_full_speed())
             || (self.debugger.is_stepping() && self.debugger.full_speed)
+    }
+
+    /// AppleWin.cpp:183: the spinning-drive speed-up needs `!Spkr_IsActive()` and
+    /// `!MockingboardCardManager::IsActiveToPreventFullSpeed()` (any Mockingboard-family card in
+    /// a slot). Scroll Lock and the debugger's full speed ignore the sound.
+    fn sound_prevents_full_speed(&self) -> bool {
+        let now = self.machine.cycles();
+        self.machine.speaker_is_active()
+            || (1..=7u8).any(|slot| {
+                self.machine
+                    .card::<apple2_audio::MockingboardCard>(slot)
+                    .is_some_and(|c| c.is_active_to_prevent_full_speed(now))
+            })
     }
 
     pub fn clock_hz(&self) -> f64 {
