@@ -210,9 +210,6 @@ namespace
             advance();
             *play = static_cast<DWORD>(myPlayPos);
             *write = static_cast<DWORD>(myWritePos);
-            if (std::getenv("ORACLE_DS_DEBUG"))
-                std::fprintf(stderr, "[ds %zu] cyc=%" PRIu64 " play=%zu write=%zu avail=%zu\n", mySampleRate,
-                    static_cast<uint64_t>(g_nCumulativeCycles), myPlayPos, myWritePos, myAvailable);
             return DS_OK;
         }
 

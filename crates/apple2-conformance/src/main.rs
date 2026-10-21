@@ -20,7 +20,8 @@ uso:
   conformance pcm-compare ESPERADO.pcm OBTIDO.pcm [--channels N] [--f-tol X --rms-tol X --peak-tol X]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
-Código de saída de `run`: 0 se tudo PASS, 1 se algum FAIL, 2 se algum BLOCKED (sem FAIL).
+Código de saída de `run`: 0 se tudo PASS, 1 se algum FAIL sem `known_divergence`, 2 se algum BLOCKED (sem FAIL),
+3 se os únicos FAIL são divergências conhecidas (`oracle.known_divergence`); o FAIL continua FAIL no manifesto.
 TEXT aceita \\r \\n \\\\ e \\xNN. Modelos: apple2 apple2plus apple2jplus apple2e apple2e-enhanced
 pravets82 pravets8m pravets8a tk3000e base64a.";
 
@@ -101,6 +102,7 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
             .collect::<Result<_, _>>()?
     };
     let mut outcomes = Vec::new();
+    let mut unexpected_fail = false;
     for c in selected {
         let o = run_case(&env, c);
         println!(
@@ -110,6 +112,9 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
             o.seconds,
             o.manifest.actual.lines().next().unwrap_or("")
         );
+        if o.manifest.result == TestResult::Fail && c.oracle.known_divergence.is_none() {
+            unexpected_fail = true;
+        }
         outcomes.push(o);
     }
     write_report(&report, &outcomes).map_err(|e| format!("{}: {e}", report.display()))?;
@@ -120,10 +125,12 @@ fn cmd_run(rest: &[String]) -> Result<u8, String> {
         .map(|r| format!("{r}={}", c[r]))
         .collect();
     println!("relatório em {} ({})", report.display(), line.join(" "));
-    Ok(if c[&TestResult::Fail] > 0 {
+    Ok(if unexpected_fail {
         1
     } else if c[&TestResult::Blocked] > 0 {
         2
+    } else if c[&TestResult::Fail] > 0 {
+        3
     } else {
         0
     })

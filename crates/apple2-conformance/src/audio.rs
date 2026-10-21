@@ -571,3 +571,80 @@ pub fn render_lines(lines: &[String]) -> String {
     }
     s
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lines(s: &str) -> Vec<String> {
+        lines_of(s)
+    }
+
+    #[test]
+    fn exact_timing_reports_the_first_different_line_and_length_mismatches() {
+        let a = lines("10,IOW,4,01,07\n20,AYW,4,0,0,7,38\n30,SPK\n");
+        assert!(compare_events(&a, &a, Timing::Exact, 100).is_ok());
+        let b = lines("10,IOW,4,01,07\n21,AYW,4,0,0,7,38\n30,SPK\n");
+        let e = compare_events(&a, &b, Timing::Exact, 100).unwrap_err();
+        assert!(
+            e.contains("linha 2") && e.contains("20,AYW") && e.contains("21,AYW"),
+            "{e}"
+        );
+        let short = lines("10,IOW,4,01,07\n");
+        let e = compare_events(&a, &short, Timing::Exact, 100).unwrap_err();
+        assert!(e.contains("oráculo tem mais"), "{e}");
+    }
+
+    #[test]
+    fn ssi_timing_accepts_shifted_phoneme_ends_within_the_tolerance_per_chip() {
+        let oracle =
+            lines("5,PHON,4,1,0E,100\n1000,PHEND,4,1\n1010,PHON,4,1,0C,100\n2000,PHEND,4,1\n");
+        // Same sequence, ends 300 cycles late.
+        let rust =
+            lines("5,PHON,4,1,0E,100\n1300,PHEND,4,1\n1310,PHON,4,1,0C,100\n2300,PHEND,4,1\n");
+        assert!(compare_events(&oracle, &rust, Timing::Ssi { tolerance: 400 }, 3000).is_ok());
+        let e = compare_events(&oracle, &rust, Timing::Ssi { tolerance: 200 }, 3000).unwrap_err();
+        assert!(e.contains("fora da tolerância"), "{e}");
+        // A different phoneme is a sequence error whatever the tolerance.
+        let wrong =
+            lines("5,PHON,4,1,0E,100\n1000,PHEND,4,1\n1010,PHON,4,1,0D,100\n2000,PHEND,4,1\n");
+        let e = compare_events(&oracle, &wrong, Timing::Ssi { tolerance: 5000 }, 3000).unwrap_err();
+        assert!(e.contains("diverge"), "{e}");
+    }
+
+    #[test]
+    fn a_phoneme_end_without_a_start_counts_from_the_load() {
+        // Save-state: the phoneme was restarted at cycle 0 by the load.
+        let d = durations(
+            &lines("120,PHEND,5,0\n130,PHON,5,0,04,9\n250,PHEND,5,0\n"),
+            "5,0",
+        );
+        assert_eq!(d, vec![120, 120]);
+    }
+
+    #[test]
+    fn audio_spec_rejects_bad_names_and_sizes() {
+        let ok = AudioSpec {
+            card: Some("phasor".into()),
+            ay_sockets: Some(vec!["ay8913".into(); 4]),
+            ..Default::default()
+        };
+        assert!(ok.validate().is_ok());
+        assert!(ok
+            .sockets()
+            .unwrap()
+            .ay
+            .iter()
+            .all(|&t| t == AyType::Ay3_8913));
+        let bad = AudioSpec {
+            card: Some("sound blaster".into()),
+            ..Default::default()
+        };
+        assert!(bad.validate().is_err());
+        let short = AudioSpec {
+            ay_sockets: Some(vec!["ay8910".into()]),
+            ..Default::default()
+        };
+        assert!(short.validate().is_err());
+    }
+}
