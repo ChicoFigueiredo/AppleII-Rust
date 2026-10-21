@@ -22,7 +22,7 @@ Limitações: a Breakpoint card existe, mas o depurador ainda não lhe entrega o
 
 ## Interface
 
-- **Janela de configuração.** Reproduz as páginas do AppleWin (Configuration, Input, Slots, Advanced e as opções de cada carta), mais uma aba Sound para os interruptores de som que o AppleWin só tem na linha de comando. Faltam o botão "Benchmark Emulator" (desativado), o volume separado do Mockingboard e a lista de interfaces do Npcap/libpcap (usa os nomes do sistema ou um nome digitado). A lista de portas seriais vem de /dev (ou COM1 a COM9).
+- **Janela de configuração.** Reproduz as páginas do AppleWin (Configuration, Input, Slots, Advanced e as opções de cada carta), mais uma aba Sound para os interruptores de som que o AppleWin só tem na linha de comando. Faltam o botão "Benchmark Emulator" (desativado), o volume separado do Mockingboard e, sem o recurso `pcap`, a descrição das interfaces do Npcap/libpcap (a lista vem do sistema, com os endereços IP). A lista de portas seriais combina `serialport::available_ports()` com uma varredura por sistema (`ttyUSB*`, `ttyACM*`, `ttyS*`, `rfcomm*`, `cu.*`, COM existentes). Erros ao abrir a porta serial, a interface pcap ou o arquivo da impressora aparecem na barra de status e em `stderr`; a carta fica desconectada e a emulação continua (o AppleWin só grava no log).
 - **Janela única.** A tela, a barra e as janelas de ajuda e configuração são desenhadas dentro da mesma janela, com a biblioteca egui, e não por caixas de diálogo do sistema.
 - **Idioma.** Os textos da interface são em inglês; este manual está em português do Brasil.
 - **Ajuda.** F1 abre este manual dentro do emulador, no lugar do arquivo CHM do AppleWin.
