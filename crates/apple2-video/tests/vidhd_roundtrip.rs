@@ -101,3 +101,43 @@ fn legacy_mode_framebuffer_with_a_vidhd_is_identical_after_save_and_load() {
         assert!(before == after, "{vt:?}: legacy framebuffer differs after the round trip");
     }
 }
+
+/// DIV-002/DIV-003 (framebuffer differential): Super Hi-Res is switched on by the first opcode of
+/// the first frame. AppleWin does not recompute the scanner address at a mode change, so line 0
+/// of that frame is drawn from the pointer the legacy (centred, 40 px right and 8 rows down) mode
+/// left, and its last 40 pixels run off the end of the row into the row above on screen
+/// (AppleWin's framebuffer is bottom-up). Only one SHR row (2*y) is drawn per IIgs line.
+#[test]
+fn first_shr_line_starts_at_the_legacy_pointer_and_wraps_upwards() {
+    let mut m = machine(Model::Apple2eEnhanced, 0x00); // SHR off until the program turns it on
+    for (i, b) in [0xA9, 0xC1, 0x8D, 0x29, 0xC0, 0x4C, 0x05, 0x03].iter().enumerate() {
+        m.poke_main(0x300 + i as u16, *b);
+    }
+    m.cpu_mut().pc = 0x300;
+    let mut r = Renderer::new(RenderConfig {
+        video_type: VideoType::ColorIdealized,
+        ..Default::default()
+    });
+    r.resync(m.cycles_in_frame());
+    {
+        let hd = m.card::<VidHd>(2).unwrap();
+        r.init(&WithVidHd { source: &m, vidhd: hd });
+    }
+    while m.frames() < 1 {
+        let c = m.step();
+        let hd = m.card::<VidHd>(2).unwrap();
+        r.update(&WithVidHd { source: &m, vidhd: hd }, c);
+    }
+    let w = r.size().0;
+    let px = |x: usize, y: usize| r.pixels()[y * w + x];
+    let black = 0xFF00_0000;
+    // Line 0 started at (60, 26): 40 columns of 16 pixels end at x=700, wrapping 20 pixels up.
+    assert_ne!(px(60, 26), black);
+    assert_ne!(px(679, 26), black, "the first line runs to the right border");
+    assert_ne!(px(0, 25), black, "...and wraps onto the row above");
+    assert_ne!(px(19, 25), black);
+    assert_eq!(px(20, 25), black);
+    // The properly placed lines (1 onwards) start at x=20 on rows 2*y, with black rows between.
+    assert_ne!(px(20, 20), black);
+    assert_eq!(px(20, 21), black);
+}
