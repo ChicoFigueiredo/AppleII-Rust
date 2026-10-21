@@ -9,11 +9,15 @@ O harness é escrito no crate `crates/apple2-conformance`, binário `conformance
 | Pasta | Conteúdo |
 |---|---|
 | `manifests/` | Manifestos de execução e o esquema `manifests/schema.json` |
-| `inputs/` | Entradas pequenas e geradas por nós (sequências de teclas, configurações de Máquina), e o índice das Fixtures externas (caminho, SHA-256, modelo, finalidade) |
+| `inputs/` | Entradas pequenas e geradas por nós (sequências de teclas, configurações de Máquina), e o índice das Fixtures externas (caminho, SHA-256, modelo, finalidade). `inputs/video/*.scene`: cenas determinísticas do diferencial de vídeo, geradas por `crates/apple2-video/examples/gen_scenes.rs` |
 | `reference-traces/` | Traces de referência v1 (CSV) gerados pelo AppleWin, com a origem e o SHA nos metadados |
 | `reports/` | Relatórios das execuções (JUnit, diffs) |
 
 Em `reports/` ficam só relatórios de referência que valem a pena versionar. O relatório de uma execução comum vai para `target/conformance-report`, fora do controle de versão.
+
+## Casos de vídeo
+
+Os `cases/video-*.toml` são casos `framebuffer-hash` com `authority = "applewin"`: o SHA-256 do framebuffer completo (600x420, ou 680x436 com VidHD) que o oráculo (`audetto-oracle --fb-out`) produziu para a mesma cena, Tipo de vídeo, frequência e carta. O `source` de cada um traz o comando do oráculo. A tabela `[video]` aceita `type`, `hz`, `rgb_card`, `region` (`visible` ou `full`), `scene`, `scene_sha256` e `vidhd_slot`. Regerar: `tools/conformance/oracle/video-differential.py --cards 0,1,2 --write-cases tests/conformance/cases`. O registro do diferencial está em [video-differential.md](../../docs/conformance/audit/video-differential.md).
 
 ## Como rodar
 
