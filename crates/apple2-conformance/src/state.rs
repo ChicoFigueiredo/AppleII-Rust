@@ -96,12 +96,16 @@ pub struct Imported {
 /// Directories searched for images: the state's own, then `extra`.
 pub fn image_dirs(state: &Path, extra: &[PathBuf]) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
-    if let Some(d) = state.parent() {
-        dirs.push(if d.as_os_str().is_empty() {
+    // The state's directory and its parents (a corpus keeps images next to the topic folders).
+    let mut d = state.parent();
+    for _ in 0..4 {
+        let Some(p) = d else { break };
+        dirs.push(if p.as_os_str().is_empty() {
             PathBuf::from(".")
         } else {
-            d.to_path_buf()
+            p.to_path_buf()
         });
+        d = p.parent();
     }
     dirs.extend(extra.iter().cloned());
     dirs

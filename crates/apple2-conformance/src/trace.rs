@@ -202,7 +202,19 @@ impl<W: Write> TraceWriter<W> {
     /// Records, then executes one instruction; returns its cycles. This is how a trace is
     /// "attached" to a [`Machine`] without any hook in the core.
     pub fn step(&mut self, m: &mut Machine) -> io::Result<u32> {
-        self.record(m)?;
+        let mut row = TraceRow::from_machine(m);
+        if (0xC100..0xD000).contains(&row.pc) {
+            // `peek` cannot read the slot/internal Cx ROM without side effects: take the opcode the
+            // CPU really fetched.
+            let cycles = m.step();
+            let (pc, op) = m.board().current_opcode();
+            if pc == row.pc {
+                row.op = op;
+            }
+            self.record_row(&row)?;
+            return Ok(cycles);
+        }
+        self.record_row(&row)?;
         Ok(m.step())
     }
 

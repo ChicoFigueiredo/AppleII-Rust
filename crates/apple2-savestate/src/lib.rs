@@ -26,6 +26,7 @@ pub mod ext;
 pub mod fsio;
 pub mod host;
 mod misc;
+pub mod powerup;
 pub mod yaml;
 
 pub use fsio::{write_atomic, write_atomic_with};
@@ -392,7 +393,11 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
             st.interrupts.set_irq(apple2_core::IrqSource::Mouse, true);
         }
     }
-    apple2::apply_apple2(&mut st, &a2, &lc_loads, ctx.warnings)?;
+    let power_on = {
+        let pattern = ctx.host.memory_init_pattern();
+        powerup::power_on_ram(pattern, &mut || ctx.host.power_on_random())
+    };
+    apple2::apply_apple2(&mut st, &a2, &lc_loads, &power_on, ctx.warnings)?;
     if let Some(a) = &aux {
         apple2::load_aux_memory(&mut st, a)?;
     }

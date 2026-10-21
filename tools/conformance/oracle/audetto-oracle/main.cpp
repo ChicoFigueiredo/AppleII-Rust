@@ -44,6 +44,7 @@ namespace
     FILE *g_out = nullptr;
     uint64_t g_limit = 0; // trace lines are written only while cycle < g_limit
     uint64_t g_lines = 0;
+    bool g_videoUpdate = false; // --video-update: advance the NTSC video scanner (floating bus) per opcode
 
     void traceHook(uint64_t cycle, uint16_t pc, uint8_t op, uint8_t a, uint8_t x, uint8_t y, uint8_t sp, uint8_t p)
     {
@@ -82,7 +83,7 @@ namespace
             const uint32_t slice = static_cast<uint32_t>(g_fCurrentCLK6502 * (1.0 / 1000.0));
             while (g_nCumulativeCycles < endCycle)
             {
-                const uint32_t executed = CpuExecute(slice, false);
+                const uint32_t executed = CpuExecute(slice, g_videoUpdate);
                 GetCardMgr().Update(executed);
                 SpkrUpdate(executed);
                 g_dwCyclesThisFrame = (g_dwCyclesThisFrame + executed) % clksPerFrame;
@@ -144,6 +145,8 @@ int main(int argc, char **argv)
             state = argv[++i];
         else if (arg == "--memclear" && hasValue)
             memclear = std::atoi(argv[++i]);
+        else if (arg == "--video-update")
+            g_videoUpdate = true;
         else if (arg == "--cards" && hasValue)
             cards = argv[++i];
         else if (arg == "--meta" && hasValue)

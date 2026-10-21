@@ -1079,7 +1079,8 @@ impl Cpu {
             0x28 => {
                 self.idle(bus);
                 self.idle(bus);
-                self.p = (self.pull(bus) | FLAG_U) & !FLAG_B;
+                // cpu_instructions.inl PLP/RTI: `POP | AF_RESERVED | AF_BREAK` (B always reads as 1).
+                self.p = self.pull(bus) | FLAG_U | FLAG_B;
             }
             0xDA if cmos => {
                 self.idle(bus);
@@ -1154,7 +1155,8 @@ impl Cpu {
             0x40 => {
                 self.idle(bus);
                 self.idle(bus);
-                self.p = (self.pull(bus) | FLAG_U) & !FLAG_B;
+                // cpu_instructions.inl PLP/RTI: `POP | AF_RESERVED | AF_BREAK` (B always reads as 1).
+                self.p = self.pull(bus) | FLAG_U | FLAG_B;
                 let lo = self.pull(bus) as u16;
                 let hi = self.pull(bus) as u16;
                 self.pc = lo | (hi << 8);

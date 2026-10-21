@@ -13,6 +13,7 @@ const USAGE: &str = "\
 uso:
   conformance run (--all | --case ID [--case ID ...]) --report DIR [--root DIR]
   conformance trace (--model M | --state FILE.aws.yaml [--image-dir DIR]...) (--frames N | --cycles N) [--cpu 6502|65C02] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
+  conformance check-import FILE.aws.yaml [--image-dir DIR]...
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
@@ -26,6 +27,7 @@ fn main() -> ExitCode {
         Some("run") => cmd_run(&args[1..]),
         Some("trace") => cmd_trace(&args[1..]),
         Some("diff") => cmd_diff(&args[1..]),
+        Some("check-import") => cmd_check_import(&args[1..]),
         Some("-h" | "--help" | "help") => {
             println!("{USAGE}");
             Ok(0)
@@ -257,6 +259,41 @@ fn trace_from_state(
         bytes.iter().filter(|&&b| b == b'\n').count()
     );
     Ok(0)
+}
+
+/// `check-import`: compares a freshly imported save-state with its own YAML (HU-0401).
+/// Exit code 0 when nothing differs, 1 otherwise, 2 when an image is missing (BLOCKED).
+fn cmd_check_import(rest: &[String]) -> Result<u8, String> {
+    let (mut file, mut dirs) = (None, Vec::<PathBuf>::new());
+    let mut a = Args::new(rest);
+    while let Some(arg) = a.next() {
+        match arg {
+            "--image-dir" => dirs.push(PathBuf::from(a.value(arg)?)),
+            o if o.starts_with("--") => return Err(format!("argumento desconhecido `{o}`")),
+            f => file = Some(PathBuf::from(f)),
+        }
+    }
+    let file = file.ok_or("check-import precisa de FILE.aws.yaml")?;
+    let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let mut imp = apple2_conformance::state::import_file(&file, &dirs)?;
+    if !imp.missing.is_empty() {
+        println!("BLOCKED: imagens ausentes: {}", imp.missing.join(", "));
+        return Ok(2);
+    }
+    let mut diffs = apple2_conformance::import_check::direct_checks(&text, &mut imp.machine)?;
+    let imp2 = apple2_conformance::state::import_file(&file, &dirs)?;
+    diffs.extend(apple2_conformance::import_check::tree_diff(&text, &imp2.machine)?);
+    for d in &diffs {
+        println!("DIFF {d}");
+    }
+    println!(
+        "{}: {} diferenças, {} avisos do carregador",
+        file.display(),
+        diffs.len(),
+        imp.warnings.len()
+    );
+    Ok(u8::from(!diffs.is_empty()))
 }
 
 fn cmd_diff(rest: &[String]) -> Result<u8, String> {

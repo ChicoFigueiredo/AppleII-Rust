@@ -18,6 +18,7 @@ path = "src/main.rs"
 apple2-core = { path = "../apple2-core" }
 apple2-video = { path = "../apple2-video" }
 apple2-savestate = { path = "../apple2-savestate" }
+apple2-cpu = { path = "../apple2-cpu" }
 apple2-audio = { path = "../apple2-audio" }
 apple2-hostio = { path = "../apple2-hostio" }
 apple2-storage = { path = "../apple2-storage" }

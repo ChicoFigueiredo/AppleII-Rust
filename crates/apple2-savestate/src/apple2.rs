@@ -453,6 +453,7 @@ pub fn apply_apple2(
     st: &mut MachineState,
     unit: &Apple2Unit,
     lcs: &[LcLoad],
+    power_on_ram: &[u8],
     warnings: &mut Vec<String>,
 ) -> Result<(), Error> {
     let s = unit.state;
@@ -569,7 +570,10 @@ pub fn apply_apple2(
 
     // Main memory (Memory.cpp:2905)
     let mm = s.need_sub("Main Memory")?;
+    // MemReset() ran before the load: bytes the file does not list keep the power-on pattern.
     let mut img = vec![0u8; 0x10000];
+    let n = power_on_ram.len().min(0xC000);
+    img[..n].copy_from_slice(&power_on_ram[..n]);
     mm.load_memory(&mut img)?;
     st.memory.main[..0xC000].copy_from_slice(&img[..0xC000]);
     let lc_bytes = st.memory.lc.len();

@@ -4,7 +4,7 @@
 # usage: run-audetto-oracle.sh --model <apple2|apple2p|apple2jp|apple2e|apple2ee>
 #                              (--cycles N | --frames N) [--out FILE]
 #                              [--disk IMAGE] [--state FILE.aws.yaml]
-#                              [--memclear 0..7] [--cards disk2|none]
+#                              [--memclear 0..7] [--cards disk2|none] [--video-update]
 # Without --out the CSV goes to stdout. Run build-audetto-oracle.sh first.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ if [ -z "${ORACLE_CACHE:-}" ]; then
   ORACLE_CACHE="$(dirname "$COMMON")/target/conformance-cache"
 fi
 CLONE="$ORACLE_CACHE/oracle/audetto-AppleWin"
-BIN="$ORACLE_CACHE/oracle/build/audetto-oracle"
+BIN="${ORACLE_BIN:-$ORACLE_CACHE/oracle/build/audetto-oracle}"
 [ -x "$BIN" ] || { echo "run-audetto-oracle: $BIN not found; run build-audetto-oracle.sh" >&2; exit 1; }
 
 MODEL="" OUT="" ARGS=()
@@ -27,6 +27,7 @@ while [ $# -gt 0 ]; do
     --model) MODEL="$2"; ARGS+=("$1" "$2"); shift 2 ;;
     --out)   OUT="$2"; shift 2 ;;
     --cycles|--frames|--disk|--state|--memclear|--cards) ARGS+=("$1" "$2"); shift 2 ;;
+    --video-update) ARGS+=("$1"); shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -75,8 +76,13 @@ for ((i = 0; i < ${#ARGS[@]}; i++)); do
   if [ "${ARGS[i]}" = "--state" ]; then
     # Disk images are looked up next to the save-state: link the neighbours into the scratch dir.
     STATE_DIR="$(cd "$(dirname "${ARGS[i+1]}")" && pwd)"
-    for f in "$STATE_DIR"/*; do
-      case "$f" in *.aws.yaml) ;; *) [ -f "$f" ] && ln -sf "$f" "$SCRATCH/$(basename "$f")" ;; esac
+    # ORACLE_IMAGE_DIRS (colon-separated) adds more directories to look in.
+    IFS=: read -r -a SEARCH_DIRS <<< "$STATE_DIR:${ORACLE_IMAGE_DIRS:-}"
+    for d in "${SEARCH_DIRS[@]}"; do
+      [ -n "$d" ] && [ -d "$d" ] || continue
+      for f in "$(cd "$d" && pwd)"/*; do
+        case "$f" in *.aws.yaml) ;; *) [ -f "$f" ] && ln -sf "$f" "$SCRATCH/$(basename "$f")" ;; esac
+      done
     done
     python3 -I "$HERE/state-compat.py" "${ARGS[i+1]}" "$SCRATCH/state.aws.yaml"
     ARGS[i+1]="$SCRATCH/state.aws.yaml"
