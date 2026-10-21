@@ -736,12 +736,7 @@ fn malformed_frames_from_the_backend_are_dropped_not_delivered() {
     bad_version[14] = 0x65; // IPv6 nibble under an IPv4 ethertype
     let runt = &good[..10]; // shorter than an Ethernet header
 
-    for f in [
-        &bad_total[..],
-        &bad_version[..],
-        runt,
-        &[][..],
-    ] {
+    for f in [&bad_total[..], &bad_version[..], runt, &[][..]] {
         h.push_rx(f);
     }
     assert_eq!(

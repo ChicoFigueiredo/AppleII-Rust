@@ -19,7 +19,11 @@ fn a_printer_file_that_cannot_be_opened_shows_a_message_and_emulation_continues(
     let mut emu = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
 
     emu.run_frame();
-    assert_eq!(emu.status().message_seq, 0, "nothing to say before the card is used");
+    assert_eq!(
+        emu.status().message_seq,
+        0,
+        "nothing to say before the card is used"
+    );
 
     // A byte to the printer card: the file does not open.
     emu.machine.with_card(1, |c, ctx| c.io_write(0, b'X', ctx));

@@ -392,7 +392,11 @@ fn printer_custom_filename_survives_save_and_load() {
         ..Host::default()
     };
     let c = load_entry_with(&mut host, &text, "Generic Printer");
-    let p = c.as_any().unwrap().downcast_ref::<ParallelPrinterCard>().unwrap();
+    let p = c
+        .as_any()
+        .unwrap()
+        .downcast_ref::<ParallelPrinterCard>()
+        .unwrap();
     assert_eq!(p.filename(), Some(std::path::Path::new(NAME)));
 }
 
@@ -408,7 +412,11 @@ fn printer_default_name_in_a_save_keeps_the_configured_file() {
         ..Host::default()
     };
     let c = load_entry_with(&mut host, &text, "Generic Printer");
-    let p = c.as_any().unwrap().downcast_ref::<ParallelPrinterCard>().unwrap();
+    let p = c
+        .as_any()
+        .unwrap()
+        .downcast_ref::<ParallelPrinterCard>()
+        .unwrap();
     assert_eq!(p.filename(), Some(std::path::Path::new("custom.txt")));
 }
 
