@@ -128,7 +128,7 @@ fn p23_ctrl_f10_has_no_mouse_release_function() {
 fn p23_reboot_confirmation_follows_the_option() {
     assert!(reboot_needs_confirmation(Action::Reboot, true, true));
     assert!(!reboot_needs_confirmation(Action::Reboot, true, false));
-    assert!(!reboot_needs_confirmation(Action::Reboot, false, true)); // the F2 key
+    assert!(!reboot_needs_confirmation(Action::Reboot, false, true)); // internal restart, not F2
     assert!(!reboot_needs_confirmation(Action::SoftReset, true, true));
 }
 

@@ -265,25 +265,6 @@ impl App {
         }
     }
 
-    /// `Win32Frame::ConfirmReboot` (WinFrame.cpp:1997): the same question and wording.
-    fn confirm_reboot(&mut self) -> bool {
-        let was_paused = self.status.paused;
-        self.emu.send(Command::SetPaused(true));
-        let yes = rfd::MessageDialog::new()
-            .set_level(rfd::MessageLevel::Warning)
-            .set_title("Reboot")
-            .set_description(
-                "Are you sure you want to reboot?\n(All data will be lost!)\n\n\
-                 You can skip this dialog from displaying\nin the future by unchecking:\n\n    \
-                 [ ] Confirm reboot\n\nin the Configuration dialog.",
-            )
-            .set_buttons(rfd::MessageButtons::YesNo)
-            .show()
-            == rfd::MessageDialogResult::Yes;
-        self.emu.send(Command::SetPaused(was_paused));
-        yes
-    }
-
     /// F11 / F12 (`SaveStateSelectImage`): the file dialog starts at the current state file; the
     /// chosen file becomes the current one (and is remembered, like AppleWin's registry value).
     fn state_dialog(&mut self, save: bool) {
@@ -637,14 +618,7 @@ impl App {
     fn handle_ui_events(&mut self, events: Vec<UiEvent>) {
         for e in events {
             match e {
-                UiEvent::Action(a) => {
-                    if reboot_needs_confirmation(a, true, self.settings.misc.confirm_reboot)
-                        && !self.confirm_reboot()
-                    {
-                        continue;
-                    }
-                    self.do_action(a)
-                }
+                UiEvent::Action(a) => self.do_action(a),
                 UiEvent::Apply(s) => {
                     self.settings = (*s).clone();
                     self.input
@@ -820,8 +794,11 @@ fn open_command(p: &std::path::Path) -> Command {
     }
 }
 
-/// AppleWin asks "Are you sure you want to reboot?" only when F2's button is clicked (not the
-/// F2 key) and "Confirm reboot" is on (`ConfirmReboot(bFromButtonUI)`, WinFrame.cpp:1999).
+/// AppleWin asks "Are you sure you want to reboot?" when the reboot comes from the F2 button or
+/// the F2 key (both call `ProcessButtonClick(.., true)`, WinFrame.cpp:1440 and :1534) and
+/// "Confirm reboot" is on (`ConfirmReboot(bFromButtonUI)`, WinFrame.cpp:1999). Internal restarts
+/// (`ProcessButtonClick(BTN_RUN)`, :1189 and :1955) never ask. The question itself is the
+/// egui box opened by `Ui::request_reboot`.
 pub fn reboot_needs_confirmation(action: Action, from_button: bool, confirm_reboot: bool) -> bool {
     matches!(action, Action::Reboot) && from_button && confirm_reboot
 }
