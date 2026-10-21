@@ -507,4 +507,23 @@ mod vidhd {
         let held = t.orig.card::<VidHd>(2).unwrap().snapshot();
         assert_eq!(t.plain.card::<VidHd>(2).unwrap().snapshot(), held);
     }
+
+    /// GH#1108: after loading a save-state with a VidHD in slot 3, `$C3nn` reads the card's ROM
+    /// bytes (`24 EA 4C`), not the floating bus (SLOTC3ROM on, so the card ROM is visible).
+    #[test]
+    fn gh1108_slot3_rom_is_set_after_load() {
+        use apple2_cpu::Bus;
+        let mut t = round_trip(3, Box::new(VidHd::new()), |m| {
+            m.board_mut().write(0xC00B, 0); // SLOTC3ROM
+        });
+        for (name, m) in [
+            ("original", &mut t.orig),
+            ("loaded", &mut t.exact),
+            ("loaded without extension", &mut t.plain),
+        ] {
+            m.board_mut().write(0xC00B, 0);
+            let rom = [0xC300u16, 0xC301, 0xC302].map(|a| m.board_mut().read(a));
+            assert_eq!(rom, [0x24, 0xEA, 0x4C], "{name}");
+        }
+    }
 }
