@@ -12,8 +12,9 @@ import hashlib
 import os
 import re
 import sys
+from pathlib import Path
 
-DEFAULT_CACHE = "/mnt/d/Chico/AppleRust/target/conformance-cache/applewin-test"
+DEFAULT_CACHE = str(Path(__file__).resolve().parents[2] / "target/conformance-cache/applewin-test")
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "..", "..", "tests", "conformance", "inputs", "applewin-test-index.csv")
 COLUMNS = ["caminho", "tipo", "tamanho", "sha256", "modelo", "cpu", "cartas_slots", "perifericos", "descricao"]

@@ -1,7 +1,7 @@
 # Fixtures obrigatórias da HU-0002 no AppleWin-Test
 
 SHA fixado: `4b113ce8cff1426bda5595cac9cb04776adfbb5d` (master em 2026-10-04).
-Cache fora do Git: `/mnt/d/Chico/AppleRust/target/conformance-cache/applewin-test/` (o repositório não tem licença; nada dele é copiado para o Git).
+Cache fora do Git: `target/conformance-cache/applewin-test/` (o repositório não tem licença; nada dele é copiado para o Git).
 Verificação feita em 2026-10-20 sobre o checkout desse SHA; hashes SHA-256 em `applewin-test-index.csv`.
 
 | Nome citado no plano | Caminho real no SHA | Situação |
