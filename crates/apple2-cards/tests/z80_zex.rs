@@ -75,7 +75,7 @@ fn zexdoc_and_zexall() {
         };
         let (out, t) = run_cpm(&image);
         let errors = out.matches("ERROR").count();
-        let ok = out.matches("OK").count();
+        let ok = out.lines().filter(|l| l.trim_end().ends_with("OK")).count();
         let tests = out.lines().filter(|l| l.contains("....")).count();
         failed |= errors > 0 || tests == 0;
         md += &format!(
