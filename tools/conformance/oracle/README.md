@@ -150,7 +150,9 @@ O fork reimplementa para o Linux alguns arquivos de `source/linux/duplicates/` c
 - `audetto-snesmax.patch`: o SNES MAX não registrava tratador de E/S (a leitura de `$C0n0` devolvia o barramento flutuante cru). O patch devolve `IORead`/`IOWrite` do upstream sem joystick (o oráculo não tem controle: o latch deixa todos os botões soltos) e o `LoadSnapshot` que põe `0x1ffff` nos dois controles.
 - `audetto-ssc-rom.patch`: o Super Serial Card não instalava a ROM do firmware (`$Cn00` e a expansão de `$C800`); `$C2xx` lia 0. O patch restaura `InitializeIO` do upstream. Os registradores do 6551 continuam sem emulação (`$C0A8-$C0AF` leem o barramento flutuante), por isso os estados `SSC-*` seguem BLOCKED.
 
-`build-audetto-oracle.sh` aplica os dois depois dos patches de trace e de áudio. Quem tiver um binário antigo no cache compartilhado precisa reconstruir (os hashes dos casos `savestate-corpus-SNES_MAX-slot4`, `6522-one-shot` e `SSI263-test` vêm do binário novo).
+`build-audetto-oracle.sh` aplica estes patches depois dos patches de trace e de áudio. Quem tiver um binário antigo no cache compartilhado precisa reconstruir (os hashes dos casos `savestate-corpus-SNES_MAX-slot4`, `6522-one-shot` e `SSI263-test` vêm do binário novo).
+
+- `audetto-version.patch`: o `resource/version.h` do fork diz `APPLEWIN_VERSION 1,32,0,0` (o fork é anterior ao a8f0d1d); o patch o muda para `1,32,1,0`, a versão da referência (ADR 0004). A versão aparece no DIB do SmartPort (`SmartPortCmdStatus`, `Harddisk.cpp:1095`: firmware 132.1) e em save-states. Quem tiver binário antigo no cache precisa reconstruir; os casos `savestate-corpus-SmartPort-firmware` e `disk-*hdd*` dependem disso.
 
 `run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255`: o fork aloca os bancos do Language Card/Saturn com `new BYTE[16K]` sem zerar, e um `Memory BankNN` parcial no YAML (por exemplo `0000: 00`) deixa o resto com lixo do heap, que mudava de arquivo para arquivo (Saturn64/Saturn128). Com o preenchimento, toda alocação sai zerada, como no porte.
 

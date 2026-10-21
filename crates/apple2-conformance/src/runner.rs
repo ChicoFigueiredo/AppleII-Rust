@@ -929,7 +929,7 @@ fn evaluate(
                 Verdict::Fail(format!("falharam: {}", bad.join("; ")), diff)
             }
         }
-        OracleKind::Trace if reference.is_none() => {
+        OracleKind::Trace if reference.is_none() && case.oracle.trace_rows_sha256.is_none() => {
             // Determinism case: no reference, the runs only had to agree (checked above).
             Verdict::Pass(format!("trace sha256={}{rep}", obs.value))
         }
