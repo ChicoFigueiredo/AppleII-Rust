@@ -16,4 +16,4 @@ O AppleII-Rust nasceu como porte do AppleWin e ainda deve tudo a ele, mas tem vi
 
 - **Migração da configuração.** Na primeira execução, se o diretório novo não tem `settings.toml` e o antigo (`applewin-rs`) tem, o programa copia `settings.toml` e `recent_disks.txt` e avisa o usuário pela linha de status. O diretório antigo nunca é apagado; se os dois existem, vale o novo. A lógica é testada sem tocar no diretório real (`migrate_legacy_dir`).
 - Scripts, atalhos e extensões que chamavam `applewin` precisam trocar para `apple2-rust`. A extensão do VS Code passou a se chamar `apple2-rust` (tipo de depuração e configuração).
-- O release candidate `0.2.0-rc.1` precisa ser refeito com os nomes novos; o que foi publicado com o nome antigo não é reaproveitado.
+- O release candidate `0.2.0-rc.1` precisa ser refeito com os nomes novos; a branch preparada com o nome antigo (nunca publicada) não é reaproveitada.
