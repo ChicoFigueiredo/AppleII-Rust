@@ -1,0 +1,20 @@
+id = "savestate-corpus-IIee_s0-LC-_s3-Saturn--test1"
+story = "HU-0401"
+criterion = "Importar o save-state real IIee_s0(LC)_s3(Saturn)-test1.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Memory/IIee_s0(LC)_s3(Saturn)-test1.aws.yaml"
+sha256 = "f9292c55dfd3ecabec8cea48df6bf69fc07b5e5620f14fb6dd6efa8dd0202092"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state IIee_s0(LC)_s3(Saturn)-test1.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "abd94df27ad597a8a33146a764d54bc6fc582281121ae8145c4656419cd7104f"

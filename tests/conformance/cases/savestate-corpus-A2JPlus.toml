@@ -1,0 +1,20 @@
+id = "savestate-corpus-A2JPlus"
+story = "HU-0401"
+criterion = "Importar o save-state real A2JPlus.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2jplus"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Video ROM/A2JPlus.aws.yaml"
+sha256 = "da177a45871f541f3fc5b32402470f9fa973bc90b6049f89a5f49e5eaf03b93d"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state A2JPlus.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "c0b1d9639f79e5c5f30deb29d73bf7eccb425a1a4b957efc2d97e47212bd2ee5"

@@ -90,7 +90,8 @@ const HOST_FIELDS: [&str; 3] = ["Print Filename", "Serial Port Name", "Absolute 
 
 /// Path fragments of fields the port does not model or normalises on purpose; they are listed in
 /// the report as such and not counted as differences.
-const NOT_MODELLED: [&str; 16] = [
+const NOT_MODELLED: [&str; 17] = [
+    "/AY891x/", // AY-3-891x phase counters and RNG: audio only, not visible to the CPU
     "/State/Enabled", // mouse card flags AppleWin saves but never reads back as behaviour
     "/State/VBL",
     "/SY6522/Timer1 Latch", // v<7 files: a zero latch becomes 0xFFFF on purpose (6522.cpp:690)

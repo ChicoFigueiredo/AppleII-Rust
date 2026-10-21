@@ -1,0 +1,20 @@
+id = "savestate-corpus-Pravets82"
+story = "HU-0401"
+criterion = "Importar o save-state real Pravets82.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "pravets82"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Pravets82.aws.yaml"
+sha256 = "37173d26eb23309ffd0e5cb9a9fbc455feef6d9143c262b6d220d234ec8b9780"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Pravets82.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "a6d28aee09b479f4dce2305c51f8e1ada2f1b0de62d11ba7553b6930eee59b78"

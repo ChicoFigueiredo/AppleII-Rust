@@ -1,0 +1,20 @@
+id = "savestate-corpus-LC-RamWrite-Test-II"
+story = "HU-0401"
+criterion = "Importar o save-state real LC-RamWrite-Test-II+.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2plus"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Memory/LC-RamWrite-Test-II+.aws.yaml"
+sha256 = "e7ea665489e047ee9c6993865492212d280446f225c516e32a03aa3bf43e9f62"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state LC-RamWrite-Test-II+.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "799cc03f4908317de978bc39cb5266545b7457a35f51a1495d83d8e441670e3f"

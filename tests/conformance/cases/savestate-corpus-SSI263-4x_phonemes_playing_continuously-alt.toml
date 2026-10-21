@@ -1,0 +1,20 @@
+id = "savestate-corpus-SSI263-4x_phonemes_playing_continuously-alt"
+story = "HU-0401"
+criterion = "Importar o save-state real SSI263-4x_phonemes_playing_continuously-alt.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/SSI263-4x_phonemes_playing_continuously-alt.aws.yaml"
+sha256 = "9a837d65c146f596d8043f8c92a1ac571d2ed9104fdbcd65a87d89bc9db547b5"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state SSI263-4x_phonemes_playing_continuously-alt.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "937775f136c9e02f8a1c53878b79ef06ce79f6f74746bde7958bcfde3e20ea71"

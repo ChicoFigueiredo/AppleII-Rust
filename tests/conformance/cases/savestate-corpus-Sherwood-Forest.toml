@@ -1,0 +1,20 @@
+id = "savestate-corpus-Sherwood-Forest"
+story = "HU-0401"
+criterion = "Importar o save-state real Sherwood Forest.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Sherwood Forest.aws.yaml"
+sha256 = "d4218740409d72f6eb39758e9647c8489403c71034c0349af97c968ea466520e"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Sherwood Forest.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "ce64c6abcfcd92d6b2eedd79ab37de88f0237ea8759ab737df0e108b6ff3fb20"

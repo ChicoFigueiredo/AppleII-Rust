@@ -1,0 +1,20 @@
+id = "savestate-corpus-TK3000e"
+story = "HU-0401"
+criterion = "Importar o save-state real TK3000e.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "tk3000e"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/TK3000e.aws.yaml"
+sha256 = "74a6f97c200910a7809fb33a546c1e7301bea343d2fedc12fe95bfc7c47dbe3c"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state TK3000e.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "a4b183b3440f85a2ef9c53a46aaa0726844e50daee72c8fec89385a1afd43018"

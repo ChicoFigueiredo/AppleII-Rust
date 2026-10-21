@@ -1,0 +1,20 @@
+id = "savestate-corpus-FANTAVISION"
+story = "HU-0401"
+criterion = "Importar o save-state real FANTAVISION.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000 --video-update. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/FANTAVISION.aws.yaml"
+sha256 = "9688a00e4942f8a71f6eadcba6ac7825005167a9d080b01d988bf5e61eb1f2c8"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state FANTAVISION.aws.yaml --cycles 100000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "ea6210baac463942c36ae6a51f8f1da7980e33b24b8ba0ab894151724cce3cd0"
