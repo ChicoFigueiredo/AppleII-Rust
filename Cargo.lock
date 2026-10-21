@@ -159,8 +159,11 @@ version = "0.1.0"
 name = "apple2-debugger"
 version = "0.1.0"
 dependencies = [
+ "apple2-cards",
  "apple2-core",
  "apple2-cpu",
+ "apple2-storage",
+ "apple2-video",
 ]
 
 [[package]]

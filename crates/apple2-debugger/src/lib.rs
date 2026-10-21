@@ -13,6 +13,7 @@ pub mod assembler;
 pub mod bp;
 mod cmd_bp;
 mod cmd_exec;
+mod cmd_host;
 mod cmd_mem;
 mod cmd_misc;
 mod cmd_sym;
@@ -31,6 +32,7 @@ pub mod mem;
 pub mod opcodes;
 pub mod symbols;
 
+pub use cmd_host::SourceState;
 pub use debugger::{upd, Debugger, RunMode, Update};
 pub use display::{Grid, GridCell};
 pub use keys::{Align, Key, KeyMods};
