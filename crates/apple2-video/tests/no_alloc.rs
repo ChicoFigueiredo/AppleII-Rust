@@ -53,7 +53,12 @@ fn load(m: &mut Machine, scene: &str) {
 fn rendering_frames_does_not_allocate() {
     // Every video type, on the boot screen and on busy graphics scenes (mid-line mode changes
     // included, which exercise the most branches of the scanner).
-    for scene in [None, Some("hires-noise"), Some("dhires-noise"), Some("midline-hgr-text-24")] {
+    for scene in [
+        None,
+        Some("hires-noise"),
+        Some("dhires-noise"),
+        Some("midline-hgr-text-24"),
+    ] {
         for vt in VideoType::ALL {
             let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
             if let Some(s) = scene {
@@ -75,7 +80,10 @@ fn rendering_frames_does_not_allocate() {
                 m.drain_speaker_toggles().for_each(drop);
             }
             let n = ALLOCS.load(Ordering::Relaxed) - before;
-            assert_eq!(n, 0, "{scene:?} {vt:?}: {n} allocations over 6 rendered frames");
+            assert_eq!(
+                n, 0,
+                "{scene:?} {vt:?}: {n} allocations over 6 rendered frames"
+            );
         }
     }
 }

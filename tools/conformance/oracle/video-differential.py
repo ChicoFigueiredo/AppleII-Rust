@@ -99,7 +99,7 @@ def write_cases(a, results):
         toml = (f'id = "{cid}"\n'
                 f'story = "{SCENE_STORY}"\n'
                 f'criterion = "{crit}"\n'
-                f'model = "{MODEL[r["model"]]}"\n\n'
+                f'model = "{MODEL[r["model"]]}"\n' + ("memclear = 0\n" if r["scene"].startswith("boot0-") else "") + "\n"
                 f'[run]\nframes = {r["frames"]}\n\n'
                 f'[video]\ntype = "{TYPE_NAME[r["type"]]}"\nhz = {r["hz"]}\nrgb_card = "{CARDS[r["rgb_card"]]}"\n'
                 f'region = "full"\n' + (f"vidhd_slot = {r['vidhd']}\n" if r["vidhd"] else "") + ("" if boot else f'scene = "{scene_rel}"\nscene_sha256 = "{scene_sha}"\n') + "\n"
@@ -125,11 +125,12 @@ def run_oracle(a, scene, model, frames, vt, hz, card, vidhd, prefix, memclear=No
     return parse_kv(r.stdout), " ".join(cmd)
 
 
-def run_rust(a, scene, model, frames, vt, hz, card, vidhd, prefix):
+def run_rust(a, scene, model, frames, vt, hz, card, vidhd, prefix, memclear=None):
     cmd = [a.conformance, "scene-fb"] + (["--scene", scene] if scene else []) + [
            "--model", MODEL[model], "--frames", str(frames),
            "--type", str(vt), "--hz", str(hz), "--rgb-card", str(card)] + (
-           ["--vidhd", str(vidhd)] if vidhd else []) + ["--out", prefix]
+           ["--vidhd", str(vidhd)] if vidhd else []) + (
+           ["--memclear", str(memclear)] if memclear is not None else []) + ["--out", prefix]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         return None, r.stderr
@@ -172,7 +173,7 @@ def one(a, job):
     po, pr = os.path.join(a.out, "ora", tag), os.path.join(a.out, "rust", tag)
     memclear = 0 if name.startswith("boot0-") else None
     o, ocmd = run_oracle(a, scene, model, frames, vt, hz, card, vidhd, po, memclear)
-    r, rcmd = run_rust(a, scene, model, frames, vt, hz, card, vidhd, pr)
+    r, rcmd = run_rust(a, scene, model, frames, vt, hz, card, vidhd, pr, memclear)
     if a.selfcheck and o is not None:
         o2, _ = run_oracle(a, scene, model, frames, vt, hz, card, vidhd, po + ".again", memclear)
         if os.path.exists(po + ".again.rgba"):
@@ -234,8 +235,8 @@ def main():
                         for f in fr:
                             jobs.append((path, name, model, f, vt, hz, card, vidhd))
     # ROM boot (no scene): the power-on screen with the cursor flashing, per model.
-    # "boot-" uses the AppleWin default RAM pattern (FF FF 00 00); "boot0-" runs the oracle with
-    # --memclear 0 (all RAM zero), which is the Rust machine's power-on RAM.
+    # "boot-" uses the AppleWin default RAM pattern (FF FF 00 00); "boot0-" runs both sides with
+    # --memclear 0 (all RAM zero).
     if a.scene in ("*", "boot*"):
         for model, prefix in [(m, p) for p in ("boot", "boot0") for m in ("apple2ee", "apple2e", "apple2p", "apple2")]:
             for hz in map(int, a.hz.split(",")):

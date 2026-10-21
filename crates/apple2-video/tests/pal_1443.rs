@@ -54,7 +54,10 @@ fn pal_color_tv_keeps_the_color_burst_after_a_switch_to_text() {
         let tv_pal = frame(scene, VideoType::ColorTv, VideoStandard::Pal);
         let mon_ntsc = frame(scene, VideoType::ColorMonitorNtsc, VideoStandard::Ntsc);
         let mon_pal = frame(scene, VideoType::ColorMonitorNtsc, VideoStandard::Pal);
-        assert!(has_colour(&tv_pal), "{scene}: the HGR side of the TV is coloured");
+        assert!(
+            has_colour(&tv_pal),
+            "{scene}: the HGR side of the TV is coloured"
+        );
         assert!(
             tv_pal == tv_ntsc,
             "{scene}: PAL Color TV must render like NTSC (colour burst not killed, GH#1443)"

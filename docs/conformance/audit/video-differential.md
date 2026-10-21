@@ -6,9 +6,9 @@
 
 ## Resultado
 
-1.573 comparações oráculo x Rust, todas com o oráculo repetido duas vezes com o mesmo SHA-256 (calibração, `--selfcheck`): **1.517 PASS, 56 FAIL**. Os 56 FAIL são todos de **boot da ROM** e têm uma causa só, fora do vídeo (DIV-004, abaixo). Nenhuma execução ficou BLOCKED.
+1.573 comparações oráculo x Rust, todas com o oráculo repetido duas vezes com o mesmo SHA-256 (calibração, `--selfcheck`): **1.573 PASS, 0 FAIL, 0 BLOCKED**. O caminho até aqui achou três divergências do Rust (DIV-001 a DIV-003, corrigidas) e uma de RAM de power-on (DIV-004, resolvida pela frente de CPU), mais três achados do lado do oráculo.
 
-Há 306 casos em `tests/conformance/cases/` (`video-*.toml`, `authority = "applewin"`); o `conformance run --all` dá PASS em todos.
+Há 305 casos em `tests/conformance/cases/` (`video-*.toml`, `authority = "applewin"`); o `conformance run --all` dá PASS em todos.
 
 ### Matriz modo x Tipo de vídeo
 
@@ -26,13 +26,13 @@ Cada célula soma as comparações do grupo (PASS n/N). Colunas: tipo de vídeo 
 | Troca de modo ou de página no meio do quadro (flash com mudança de modo, page flip, 80 colunas + LORES) | PASS 5/5 | PASS 5/5 | PASS 15/15 | PASS 5/5 | PASS 5/5 | PASS 5/5 | PASS 5/5 | PASS 5/5 | PASS 5/5 | PASS 5/5 | PASS 15/15 | PASS 5/5 | PASS 5/5 | PASS 5/5 |
 | Modos legados com VidHD (centrados em 640x400) | PASS 9/9 | PASS 9/9 | PASS 27/27 | PASS 9/9 | PASS 9/9 | PASS 9/9 | PASS 9/9 | PASS 9/9 | PASS 9/9 | - | - | - | - | - |
 | Super Hi-Res com VidHD (320, 640, controle misto, preenchimento de cor) | PASS 4/4 | PASS 4/4 | PASS 12/12 | PASS 4/4 | PASS 4/4 | PASS 4/4 | PASS 4/4 | PASS 4/4 | PASS 4/4 | - | - | - | - | - |
-| Boot da ROM, RAM zerada (`--memclear 0`; II, II+, //e, //e Enhanced) | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 | FAIL 7/8 |
-| Boot da ROM, RAM padrão do AppleWin | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 | FAIL 5/8 |
+| Boot da ROM, RAM padrão do AppleWin (II, II+, //e, //e Enhanced) | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 |
+| Boot da ROM, RAM zerada (`--memclear 0`; II, II+, //e, //e Enhanced) | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 | PASS 8/8 |
 
 Notas de leitura:
 
 - Os modos com carta RGB só existem em t2; os outros tipos renderizam as mesmas cenas pelo caminho NTSC/mono. Todos conferem.
-- "Boot" são 8 comparações por tipo (4 modelos x 30 e 120 quadros). Os FAIL estão detalhados em DIV-004.
+- "Boot" são 8 comparações por tipo (4 modelos x 30 e 120 quadros), sem disco; "RAM padrão" é o padrão `FF FF 00 00` do AppleWin com o sorteio fixo do oráculo, "RAM zerada" roda os dois lados com `--memclear 0`.
 - Não há comparação de SHR em PAL nem de VidHD em II+: o oráculo e o Rust só têm aux RAM na //e para essa carta nesta bateria (ver "Lacunas").
 
 ## Divergências
@@ -42,7 +42,7 @@ Notas de leitura:
 | DIV-001 | Texto 80 colunas em Color TV, 1o quadro | corrigida | O AppleWin calcula o endereço da linha 0 em `NTSC_VideoInit` -> `VideoReinitialize(true)` (`NTSC.cpp:2364`, `:2426-2440`) com o modo de power-on (TEXT40). O `Renderer` se configurava no primeiro `update`, depois dos efeitos do 1o opcode; a linha 0 do 1o quadro começava 1 pixel antes em 80 colunas (-3 em vez de -2) e o resíduo da linha intermediária acima dela (`updateFramebufferTVSingleScanline`, `*pLine1Prev`) diferia em 1 pixel | `Renderer::init` (chamado por `run_frame`) configura o scanner antes do 1o opcode. `tests/first_frame.rs` |
 | DIV-002 | SHR (VidHD), todas as linhas | corrigida | `VidHDCard::UpdateSHRCell` (`VidHD.cpp:130`) escreve 16 pixels em **uma** linha de framebuffer (`g_pScanLines[2*vert]`); a linha seguinte fica preta. O Rust preenchia as duas | `shr_cell` escreve só a linha 2*y. `tests/vidhd.rs` ajustado (a asserção antiga "duas linhas" estava errada em relação ao AppleWin) |
 | DIV-003 | SHR (VidHD), linha 0 do quadro em que o SHR liga | corrigida | `NTSC_SetVideoMode` não recalcula `g_pVideoAddress` (só o fim de linha o faz: `updateVideoScannerHorzEOL_SHR`, `NTSC.cpp:722-728`), e `updateScreenSHR` escreve a partir desse ponteiro. A linha 0 desse quadro sai de onde o modo legado centrado deixou o ponteiro (x=60, y=26) e, como o framebuffer do AppleWin é bottom-up, os últimos 40 pixels transbordam para a linha de cima, não para a de baixo. O Rust calculava o destino por `vert`/`horz` e recalculava o ponteiro ao trocar de modo | `shr_cell` usa e avança o ponteiro (`advance` modela o wrap bottom-up), `eol_shr` recalcula o endereço, e `set_shr` não o recalcula. `tests/vidhd_roundtrip.rs::first_shr_line_starts_at_the_legacy_pointer_and_wraps_upwards` |
-| DIV-004 | Boot da ROM do II e //e Enhanced | **FAIL (aberta)** | O Rust liga com a RAM toda em zero. O AppleWin enche a RAM com `FF FF 00 00` (`MemReset`, `g_nMemoryClearType = MIP_FF_FF_00_00`) e semeia `$4E/$4F` (RNDL/RNDH) com o relógio; o oráculo fixa esses últimos em `$20` (patch do trace). A tela do II original (a ROM não a limpa) e a fase do cursor piscante do //e Enhanced (o laço de espera de tecla parte de RNDL) dependem disso | Fora da fronteira de arquivos desta frente (inicialização de RAM no `apple2-core`, mesma causa que afeta os Traces de CPU de boot). Hipóteses testadas, ambas confirmadas: (1) com `--memclear 0` no oráculo o boot do II dá o mesmo SHA do Rust em todos os tipos e quadros; (2) com a cena `main 004E 00 00` + `entry FA62` (RAM zerada) o //e Enhanced a 120 quadros também dá o mesmo SHA. O vídeo não tem culpa: os casos `video-boot0-*` (RAM zerada) e `video-boot-*` que passam estão commitados; os que falham não viraram caso |
+| DIV-004 | Boot da ROM do II e do //e Enhanced | resolvida (pela frente de CPU, HU-0103) | O Rust ligava com a RAM toda em zero. O AppleWin enche a RAM com `FF FF 00 00` (`MemReset`, `g_nMemoryClearType = MIP_FF_FF_00_00`) e semeia `$4E/$4F` (RNDL/RNDH) com o relógio; o oráculo fixa esses últimos em `$20`. A tela do II original (a ROM não a limpa) e a fase do cursor piscante do //e Enhanced (o laço de espera de tecla parte de RNDL) dependem disso | O diferencial apontou a causa antes da integração, com duas hipóteses testadas e confirmadas: (1) com `--memclear 0` no oráculo o boot do II dava o mesmo SHA do Rust; (2) com a cena `main 004E 00 00` + `entry FA62` (RAM zerada) o //e Enhanced a 120 quadros também dava o mesmo SHA. A correção está no `apple2-core` (`RamInit::APPLEWIN_DETERMINISTIC`, de outra frente, fora da fronteira de arquivos desta); com ela, `scene-fb` e o harness usam o mesmo padrão de RAM do oráculo e os 56 FAIL de boot passaram a PASS |
 
 Todas as correções foram validadas pela matriz inteira, não só pelo caso que as achou.
 
@@ -67,7 +67,7 @@ Todas as correções foram validadas pela matriz inteira, não só pelo caso que
 | Achado | Resultado | Evidência |
 |---|---|---|
 | AUD-P-001 (#1443, Color TV PAL) | PASS | casos `video-midline-1443-*-pal` (t1 a t5) e `tests/pal_1443.rs` |
-| AUD-P-002 (NTSC sem oráculo pixel a pixel) | PASS | 1.517 comparações bit a bit, t3, t4 e t5 incluídos; diferença máxima de canal 0 em todas |
+| AUD-P-002 (NTSC sem oráculo pixel a pixel) | PASS | 1.573 comparações bit a bit, t3, t4 e t5 incluídos; diferença máxima de canal 0 em todas |
 | AUD-P-003 (flash, misto, page flip, bordas) | PASS | texto em quadros 4 e 20, `flash-mode-change`, `pageflip-midframe`, cenas `*-mixed`, `*-page2`; bordas incluídas em todas (região `full`) |
 | AUD-P-004 (VidHD sem 80x45 e sem cor de borda) | NOT_APPLICABLE (paridade) | O AppleWin também não suporta (`VidHD.cpp:27-33`); não foi implementado nem testado |
 | AUD-P-050 (VidHD sobrevive a save/load) | PASS | `tests/vidhd_roundtrip.rs` (SHR e modo legado, antes e depois do `.aws.yaml`) e o experimento `--state` (O-3) |
@@ -81,7 +81,7 @@ Todas as correções foram validadas pela matriz inteira, não só pelo caso que
 
 - Modelos: o oráculo roda `apple2`, `apple2p`, `apple2e` e `apple2ee`; Pravets, TK3000, Base64A e J-Plus não entraram nesta bateria.
 - VidHD em II/II+ (aux RAM da própria carta), SHR em PAL, Video-7 e Feline além dos 4 modos AN3 e do texto 80, e telas capturadas do software real (corpus) ficam para uma próxima rodada.
-- Os casos de boot dependem da RAM de power-on (DIV-004); os que passam hoje continuam passando quando o `apple2-core` adotar o padrão do AppleWin, desde que a semente de `$4E/$4F` siga a do oráculo.
+- Os casos de boot dependem da RAM de power-on: a semente de `$4E/$4F` é a do oráculo (`$20`), não a aleatória do AppleWin real.
 
 ## Como reproduzir
 

@@ -2,6 +2,7 @@ id = "video-boot0-apple2-color-tv-f120"
 story = "HU-0201"
 criterion = "O framebuffer (600x420, bordas incluídas) do boot da ROM (apple2, sem disco, RAM zerada) em color-tv a 60 Hz, após 120 quadros, é idêntico bit a bit ao do AppleWin"
 model = "apple2"
+memclear = 0
 
 [run]
 frames = 120

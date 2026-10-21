@@ -882,7 +882,10 @@ fn dump_actual(
         OracleKind::StateHash => (format!("{}.actual.json", case.id), state_dump(&obs.machine)),
         OracleKind::FramebufferHash => {
             let r = obs.renderer.as_ref()?;
-            let full = case.video.as_ref().is_some_and(|v| v.full_region() == Ok(true));
+            let full = case
+                .video
+                .as_ref()
+                .is_some_and(|v| v.full_region() == Ok(true));
             (format!("{}.actual.png", case.id), png_bytes(r, full).ok()?)
         }
         OracleKind::Trace => return None,

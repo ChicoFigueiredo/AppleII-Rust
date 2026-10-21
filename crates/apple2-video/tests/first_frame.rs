@@ -48,7 +48,11 @@ fn line_zero_of_the_first_frame_starts_at_the_power_on_text40_offset() {
     // Line 0 is framebuffer row 18. With the power-on offset (-2 for Color TV, no -1 for 80 columns
     // yet) its 560 pixels end at x=577 and the end-of-line "ringing" pixels land on 578 and 579; the
     // in-between row above (17) receives the same two pixels, so (579, 17) is lit.
-    assert_ne!(at(579, 17), 0xFF00_0000, "residue of the first line 0 above the picture");
+    assert_ne!(
+        at(579, 17),
+        0xFF00_0000,
+        "residue of the first line 0 above the picture"
+    );
     // The later lines of the frame already use the 80-column offset (-3).
     assert_eq!(at(579, 19 + 2), 0xFF00_0000);
 }

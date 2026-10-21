@@ -415,7 +415,9 @@ fn vidhd_shr_renders_through_the_video_crate() {
     };
     r.redraw(&src);
     assert_eq!(r.pixel(0, 0), [0xF0, 0, 0, 255]);
-    assert_eq!(r.pixel(2, 1), [0, 0xF0, 0, 255]);
+    assert_eq!(r.pixel(2, 0), [0, 0xF0, 0, 255]);
     assert_eq!(r.pixel(4, 0), [0, 0, 0, 255]);
+    // AppleWin draws each IIgs line on one framebuffer row (2*y); the row between stays black.
+    assert_eq!(r.pixel(0, 1), [0, 0, 0, 255]);
     assert_eq!(r.size(), (680, 436));
 }

@@ -121,10 +121,18 @@ fn run_all_writes_manifests_junit_and_summary() {
         assert!(d.join(f).exists(), "{f}");
     }
     let s = std::fs::read_to_string(d.join("summary.md")).unwrap();
-    assert!(
-        s.contains("| PASS | 12 |") || s.contains("| PASS | 7 |"),
-        "{s}"
-    );
+    // 7 cases without the cached oracle traces, more with them and with the video cases (the
+    // framebuffer differential adds hundreds): only a floor, not an exact count.
+    let passed: usize = s
+        .lines()
+        .find_map(|l| {
+            l.strip_prefix("| PASS | ")?
+                .trim_end_matches(" |")
+                .parse()
+                .ok()
+        })
+        .expect("a PASS row");
+    assert!(passed >= 7, "{s}");
     assert!(s.contains("| FAIL | 0 |"));
     let one = scratch("run-one");
     let out = bin()

@@ -20,7 +20,10 @@ mod scenes;
 
 struct NoImages;
 impl LoadHost for NoImages {
-    fn open_image(&mut self, _r: &ImageRequest) -> Result<apple2_storage::image::DiskImage, String> {
+    fn open_image(
+        &mut self,
+        _r: &ImageRequest,
+    ) -> Result<apple2_storage::image::DiskImage, String> {
         Err("none".into())
     }
 }

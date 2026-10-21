@@ -295,7 +295,9 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
             "--hz" => hz = a.value(arg)?.parse::<u32>().map_err(|e| e.to_string())?,
             "--rgb-card" => card = a.value(arg)?,
             "--vidhd" => vidhd = Some(a.value(arg)?.parse::<u8>().map_err(|e| e.to_string())?),
-            "--memclear" => memclear = Some(a.value(arg)?.parse::<i32>().map_err(|e| e.to_string())?),
+            "--memclear" => {
+                memclear = Some(a.value(arg)?.parse::<i32>().map_err(|e| e.to_string())?)
+            }
             "--out" => out = Some(a.value(arg)?),
             o => return Err(format!("argumento desconhecido `{o}`")),
         }

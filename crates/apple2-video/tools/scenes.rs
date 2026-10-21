@@ -126,7 +126,7 @@ fn hgr_page(base: u16, mut f: impl FnMut(usize, usize) -> u8) -> Vec<(u16, Vec<u
 
 /// 16 bands of 12 lines, each a colour-artefact pattern; bit 7 and the byte phase both vary.
 fn bars(y: usize, col: usize) -> u8 {
-    let even = col % 2 == 0;
+    let even = col.is_multiple_of(2);
     match (y / 12) % 16 {
         0 => 0x55,
         1 => 0xAA,
@@ -136,13 +136,37 @@ fn bars(y: usize, col: usize) -> u8 {
         5 => 0x7F,
         6 => 0xFF,
         7 => 0x80,
-        8 => if even { 0x55 } else { 0xD5 },
-        9 => if even { 0x2A } else { 0xAA },
-        10 => if even { 0x7F } else { 0x00 },
+        8 => {
+            if even {
+                0x55
+            } else {
+                0xD5
+            }
+        }
+        9 => {
+            if even {
+                0x2A
+            } else {
+                0xAA
+            }
+        }
+        10 => {
+            if even {
+                0x7F
+            } else {
+                0x00
+            }
+        }
         11 => 0x01 << (col % 7),
         12 => 0x03 << (col % 6),
         13 => 0x81 << (col % 6),
-        14 => if (col / 5) % 2 == 0 { 0xF0 } else { 0x0F },
+        14 => {
+            if (col / 5).is_multiple_of(2) {
+                0xF0
+            } else {
+                0x0F
+            }
+        }
         _ => (col as u8).wrapping_mul(7) ^ (y as u8),
     }
 }
@@ -176,12 +200,24 @@ fn scene(
 
 /// A Super Hi-Res picture in aux memory (VidHD, NEWVIDEO = $C1): 200 lines of 160 bytes at
 /// $2000, scan-line control bytes at $9D00 and sixteen palettes of sixteen 0RGB words at $9E00.
-fn shr_scene(name: &str, notes: &str, seed: u32, ctrl: impl Fn(usize) -> u8, fill_pixels: bool) -> SceneDef {
+fn shr_scene(
+    name: &str,
+    notes: &str,
+    seed: u32,
+    ctrl: impl Fn(usize) -> u8,
+    fill_pixels: bool,
+) -> SceneDef {
     let mut g = Lcg(seed);
     let mut aux = Vec::new();
     for line in 0..200usize {
         let row: Vec<u8> = (0..160)
-            .map(|i| if fill_pixels && i % 8 != 0 { 0 } else { g.next() })
+            .map(|i| {
+                if fill_pixels && i % 8 != 0 {
+                    0
+                } else {
+                    g.next()
+                }
+            })
             .collect();
         aux.push((0x2000 + (line * 160) as u16, row));
     }
@@ -212,11 +248,15 @@ fn static_code(switches: &[u16]) -> Asm {
 /// A loop of exactly 65 cycles (one scan line): `first`, `d1` cycles of NOPs, `second`, the rest.
 /// The switches therefore toggle at a fixed horizontal position of every line.
 fn line_loop(setup: &[u16], first: u16, second: u16, d1: usize) -> Asm {
-    assert!(d1 % 2 == 0 && d1 <= 54);
+    assert!(d1.is_multiple_of(2) && d1 <= 54);
     let mut a = Asm::default();
     a.set(setup);
     let top = a.here();
-    a.sta(first).nops(d1 / 2).sta(second).nops((54 - d1) / 2).jmp(top);
+    a.sta(first)
+        .nops(d1 / 2)
+        .sta(second)
+        .nops((54 - d1) / 2)
+        .jmp(top);
     a
 }
 
@@ -307,7 +347,14 @@ pub fn all() -> Vec<SceneDef> {
         lores.clone(),
         text_page(0x800, |r, c| ((r * 5 + c * 11 + 1) & 0xFF) as u8),
     ]);
-    v.push(scene("lores", "apple2ee", "lo-res full screen", lores_all.clone(), vec![], static_code(&[GR, FULL, LORES])));
+    v.push(scene(
+        "lores",
+        "apple2ee",
+        "lo-res full screen",
+        lores_all.clone(),
+        vec![],
+        static_code(&[GR, FULL, LORES]),
+    ));
     v.push(scene(
         "lores-mixed",
         "apple2ee",
@@ -362,12 +409,54 @@ pub fn all() -> Vec<SceneDef> {
         let p2 = hgr_page(0x4000, |_, _| g.next());
         flatten(vec![p1, p2, t40.clone()])
     };
-    v.push(scene("hires-bars", "apple2ee", "hi-res colour-artefact bands (bit 7, byte phase)", hgr_bars.clone(), vec![], static_code(&[GR, FULL, HIRES])));
-    v.push(scene("hires-noise", "apple2ee", "hi-res pseudo-random bytes", hgr_noise.clone(), vec![], static_code(&[GR, FULL, HIRES])));
-    v.push(scene("hires-mixed", "apple2ee", "hi-res with 4 text lines", hgr_noise.clone(), vec![], static_code(&[GR, MIXED, HIRES])));
-    v.push(scene("hires-page2", "apple2ee", "hi-res page 2", hgr_bars.clone(), vec![], static_code(&[GR, FULL, HIRES, PAGE2])));
-    v.push(scene("hires-bars-ii-plus", "apple2p", "Apple II+ hi-res bands", hgr_bars.clone(), vec![], static_code(&[GR, FULL, HIRES])));
-    v.push(scene("hires-mixed-ii-plus", "apple2p", "Apple II+ hi-res mixed", hgr_noise.clone(), vec![], static_code(&[GR, MIXED, HIRES])));
+    v.push(scene(
+        "hires-bars",
+        "apple2ee",
+        "hi-res colour-artefact bands (bit 7, byte phase)",
+        hgr_bars.clone(),
+        vec![],
+        static_code(&[GR, FULL, HIRES]),
+    ));
+    v.push(scene(
+        "hires-noise",
+        "apple2ee",
+        "hi-res pseudo-random bytes",
+        hgr_noise.clone(),
+        vec![],
+        static_code(&[GR, FULL, HIRES]),
+    ));
+    v.push(scene(
+        "hires-mixed",
+        "apple2ee",
+        "hi-res with 4 text lines",
+        hgr_noise.clone(),
+        vec![],
+        static_code(&[GR, MIXED, HIRES]),
+    ));
+    v.push(scene(
+        "hires-page2",
+        "apple2ee",
+        "hi-res page 2",
+        hgr_bars.clone(),
+        vec![],
+        static_code(&[GR, FULL, HIRES, PAGE2]),
+    ));
+    v.push(scene(
+        "hires-bars-ii-plus",
+        "apple2p",
+        "Apple II+ hi-res bands",
+        hgr_bars.clone(),
+        vec![],
+        static_code(&[GR, FULL, HIRES]),
+    ));
+    v.push(scene(
+        "hires-mixed-ii-plus",
+        "apple2p",
+        "Apple II+ hi-res mixed",
+        hgr_noise.clone(),
+        vec![],
+        static_code(&[GR, MIXED, HIRES]),
+    ));
 
     // ---- Double hi-res ----
     let dhgr_main = hgr_page(0x2000, bars);
@@ -415,12 +504,19 @@ pub fn all() -> Vec<SceneDef> {
 
     // ---- RGB card modes (AN3 toggled twice with 80COL on/off: F2 F1 = !80COL at each 5E->5F) ----
     // mode 0 (140): 80COL on twice; mode 1 (160): on then off; mode 2 (mixed): off then on; mode 3 (560): off twice.
-    for (mode, (first, second)) in [(COL80_ON, COL80_ON), (COL80_ON, COL80_OFF), (COL80_OFF, COL80_ON), (COL80_OFF, COL80_OFF)]
-        .into_iter()
-        .enumerate()
+    for (mode, (first, second)) in [
+        (COL80_ON, COL80_ON),
+        (COL80_ON, COL80_OFF),
+        (COL80_OFF, COL80_ON),
+        (COL80_OFF, COL80_OFF),
+    ]
+    .into_iter()
+    .enumerate()
     {
         let mut a = Asm::default();
-        a.set(&[GR, FULL, HIRES, first, AN3_ON, AN3_OFF, second, AN3_ON, AN3_OFF, COL80_ON, AN3_ON]);
+        a.set(&[
+            GR, FULL, HIRES, first, AN3_ON, AN3_OFF, second, AN3_ON, AN3_OFF, COL80_ON, AN3_ON,
+        ]);
         a.halt();
         v.push(scene(
             &format!("rgb-mode{mode}-dhires"),
@@ -431,7 +527,9 @@ pub fn all() -> Vec<SceneDef> {
             a,
         ));
         let mut a = Asm::default();
-        a.set(&[GR, MIXED, HIRES, first, AN3_ON, AN3_OFF, second, AN3_ON, AN3_OFF, COL80_ON, AN3_ON]);
+        a.set(&[
+            GR, MIXED, HIRES, first, AN3_ON, AN3_OFF, second, AN3_ON, AN3_OFF, COL80_ON, AN3_ON,
+        ]);
         a.halt();
         v.push(scene(
             &format!("rgb-mode{mode}-dhires-mixed"),
@@ -442,7 +540,9 @@ pub fn all() -> Vec<SceneDef> {
             a,
         ));
         let mut a = Asm::default();
-        a.set(&[GR, FULL, HIRES, first, AN3_ON, AN3_OFF, second, AN3_ON, AN3_OFF, COL80_OFF]);
+        a.set(&[
+            GR, FULL, HIRES, first, AN3_ON, AN3_OFF, second, AN3_ON, AN3_OFF, COL80_OFF,
+        ]);
         a.halt();
         v.push(scene(
             &format!("rgb-mode{mode}-hires"),
@@ -457,7 +557,14 @@ pub fn all() -> Vec<SceneDef> {
         let mut a = Asm::default();
         a.set(&[COL80_ON, TEXT]);
         a.halt();
-        v.push(scene("rgb-text80", "apple2ee", "RGB card, 80-column text", t40.clone(), aux_t.clone(), a));
+        v.push(scene(
+            "rgb-text80",
+            "apple2ee",
+            "RGB card, 80-column text",
+            t40.clone(),
+            aux_t.clone(),
+            a,
+        ));
     }
 
     // ---- Timed scenes (mode changes inside the frame) ----
@@ -535,18 +642,31 @@ pub fn all() -> Vec<SceneDef> {
         a.set(&[GR, FULL, HIRES]);
         let top = a.here();
         a.sta(PAGE2);
-        a.delay_loop(255).delay_loop(255).delay_loop(255).delay_loop(255);
+        a.delay_loop(255)
+            .delay_loop(255)
+            .delay_loop(255)
+            .delay_loop(255);
         a.sta(PAGE1);
         a.delay_loop(255).delay_loop(255).delay_loop(200);
         a.jmp(top);
-        v.push(scene("pageflip-midframe", "apple2ee", "HIRES page 1/2 switched several times per frame", hgr_bars.clone(), vec![], a));
+        v.push(scene(
+            "pageflip-midframe",
+            "apple2ee",
+            "HIRES page 1/2 switched several times per frame",
+            hgr_bars.clone(),
+            vec![],
+            a,
+        ));
     }
     // 80-column text with the mode switched to graphics for part of the frame (borders / junction).
     {
         let mut a = Asm::default();
         a.set(&[COL80_ON, TEXT]);
         let top = a.here();
-        a.delay_loop(255).delay_loop(255).delay_loop(255).delay_loop(255);
+        a.delay_loop(255)
+            .delay_loop(255)
+            .delay_loop(255)
+            .delay_loop(255);
         a.set(&[GR, MIXED, LORES]);
         a.delay_loop(255).delay_loop(255).delay_loop(255);
         a.set(&[TEXT]);
@@ -562,8 +682,20 @@ pub fn all() -> Vec<SceneDef> {
     }
 
     // ---- Super Hi-Res (VidHD, HU-0202) ----
-    v.push(shr_scene("shr-320-noise", "SHR 320x200, a palette per line, random pixels and palettes", 99, |l| (l % 16) as u8, false));
-    v.push(shr_scene("shr-640-noise", "SHR 640x200 (dithered four-colour columns), random pixels", 100, |l| 0x80 | (l % 16) as u8, false));
+    v.push(shr_scene(
+        "shr-320-noise",
+        "SHR 320x200, a palette per line, random pixels and palettes",
+        99,
+        |l| (l % 16) as u8,
+        false,
+    ));
+    v.push(shr_scene(
+        "shr-640-noise",
+        "SHR 640x200 (dithered four-colour columns), random pixels",
+        100,
+        |l| 0x80 | (l % 16) as u8,
+        false,
+    ));
     v.push(shr_scene(
         "shr-mixed-control",
         "SHR with 320/640 and colour-fill flags changing line by line",
@@ -571,7 +703,13 @@ pub fn all() -> Vec<SceneDef> {
         |l| ((l * 37) as u8 & 0xAF) | (l % 16) as u8,
         false,
     ));
-    v.push(shr_scene("shr-fill", "SHR 320 colour-fill mode (index 0 repeats the previous colour)", 102, |l| 0x20 | (l % 16) as u8, true));
+    v.push(shr_scene(
+        "shr-fill",
+        "SHR 320 colour-fill mode (index 0 repeats the previous colour)",
+        102,
+        |l| 0x20 | (l % 16) as u8,
+        true,
+    ));
 
     v
 }
@@ -591,7 +729,9 @@ fn hex_lines(kind: &str, segs: &[(u16, Vec<u8>)], out: &mut String) {
 impl SceneDef {
     pub fn to_text(&self) -> String {
         let mut s = String::new();
-        s.push_str("# scene v1 (generated by crates/apple2-video/examples/gen_scenes.rs; do not edit)\n");
+        s.push_str(
+            "# scene v1 (generated by crates/apple2-video/examples/gen_scenes.rs; do not edit)\n",
+        );
         s.push_str(&format!("name {}\n", self.name));
         s.push_str(&format!("model {}\n", self.model));
         if let Some(slot) = self.vidhd {

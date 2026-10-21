@@ -80,10 +80,15 @@ mod tests {
 
     #[test]
     fn parses_segments_and_entry() {
-        let s = Scene::parse("# x\nname a\nmodel apple2ee\nmain 0300 A9 00\naux 0400 FF # c\nentry 0300\n")
-            .unwrap();
+        let s = Scene::parse(
+            "# x\nname a\nmodel apple2ee\nmain 0300 A9 00\naux 0400 FF # c\nentry 0300\n",
+        )
+        .unwrap();
         assert_eq!(s.name, "a");
-        assert_eq!(s.segments, vec![(false, 0x300, vec![0xA9, 0]), (true, 0x400, vec![0xFF])]);
+        assert_eq!(
+            s.segments,
+            vec![(false, 0x300, vec![0xA9, 0]), (true, 0x400, vec![0xFF])]
+        );
         assert_eq!(s.entry, 0x300);
         assert!(Scene::parse("main 0300 00\n").is_err());
     }
