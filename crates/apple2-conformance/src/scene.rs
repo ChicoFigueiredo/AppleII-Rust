@@ -19,6 +19,7 @@ pub struct Scene {
     /// `(aux, address, bytes)` in file order (later segments overwrite earlier ones).
     pub segments: Vec<(bool, u16, Vec<u8>)>,
     pub entry: u16,
+    pub vidhd_slot: Option<u8>,
 }
 
 impl Scene {
@@ -33,6 +34,8 @@ impl Scene {
             match kind {
                 "name" => s.name = it.next().unwrap_or("").to_string(),
                 "model" => s.model = it.next().unwrap_or("").to_string(),
+                // The slot of the VidHD the scene needs (informational: the case/CLI installs it).
+                "vidhd" => s.vidhd_slot = it.next().and_then(|v| v.parse().ok()),
                 "entry" => {
                     let a = it.next().ok_or_else(|| bad("entry without address"))?;
                     s.entry = u16::from_str_radix(a, 16).map_err(|_| bad("bad entry"))?;

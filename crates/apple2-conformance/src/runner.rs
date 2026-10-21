@@ -267,6 +267,43 @@ struct Observed {
     trace: Option<Vec<u8>>,
 }
 
+/// Puts a VidHD in `slot` and power-cycles, so the card starts in its power-on state.
+fn install_vidhd(m: &mut Machine, slot: u8) -> Result<(), String> {
+    if !m.insert_card(slot, Box::new(apple2_cards::VidHd::new())) {
+        return Err(format!("slot {slot} cannot take a VidHD"));
+    }
+    m.power_cycle();
+    Ok(())
+}
+
+/// `Renderer::run_frame` for a machine with a VidHD, which the renderer sees through `WithVidHd`.
+fn render_frames_vidhd(
+    m: &mut Machine,
+    r: &mut Renderer,
+    slot: u8,
+    frames: u64,
+) -> Result<(), String> {
+    use apple2_cards::VidHd;
+    use apple2_video::WithVidHd;
+    fn view(m: &Machine, slot: u8) -> Result<WithVidHd<'_>, String> {
+        let hd = m.card::<VidHd>(slot).ok_or("the VidHD vanished")?;
+        Ok(WithVidHd {
+            source: m,
+            vidhd: hd,
+        })
+    }
+    r.init(&view(m, slot)?);
+    while m.frames() < frames {
+        r.resync(m.cycles_in_frame());
+        let target = m.frames() + 1;
+        while m.frames() < target {
+            let c = m.step();
+            r.update(&view(m, slot)?, c);
+        }
+    }
+    Ok(())
+}
+
 /// The renderer options of a case (`[video]`, defaults: colour TV, NTSC, Video-7 SL7).
 pub fn render_config(case: &Case) -> Result<RenderConfig, String> {
     let v = case.video.clone().unwrap_or_default();
@@ -296,6 +333,10 @@ fn observe_once(
 ) -> Result<Observed, String> {
     let cfg = machine_config(case)?;
     let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let vidhd = case.video.as_ref().and_then(|v| v.vidhd_slot);
+    if let Some(slot) = vidhd {
+        install_vidhd(&mut m, slot)?;
+    }
     if let Some(sc) = scene {
         sc.apply(&mut m);
     }
@@ -327,15 +368,23 @@ fn observe_once(
         OracleKind::FramebufferHash => {
             let mut r = Renderer::new(render_config(case)?);
             r.resync(m.cycles_in_frame());
-            drive(
-                &mut m,
-                &case.run,
-                &case.input,
-                Hooks {
-                    trace: None,
-                    renderer: Some(&mut r),
-                },
-            )?;
+            if let Some(slot) = vidhd {
+                let frames = case.run.frames.ok_or("vidhd cases need run.frames")?;
+                if !case.input.is_empty() {
+                    return Err("vidhd cases take no input events".into());
+                }
+                render_frames_vidhd(&mut m, &mut r, slot, frames)?;
+            } else {
+                drive(
+                    &mut m,
+                    &case.run,
+                    &case.input,
+                    Hooks {
+                        trace: None,
+                        renderer: Some(&mut r),
+                    },
+                )?;
+            }
             let full = case.video.as_ref().map_or(Ok(false), |v| v.full_region())?;
             Ok(Observed {
                 value: sha256_hex(&framebuffer_rgba(&r, full)),
@@ -753,18 +802,26 @@ pub fn render_scene(
     cfg: RenderConfig,
     standard: apple2_core::VideoStandard,
     frames: u64,
+    vidhd_slot: Option<u8>,
 ) -> Result<SceneFramebuffer, String> {
     let model = crate::case::parse_model(model)?;
     let mut mc = MachineConfig::for_model(model);
     mc.video_standard = standard;
     let mut m = Machine::try_new(mc).map_err(|e| e.to_string())?;
+    if let Some(slot) = vidhd_slot {
+        install_vidhd(&mut m, slot)?;
+    }
     if let Some(scene) = scene {
         scene.apply(&mut m);
     }
     let mut r = Renderer::new(cfg);
     r.resync(m.cycles_in_frame());
-    while m.frames() < frames {
-        r.run_frame(&mut m);
+    if let Some(slot) = vidhd_slot {
+        render_frames_vidhd(&mut m, &mut r, slot, frames)?;
+    } else {
+        while m.frames() < frames {
+            r.run_frame(&mut m);
+        }
     }
     let (w, h) = r.size();
     Ok(SceneFramebuffer {

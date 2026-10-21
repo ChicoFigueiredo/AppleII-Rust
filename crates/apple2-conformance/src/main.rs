@@ -13,7 +13,7 @@ const USAGE: &str = "\
 uso:
   conformance run (--all | --case ID [--case ID ...]) --report DIR [--root DIR]
   conformance trace --model M (--frames N | --cycles N) [--cpu 6502|65C02] [--input frame:N:TEXT | cycle:N:TEXT]... [--meta k=v]... -o FILE
-  conformance scene-fb [--scene FILE] --model M --frames N [--type T] [--hz 50|60] [--rgb-card C] --out PREFIX
+  conformance scene-fb [--scene FILE] --model M --frames N [--type T] [--hz 50|60] [--rgb-card C] [--vidhd SLOT] --out PREFIX
   conformance diff ESPERADO.csv OBTIDO.csv [--ignore cycle,p] [--context N]
 
 Saída de `run`: DIR/<caso>.manifest.json, DIR/junit.xml, DIR/summary.md e artefatos de diff.
@@ -243,6 +243,7 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
     use apple2_video::{RenderConfig, RgbCard};
     let (mut scene, mut model, mut frames, mut out) = (None, None, None, None);
     let (mut vt, mut hz, mut card) = ("color-tv", 60u32, "video7-sl7");
+    let mut vidhd: Option<u8> = None;
     let mut a = Args::new(rest);
     while let Some(arg) = a.next() {
         match arg {
@@ -252,6 +253,7 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
             "--type" => vt = a.value(arg)?,
             "--hz" => hz = a.value(arg)?.parse::<u32>().map_err(|e| e.to_string())?,
             "--rgb-card" => card = a.value(arg)?,
+            "--vidhd" => vidhd = Some(a.value(arg)?.parse::<u8>().map_err(|e| e.to_string())?),
             "--out" => out = Some(a.value(arg)?),
             o => return Err(format!("argumento desconhecido `{o}`")),
         }
@@ -281,7 +283,7 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
         50 => VideoStandard::Pal,
         h => return Err(format!("--hz {h}: use 50 ou 60")),
     };
-    let fb = render_scene(model, sc.as_ref(), cfg, std, frames)?;
+    let fb = render_scene(model, sc.as_ref(), cfg, std, frames, vidhd)?;
     std::fs::write(format!("{out}.rgba"), &fb.rgba_full).map_err(|e| e.to_string())?;
     println!("fb_size={}x{}", fb.width, fb.height);
     println!("fb_sha256_visible={}", fb.visible_sha256);

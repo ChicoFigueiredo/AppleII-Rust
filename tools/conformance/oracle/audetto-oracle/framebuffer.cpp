@@ -20,6 +20,7 @@
 #include "Core.h"
 #include "Interface.h"
 #include "Memory.h"
+#include "Registry.h"
 #include "NTSC.h"
 #include "RGBMonitor.h"
 #include "Speaker.h"
@@ -34,6 +35,7 @@ namespace
     int g_videoType = -1; // -1: keep the AppleWin default (VT_DEFAULT = colour TV)
     int g_videoHz = 0;    // 0: keep the default (60)
     int g_rgbCard = 0;
+    int g_vidhdSlot = 0; // 0: no VidHD
 
     // ---- SHA-256 (FIPS 180-4), so the oracle needs no crypto library. ----
     struct Sha256
@@ -209,6 +211,8 @@ namespace fbdump
             g_videoHz = std::atoi(argv[++i]);
         else if (arg == "--rgb-card")
             g_rgbCard = std::atoi(argv[++i]);
+        else if (arg == "--vidhd")
+            g_vidhdSlot = std::atoi(argv[++i]);
         else
             return false;
         return true;
@@ -221,6 +225,8 @@ namespace fbdump
 
     void configureRegistry(Registry &registry)
     {
+        if (g_vidhdSlot >= SLOT1 && g_vidhdSlot <= SLOT7)
+            RegSetConfigSlotNewCardType(static_cast<UINT>(g_vidhdSlot), CT_VidHD);
         if (g_videoType >= 0)
             registry.putDWord(REG_CONFIG, REGVALUE_VIDEO_MODE, static_cast<uint32_t>(g_videoType));
         if (g_videoHz == 50)

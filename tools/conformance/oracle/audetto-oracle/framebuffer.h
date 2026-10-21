@@ -11,6 +11,7 @@
 //                      4 colour TV (default), 5 B&W TV, 6 amber, 7 green, 8 white)
 //   --video-hz 50|60   video refresh rate (PAL / NTSC)
 //   --rgb-card N       0 Video-7 SL7 (= Apple), 1 Le Chat Mauve EVE, 2 Le Chat Mauve Feline
+//   --vidhd SLOT       a VidHD card in SLOT (1-7): 640x400 framebuffer, Super Hi-Res
 #pragma once
 
 #include <cstdint>

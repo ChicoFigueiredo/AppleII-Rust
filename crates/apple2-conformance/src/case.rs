@@ -59,6 +59,9 @@ pub struct VideoSpec {
     /// SHA-256 of the scene file.
     #[serde(default)]
     pub scene_sha256: Option<String>,
+    /// Slot (1-7) of a VidHD card: 640x400 framebuffer and Super Hi-Res (HU-0202).
+    #[serde(default)]
+    pub vidhd_slot: Option<u8>,
 }
 
 impl VideoSpec {
@@ -92,6 +95,9 @@ impl VideoSpec {
     }
 
     fn validate(&self) -> Result<(), String> {
+        if self.vidhd_slot.is_some_and(|s| !(1..=7).contains(&s)) {
+            return Err("video.vidhd_slot: use 1-7".into());
+        }
         self.video_type()?;
         self.standard()?;
         self.rgb_card()?;
