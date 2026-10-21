@@ -7,9 +7,12 @@ use apple2_debugger::Debugger;
 use serde_json::{json, Value};
 use std::io::BufReader;
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Duration;
+
+static NEXT_CLIENT: AtomicUsize = AtomicUsize::new(0);
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -32,6 +35,7 @@ struct Client {
     stdin: ChildStdin,
     rx: Receiver<Value>,
     seq: i64,
+    id: usize,
     events: Vec<Value>,
 }
 
@@ -58,6 +62,7 @@ impl Client {
             stdin,
             rx,
             seq: 0,
+            id: NEXT_CLIENT.fetch_add(1, Ordering::Relaxed),
             events: Vec::new(),
         }
     }
@@ -137,7 +142,13 @@ impl Client {
         let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
         let mut args = json!({"model": "apple2plus", "pc": 768, "stopOnEntry": true, "load": []});
         for (addr, bytes) in PROGRAM {
-            let p = dir.join(format!("dap-prog-{addr:04x}-{}.bin", std::process::id()));
+            // One file per client and address: tests run in parallel inside one process, and a
+            // shared name let one test truncate the program while another adapter loaded it.
+            let p = dir.join(format!(
+                "dap-prog-{addr:04x}-{}-{}.bin",
+                std::process::id(),
+                self.id
+            ));
             std::fs::write(&p, bytes).unwrap();
             args["load"]
                 .as_array_mut()
