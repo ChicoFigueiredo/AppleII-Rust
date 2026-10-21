@@ -78,6 +78,26 @@ Cache (fora do Git, compartilhado entre worktrees): `target/conformance-cache/or
 
 Linhas `#chave=valor` (UTF-8, antes do cabeçalho): `trace_format`, `oracle`, `model`, `cpu`, `frames` (se pedido), `cycles`, `start_cycle`, `memclear`, `cards`, `input`, `disk`, `state`, `rom_sha256`, `applewin_sha`, `port_base_applewin_sha`, `fork_sha`, `fork_url` (e `fixture_sha256` com disco/save-state). Depois `cycle,pc,op,a,x,y,sp,p` e uma linha por instrução: `cycle` decimal, `pc` com 4 dígitos hexa maiúsculos, os demais com 2. Finais de linha `\n`.
 
+## Relógio de vídeo (alteração do frontend `main.cpp`, HU-0103)
+
+A primeira versão do oráculo chamava `CpuExecute(slice, false)` (como `CommonFrame::Execute` quando `noVideoUpdate`). Com `bVideoUpdate = false` o `g_nVideoClockHorz/Vert` do NTSC nunca avança e toda leitura do floating bus (`$C056`, `$C050`, `$C0xx` sem dono) devolve o byte de um único endereço do scanner. O AppleWin do Windows sempre atualiza o vídeo, então isto era um artefato do frontend headless do fork, não comportamento do AppleWin. `main.cpp` agora chama `CpuExecute(slice, true)`; o patch `audetto-trace.patch` e o código do AppleWin não mudaram. Os traces de referência foram regenerados (o cabeçalho ganhou `#video_clock=`). O Rust já avançava o scanner a cada opcode.
+
+Outros ajustes do script/frontend: `--out`, `--disk` e `--state` viram caminhos absolutos no `run-audetto-oracle.sh` (o oráculo muda de diretório ao carregar o disco; um `--out` relativo falhava); o cabeçalho grava só o nome do arquivo em `#disk=`/`#state=`. O caminho `--disk` foi exercitado: DOS 3.3 System Master, 5.000.000 de ciclos no //e Enhanced, 1.821.912 instruções.
+
+## Traces grandes (não versionados)
+
+Ficam em `target/conformance-cache/reference-traces/`; os casos `trace-applewin-*` guardam o SHA-256 e o comando. Todos com `--cards disk2` (padrão), `--memclear 2`, determinísticos:
+
+| Arquivo | Comando | Instruções | SHA-256 |
+|---|---|---|---|
+| `applewin-apple2p-boot-2m.csv` | `--model apple2p --cycles 2000000` | 776.083 | `bedaa4d48ada5cce077e16faf0c3ee36d46285e64c66e11562069d9cd23f1a49` |
+| `applewin-apple2ee-boot-2m.csv` | `--model apple2ee --cycles 2000000` | 776.044 | `a000df3a0f159f993aab254c692b2fbfd3ffc10a2942d116c5f8abe3d69f61d4` |
+| `applewin-apple2-boot-2m.csv` | `--model apple2 --cycles 2000000` | 547.232 | `c77401fa9732c6b7dfa90d7bdd7a7849b09724d20f9b86f8cb93b718834b1a7d` |
+| `applewin-apple2e-boot-2m.csv` | `--model apple2e --cycles 2000000` | 776.050 | `bf80669fa23f3403179db72d8fbdc6e92fd7b50809094bb5c0a8b4877b702e37` |
+| `applewin-apple2ee-dos33-5m.csv` | `--model apple2ee --cycles 5000000 --disk "assets/disks/DOS 3.3 System Master - 680-0210-A.dsk"` | 1.821.912 | `13af08ef0a5749a64b8d0a9217d1f08a4a1725b356131dcfe5ff841d3670373d` |
+
+Os mesmos hashes estão em `tests/conformance/cases/trace-applewin-*.toml`.
+
 ## Traces versionados
 
 `tests/conformance/reference-traces/applewin-<modelo>-boot-500k.csv`: 500.000 ciclos do boot sem disco, para `apple2ee` e `apple2p` (~5,8 MB cada). Os 2.000.000 de ciclos pedidos geram ~23 MB por modelo (776 mil instruções), acima do limite de ~10 MB; gere-os localmente com `--cycles 2000000`. O comando é determinístico (duas execuções produzem arquivos idênticos).

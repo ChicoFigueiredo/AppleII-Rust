@@ -25,8 +25,9 @@ MODEL="" OUT="" ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --model) MODEL="$2"; ARGS+=("$1" "$2"); shift 2 ;;
-    --out)   OUT="$2"; shift 2 ;;
-    --cycles|--frames|--disk|--state|--memclear|--cards) ARGS+=("$1" "$2"); shift 2 ;;
+    --out)   OUT="$(realpath -m "$2")"; shift 2 ;;   # absolute: the oracle may change directory
+    --disk|--state) ARGS+=("$1" "$(realpath "$2")"); shift 2 ;;
+    --cycles|--frames|--memclear|--cards) ARGS+=("$1" "$2"); shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
