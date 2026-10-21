@@ -91,28 +91,28 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| UNVERIFIED | 480 | 43.0 |
-| NOT_APPLICABLE | 317 | 28.4 |
-| PASS | 217 | 19.5 |
-| BLOCKED | 88 | 7.9 |
-| FAIL | 13 | 1.2 |
+| UNVERIFIED | 407 | 36.5 |
+| NOT_APPLICABLE | 343 | 30.8 |
+| PASS | 255 | 22.9 |
+| BLOCKED | 96 | 8.6 |
+| FAIL | 14 | 1.3 |
 
 ## Taxas
 
-Taxa geral: PASS 217 / aplicáveis 798 = 27.2%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 255 / aplicáveis 772 = 33.0%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 706 | 180 | 11 | 432 | 25.5% |
+| todos | 1004 | 680 | 215 | 12 | 362 | 31.6% |
 | apple2e | 59 | 51 | 30 | 1 | 16 | 58.8% |
 | apple2e-enhanced | 59 | 47 | 25 | 0 | 17 | 53.2% |
-| apple2plus | 29 | 27 | 11 | 2 | 14 | 40.7% |
-| apple2 | 26 | 24 | 10 | 2 | 12 | 41.7% |
+| apple2plus | 29 | 27 | 13 | 2 | 12 | 48.1% |
+| apple2 | 26 | 24 | 12 | 2 | 10 | 50.0% |
 | apple2jplus | 11 | 9 | 5 | 0 | 4 | 55.6% |
-| pravets82 | 7 | 7 | 2 | 0 | 5 | 28.6% |
-| pravets8m | 7 | 7 | 2 | 0 | 5 | 28.6% |
+| pravets82 | 7 | 7 | 3 | 0 | 4 | 42.9% |
+| pravets8m | 7 | 7 | 3 | 0 | 4 | 42.9% |
 | apple2c | 6 | 4 | 1 | 0 | 3 | 25.0% |
 | base64a | 3 | 3 | 0 | 0 | 3 | 0.0% |
 | pravets8a | 2 | 2 | 1 | 0 | 1 | 50.0% |
@@ -135,17 +135,17 @@ Taxa geral: PASS 217 / aplicáveis 798 = 27.2%. Aplicável = estado diferente de
 | cpu | 55 | 44 | 19 | 0 | 20 | 43.2% |
 | teclado | 53 | 39 | 6 | 0 | 30 | 15.4% |
 | memoria | 48 | 44 | 17 | 2 | 19 | 38.6% |
-| mockingboard | 47 | 42 | 18 | 0 | 14 | 42.9% |
+| mockingboard | 47 | 41 | 28 | 1 | 0 | 68.3% |
 | joystick | 41 | 36 | 4 | 0 | 32 | 11.1% |
-| audio | 32 | 25 | 2 | 0 | 14 | 8.0% |
+| audio | 32 | 16 | 7 | 0 | 0 | 43.8% |
 | savestate | 32 | 29 | 9 | 1 | 17 | 31.0% |
 | hdd | 28 | 21 | 3 | 0 | 17 | 14.3% |
-| serial | 20 | 19 | 0 | 0 | 17 | 0.0% |
+| serial | 20 | 14 | 10 | 0 | 0 | 71.4% |
 | mouse | 16 | 13 | 2 | 0 | 11 | 15.4% |
-| rede | 12 | 10 | 0 | 0 | 10 | 0.0% |
-| relogio | 10 | 10 | 2 | 0 | 7 | 20.0% |
-| ssi263 | 10 | 9 | 3 | 0 | 5 | 33.3% |
-| impressora | 9 | 6 | 0 | 0 | 6 | 0.0% |
+| rede | 12 | 6 | 4 | 0 | 0 | 66.7% |
+| relogio | 10 | 8 | 6 | 0 | 0 | 75.0% |
+| ssi263 | 10 | 6 | 4 | 0 | 0 | 66.7% |
+| impressora | 9 | 4 | 4 | 0 | 0 | 100.0% |
 | z80 | 8 | 7 | 1 | 0 | 6 | 14.3% |
 | vidhd | 1 | 1 | 0 | 0 | 1 | 0.0% |
 
@@ -153,14 +153,14 @@ Taxa geral: PASS 217 / aplicáveis 798 = 27.2%. Aplicável = estado diferente de
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 376 | 125 | 1 | 180 | 33.2% |
-| feature-futura | 146 | 127 | 9 | 0 | 118 | 7.1% |
-| ui | 122 | 120 | 0 | 1 | 118 | 0.0% |
+| runtime | 388 | 367 | 158 | 2 | 129 | 43.1% |
+| feature-futura | 146 | 114 | 11 | 0 | 103 | 9.6% |
+| ui | 122 | 119 | 2 | 1 | 115 | 1.7% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
-| formato | 77 | 77 | 20 | 1 | 45 | 26.0% |
+| formato | 77 | 77 | 21 | 1 | 44 | 27.3% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
-| documentacao | 30 | 20 | 1 | 0 | 19 | 5.0% |
+| documentacao | 30 | 17 | 1 | 0 | 16 | 5.9% |
 | duplicada | 28 | 0 | 0 | 0 | 0 | n/a |
 | invalida | 26 | 0 | 0 | 0 | 0 | n/a |
