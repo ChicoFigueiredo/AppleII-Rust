@@ -1162,6 +1162,21 @@ mod tests {
         assert!(needs_restart(&old, &n));
     }
 
+    /// GH#27 / GH#478: the Slot Aux page offers the RamWorks III and its size reaches 256 banks
+    /// (16 MB); 0 and more than 256 are refused (PageSlots.cpp IDD_RAMWORKS3, kMaxExMemoryBanks).
+    #[test]
+    fn ramworks_size_is_selectable_up_to_16_mb() {
+        assert!(aux_choices(Model::Apple2eEnhanced)
+            .unwrap()
+            .contains(&CardType::RamWorksIII));
+        assert_eq!(RW3_BANK_STEPS.last(), Some(&256));
+        for (banks, ok) in [(1u16, true), (256, true), (0, false), (257, false)] {
+            let mut s = base();
+            s.aux.card = SlotCardSpec::RamWorksIII { banks };
+            assert_eq!(validate(&s).is_empty(), ok, "{banks} banks");
+        }
+    }
+
     #[test]
     fn default_settings_are_valid() {
         assert!(validate(&base()).is_empty(), "{:?}", validate(&base()));

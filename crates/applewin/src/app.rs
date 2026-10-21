@@ -386,10 +386,11 @@ impl App {
 
     /// Scroll Lock: full speed while held, or toggled when "ScrollLock Toggle" is set.
     fn scroll_lock(&mut self, pressed: bool, repeat: bool) {
-        if repeat {
-            return;
-        }
-        if pressed || !self.settings.keyboard.scroll_lock_toggle {
+        if crate::input::scroll_lock_flips_full_speed(
+            pressed,
+            repeat,
+            self.settings.keyboard.scroll_lock_toggle,
+        ) {
             self.emu.send(Command::ToggleFullSpeed);
         }
     }

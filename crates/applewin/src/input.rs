@@ -30,6 +30,12 @@ pub enum Routed {
     },
 }
 
+/// Scroll Lock and full speed (AppleWin: held = full speed while down; with "ScrollLock Toggle"
+/// each press flips it): true when this key event must flip the full-speed state. GH#7, GH#56.
+pub fn scroll_lock_flips_full_speed(pressed: bool, repeat: bool, toggle_setting: bool) -> bool {
+    !repeat && (pressed || !toggle_setting)
+}
+
 /// Actions after which the keyboard is somewhere else (the debugger, another screen mode): the
 /// held keys are let go so that no release gets lost (AUD-P-028).
 pub fn releases_keys(a: crate::actions::Action) -> bool {
@@ -153,5 +159,26 @@ impl InputRouter {
             cmds.push(Command::HostPads(hp));
         }
         cmds
+    }
+}
+
+#[cfg(test)]
+mod scroll_lock_tests {
+    use super::scroll_lock_flips_full_speed as flips;
+
+    /// GH#7 (temporary speed-up): hold = full speed while down, back to normal on release.
+    #[test]
+    fn held_scroll_lock_is_full_speed_only_while_down() {
+        assert!(flips(true, false, false), "press turns it on");
+        assert!(flips(false, false, false), "release turns it off");
+        assert!(!flips(true, true, false), "auto-repeat is ignored");
+    }
+
+    /// GH#56 (lock/toggle for turbo mode): with the toggle setting a press flips, a release not.
+    #[test]
+    fn toggle_setting_flips_on_press_only() {
+        assert!(flips(true, false, true));
+        assert!(!flips(false, false, true));
+        assert!(!flips(true, true, true));
     }
 }

@@ -228,8 +228,10 @@ impl<W: Write> TraceWriter<W> {
         if enters_interrupt {
             return Ok(cycles);
         }
-        if (0xC100..=0xCFFF).contains(&row.pc) {
-            // `peek` cannot read slot ROM without side effects: take the opcode the CPU fetched.
+        if (0xC000..=0xCFFF).contains(&row.pc) {
+            // `peek` cannot read soft switches or slot ROM without side effects (code running in
+            // $C000-$C0FF, GH#728, fetches the floating bus / keyboard latch): take the opcode
+            // the CPU fetched.
             row.op = m.cpu().opcode;
         }
         self.record_row(&row)?;
