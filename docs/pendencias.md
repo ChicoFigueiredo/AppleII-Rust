@@ -6,17 +6,13 @@ Estado em 2026-10-20, depois da onda final. As diferenças em relação ao Apple
 
 - Breakpoint card: existe, mas o depurador ainda não lhe entrega os breakpoints.
 - Mockingboard: um tipo de AY por carta. Os soquetes 3 e 4 do Phasor e as chaves `6522*-bad` não são modelados.
-- SNES MAX: os arquivos `-snes-max-user-joy` não são lidos.
+- SNES MAX: os controles do computador chegam à carta, mas `-snes-max-alt-joy*` e os arquivos `-snes-max-user-joy` não valem.
 - ThunderClock Plus: emulado na biblioteca, mas sem tipo de carta para escolher na configuração.
-- Disk II e HDD: trocar a imagem pela tela de configuração só vale depois de reiniciar. O menu do drive insere na hora.
 - Z80: sem interrupções. Os efeitos colaterais do MEMPTR em INIR/OTIR não são modelados.
 
 ## Interface
 
 - Os atalhos de teclado do depurador (setas, Tab, Espaço) não existem. Os mesmos efeitos estão nos comandos.
-- Ctrl+Print Screen copia só texto de 40 colunas (`text_screen` do núcleo).
-- Falta o indicador de setor ("S??") ao lado da trilha.
-- Falta importar o `.reg`/INI do AppleWin pela interface. Já funciona via `-conf`.
 
 ## Desempenho
 

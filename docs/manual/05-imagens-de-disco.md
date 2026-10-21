@@ -36,10 +36,26 @@ Os discos protegidos contra cópia que usam trilhas especiais só funcionam como
 ## Carregando imagens
 
 - **F3** (drive 1) e **F4** (drive 2) abrem o seletor de arquivos. Enquanto o seletor está aberto a emulação fica em pausa, para o som não gaguejar.
-- O menu do drive (botão direito sobre o botão, ou **Ctrl+F3** e **Ctrl+F4**) permite inserir uma imagem ou ejetar.
-- **Arrastar e soltar** um arquivo sobre a janela insere a imagem no drive 1 e reinicia a Máquina.
+- O menu do drive (botão direito sobre o botão, ou **Ctrl+F3** e **Ctrl+F4**) permite inserir uma imagem, inserir como **somente leitura** ("Insert disk image (read only)...": o disco entra com a proteção de gravação ligada, como a caixa "Open as Read Only" do AppleWin), ejetar, proteger contra gravação e trocar os drives.
+- **Arrastar e soltar** um arquivo de disco sobre a janela, como no AppleWin: solto sobre o botão do drive 2, vai para o drive 2; em qualquer outro lugar, para o drive 1. A Máquina reinicia (como se o botão Run fosse apertado) se o disco foi aceito, **exceto** quando o arquivo foi solto sobre o botão do drive 1. Um arquivo que não é disco só mostra o erro. Arquivos `.aws.yaml` carregam o save-state.
 - Na linha de comando: `-d1 arquivo.dsk -d2 outro.dsk` ou, para outros slots, `-s5d1 arquivo.dsk`. Um nome sem opção (como `applewin jogo.dsk`) também insere o disco no drive 1.
 - **F5** troca os discos dos drives 1 e 2. Não faça isso durante um acesso ao disco: o programa do Apple pode travar e a imagem pode ser corrompida.
+
+## Trocar imagens com a Máquina ligada
+
+O que vale na hora e o que pede reinício segue o AppleWin (`ApplyConfigAfterClose` e `IsOkToRestart`):
+
+| Mudança | Quando vale |
+|---|---|
+| Imagem de um Disk II (F3/F4, menu do drive, arrastar, página Slots) | Na hora, a Máquina continua rodando |
+| Ejetar, proteção contra gravação, trocar drives | Na hora |
+| Imagem de uma unidade de disco rígido de um controlador já no slot (menu do drive, seção "Hard disks") | Na hora (as unidades são ligadas e desligadas a quente) |
+| Vídeo, entrada, som, velocidade, preferências, opções de mouse e impressora | Na hora |
+| Modelo, CPU, taxa de atualização, uma Carta num slot, opções que montam a Carta (soquetes do Mockingboard, porta do SSC, Uthernet, tamanho da RamWorks, firmware) | Reinício |
+
+O reinício nunca é silencioso: a janela de configuração mostra a lista do que mudou e avisa "Restarting the emulator will reset the state of the emulated machine, causing you to lose any unsaved work". **Cancel** deixa a Máquina como estava. Só F2 e Ctrl+F2 reiniciam por ação direta sua.
+
+A linha de status mostra, por drive, a trilha e o setor (`Drive 1: T 5 S11 jogo.dsk`). Como no AppleWin, o setor não vem do hardware: é o que a RWTS do DOS 3.3 ou do ProDOS diz estar lendo para aquele slot, e aparece como `S??` quando o sistema não é um deles (ou fala de outro slot).
 
 Os LEDs ao lado dos botões de drive indicam o estado: apagado (motor desligado), verde (lendo) ou vermelho (gravando). Uma imagem aberta como somente leitura se comporta como um disquete com a proteção de gravação ligada.
 

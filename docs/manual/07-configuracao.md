@@ -107,7 +107,8 @@ O programa emula o alto-falante do Apple II, a Mockingboard, a Phasor e a SAM. A
 - **Setor de boot**: `-bootsector arquivo`.
 - **Game I/O Connector**: o dongle de proteção (nenhum, SpeedStar, CodeWriter, Robocom 500/1000/1500 ou Hayden).
 - **No-Slot Clock**: ligado por padrão (`-no-nsc` remove).
-- **Benchmark**: o AppleWin tem um teste de desempenho na interface; aqui o comando `BENCHMARK` do depurador cumpre o papel.
+- **Benchmark Emulator**: botão da página Advanced, como no AppleWin. Mede por cerca de 7 segundos, numa Máquina própria (a sessão em andamento não é tocada), os quadros por segundo de vídeo em texto e em hires, a velocidade pura da CPU com e sem atualização de vídeo e os quadros por segundo "realistas", e mostra o resultado numa janela. O comando `BENCHMARK` do depurador continua existindo.
+- **Import AppleWin settings...**: botão da página Advanced. Lê um `.reg` exportado do registro do Windows ou um `.ini` do AppleWin para dentro do formulário; **OK** ou **Apply** aplicam (com o aviso de reinício se o hardware mudou).
 - **Reiniciar tudo**: apague o arquivo `settings.toml` para voltar aos padrões.
 
 ## Velocidade máxima
