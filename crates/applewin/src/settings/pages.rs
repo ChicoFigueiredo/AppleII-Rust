@@ -546,6 +546,17 @@ impl SettingsDialog {
                 ui.label("System ROM (16K or 12K):");
                 path_row(ui, "System ROM", &mut self.draft.machine.custom_rom, rom);
             });
+            // `[roms]` entry of the selected model: used when no `-rom` file is set above.
+            let m = self.draft.machine.model;
+            if let Some(entry) = self.draft.roms.system_for_mut(m) {
+                ui.horizontal(|ui| {
+                    ui.label(format!(
+                        "System ROM for this model ({}K):",
+                        m.system_rom().map_or(0, |r| r.len() / 1024)
+                    ));
+                    path_row(ui, "System ROM for this model", entry, rom);
+                });
+            }
             ui.horizontal(|ui| {
                 ui.label("F8 ROM (2K):");
                 path_row(ui, "F8 ROM", &mut self.draft.machine.custom_f8_rom, rom);

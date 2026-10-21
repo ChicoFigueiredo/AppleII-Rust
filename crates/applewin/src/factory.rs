@@ -307,9 +307,9 @@ pub fn build_machine_report(
     settings: &Settings,
     bus: &AudioBus,
 ) -> Result<(Machine, Vec<String>), String> {
-    let config = settings.to_machine_config_with_roms()?;
-    let mut m = Machine::try_new(config).map_err(|e| e.to_string())?;
-    let mut warnings = Vec::new();
+    let roms = settings.resolve_roms();
+    let mut m = Machine::try_new(roms.machine).map_err(|e| e.to_string())?;
+    let mut warnings = roms.warnings;
     let env = Env { settings, bus };
     for (slot, spec) in settings.slots.0.iter().enumerate().skip(1) {
         if let Some(card) = build_card(spec, slot as u8, &env, &mut warnings) {

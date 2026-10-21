@@ -578,6 +578,7 @@ pub fn restart_reasons(old: &Settings, new: &Settings) -> Vec<String> {
     if old.machine.custom_rom != new.machine.custom_rom
         || old.machine.custom_f8_rom != new.machine.custom_f8_rom
         || old.machine.video_rom != new.machine.video_rom
+        || old.roms != new.roms
     {
         v.push("Custom ROM has changed".into());
     }
@@ -689,6 +690,11 @@ pub fn validate(s: &Settings) -> Vec<Problem> {
     }
     if s.video.window_scale == 0 || s.video.window_scale > 8 {
         bad(&mut v, "Window scale must be 1-8");
+    }
+    // A user ROM that is missing or has the wrong size: at start-up the embedded ROM would be
+    // used (AppleWin's behaviour), but the form refuses it on entry.
+    for e in s.rom_problems() {
+        bad(&mut v, e);
     }
     v
 }

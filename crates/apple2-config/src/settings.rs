@@ -545,6 +545,8 @@ impl<'de> Deserialize<'de> for Slots {
 #[serde(default)]
 pub struct Settings {
     pub machine: MachineSettings,
+    /// Optional `[roms]` table: user ROM files (see [`crate::roms`]).
+    pub roms: crate::roms::RomSettings,
     pub video: VideoSettings,
     pub sound: SoundSettings,
     pub joystick: JoystickSettings,
