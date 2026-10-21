@@ -157,10 +157,7 @@ impl UiState {
                 let avail = ui.available_rect_before_wrap();
                 if let Some(tex) = &self.texture {
                     let size = tex.size_vec2();
-                    let mut scale = (avail.width() / size.x).min(avail.height() / size.y);
-                    if self.integer_scale && scale >= 1.0 {
-                        scale = scale.floor();
-                    }
+                    let scale = fit_scale(avail.size(), size, self.integer_scale);
                     let rect = Rect::from_center_size(avail.center(), size * scale);
                     ui.painter().image(
                         tex.id(),
@@ -285,5 +282,47 @@ impl UiState {
     pub fn toggle_settings(&mut self, settings: &Settings) {
         self.applied = settings.clone();
         self.settings.toggle(settings);
+    }
+}
+
+/// Scale factor that fits the `image` in `avail` keeping its aspect ratio (the Apple screen is
+/// never stretched: wide windows and full screen get black side bars, GH#117, GH#136, GH#1121);
+/// `integer` rounds a factor of 1 or more down to a whole number.
+pub fn fit_scale(avail: egui::Vec2, image: egui::Vec2, integer: bool) -> f32 {
+    let scale = (avail.x / image.x).min(avail.y / image.y);
+    if integer && scale >= 1.0 {
+        scale.floor()
+    } else {
+        scale
+    }
+}
+
+#[cfg(test)]
+mod fit_tests {
+    use super::fit_scale;
+    use egui::vec2;
+
+    #[test]
+    fn widescreen_keeps_the_4_3_ratio_and_centres_with_side_bars() {
+        let img = vec2(560.0, 384.0);
+        // 1920x1080 full screen: height limits, the width used is 1575 < 1920 (black side bars)
+        let s = fit_scale(vec2(1920.0, 1080.0), img, false);
+        assert!((s - 1080.0 / 384.0).abs() < 1e-6);
+        assert!(img.x * s < 1920.0);
+        assert!((img.x / img.y - (img.x * s) / (img.y * s)).abs() < 1e-6);
+        // 1366x768 (GH#464): the whole height fits, nothing is cut off
+        assert!(img.y * fit_scale(vec2(1366.0, 768.0), img, false) <= 768.0 + 1e-3);
+    }
+
+    #[test]
+    fn window_can_be_scaled_from_1x_to_4x_and_integer_mode_floors() {
+        let img = vec2(560.0, 384.0);
+        for k in 1..=4 {
+            let a = vec2(560.0 * k as f32, 384.0 * k as f32);
+            assert_eq!(fit_scale(a, img, true), k as f32);
+        }
+        assert_eq!(fit_scale(vec2(1920.0, 1080.0), img, true), 2.0);
+        // below 1x the image is still shrunk to fit
+        assert!(fit_scale(vec2(280.0, 192.0), img, true) < 1.0);
     }
 }

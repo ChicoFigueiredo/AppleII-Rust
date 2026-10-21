@@ -74,6 +74,12 @@ pub struct VideoSpec {
     /// `video7-sl7` (default), `le-chat-mauve-eve` or `le-chat-mauve-feline`.
     #[serde(default)]
     pub rgb_card: Option<String>,
+    /// `VideoStyle_e` bits: 1 = half scan lines (default), 2 = vertical blend; 0 = none.
+    #[serde(default)]
+    pub style: Option<u32>,
+    /// `RGB_SetMacLCCardDLGR`: the Apple IIe Card for Macintosh LC double lo-res quirk (GH#1258).
+    #[serde(default)]
+    pub mac_lc_dlgr: bool,
     /// `visible` (560x384, default) or `full` (600x420 with the 20/18-pixel borders).
     #[serde(default)]
     pub region: Option<String>,

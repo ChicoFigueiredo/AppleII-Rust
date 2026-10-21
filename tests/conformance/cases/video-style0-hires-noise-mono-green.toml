@@ -1,0 +1,22 @@
+id = "video-style0-hires-noise-mono-green"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena hires-noise em mono-green a 60 Hz com VideoStyle=0 (sem 50% scan lines), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-green"
+hz = 60
+rgb_card = "video7-sl7"
+style = 0
+region = "full"
+scene = "inputs/video/hires-noise.scene"
+scene_sha256 = "a2ae00c7bb32d1ec86667fd0eaa41c10be07b78224e0ded4fa619b65612ad67b"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "ba39cf406140c0519e540edf45b1273617eafaa0204d09a21ff26c4ddad6945f"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/hires-noise.scene --video-type 7 --video-hz 60 --rgb-card 0 --video-style 0 => fb_sha256_full=ba39cf406140c0519e540edf45b1273617eafaa0204d09a21ff26c4ddad6945f (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

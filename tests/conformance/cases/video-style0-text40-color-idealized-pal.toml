@@ -1,0 +1,22 @@
+id = "video-style0-text40-color-idealized-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena text40 em color-idealized a 50 Hz com VideoStyle=0 (sem 50% scan lines), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 50
+rgb_card = "video7-sl7"
+style = 0
+region = "full"
+scene = "inputs/video/text40.scene"
+scene_sha256 = "2e7a1d47b3d5e6cd561bf575d276d712cb9ac5c9814e070491674101e9dcbe3f"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "3c4cea9c4841fc4a7a029790ef28eb2e29e1949d78d41c16764e2945ebe62651"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/text40.scene --video-type 1 --video-hz 50 --rgb-card 0 --video-style 0 => fb_sha256_full=3c4cea9c4841fc4a7a029790ef28eb2e29e1949d78d41c16764e2945ebe62651 (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

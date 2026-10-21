@@ -1,0 +1,23 @@
+id = "video-maclc-dlores-color-rgb"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena dlores em color-rgb a 60 Hz com VideoStyle=1 (50% scan lines, quirk DLGR do Mac LC (GH#1258)), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-rgb"
+hz = 60
+rgb_card = "video7-sl7"
+style = 1
+mac_lc_dlgr = true
+region = "full"
+scene = "inputs/video/dlores.scene"
+scene_sha256 = "0ba9ecd0b665753e7218ceb5ca023acf17ada8120a3b74ea707b199ac856171b"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "d6f33479ff74ffdb59b422f1952e6398ab447c912685db8e244c535d7cbfe9b7"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/dlores.scene --video-type 2 --video-hz 60 --rgb-card 0 --video-style 1 --mac-lc-dlgr 1 => fb_sha256_full=d6f33479ff74ffdb59b422f1952e6398ab447c912685db8e244c535d7cbfe9b7 (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

@@ -1,0 +1,22 @@
+id = "video-style0-hires-bars-color-rgb-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena hires-bars em color-rgb a 50 Hz com VideoStyle=0 (sem 50% scan lines), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-rgb"
+hz = 50
+rgb_card = "video7-sl7"
+style = 0
+region = "full"
+scene = "inputs/video/hires-bars.scene"
+scene_sha256 = "08cb2898097105c06110087358858761062f217b6590f1800394488fe1391aa6"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "a3cff1ee16249a606bb2d64d059162357995a75bb44c7f5b05f3522be7e7824d"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/hires-bars.scene --video-type 2 --video-hz 50 --rgb-card 0 --video-style 0 => fb_sha256_full=a3cff1ee16249a606bb2d64d059162357995a75bb44c7f5b05f3522be7e7824d (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

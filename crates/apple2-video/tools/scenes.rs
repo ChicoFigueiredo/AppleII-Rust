@@ -826,6 +826,42 @@ pub fn all() -> Vec<SceneDef> {
             a,
         ));
     }
+    // GH#610: the II/II+ power-on state of the video switches. AppleWin starts with TEXT on and
+    // MIXED/PAGE2/HIRES off; the scene only turns graphics on, so a MIXED bit left on at power-on
+    // would show four text lines.
+    for (name, model) in [
+        ("issue-0610-poweron-mixed-ii-plus", "apple2p"),
+        ("issue-0610-poweron-mixed-ii", "apple2"),
+    ] {
+        v.push(scene(
+            name,
+            model,
+            "GH#610: lo-res graphics turned on from the power-on state (MIXED never written)",
+            lores_all.clone(),
+            vec![],
+            static_code(&[GR]),
+        ));
+    }
+    // GH#643: AN2 toggled while an RGB-card DHGR mode is showing; AppleWin ignores it.
+    {
+        let mut a = Asm::default();
+        a.set(&[
+            GR, FULL, HIRES, COL80_ON, AN3_ON, AN3_OFF, COL80_ON, AN3_ON, AN3_OFF, COL80_ON, AN3_ON,
+        ]);
+        a.delay_loop(255).delay_loop(255).delay_loop(255);
+        a.set(&[0xC05C]);
+        a.delay_loop(255).delay_loop(255).delay_loop(255);
+        a.set(&[0xC05D, 0xC05C]);
+        a.halt();
+        v.push(scene(
+            "issue-0643-an2-dhgr",
+            "apple2ee",
+            "GH#643: AN2 set and cleared while the Video-7 DHGR mode is showing",
+            flatten(vec![dhgr_main_noise.clone(), t40.clone()]),
+            dhgr_aux.clone(),
+            a,
+        ));
+    }
     // GH#851/#1018/#1435: Video-7 SL7 extra modes (DHIRES switch on with 40-column modes: the aux
     // text page carries the foreground/background colours) and the power-on 140/160/560 state.
     {
