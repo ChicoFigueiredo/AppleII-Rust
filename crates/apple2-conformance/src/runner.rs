@@ -717,6 +717,10 @@ fn evaluate(
                 Verdict::Fail(format!("falharam: {}", bad.join("; ")), diff)
             }
         }
+        OracleKind::Trace if reference.is_none() => {
+            // Determinism case: no reference, the runs only had to agree (checked above).
+            Verdict::Pass(format!("trace sha256={}{rep}", obs.value))
+        }
         OracleKind::Trace => {
             let reference = reference.expect("loaded");
             let actual_bytes = obs.trace.expect("trace case");

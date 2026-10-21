@@ -285,7 +285,15 @@ impl Case {
         }
         let o = &self.oracle;
         match o.kind {
-            OracleKind::Trace if o.trace.is_none() => return Err("oracle.trace required".into()),
+            OracleKind::Trace
+                if o.trace.is_none()
+                    && !(o.authority == Authority::Determinism && self.run.repeat >= 2) =>
+            {
+                return Err(
+                    "oracle.trace required (or authority = determinism with run.repeat >= 2 for self-consistency)"
+                        .into(),
+                );
+            }
             OracleKind::Expr if o.expect.is_empty() => return Err("oracle.expect required".into()),
             OracleKind::Expr => {
                 for e in &o.expect {
