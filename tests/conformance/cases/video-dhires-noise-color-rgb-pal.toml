@@ -1,0 +1,21 @@
+id = "video-dhires-noise-color-rgb-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena dhires-noise em color-rgb a 50 Hz com a carta video7-sl7, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-rgb"
+hz = 50
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/dhires-noise.scene"
+scene_sha256 = "1155eb2e060fa69e71752162cc8af20a109146a01b17d7561c4fc975655ee759"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "26fda5860a69a601d239594cbb20e38ab768044f52673bae33316c594a7c45f0"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/dhires-noise.scene --video-type 2 --video-hz 50 --rgb-card 0 => fb_sha256_full=26fda5860a69a601d239594cbb20e38ab768044f52673bae33316c594a7c45f0 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

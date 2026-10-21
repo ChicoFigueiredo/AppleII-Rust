@@ -131,6 +131,26 @@ impl Class {
     }
 }
 
+/// Largest file `open_path` reads for a given name (AUD-C-035), checked against the size on the
+/// host *before* the file is read. Compressed containers get the class limit plus slack for the
+/// container overhead (their content is bounded again while decompressing); a floppy in a
+/// fixed-size format (`.dsk`/`.do`/`.po`/`.nib`/`.2mg`, at most 800K plus headers) gets 1 MiB;
+/// only WOZ may be large (flux tracks). A hard disk is capped by the 32 MB ProDOS volume limit
+/// that AppleWin enforces (`HARDDISK_32M_SIZE` plus the 2MG header).
+pub fn max_file_size(class: Class, name: &str) -> u64 {
+    let lower = name.to_ascii_lowercase();
+    let slack = 64 * 1024;
+    let base = class.max_image_size() as u64;
+    if lower.ends_with(".gz") || lower.ends_with(".zip") {
+        return base + slack;
+    }
+    match (class, lower_ext(name).as_str()) {
+        (Class::Floppy, ".woz") => base,
+        (Class::Floppy, _) => 1 << 20,
+        (Class::HardDisk, _) => base,
+    }
+}
+
 /// Lower-cased extension with its dot, the way `GetCharLowerExt` finds it.
 fn lower_ext(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
@@ -662,6 +682,9 @@ impl DiskImage {
         let entries = archive.len();
         let mut first: Option<(Detected, Vec<u8>, String)> = None;
         let mut valid = 0;
+        // Total bytes inflated across all members: many small-looking members cannot add up to
+        // a bomb either.
+        let mut budget = 2 * class.max_image_size() as u64;
         for i in 0..entries {
             let mut f = archive.by_index(i).map_err(|_| ImageError::Zip)?;
             if f.size() as usize > class.max_image_size() {
@@ -672,8 +695,14 @@ impl DiskImage {
             }
             let entry = f.name().to_string();
             let mut data = Vec::with_capacity(f.size() as usize);
-            f.read_to_end(&mut data)
+            (&mut f)
+                .take(class.max_image_size() as u64 + 1)
+                .read_to_end(&mut data)
                 .map_err(|_| ImageError::Unsupported)?;
+            if data.len() > class.max_image_size() || data.len() as u64 > budget {
+                return Err(ImageError::BadSize);
+            }
+            budget -= data.len() as u64;
             if let Some(d) = Self::detect(class, &data, &lower_ext(&entry)) {
                 valid += 1;
                 if first.is_none() {
@@ -704,7 +733,18 @@ impl DiskImage {
         let name = path.to_string_lossy().to_string();
         let meta = std::fs::metadata(path).map_err(ImageError::Io)?;
         let readonly = force_write_protected || meta.permissions().readonly();
-        let bytes = std::fs::read(path).map_err(ImageError::Io)?;
+        let limit = max_file_size(class, &name);
+        if meta.len() > limit {
+            return Err(ImageError::BadSize);
+        }
+        // `take` keeps the read bounded even if the file grows after the check.
+        let mut bytes = Vec::with_capacity(meta.len() as usize);
+        std::fs::File::open(path)
+            .and_then(|f| f.take(limit + 1).read_to_end(&mut bytes))
+            .map_err(ImageError::Io)?;
+        if bytes.len() as u64 > limit {
+            return Err(ImageError::BadSize);
+        }
         let zero = bytes.is_empty();
         if zero && readonly {
             return Err(ImageError::ZeroLengthWriteProtected);
@@ -1185,6 +1225,11 @@ impl DiskImage {
     /// Writes block `block`, growing the image if it is past the end. False if write-protected.
     pub fn write_block(&mut self, block: u32, src: &[u8; HD_BLOCK_SIZE]) -> bool {
         if self.write_protected {
+            return false;
+        }
+        // A write past the end grows the image, but never beyond the 32 MB ProDOS volume
+        // (found by fuzzing: block 0xFFFFFFFF asked for a 2 TB allocation).
+        if block as usize >= HARDDISK_32M_SIZE / HD_BLOCK_SIZE {
             return false;
         }
         let start = self.offset + block as usize * HD_BLOCK_SIZE;

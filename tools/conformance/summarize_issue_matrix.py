@@ -98,8 +98,12 @@ def main():
     L += rates("Por aplicabilidade", "aplicabilidade", by_app)
     OUT_AUDIT.write_text("\n".join(L), encoding="utf-8")
 
-    # Lista de issues abertas para o §15/EP-11 (tudo vem da matriz, sem inventar dados)
+    # Lista de issues abertas para o §15/EP-11 (tudo vem da matriz, sem inventar dados).
+    # Gerada só uma vez: depois da triagem (HU-1101) o arquivo é editado à mão e não é sobrescrito.
     openr = [r for r in rows if r["estado_upstream"] == "open"]
+    if OUT_TRIAGE.exists():
+        print(f"{OUT_AUDIT}\n{OUT_TRIAGE} (mantido: já existe)\nissues={total} abertas={len(openr)}")
+        return
     T = ["# Issues abertas do AppleWin para triagem (HU-1101 / EP-11)", "",
          "Gerado por `tools/conformance/summarize_issue_matrix.py`. Títulos, datas e labels vêm da coleta"
          + (f" de {meta['coletado_em_utc']} UTC (upstream `{meta['upstream_head_sha'][:12]}`)." if meta else "."),

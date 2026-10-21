@@ -109,6 +109,7 @@ fn main() {
         }
         return;
     }
+    install_termination_handler();
     let mut settings =
         conf_settings(&cmd).unwrap_or_else(|| Settings::load_default().unwrap_or_default());
     apply(&mut settings, &cmd);
@@ -126,6 +127,24 @@ fn main() {
     if let Err(e) = run {
         eprintln!("{e}");
         std::process::exit(1);
+    }
+}
+
+/// SIGINT/SIGTERM/SIGHUP (Unix) and console close/Ctrl+C/logoff/shutdown (Windows) quit like the
+/// window's close button, so the emulation thread flushes the disks and saves the state on exit
+/// (AUD-C-034). Uses the `ctrlc` crate (`termination` feature): no `unsafe` of ours. A second
+/// signal while the first is still being handled ends the process at once.
+fn install_termination_handler() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static ASKED: AtomicBool = AtomicBool::new(false);
+    let res = ctrlc::set_handler(|| {
+        if ASKED.swap(true, Ordering::SeqCst) || !applewin_shell::app::request_exit() {
+            // second signal, or the window does not exist yet: nothing to flush
+            std::process::exit(130);
+        }
+    });
+    if let Err(e) = res {
+        eprintln!("warning: cannot install the termination handler: {e}");
     }
 }
 

@@ -42,6 +42,21 @@ A simulação analógica de vídeo e a síntese de áudio não têm igualdade bi
 - O limiar não é ajustado depois para fazer um teste passar. Fora do limiar é FAIL, e o julgamento visual ou auditivo não o transforma em PASS. Mudar um limiar exige um novo registro com justificativa e vale só para as execuções seguintes.
 - Todo diff gera um artefato (imagem de diferença, histograma, trecho de áudio) guardado em `tests/conformance/reports/`.
 
+### Vídeo (HU-0201, HU-0202): framebuffer contra o AppleWin
+
+Registrada em 2026-10-20, **antes da primeira execução** do diferencial. Vale para as execuções seguintes; qualquer mudança exige novo registro com justificativa.
+
+- **Oráculo**: o fork Linux do AppleWin (`audetto-oracle --fb-out`, ver `tools/conformance/oracle/README.md`), que despeja o framebuffer da camada de vídeo do núcleo (`NTSC.cpp`, `Video.cpp`, `RGBMonitor.cpp`) com a atualização de vídeo por opcode ligada, como nos frontends reais.
+- **Entrada**: cenas "scene v1" (`tests/conformance/inputs/video/*.scene`), geradas por `crates/apple2-video/examples/gen_scenes.rs`: bytes de RAM e de código 6502 escritos pela equipe, sem ROM de usuário. O oráculo e o Rust carregam os mesmos bytes logo após o power-on, apontam o PC para o ponto de entrada e rodam do ciclo 0.
+- **Alinhamento temporal**: ambos executam até o fim do quadro N (primeira instrução que cruza `N x ciclos por quadro`) e comparam o framebuffer nesse instante; o contador de flash depende desse N (quadros 4 e 20 cobrem flash desligado e ligado).
+- **Região**: o framebuffer inteiro de 600x420 (560x384 visíveis mais bordas de 20 e 18 pixels), em RGBA8 de cima para baixo. Cada caso declara se compara `visible` ou `full`; o diferencial amplo usa `full`.
+- **Métrica**:
+  - modos digitais (`MonoCustom`, `ColorIdealized`, `ColorVideocardRgb`, monocromáticos de fósforo, texto, lo-res, SHR): igualdade bit a bit, isto é, diferença máxima de canal = 0;
+  - NTSC e PAL (`ColorMonitorNtsc`, `ColorTv`, `MonoTv`): diferença máxima de canal = 0, porque o `apple2-video` é uma tradução do `NTSC.cpp` e o algoritmo é o mesmo (aritmética inteira); MAE, SSIM e a caixa envolvente das diferenças entram **só como diagnóstico**.
+- **Limiar de reprovação**: qualquer pixel diferente é FAIL. Cada diferença é investigada até a causa raiz no C++ e corrigida no Rust com teste de regressão, ou permanece FAIL (ou BLOCKED, se a causa estiver fora do alcance) com as hipóteses testadas; não se relaxa o limiar para fazê-la passar, e o julgamento visual não a transforma em PASS.
+- **Calibração**: o oráculo contra ele mesmo em duas execuções deve dar o mesmo SHA-256 (conferido por `tools/conformance/oracle/video-differential.py --selfcheck`).
+- **Saída**: `tests/conformance/cases/video-*.toml` (casos `framebuffer-hash` com `authority = "applewin"`, o comando do oráculo e o SHA-256 em `source`) e o registro de divergências em `docs/conformance/audit/video-differential.md`.
+
 ### Áudio: Mockingboard, Phasor, SSI263 e alto-falante (HU-0501, HU-0502)
 
 Registrada **antes** da primeira comparação Rust × oráculo (a calibração entra em `audit/audio-differential.md` antes do primeiro resultado). O Oráculo é o fork Linux do AppleWin (`tools/conformance/oracle/`, `audetto-oracle`) com o gancho de áudio `audetto-audio.patch` e um "DirectSound virtual" determinístico (relógio = Ciclos emulados). Os dois lados partem do mesmo estado inicial (RAM + registradores de CPU, ou o mesmo `.aws.yaml`) e rodam o mesmo número de Ciclos.
@@ -118,6 +133,8 @@ O gerador Rust (`conformance trace`) e o oráculo (`audetto-oracle`) seguem as m
 7. **Disk II.** `--cards disk2` (slot 6) e `--disk IMAGEM` (drive 1, protegido contra escrita) no Rust; o oráculo usa o mesmo cartão (`--cards disk2`, padrão). Os bytes "aleatórios" do Disk II vêm do `rand()` da glibc após `srand(1)`, igual nos dois.
 
 Casos `authority = "applewin"`: `tests/conformance/cases/trace-applewin-*.toml`. Os de 500 mil ciclos têm o trace versionado; os maiores (2 e 5 milhões) ficam em `target/conformance-cache/reference-traces/` e o caso guarda o SHA-256 (`trace_sha256`) e o comando para regenerá-los em `source`; sem o arquivo, o resultado é BLOCKED com esse comando. O `applewin_sha` do manifesto vem do cabeçalho `#applewin_sha` do trace de referência. Registro das divergências encontradas: `docs/conformance/audit/cpu-trace-differential.md`.
+
+Casos de disco (`tests/conformance/cases/disk-*.toml`, 53, `oracle.kind = "trace-checkpoints"`, `authority = "applewin"`): o Disk II (drives 1 e 2, `fixture`/`fixture2`), o controlador de HDD no slot 7 (`hdd`/`hdd2`), a velocidade autêntica (`authentic = true`) e imagens somente leitura (`readonly = ["fixture"]`) vêm do próprio caso. Um trace de 12 milhões de ciclos passa de 100 MB, então a referência é um arquivo `.ckpt` (`tests/conformance/reference-traces/disk/`): metadados (modelo, memclear, comando do oráculo, SHA-256 do trace completo, SHA-256 de cada imagem ao final), um checkpoint a cada 2000 instruções (`cycle,pc,a,x,y,sp,p`) e o hash FNV-1a encadeado de **todas** as linhas anteriores (`cycle`, `pc`, A, X, Y, SP, P com bits 4 e 5). Passar significa que a sequência inteira, ciclo a ciclo, e o conteúdo final das imagens são os do oráculo. As imagens do corpus AppleWin-Test (não versionadas) deixam o caso BLOCKED (`... ausente`) até serem baixadas. O gerador é `cargo run --release -p apple2-storage --example disk_follow -- --case CASO.toml --oracle TRACE.csv --emit-ckpt X.ckpt [--oracle-final fixture=SHA256]`; os micro-programas de boot vêm de `--example make_micro`. Registro e resultados: `docs/conformance/audit/disk-differential.md`.
 
 Exemplo (valores ilustrativos do formato, não de uma execução real):
 

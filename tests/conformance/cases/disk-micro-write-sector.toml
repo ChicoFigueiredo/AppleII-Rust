@@ -1,0 +1,20 @@
+id = "disk-micro-write-sector"
+story = "HU-0303"
+criterion = "Gravar um setor e desligar o motor: depois do atraso de 1 s a imagem do host tem a trilha gravada e os demais bytes intactos"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #73, #119, #499, #1444. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-micro-write-sector (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 4500000
+
+[fixture]
+path = "tests/conformance/inputs/disk-micro/write-sector.do"
+sha256 = "63550bc25d731fd88a6a63f6d68d08bbe4110da47cbcb27cb323ef0a148761d8"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 4500000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-micro-write-sector.ckpt"

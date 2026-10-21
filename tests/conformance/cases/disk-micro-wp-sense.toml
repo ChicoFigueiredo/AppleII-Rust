@@ -1,0 +1,20 @@
+id = "disk-micro-wp-sense"
+story = "HU-0301"
+criterion = "A leitura de write-protect ($C08D+$C08E) de um disco gravável não devolve bit 7"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #389. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-micro-wp-sense (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 3000000
+
+[fixture]
+path = "tests/conformance/inputs/disk-micro/wp-sense.do.gz"
+sha256 = "1363f398e5be611a6cd84626d318c58a03d8dee59b56e42fbdc88f398d165249"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 3000000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-micro-wp-sense.ckpt"

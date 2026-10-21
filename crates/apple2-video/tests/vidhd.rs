@@ -70,9 +70,10 @@ fn shr_320_cells_come_from_aux_memory_with_per_line_palette_and_control() {
             "cell 1"
         );
     }
-    // Every IIgs line is two framebuffer rows.
+    // AppleWin draws IIgs line y on framebuffer row 2*y only (UpdateSHRCell writes one row);
+    // the rows in between stay black (framebuffer differential, DIV-002).
     for x in 0..640 {
-        assert_eq!(r.pixel(x, 0), r.pixel(x, 1), "x {x}");
+        assert_eq!(r.pixel(x, 1), [0, 0, 0, 255], "row 1, x {x}");
     }
     assert_eq!(
         px(0, 2),

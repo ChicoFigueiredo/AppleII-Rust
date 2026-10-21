@@ -44,12 +44,17 @@ cp "$HERE/audetto-oracle/audio_hook.h" "$CLONE/source/audio_hook.h"
 # The oracle frontend lives in Git here and is copied into the fork tree (untracked there).
 rm -rf "$CLONE/source/frontends/oracle"
 mkdir -p "$CLONE/source/frontends/oracle"
-cp "$HERE/audetto-oracle/main.cpp" "$HERE/audetto-oracle/CMakeLists.txt" "$HERE/audetto-oracle/audio.cpp" "$HERE/audetto-oracle/audio.h" "$HERE/audetto-oracle/audio_hook.h" "$CLONE/source/frontends/oracle/"
+cp "$HERE"/audetto-oracle/*.cpp "$HERE"/audetto-oracle/*.h "$HERE/audetto-oracle/CMakeLists.txt" "$CLONE/source/frontends/oracle/"
 
+# -fno-strict-aliasing: the AppleWin video code stores RGBQUAD structs and reads them back as UINT32
+# (RGBMonitor.cpp UpdateDuochromeCell and others). That is undefined behaviour in C++; MSVC, which
+# AppleWin is developed with, tolerates it, but GCC -O2 reads stale stack data (RGB-card text
+# came out as garbage colours). The flag restores the behaviour the Windows build has.
 # Only the headless executable (BUILD_ORACLE). slirp/pcap/SDL/Qt/evdev are not needed:
 # without slirp and pcap the fork compiles a dummy network backend.
 cmake -S "$CLONE" -B "$BUILD" -G "${CMAKE_GENERATOR:-Unix Makefiles}" \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS="-fno-strict-aliasing" \
   -DBUILD_ORACLE=ON \
   -DENABLE_NETWORKING=OFF
 cmake --build "$BUILD" --target audetto-oracle -j "$JOBS"

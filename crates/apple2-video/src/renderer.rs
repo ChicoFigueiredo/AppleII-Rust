@@ -309,13 +309,25 @@ impl Renderer {
 
     /// The visible area as tightly packed RGBA8 (for texture upload or screenshots).
     pub fn rgba8(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.vis_w * self.vis_h * 4);
-        for y in 0..self.vis_h {
-            for x in 0..self.vis_w {
-                out.extend_from_slice(&self.pixel(x, y));
+        let mut out = Vec::new();
+        self.rgba8_into(&mut out);
+        out
+    }
+
+    /// [`Renderer::rgba8`] into a buffer the caller keeps between frames: no allocation once
+    /// `out` has the right size, and one pass over each row of the framebuffer.
+    pub fn rgba8_into(&self, out: &mut Vec<u8>) {
+        let row_bytes = self.vis_w * 4;
+        out.resize(row_bytes * self.vis_h, 0);
+        for (y, dst) in out.chunks_exact_mut(row_bytes).enumerate() {
+            let start = (BORDER_H + y) * self.fb_w + BORDER_W;
+            let row = &self.fb[start..start + self.vis_w];
+            let (dst, _) = dst.as_chunks_mut::<4>();
+            for (&c, d) in row.iter().zip(dst) {
+                // 0xAARRGGBB -> [R, G, B, A]
+                *d = c.rotate_left(8).to_be_bytes();
             }
         }
-        out
     }
 
     /// `VideoResetState` + `RGB_ResetState`: call when the machine is reset.
@@ -375,9 +387,22 @@ impl Renderer {
         self.video_update_cycles(s, cycles);
     }
 
+    /// Configures the renderer from the power-on state of `s`. AppleWin does this in
+    /// `NTSC_VideoInit` -> `VideoReinitialize(true)` before the first opcode runs; doing it lazily
+    /// in the first [`update`](Self::update) would see the mode changes of that first opcode and
+    /// start line 0 of the first frame at the wrong offset. [`run_frame`](Self::run_frame) calls
+    /// it; a caller that drives `update` itself should call it once before the first opcode
+    /// (a no-op afterwards).
+    pub fn init(&mut self, s: &dyn VideoSource) {
+        if self.configured.is_none() {
+            self.sync(s);
+        }
+    }
+
     /// Runs `m` for one frame, rendering after every instruction. Returns the cycles executed.
     pub fn run_frame(&mut self, m: &mut Machine) -> u64 {
         self.resync(m.cycles_in_frame());
+        self.init(m);
         let target = m.frames() + 1;
         let mut done = 0u64;
         while m.frames() < target {
@@ -723,6 +748,16 @@ impl Renderer {
 
     // ---- Scanner. ----
 
+    /// The pixel `k` places after `idx` in AppleWin's pointer arithmetic. AppleWin's framebuffer is
+    /// bottom-up (a DIB), so running off the end of a row lands on the row *above* it on screen,
+    /// not below; this matters only for the pointer left over from a mode with a different
+    /// centring (the line of the frame in which SHR is switched on).
+    fn advance(&self, idx: isize, k: isize) -> isize {
+        let w = self.fb_w as isize;
+        let (y, x) = (idx.div_euclid(w), idx.rem_euclid(w) + k);
+        (y - x.div_euclid(w)) * w + x.rem_euclid(w)
+    }
+
     /// `g_pScanLines[k]`: index of pixel 0 of framebuffer scan line `k` (0-383).
     fn scan_line(&self, k: usize) -> isize {
         ((BORDER_H + self.cy + k) * self.fb_w + BORDER_W + self.cx) as isize
@@ -764,7 +799,8 @@ impl Renderer {
             self.reselect_text_mode();
             self.reselect_screen_funcs_for(self.flags);
         }
-        self.update_video_scanner_address();
+        // NTSC_SetVideoMode does not touch g_pVideoAddress: the scanner address is only
+        // recomputed at the end of a line, so the line in progress keeps the old pointer.
     }
 
     pub(crate) fn put(&mut self, idx: isize, v: u32) {
@@ -1276,8 +1312,8 @@ impl Renderer {
 
     /// `updateScreenSHR` (NTSC.cpp:1866): one 16-pixel cell (four aux bytes) per cycle from
     /// `$2000`, with the scan line's control byte (`$9D00+y`: b7 640 mode, b5 colour fill, b3-0
-    /// palette) and palette (`$9E00 + 32*n`) read at that moment. Each IIgs line fills two
-    /// framebuffer rows.
+    /// palette) and palette (`$9E00 + 32*n`) read at that moment. Each IIgs line is drawn on row
+    /// `2*y` of the framebuffer only (the rows in between stay black, as in AppleWin).
     fn shr_cycles(&mut self, s: &dyn VideoSource, cycles: i32) {
         for _ in 0..cycles {
             if self.vert < Y_DISPLAY_IIGS && self.horz >= HORZ_START {
@@ -1301,16 +1337,19 @@ impl Renderer {
             let p = pal + 2 * i as u16;
             s.aux(p) as u16 | (s.aux(p + 1) as u16) << 8
         });
-        let dst = self.shr_line(2 * y as usize) + 16 * x as isize;
+        // g_pVideoAddress: set at each end of line (and not at a mode change, so line 0 of the
+        // frame where SHR is switched on starts where the previous mode left the pointer).
+        let dst = self.addr;
         let left = self.get(dst - 1);
         let prev = [(left >> 16) as u8, (left >> 8) as u8, left as u8];
         let cell = v.shr_cell(c & 0x80 != 0, c & 0x20 != 0, &palette, a, prev);
-        let fw = self.fb_w as isize;
+        // VidHDCard::UpdateSHRCell writes the 16 pixels of row 2*y only: the in-between row keeps
+        // whatever was there (black), as in AppleWin (framebuffer differential, DIV-002).
         for (i, p) in cell.iter().enumerate() {
             let px = ALPHA | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32;
-            self.put(dst + i as isize, px);
-            self.put(dst + fw + i as isize, px);
+            self.put(self.advance(dst, i as isize), px);
         }
+        self.addr = self.advance(dst, 16);
     }
 
     /// `updateVideoScannerHorzEOL_SHR`.
@@ -1321,6 +1360,9 @@ impl Renderer {
             self.vert += 1;
             if self.vert == self.max_vert {
                 self.vert = 0;
+            }
+            if self.vert < Y_DISPLAY_IIGS {
+                self.update_video_scanner_address();
             }
         }
     }

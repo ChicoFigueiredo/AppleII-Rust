@@ -110,6 +110,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "apple2-bench"
+version = "0.1.0"
+dependencies = [
+ "apple2-audio",
+ "apple2-config",
+ "apple2-core",
+ "apple2-video",
+ "applewin",
+ "serde_json",
+]
+
+[[package]]
 name = "apple2-cards"
 version = "0.1.0"
 dependencies = [
@@ -138,12 +150,14 @@ name = "apple2-conformance"
 version = "0.1.0"
 dependencies = [
  "apple2-audio",
+ "apple2-cards",
  "apple2-core",
  "apple2-cpu",
  "apple2-hostio",
  "apple2-savestate",
  "apple2-storage",
  "apple2-video",
+ "flate2",
  "image",
  "serde",
  "serde_json",
@@ -245,6 +259,7 @@ dependencies = [
 name = "apple2-storage"
 version = "0.1.0"
 dependencies = [
+ "apple2-conformance",
  "apple2-core",
  "apple2-cpu",
  "apple2-roms",
@@ -256,8 +271,11 @@ dependencies = [
 name = "apple2-video"
 version = "0.1.0"
 dependencies = [
+ "apple2-cards",
  "apple2-core",
  "apple2-roms",
+ "apple2-savestate",
+ "apple2-storage",
 ]
 
 [[package]]
@@ -278,6 +296,7 @@ dependencies = [
  "arboard",
  "chrono",
  "cpal",
+ "ctrlc",
  "egui",
  "egui-wgpu",
  "egui-winit",
@@ -938,6 +957,17 @@ name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+
+[[package]]
+name = "ctrlc"
+version = "3.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0b1fab2ae45819af2d0731d60f2afe17227ebb1a1538a236da84c93e9a60162"
+dependencies = [
+ "dispatch2",
+ "nix 0.31.3",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "cursor-icon"

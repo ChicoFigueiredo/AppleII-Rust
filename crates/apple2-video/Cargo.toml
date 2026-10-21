@@ -9,3 +9,9 @@ repository.workspace = true
 [dependencies]
 apple2-core = { path = "../apple2-core" }
 apple2-roms = { path = "../apple2-roms" }
+
+[dev-dependencies]
+# AUD-P-050: the VidHD save/load round-trip test (tests/vidhd_roundtrip.rs).
+apple2-cards = { path = "../apple2-cards" }
+apple2-savestate = { path = "../apple2-savestate" }
+apple2-storage = { path = "../apple2-storage" }

@@ -201,7 +201,7 @@ impl FrameSource for VideoRenderer {
         // 560x384, or 640x400 with a VidHD card (Video.cpp:96-103)
         let (_, _, w, h) = self.renderer.visible_rect();
         frame.resize(w as u32, h as u32);
-        frame.rgba = self.renderer.rgba8();
+        self.renderer.rgba8_into(&mut frame.rgba);
     }
     fn cycle_video_mode(&mut self, delta: i32) {
         self.edit(|c| {

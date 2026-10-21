@@ -1,0 +1,21 @@
+id = "video-hires-bars-ii-plus-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena hires-bars-ii-plus em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2plus"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/hires-bars-ii-plus.scene"
+scene_sha256 = "6007d1ecbc4e5b8011812ed416c8fa61b2ecfc6bde229a97367c0dd482f7f0b2"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "cb0a6451ed6770695d18998623effb13a38cc3aff9415271a4184c09b11d2349"
+source = "audetto-oracle --model apple2p --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/hires-bars-ii-plus.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=cb0a6451ed6770695d18998623effb13a38cc3aff9415271a4184c09b11d2349 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

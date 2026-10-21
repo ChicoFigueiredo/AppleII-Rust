@@ -1,0 +1,20 @@
+id = "disk-hdd-32mb-boot"
+story = "HU-0303"
+criterion = "Volume ProDOS de 32 MB (65535 blocos) em 2MG compactado: boot e capacidade"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #1165. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-hdd-32mb-boot (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 12000000
+
+[hdd]
+path = "target/conformance-cache/applewin-test/v2/GNR-FINAL.2mg.gz"
+sha256 = "5927e8daa66642ccb7d7c90926874c9355eb0036c956635a38887c8588d05b54"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 12000000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-hdd-32mb-boot.ckpt"

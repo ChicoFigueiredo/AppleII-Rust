@@ -1,0 +1,20 @@
+id = "disk-micro-latch-motor-off"
+story = "HU-0301"
+criterion = "Com o motor desligado por mais de 1 s, ler Q6L devolve sempre o mesmo valor do latch (e com o motor ligado ele muda)"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #303. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-micro-latch-motor-off (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 5000000
+
+[fixture]
+path = "tests/conformance/inputs/disk-micro/latch-motor-off.do.gz"
+sha256 = "fa1b651f9ce72f7dd461e8542a1b8b550f4dab717f98e58104a588174898e2f3"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 5000000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-micro-latch-motor-off.ckpt"

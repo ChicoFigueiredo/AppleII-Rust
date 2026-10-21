@@ -1,0 +1,113 @@
+{
+  "machine": {
+    "cpu": "AMD Ryzen 7 3700X 8-Core Processor",
+    "git_sha": "7e98a801bb0b23f80614c0774046c04d48cc85c9",
+    "logical_cores": 16,
+    "os": "Ubuntu 26.04.1 LTS (kernel 7.0.0-38-generic, x86_64)",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "note": "Gerado por `apple2-bench --write-baseline`. margin_pct = max(15, 3 x CV) sobre as repetições que o geraram. Regrave só ao mudar de propósito timing, vídeo ou áudio (impressão digital) ou a máquina de referência.",
+  "reps": 10,
+  "scenarios": {
+    "boot_text": {
+      "cv_pct": 2.137,
+      "fingerprint": {
+        "audio": "17ed611c37f57572",
+        "cycles": 10218004,
+        "frame": "231fbba7a45feb94"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 9.558,
+      "mhz_cpu_median": 9.281
+    },
+    "cpu": {
+      "cv_pct": 2.499,
+      "fingerprint": {
+        "audio": "0000000000000000",
+        "cycles": 20200250,
+        "frame": "0000000000000000"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 58.301,
+      "mhz_cpu_median": 56.855
+    },
+    "dhgr": {
+      "cv_pct": 3.576,
+      "fingerprint": {
+        "audio": "9b4531588feee955",
+        "cycles": 7493204,
+        "frame": "4cf1f24d15a38b35"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 12.175,
+      "mhz_cpu_median": 11.818
+    },
+    "disk2_dos33": {
+      "cv_pct": 7.061,
+      "fingerprint": {
+        "audio": "c6f0a186fee4231c",
+        "cycles": 10388301,
+        "frame": "f2ebf3fc09e90029"
+      },
+      "margin_pct": 21.182,
+      "mhz_cpu_best": 12.874,
+      "mhz_cpu_median": 12.713
+    },
+    "hgr": {
+      "cv_pct": 3.802,
+      "fingerprint": {
+        "audio": "fcc0c8f15973cd75",
+        "cycles": 7493201,
+        "frame": "a1cc41b4e3118ccd"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 13.622,
+      "mhz_cpu_median": 12.679
+    },
+    "mockingboard": {
+      "cv_pct": 2.183,
+      "fingerprint": {
+        "audio": "22f0e5a53861ce42",
+        "cycles": 9196200,
+        "frame": "47d05197d306f1e3"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 12.435,
+      "mhz_cpu_median": 12.184
+    },
+    "ntsc_monitor": {
+      "cv_pct": 4.519,
+      "fingerprint": {
+        "audio": "fcc0c8f15973cd75",
+        "cycles": 7493201,
+        "frame": "a588ecb7a9891c41"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 11.041,
+      "mhz_cpu_median": 10.141
+    },
+    "ntsc_tv": {
+      "cv_pct": 12.013,
+      "fingerprint": {
+        "audio": "fcc0c8f15973cd75",
+        "cycles": 7493201,
+        "frame": "e72b3d45e9949691"
+      },
+      "margin_pct": 36.038,
+      "mhz_cpu_best": 13.073,
+      "mhz_cpu_median": 12.812
+    },
+    "pal": {
+      "cv_pct": 1.528,
+      "fingerprint": {
+        "audio": "579825e2edba97a5",
+        "cycles": 8923201,
+        "frame": "5720405304bfeb79"
+      },
+      "margin_pct": 15.0,
+      "mhz_cpu_best": 14.949,
+      "mhz_cpu_median": 14.425
+    }
+  },
+  "schema": 1
+}
