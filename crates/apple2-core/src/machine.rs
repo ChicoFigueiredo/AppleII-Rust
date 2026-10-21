@@ -377,7 +377,7 @@ impl Machine {
             config.aux_card,
             config.slots[0].is_some(),
         );
-        let mut lc = LanguageCards::new(is_e, &config.slots);
+        let mut lc = LanguageCards::new(is_e, &config.slots, &config.saturn_banks);
         lc.attach(&mut memory);
         // Kinds backed by `LanguageCards`; a new `CardKind` forces a decision here.
         for kind in config.slots.iter().flatten() {

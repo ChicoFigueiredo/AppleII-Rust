@@ -363,6 +363,21 @@ impl Memory {
         self.main[addr as usize]
     }
 
+    /// `MemGetMainPtr(0)[addr]` (Memory.cpp:1734-1738, used by `ReadFloatingBus`, :2460-2470): the
+    /// check that picks the CPU read image `mem` over `memmain` looks at page 0 only, so with
+    /// ALTZP=0 the whole index goes through the read image, and RAMRD (or 80STORE+PAGE2) makes the
+    /// video scanner "see" the auxiliary RAM; with ALTZP=1 it is main RAM. AUD-C-050: the real
+    /// hardware reads main, but AppleWin is the oracle.
+    pub fn peek_floating_image(&self, addr: u16) -> u8 {
+        if self.rd[0].seg == Seg::Main {
+            let p = self.rd[(addr >> 8) as usize];
+            if p.seg == Seg::Aux {
+                return self.aux[p.base as usize + (addr & 0xFF) as usize];
+            }
+        }
+        self.main[addr as usize]
+    }
+
     pub fn poke_main(&mut self, addr: u16, value: u8) {
         self.main[addr as usize] = value;
     }

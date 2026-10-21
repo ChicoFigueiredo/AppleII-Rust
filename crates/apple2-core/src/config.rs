@@ -31,6 +31,10 @@ pub struct MachineConfig {
     pub aux_card: AuxCardKind,
     /// Slots 0-7.
     pub slots: [Option<CardKind>; 8],
+    /// Banks (1-8, 16K each) of the Saturn in each slot; unused for other slots. Anything
+    /// outside 1-8 is clamped (`kMaxSaturnBanks`, LanguageCard.cpp:324-345).
+    #[serde(default = "default_saturn_banks")]
+    pub saturn_banks: [u8; 8],
     /// Replaces the model's system ROM when set.
     pub custom_rom: Option<Vec<u8>>,
     /// Use "Freeze's F8" non-autostart ROM instead of the ][ F8.
@@ -42,6 +46,11 @@ pub struct MachineConfig {
     /// follows the model (Utilities.cpp:145, `SetMainCpu`).
     #[serde(default)]
     pub cpu_cmos: Option<bool>,
+}
+
+/// A full Saturn 128K (`kMaxSaturnBanks`).
+fn default_saturn_banks() -> [u8; 8] {
+    [8; 8]
 }
 
 /// Invalid [`MachineConfig`].
@@ -102,6 +111,7 @@ impl MachineConfig {
             video_standard: VideoStandard::Ntsc,
             aux_card,
             slots,
+            saturn_banks: default_saturn_banks(),
             custom_rom: None,
             use_freeze_f8: false,
             custom_f8_rom: None,
