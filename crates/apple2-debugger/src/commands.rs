@@ -88,13 +88,14 @@ impl Debugger {
             let hex_prefix_ok = nlen >= 2 && chars[..nlen - 1].iter().all(|c| is_hex(*c));
             if hex_prefix_ok {
                 let last = chars[nlen - 1].to_ascii_uppercase();
-                let addr = hex_prefix(&name[..name.len() - 1]);
+                let stem: String = chars[..nlen - 1].iter().collect();
+                let addr = hex_prefix(&stem);
                 if last == 'G' {
                     m.cpu_mut().pc = addr;
                     self.exit(m);
                     return upd::ALL;
                 } else if last == 'L' && !name.eq_ignore_ascii_case("cl") {
-                    raw[0].text = name[..name.len() - 1].to_string();
+                    raw[0].text = stem;
                     raw.insert(
                         0,
                         Arg {
@@ -326,7 +327,7 @@ impl Debugger {
             CursorPageDown256 => self.cursor_page(m, false, 256),
             CursorPageDown4k => self.cursor_page(m, false, 4096),
             // Cycles
-            CyclesInfo => self.cmd_cycles_info(a),
+            CyclesInfo => self.cmd_cycles_info(m, a),
             CyclesReset => self.cmd_cycles_reset(m),
             // Disassembler data
             DisasmData | DefineDataByte1 => self.cmd_define_data(m, a, crate::disasm::Nop::Byte1),
