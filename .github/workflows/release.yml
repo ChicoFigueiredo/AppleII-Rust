@@ -30,6 +30,7 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       sha: ${{ steps.ver.outputs.sha }}
       release: ${{ steps.ver.outputs.release }}
+      prerelease: ${{ steps.ver.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,14 +52,55 @@ jobs:
             fi
             echo "version=$V" >> "$GITHUB_OUTPUT"
             echo "release=true" >> "$GITHUB_OUTPUT"
+            # Sufixo SemVer (0.2.0-alpha.1, 1.0.0-rc.1) = pre-release; so X.Y.Z puro e "stable".
+            if [[ "$V" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
           else
             echo "version=dev-${SHA::7}" >> "$GITHUB_OUTPUT"
             echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
+
+  # Portao de qualidade: fmt + clippy + testes na matriz. Qualquer falha impede build e publicacao
+  # ("nenhum build vermelho gera release stable").
+  verify:
+    name: verify ${{ matrix.os }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: verify-${{ matrix.os }}
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --release
 
   build:
     name: ${{ matrix.name }}
-    needs: prepare
+    needs: [prepare, verify]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -117,6 +159,17 @@ jobs:
           "$EXE" --headless-frames 300 --dump-screen smoke.png
           test -s smoke.png
 
+      # Licencas de terceiros (cargo-about) entram no pacote como THIRD-PARTY-LICENSES.html.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.2
+
+      - name: Third-party licenses
+        shell: bash
+        run: |
+          tools/package/licenses.sh "$RUNNER_TEMP/THIRD-PARTY-LICENSES.html"
+          echo "THIRD_PARTY_LICENSES=$RUNNER_TEMP/THIRD-PARTY-LICENSES.html" >> "$GITHUB_ENV"
+
       - name: Package
         shell: bash
         run: packaging/package.sh "${{ matrix.pkg }}" "${{ needs.prepare.outputs.version }}" "$BINDIR"
@@ -128,16 +181,33 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [prepare, build]
+    needs: [prepare, verify, build]
     if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+
+      # SBOM CycloneDX 1.5 das dependencias de todas as plataformas + SHA256SUMS de todos os artefatos.
+      - name: SBOM and checksums
+        run: |
+          tools/package/sbom.sh "artifacts/applewin-${{ needs.prepare.outputs.version }}.cdx.json"
+          tools/package/checksums.sh artifacts
+          cat artifacts/SHA256SUMS
 
       # Notas: titulo do PR (sem `[release]`) e corpo; titulo/corpo entram por env, nunca interpolados no shell.
       - name: Release notes
@@ -156,4 +226,5 @@ jobs:
           name: v${{ needs.prepare.outputs.version }}
           body_path: notes.md
           files: artifacts/*
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: true
