@@ -746,7 +746,10 @@ fn gh972_snes_max_protocol_matches_cpp() {
 fn tmp_file(name: &str, text: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("applewin-p23-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let p = dir.join(name);
+    // Um nome por chamada: os testes rodam em paralelo no mesmo processo.
+    static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let p = dir.join(format!("{n}-{name}"));
     std::fs::write(&p, text).unwrap();
     p
 }

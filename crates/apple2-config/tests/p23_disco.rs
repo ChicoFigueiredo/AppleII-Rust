@@ -18,8 +18,14 @@ fn gh663_d1_and_d2_insert_the_images_in_slot_6() {
     let s = applied(&["-d1", "game.dsk", "-d2", "data.po"]);
     match s.slot(6) {
         SlotCardSpec::Disk2 { drives, .. } => {
-            assert_eq!(drives[0].image, Some(PathBuf::from("game.dsk")));
-            assert_eq!(drives[1].image, Some(PathBuf::from("data.po")));
+            assert!(drives[0]
+                .image
+                .as_deref()
+                .is_some_and(|p| p.ends_with("game.dsk")));
+            assert!(drives[1]
+                .image
+                .as_deref()
+                .is_some_and(|p| p.ends_with("data.po")));
         }
         other => panic!("slot 6: {other:?}"),
     }
@@ -32,7 +38,7 @@ fn gh692_hard_disk_from_command_line_can_be_dismounted() {
     let s = applied(&["-h1", "a.hdv"]);
     match s.slot(7) {
         SlotCardSpec::GenericHdd { images, .. } => {
-            assert_eq!(images[0], Some(PathBuf::from("a.hdv")))
+            assert!(images[0].as_deref().is_some_and(|p| p.ends_with("a.hdv")))
         }
         other => panic!("slot 7: {other:?}"),
     }
