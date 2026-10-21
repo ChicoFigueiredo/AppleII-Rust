@@ -92,7 +92,6 @@ fn aud_p_z80_undefined_ed_opcode_is_a_silent_8_tstate_nop() {
 /// Repro AUD-P (hardware, não AppleWin): com repetição ativa, os bits 3 e 5 de F de LDIR vêm do
 /// byte alto do PC da instrução (0x28 aqui), não de A+(HL).
 #[test]
-#[ignore = "reproduz achado AUD-P-014"]
 fn aud_p_z80_ldir_repeat_takes_flags_3_5_from_pch() {
     let mut ram = ram_with(0x2800, &[0xED, 0xB0]);
     let mut z = Z80 {
@@ -114,7 +113,6 @@ fn aud_p_z80_ldir_repeat_takes_flags_3_5_from_pch() {
 
 /// Idem para INIR/OTIR (além de PF/HF ajustados; aqui só F3/F5).
 #[test]
-#[ignore = "reproduz achado AUD-P-014"]
 fn aud_p_z80_inir_otir_repeat_takes_flags_3_5_from_pch() {
     for op in [0xB2u8, 0xB3] {
         let mut ram = ram_with(0x2800, &[0xED, op]);
