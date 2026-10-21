@@ -1,0 +1,14 @@
+id = "trace-iiplus-boot-selfref"
+story = "HU-0101"
+criterion = "O trace instrução a instrução dos primeiros 6000 ciclos do Apple ][+ não muda (REGRESSÃO; não é prova de paridade com o AppleWin)"
+model = "apple2plus"
+notes = "Referência gerada pela própria Máquina Rust com `conformance trace --model apple2plus --cycles 6000`. Só detecta mudança de comportamento. O oráculo AppleWin virá de um trace gerado a partir do C++ no mesmo formato."
+
+[run]
+cycles = 6000
+
+[oracle]
+kind = "trace"
+authority = "regression"
+source = "REGRESSÃO: saída anterior da própria Máquina Rust (reference-traces/apple2plus-boot-selfref.csv). NÃO é um oráculo do AppleWin."
+trace = "reference-traces/apple2plus-boot-selfref.csv"

@@ -1,0 +1,17 @@
+id = "determinism-iie-enhanced-x10"
+story = "HU-0101"
+criterion = "Teste determinístico repetido dez vezes dá o mesmo estado/hash (boot e digitação de uma linha de BASIC)"
+model = "apple2e-enhanced"
+
+[run]
+frames = 45
+repeat = 10
+
+[[input]]
+at_frame = 15
+text = "PRINT 1+1\r"
+
+[oracle]
+kind = "state-hash"
+authority = "determinism"
+source = "As dez execuções a partir do power-on têm de gerar o mesmo sha256 do MachineState em JSON; sem hash fixo, só concordância entre elas"

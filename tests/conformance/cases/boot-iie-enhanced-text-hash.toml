@@ -1,0 +1,13 @@
+id = "boot-iie-enhanced-text-hash"
+story = "HU-0101"
+criterion = "O Apple //e Enhanced sem disco chega ao prompt do Applesoft e a página de texto fica estável"
+model = "apple2e-enhanced"
+
+[run]
+frames = 30
+
+[oracle]
+kind = "text-hash"
+authority = "known-result"
+sha256 = "50105427a6f5ccc943a50e23d5f829aca3bc620eeb24e2560599a2191eb59cc7"
+source = "Tela que o firmware real deixa sem disco (banner Apple //e e prompt ]), conferida contra crates/apple2-core/tests/boot.rs; o hash fixa a página de texto de 24 linhas após 30 quadros"

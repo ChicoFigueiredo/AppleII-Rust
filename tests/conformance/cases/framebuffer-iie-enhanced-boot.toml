@@ -1,0 +1,14 @@
+id = "framebuffer-iie-enhanced-boot"
+story = "HU-0101"
+criterion = "O framebuffer renderizado do boot do //e Enhanced (NTSC padrão) não muda (REGRESSÃO; não é prova de paridade com o AppleWin)"
+model = "apple2e-enhanced"
+
+[run]
+frames = 30
+repeat = 2
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "regression"
+sha256 = "f627c6de2ebff27517fb6caec35849cd9fb1ec3e7593769c02457af93d94eb42"
+source = "REGRESSÃO: hash do framebuffer produzido pelo renderizador de apple2-video com RenderConfig padrão; NÃO é um oráculo do AppleWin"
