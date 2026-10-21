@@ -102,6 +102,9 @@ pub fn set_model(s: &mut Settings, model: Model) {
     if !matches!(model, Model::Apple2 | Model::Apple2Plus) {
         s.machine.freeze_f8_rom = false;
     }
+    // PageConfig.cpp:161-167: the ][ family defaults to having the SHIFT key mod, the //e and //c
+    // do not (`GetShiftKeyModDefault`).
+    s.joystick.shift_key_mod = model.is_apple2();
     normalize(s);
 }
 

@@ -746,7 +746,15 @@ fn apply_one(o: &Opt, s: &mut Settings) {
         Opt::NoHookAlt => s.joystick.hook_alt_keys = false,
         Opt::AltControlButtons(a) => s.joystick.alt_control_buttons = Some(*a),
         Opt::SwapButtons => s.joystick.swap_buttons = true,
-        Opt::NoJoystick(n) => s.joystick.disabled_host_devices[*n] = true,
+        Opt::NoJoystick(n) => {
+            // `JoyUnplug` (Joystick.cpp:888, AppleWin.cpp:740, GH#1234): the *emulated* joystick
+            // becomes Disabled, so the ][ family reads PB0/PB1 floating high.
+            s.joystick.disabled_host_devices[*n] = true;
+            match n {
+                0 => s.joystick.joystick0 = Joystick0Kind::Disabled,
+                _ => s.joystick.joystick1 = Joystick1Kind::Disabled,
+            }
+        }
         Opt::SpkrInc(v) => s.sound.speaker_error_inc = Some(*v),
         Opt::SpkrMax(v) => s.sound.speaker_error_max = Some(*v),
         Opt::UseRealPrinter => s.misc.enable_dump_to_real_printer = true,
