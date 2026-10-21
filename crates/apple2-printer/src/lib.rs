@@ -12,10 +12,14 @@
 //! - `pdf`: PDF export.
 //! - `archive`, `spool`: Arquivo de impressões and job service.
 
+#[cfg(feature = "fs")]
+pub mod archive;
 pub mod capture;
 pub mod command;
 pub mod document;
 pub mod engine;
 pub mod font;
 pub mod paper;
+#[cfg(feature = "fs")]
+pub mod spool;
 pub mod units;
