@@ -4,7 +4,7 @@ members = ["crates/*"]
 default-members = ["crates/apple2-rust"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0-rc.1"
 edition = "2021"
 license = "GPL-2.0-or-later"
 repository = "https://github.com/ChicoFigueiredo/AppleII-Rust"

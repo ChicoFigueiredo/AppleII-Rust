@@ -8,8 +8,11 @@
   <key>CFBundleExecutable</key><string>apple2-rust</string>
   <key>CFBundleIconFile</key><string>apple2-rust</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>@VERSION@</string>
-  <key>CFBundleVersion</key><string>@VERSION@</string>
+  <!-- Apple only accepts 1 to 3 dot-separated integers here (no -alpha.1 suffix); package.sh fills
+       @VERSION_NUM@ with the numeric part and @VERSION@ with the full version. -->
+  <key>CFBundleShortVersionString</key><string>@VERSION_NUM@</string>
+  <key>CFBundleVersion</key><string>@VERSION_NUM@</string>
+  <key>AppleIIRustFullVersion</key><string>@VERSION@</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
   <key>NSHighResolutionCapable</key><true/>

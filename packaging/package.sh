@@ -59,7 +59,14 @@ case "$os" in
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     cp "$bindir/apple2-rust" "$app/Contents/MacOS/apple2-rust"
     chmod +x "$app/Contents/MacOS/apple2-rust"
-    sed "s/@VERSION@/$ver/g" packaging/macos/Info.plist.in > "$app/Contents/Info.plist"
+    # CFBundleVersion and CFBundleShortVersionString must be 1 to 3 dot-separated integers, so
+    # 0.2.0-alpha.1 (or 0.2.0+build) becomes 0.2.0 there; the full version goes in AppleIIRustFullVersion.
+    vernum=${ver%%[-+]*}
+    if ! [[ $vernum =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+      echo "package.sh: version '$ver' has no numeric x.y.z part usable as CFBundleVersion" >&2; exit 1
+    fi
+    sed -e "s/@VERSION_NUM@/$vernum/g" -e "s/@VERSION@/$ver/g" \
+      packaging/macos/Info.plist.in > "$app/Contents/Info.plist"
     cp "$icons/apple2-rust.icns" "$app/Contents/Resources/apple2-rust.icns"
     cp "$icons/disk.icns" "$app/Contents/Resources/disk.icns"
     copy_common "$root"

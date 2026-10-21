@@ -104,14 +104,14 @@ dependencies = [
 
 [[package]]
 name = "apple2-audio"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
 ]
 
 [[package]]
 name = "apple2-bench"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-audio",
  "apple2-config",
@@ -123,7 +123,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-cards"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-cpu",
@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-config"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-cpu",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-conformance"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-audio",
  "apple2-cards",
@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-core"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-cpu",
  "apple2-roms",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-cpu"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -184,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-dap"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-debugger",
@@ -194,7 +194,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-debugger"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-cards",
  "apple2-core",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-hostio"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-cpu",
@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-lab"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-cpu",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-rewind"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-debugger",
@@ -239,11 +239,11 @@ dependencies = [
 
 [[package]]
 name = "apple2-roms"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 
 [[package]]
 name = "apple2-rust"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-audio",
  "apple2-cards",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-rust-web"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-core",
  "apple2-storage",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-savestate"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-audio",
  "apple2-cards",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-storage"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-conformance",
  "apple2-core",
@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "apple2-video"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "apple2-cards",
  "apple2-core",

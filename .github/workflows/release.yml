@@ -217,6 +217,10 @@ jobs:
         run: |
           TITLE="$(printf '%s' "$PR_TITLE" | sed -E 's/\[release\]//Ig; s/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]{2,}/ /g')"
           { printf '## %s\n\n' "$TITLE"; printf '%s\n' "$PR_BODY"; } > notes.md
+          # Escopo verificado: Linux x86_64. Os pacotes de Windows e macOS saem do mesmo fluxo, mas sem teste nativo.
+          {
+            printf '\n> **Escopo verificado: Linux x86_64.** Os pacotes de **Windows** e **macOS** nao foram verificados nativamente (so Linux e Windows sob Wine); teste manual pelo roteiro `docs/conformance/manual-tests/plataformas.md`. Os pacotes nao sao assinados nem notarizados.\n'
+          } >> notes.md
 
       # A acao cria a tag v<versao> no commit de merge (target_commitish) e publica a release.
       - uses: softprops/action-gh-release@v2
