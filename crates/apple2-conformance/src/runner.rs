@@ -767,23 +767,24 @@ fn evaluate(
 /// `trace-checkpoints` cases: a Disk II boot in lock step with the oracle (see `disk.rs`).
 fn evaluate_disk(env: &Env, case: &Case) -> Verdict {
     use crate::disk::{self, Checkpoints, Failure};
-    let fx = case.fixture.as_ref().expect("validated");
-    let path = env.workspace.join(&fx.path);
-    let bytes = match std::fs::read(&path) {
-        Ok(b) => b,
-        Err(_) => {
+    for (role, fx) in case.devices() {
+        let path = env.workspace.join(&fx.path);
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(_) => {
+                return Verdict::Blocked(format!(
+                    "{role} ausente: {} (imagem de terceiros fora do repositório; veja docs/conformance)",
+                    fx.path
+                ))
+            }
+        };
+        let h = sha256_hex(&bytes);
+        if h != fx.sha256 {
             return Verdict::Blocked(format!(
-                "fixture ausente: {} (imagem de terceiros fora do repositório; veja docs/conformance)",
-                fx.path
-            ))
+                "{role} {} com sha256 {h}, esperado {}",
+                fx.path, fx.sha256
+            ));
         }
-    };
-    let h = sha256_hex(&bytes);
-    if h != fx.sha256 {
-        return Verdict::Blocked(format!(
-            "fixture {} com sha256 {h}, esperado {}",
-            fx.path, fx.sha256
-        ));
     }
     let rel = case.oracle.trace.as_deref().expect("validated");
     let ck = match std::fs::read_to_string(env.root.join(rel))
@@ -793,11 +794,11 @@ fn evaluate_disk(env: &Env, case: &Case) -> Verdict {
         Ok(c) => c,
         Err(e) => return Verdict::Blocked(format!("checkpoints {rel}: {e}")),
     };
-    let mut m = match disk::build(env, case) {
-        Ok(m) => m,
+    let mut rig = match disk::build(env, case) {
+        Ok(r) => r,
         Err(e) => return Verdict::Fail(format!("erro ao montar a máquina: {e}"), None),
     };
-    match disk::check(&mut m, &ck) {
+    match disk::check(&mut rig, &ck) {
         Ok(s) => Verdict::Pass(s),
         Err(Failure::Blocked(c)) => Verdict::Blocked(c),
         Err(Failure::Fail(msg, _)) => Verdict::Fail(msg, None),

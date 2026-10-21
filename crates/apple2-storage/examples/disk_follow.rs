@@ -62,8 +62,15 @@ fn main() {
     let env = Env::detect(None);
     let oracle_bytes = std::fs::read(&oracle).expect("oracle trace");
     let tr = TraceReader::read_file(std::path::Path::new(&oracle)).expect("oracle trace");
-    let mut m = disk::build(&env, &case).expect("machine");
+    let mut rig = disk::build(&env, &case).expect("machine");
+    let m = &mut rig.machine;
     let mut stepper = Stepper::default();
+    // `--oracle-final role=sha256`: the images the oracle left behind (run on scratch copies)
+    let oracle_finals: Vec<(String, String)> = args
+        .windows(2)
+        .filter(|w| w[0] == "--oracle-final")
+        .filter_map(|w| w[1].split_once('=').map(|(r, h)| (r.to_string(), h.to_string())))
+        .collect();
     let log = Log::default();
     m.set_access_observer(Some(Box::new(log.clone())));
 
@@ -75,8 +82,8 @@ fn main() {
     let mut verdict = None;
     let n = tr.rows.len().min(limit);
     for (i, want) in tr.rows.iter().enumerate().take(n) {
-        stepper.skip_interrupt_entries(&mut m);
-        let mut got = TraceRow::from_machine(&m);
+        stepper.skip_interrupt_entries(m);
+        let mut got = TraceRow::from_machine(m);
         got.p |= 0x30;
         let cx_pc = (0xC000..0xD000).contains(&want.pc);
         // `op` of code running in slot ROM space is read by peek(), which does not see it
@@ -95,6 +102,33 @@ fn main() {
             let fl = reads.iter().rev().find(|a| floating_capable(**a)).copied();
             if let (Some(addr), true) = (fl, got.sp == want.sp) {
                 *forced.entry(addr).or_default() += 1;
+                if std::env::var_os("DISK_FOLLOW_VERBOSE").is_some() {
+                    println!(
+                        "sync row {i} cycle {} (frame pos {}) read {addr:04X}: oracle a={:02X} rust a={:02X}",
+                        want.cycle,
+                        want.cycle % 17030,
+                        want.a,
+                        got.a
+                    );
+                    let sc = apple2_core::video_scanner::VideoScanner::new(
+                        apple2_core::VideoStandard::Ntsc,
+                        false,
+                    );
+                    let sw = apple2_core::video_scanner::Switches {
+                        text: true,
+                        mixed: false,
+                        hires: false,
+                        page2: false,
+                    };
+                    for d in -6i64..=6 {
+                        let c = ((want.cycle % 17030) as i64 + d).rem_euclid(17030) as u32;
+                        let a = sc.address(c, sw);
+                        println!(
+                            "     pos+{d:>2}: scanner addr {a:04X} -> main[{a:04X}]={:02X}",
+                            m.peek_main(a)
+                        );
+                    }
+                }
                 syncs.push(Sync {
                     row: i as u64,
                     a: want.a,
@@ -128,7 +162,7 @@ fn main() {
         }
         hash = disk::fold_row(hash, want.cycle, want.pc, want.a, want.x, want.y, want.sp, want.p);
         log.0.borrow_mut().clear();
-        stepper.step(&mut m);
+        stepper.step(m);
         rows += 1;
     }
     println!("rows matched: {rows} of {n}");
@@ -142,6 +176,20 @@ fn main() {
         println!("RESULT: DIVERGENCE\n{v}");
         std::process::exit(1);
     }
+    let mut final_meta: Vec<(String, String)> = Vec::new();
+    for (role, got) in rig.final_hashes() {
+        match oracle_finals.iter().find(|(r, _)| r == role) {
+            Some((_, want)) if *want != got => {
+                println!("RESULT: DIVERGENCE\nfinal image {role}: rust {got}, oracle {want}");
+                std::process::exit(1);
+            }
+            Some((_, want)) => {
+                println!("final image {role}: identical to the oracle's ({})", &want[..12]);
+                final_meta.push((format!("final_sha256_{role}"), want.clone()));
+            }
+            None => {}
+        }
+    }
     println!("RESULT: identical (modulo the floating-bus syncs above)");
     if let Some(path) = emit {
         let meta = |k: &str, v: String| (k.to_string(), v);
@@ -151,6 +199,7 @@ fn main() {
                 meta("case", case.id.clone()),
                 meta("model", case.model.clone()),
                 meta("memclear", case.memclear.unwrap_or(2).to_string()),
+                meta("authentic", case.authentic.to_string()),
                 meta("every", every.to_string()),
                 meta("rows", n.to_string()),
                 meta(
@@ -179,6 +228,8 @@ fn main() {
             syncs,
             checks,
         };
+        let mut ck = ck;
+        ck.meta.extend(final_meta);
         std::fs::write(&path, ck.to_text()).expect("write ckpt");
         println!("checkpoints written to {path}");
     }

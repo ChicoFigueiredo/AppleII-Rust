@@ -20,10 +20,14 @@
 //! whole instruction stream, cycle by cycle, equals the oracle's up to the listed syncs.
 
 use crate::case::Case;
-use crate::runner::{build_machine, machine_config, Disk2Setup, Env};
+use crate::runner::{machine_config, Env};
+use crate::sha256::sha256_hex;
 use crate::trace::BATCH_CYCLES;
 use apple2_core::Machine;
+use apple2_storage::disk2::{manager, Disk2Card};
+use apple2_storage::hdd::{HardDiskCard, HdcMode};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 
 pub const FORMAT: &str = "trace-checkpoints-v1";
 
@@ -175,20 +179,119 @@ pub fn fold_row(h: u64, cycle: u64, pc: u16, a: u8, x: u8, y: u8, sp: u8, p: u8)
 
 pub const HASH_SEED: u64 = 0xCBF2_9CE4_8422_2325;
 
+/// The machine of a disk boot case plus the scratch copies of its disk images.
+pub struct Rig {
+    pub machine: Machine,
+    /// `(role, path of the scratch copy)`: `fixture`, `fixture2`, `hdd`, `hdd2`.
+    pub files: Vec<(&'static str, PathBuf)>,
+    dir: PathBuf,
+}
+
+impl Drop for Rig {
+    fn drop(&mut self) {
+        // read-only copies must be writable again before the directory can be removed on Windows
+        for (_, p) in &self.files {
+            if let Ok(m) = std::fs::metadata(p) {
+                let mut perm = m.permissions();
+                #[allow(clippy::permissions_set_readonly_false)]
+                perm.set_readonly(false);
+                let _ = std::fs::set_permissions(p, perm);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+impl Rig {
+    /// Writes back everything the emulation still holds (dirty tracks) and returns the SHA-256
+    /// of each scratch image, `(role, hex)`.
+    pub fn final_hashes(&mut self) -> Vec<(&'static str, String)> {
+        manager::flush_all(&mut self.machine);
+        if let Some(h) = self.machine.card_mut::<HardDiskCard>(7) {
+            h.flush();
+        }
+        self.files
+            .iter()
+            .map(|(r, p)| (*r, sha256_hex(&std::fs::read(p).unwrap_or_default())))
+            .collect()
+    }
+}
+
 /// The machine of a disk boot case: the case's configuration (model, cards, `memclear` with the
-/// oracle's deterministic RAM, see `runner::machine_config`) and its Disk II with the fixture in
-/// drive 1 (slot of `cards = ["N:disk2"]`, default 6), power cycled.
-pub fn build(env: &Env, case: &Case) -> Result<Machine, String> {
+/// oracle's deterministic RAM, see `runner::machine_config`), its Disk II (slot of
+/// `cards = ["N:disk2"]`, default 6) with `fixture`/`fixture2` in drives 1/2, the hard disk
+/// controller in slot 7 with `hdd`/`hdd2`, power cycled. The images are copied to a scratch
+/// directory and opened writable, so the emulation can write and the result can be hashed.
+pub fn build(env: &Env, case: &Case) -> Result<Rig, String> {
     let cfg = machine_config(case)?;
-    let fx = case
-        .fixture
-        .as_ref()
-        .ok_or("o caso de disco precisa de fixture")?;
-    let setup = Disk2Setup {
-        slot: case.disk2_slot()?.unwrap_or(6),
-        image: Some(env.workspace.join(&fx.path)),
-    };
-    build_machine(cfg, Some(&setup))
+    let model = cfg.model;
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "conf-disk-{}-{}-{}",
+        std::process::id(),
+        case.id,
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut files = Vec::new();
+    for (role, fx) in case.devices() {
+        let src = env.workspace.join(&fx.path);
+        let name = src
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let dst = dir.join(format!("{role}-{name}"));
+        std::fs::copy(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
+        if case.readonly.iter().any(|r| r == role) {
+            let mut perm = std::fs::metadata(&dst).map_err(|e| e.to_string())?.permissions();
+            perm.set_readonly(true);
+            std::fs::set_permissions(&dst, perm).map_err(|e| e.to_string())?;
+        }
+        files.push((role, dst));
+    }
+    let path_of = |r: &str| files.iter().find(|(x, _)| *x == r).map(|(_, p)| p.clone());
+    let mut m = apple2_core::Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let slot = case.disk2_slot()?;
+    if slot.is_some() || path_of("fixture").is_some() || path_of("fixture2").is_some() {
+        let mut card = Disk2Card::new();
+        for (drive, role) in [(0, "fixture"), (1, "fixture2")] {
+            if let Some(p) = path_of(role) {
+                card.insert_path(drive, &p, false)
+                    .map_err(|e| format!("{}: {e}", p.display()))?;
+            }
+        }
+        let slot = slot.unwrap_or(6);
+        if !m.insert_card(slot, Box::new(card)) {
+            return Err(format!("slot {slot} refused the Disk II"));
+        }
+        if case.authentic {
+            manager::set_enhance_disk(&mut m, false);
+        }
+    }
+    if path_of("hdd").is_some() || path_of("hdd2").is_some() {
+        let mut card = HardDiskCard::new(7, model, HdcMode::Default);
+        for (unit, role) in [(0, "hdd"), (1, "hdd2")] {
+            if let Some(p) = path_of(role) {
+                card.insert_path(unit, &p)
+                    .map_err(|e| format!("{}: {e}", p.display()))?;
+            }
+        }
+        if !m.insert_card(7, Box::new(card)) {
+            return Err("slot 7 refused the hard disk controller".into());
+        }
+    }
+    // the cards are installed after power-on: redo it so they see the reset
+    m.power_cycle();
+    // `authentic` is a setting of the card manager: apply it again after the reset
+    if case.authentic {
+        manager::set_enhance_disk(&mut m, false);
+    }
+    Ok(Rig {
+        machine: m,
+        files,
+        dir,
+    })
 }
 
 /// Why a checkpoint run did not pass.
@@ -224,8 +327,9 @@ impl Stepper {
 }
 
 /// Runs `m` against `ck`. Ok(summary) when every checkpoint agrees.
-pub fn check(m: &mut Machine, ck: &Checkpoints) -> Result<String, Failure> {
+pub fn check(rig: &mut Rig, ck: &Checkpoints) -> Result<String, Failure> {
     let mut stepper = Stepper::default();
+    let m = &mut rig.machine;
     let mut syncs: VecDeque<Sync> = ck.syncs.iter().copied().collect();
     let mut checks: VecDeque<Check> = ck.checks.iter().copied().collect();
     let total = ck.rows();
@@ -256,9 +360,29 @@ pub fn check(m: &mut Machine, ck: &Checkpoints) -> Result<String, Failure> {
         h = fold_row(h, cycle, pc, a, x, y, sp, p);
         stepper.step(m);
     }
+    // what the oracle left in the image files
+    let mut finals = String::new();
+    for (role, got) in rig.final_hashes() {
+        if let Some(want) = ck.meta(&format!("final_sha256_{role}")) {
+            if want != got {
+                return Err(Failure::Fail(
+                    format!(
+                        "imagem {role} ao final: sha256 {got}, o oráculo deixou {want}"
+                    ),
+                    String::new(),
+                ));
+            }
+            finals.push_str(&format!(" {role}={}", &got[..8]));
+        }
+    }
     Ok(format!(
-        "{total} instruções, {} checkpoints e {} sincronizações do barramento flutuante idênticos ao oráculo",
+        "{total} instruções, {} checkpoints e {} sincronizações do barramento flutuante idênticos ao oráculo{}",
         ck.checks.len(),
-        ck.syncs.len()
+        ck.syncs.len(),
+        if finals.is_empty() {
+            String::new()
+        } else {
+            format!("; imagens finais idênticas ({})", finals.trim())
+        }
     ))
 }

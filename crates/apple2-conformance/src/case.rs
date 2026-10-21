@@ -29,6 +29,21 @@ pub struct Case {
     pub memclear: Option<i32>,
     #[serde(default)]
     pub fixture: Option<FixtureSpec>,
+    /// Disk image in drive 2 of the Disk II (`trace-checkpoints` cases).
+    #[serde(default)]
+    pub fixture2: Option<FixtureSpec>,
+    /// Hard disk image(s) in the hard disk controller of slot 7 (`trace-checkpoints` cases).
+    #[serde(default)]
+    pub hdd: Option<FixtureSpec>,
+    #[serde(default)]
+    pub hdd2: Option<FixtureSpec>,
+    /// "Enhance Disk Speed" off: authentic Disk II timing (`trace-checkpoints` cases).
+    #[serde(default)]
+    pub authentic: bool,
+    /// Roles (`fixture`, `fixture2`, `hdd`, `hdd2`) whose image file is read-only on the host, so
+    /// the drive reports it write-protected (`trace-checkpoints` cases).
+    #[serde(default)]
+    pub readonly: Vec<String>,
     pub run: RunSpec,
     #[serde(default)]
     pub input: Vec<InputEvent>,
@@ -291,8 +306,8 @@ impl Case {
             OracleKind::Trace | OracleKind::TraceCheckpoints if o.trace.is_none() => {
                 return Err("oracle.trace required".into())
             }
-            OracleKind::TraceCheckpoints if self.fixture.is_none() => {
-                return Err("fixture (the disk image) required".into())
+            OracleKind::TraceCheckpoints if self.fixture.is_none() && self.hdd.is_none() => {
+                return Err("fixture (the disk image) or hdd required".into())
             }
             OracleKind::Expr if o.expect.is_empty() => return Err("oracle.expect required".into()),
             OracleKind::Expr => {
@@ -325,10 +340,10 @@ impl Case {
                 ));
             }
         }
-        if let Some(f) = &self.fixture {
+        for (name, f) in self.devices() {
             if !is_sha256_hex(&f.sha256) {
                 return Err(format!(
-                    "fixture.sha256 `{}` is not 64 lowercase hex digits",
+                    "{name}.sha256 `{}` is not 64 lowercase hex digits",
                     f.sha256
                 ));
             }
@@ -342,6 +357,19 @@ impl Case {
         }
         crate::trace::parse_field_list(&o.ignore.join(","))?;
         Ok(())
+    }
+
+    /// Every disk image of the case with its role (`fixture`, `fixture2`, `hdd`, `hdd2`).
+    pub fn devices(&self) -> Vec<(&'static str, &FixtureSpec)> {
+        [
+            ("fixture", &self.fixture),
+            ("fixture2", &self.fixture2),
+            ("hdd", &self.hdd),
+            ("hdd2", &self.hdd2),
+        ]
+        .into_iter()
+        .filter_map(|(n, f)| f.as_ref().map(|f| (n, f)))
+        .collect()
     }
 
     pub fn model(&self) -> Model {
