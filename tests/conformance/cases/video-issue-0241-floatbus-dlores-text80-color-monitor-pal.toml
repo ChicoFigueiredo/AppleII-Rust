@@ -1,0 +1,21 @@
+id = "video-issue-0241-floatbus-dlores-text80-color-monitor-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0241-floatbus-dlores-text80 em color-monitor a 50 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-monitor"
+hz = 50
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0241-floatbus-dlores-text80.scene"
+scene_sha256 = "1b9be57366cd0a9a9bfab41c5c5d391e9c3c36eb4b6cb7b6f90003bca7931256"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "196d71b3a8d4cd7d72f5b5022116908353eb12fe5abdaa26eaf5eb23180331af"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0241-floatbus-dlores-text80.scene --video-type 3 --video-hz 50 --rgb-card 0 => fb_sha256_full=196d71b3a8d4cd7d72f5b5022116908353eb12fe5abdaa26eaf5eb23180331af (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"
