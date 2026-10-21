@@ -20,6 +20,8 @@ pub mod document;
 pub mod engine;
 pub mod font;
 pub mod paper;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 #[cfg(feature = "fs")]
 pub mod spool;
 pub mod units;

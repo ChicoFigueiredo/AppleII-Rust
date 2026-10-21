@@ -8,8 +8,9 @@ repository.workspace = true
 
 [features]
 default = ["pdf", "fs"]
-# PDF export of a PageDocument (pdf-writer).
-pdf = []
+# PDF export of a PageDocument. The PDF is written by hand (no pdf-writer); only flate2 (MIT/Apache-2.0)
+# is needed, to deflate the content streams.
+pdf = ["dep:flate2"]
 # Arquivo de impressões on disk (raw bytes, manifest, versions). Without it the crate has no std::fs.
 fs = ["dep:serde_json", "dep:sha2", "dep:chrono", "dep:directories"]
 
@@ -21,6 +22,7 @@ sha2 = { version = "0.11", optional = true }
 # UTC timestamps for job ids and manifests (MIT OR Apache-2.0).
 chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
 directories = { version = "6", optional = true }
+flate2 = { version = "1", optional = true }
 
 [dev-dependencies]
 # Temporary archive roots in tests (MIT OR Apache-2.0).
