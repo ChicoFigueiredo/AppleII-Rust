@@ -247,6 +247,8 @@ fn unquote(v: &str) -> String {
 /// Parses an AppleWin save-state document into its top-level entries (`File_hdr`, repeated
 /// `Unit`, ...). Sequences and flow style are rejected, like `YamlHelper::ParseMap`.
 pub fn parse(text: &str) -> Result<Vec<(String, Node)>, Error> {
+    // libyaml accepts a UTF-8 byte-order mark (GH#838 was a file libyaml could not decode).
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
     // (line number, indent, content) of the meaningful lines.
     let lines: Vec<(usize, usize, &str)> = text
         .lines()

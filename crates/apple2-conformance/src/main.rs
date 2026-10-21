@@ -3,7 +3,9 @@
 use apple2_conformance::case::{parse_model, InputEvent, RunSpec};
 use apple2_conformance::manifest::TestResult;
 use apple2_conformance::report::{counts, write_report};
-use apple2_conformance::runner::{generate_trace, generate_trace_from, load_cases, read_trace, run_case, Env};
+use apple2_conformance::runner::{
+    generate_trace, generate_trace_from, load_cases, read_trace, run_case, Env,
+};
 use apple2_conformance::trace::{compare_with, parse_field_list, CompareOptions};
 use apple2_conformance::Case;
 use std::path::PathBuf;
@@ -151,7 +153,15 @@ fn cmd_trace(rest: &[String]) -> Result<u8, String> {
     }
     let out = out.ok_or("-o ARQUIVO é obrigatório")?;
     if let Some(state) = state {
-        return trace_from_state(&state, &image_dirs, cycles, frames, &inputs, &extra_meta, &out);
+        return trace_from_state(
+            &state,
+            &image_dirs,
+            cycles,
+            frames,
+            &inputs,
+            &extra_meta,
+            &out,
+        );
     }
     let model_name = model.ok_or("--model ou --state é obrigatório")?;
     let run = RunSpec {
@@ -283,7 +293,10 @@ fn cmd_check_import(rest: &[String]) -> Result<u8, String> {
     }
     let mut diffs = apple2_conformance::import_check::direct_checks(&text, &mut imp.machine)?;
     let imp2 = apple2_conformance::state::import_file(&file, &dirs)?;
-    diffs.extend(apple2_conformance::import_check::tree_diff(&text, &imp2.machine)?);
+    diffs.extend(apple2_conformance::import_check::tree_diff(
+        &text,
+        &imp2.machine,
+    )?);
     for d in &diffs {
         println!("DIFF {d}");
     }

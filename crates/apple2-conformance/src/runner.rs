@@ -318,11 +318,7 @@ pub fn trace_rows_sha256(text: &str) -> String {
     sha256_hex(rows.as_bytes())
 }
 
-fn observe_once(
-    env: &Env,
-    case: &Case,
-    env_meta: &[(String, String)],
-) -> Result<Observed, String> {
+fn observe_once(env: &Env, case: &Case, env_meta: &[(String, String)]) -> Result<Observed, String> {
     let (mut m, run) = start_machine(env, case)?;
     let kind = case.oracle.kind;
     match kind {

@@ -1,0 +1,19 @@
+id = "savestate-issue-677-irq-pending"
+story = "HU-0402"
+criterion = "GH#677: carregar um save-state com a interrupção do Timer1 do Mockingboard pendente dispara a IRQ logo após o CLI, como no AppleWin (20000 ciclos do trace)"
+model = "apple2e-enhanced"
+notes = "Os primeiros 20000 ciclos de Mockingboard/irq-pending.aws.yaml batem com o oráculo; depois de ~65000 ciclos a temporização do T1 diverge (ver tests/conformance/reports/savestate-import.md)."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/irq-pending.aws.yaml"
+sha256 = "c8d56f6a5a0adafc10862374d480a13f76dcee5353bf36ddcea6065678167e85"
+save_state = true
+
+[run]
+cycles = 20000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state irq-pending.aws.yaml --cycles 20000 --video-update; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "d0e191daad4a212b0a37ca939e7231faf6b2cd0ae2a026b7001f0be081981318"

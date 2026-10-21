@@ -205,7 +205,10 @@ fn a_zlib_bomb_in_the_extension_is_bounded() {
     assert!(data.len() < MAX_COMPRESSED_LEN as usize);
     let text = base_text(true);
     // Splice the bomb in place of the real data.
-    let at = text.find("      Data:").or_else(|| text.find("Data:")).unwrap();
+    let at = text
+        .find("      Data:")
+        .or_else(|| text.find("Data:"))
+        .unwrap();
     let head_end = text[..at].rfind('\n').map(|i| i + 1).unwrap_or(0);
     let _ = head_end;
     let mut doc = String::new();

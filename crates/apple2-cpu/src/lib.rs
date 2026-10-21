@@ -147,7 +147,7 @@ impl Cpu {
             y: 0xFF,
             sp: 0xFF,
             pc: 0,
-            p: FLAG_U | FLAG_I,
+            p: FLAG_U | FLAG_B | FLAG_I, // AppleWin keeps AF_BREAK always set (CPU.cpp)
             cycles: 0,
             variant,
             irq: false,
@@ -182,7 +182,7 @@ impl Cpu {
         // CPU.cpp CpuReset(): I set (the 65C02 also clears D), the other flags and A/X/Y are
         // kept, and S drops by 3 as the three suppressed pushes would have done.
         self.sp = self.sp.wrapping_sub(3);
-        self.p |= FLAG_U | FLAG_I;
+        self.p |= FLAG_U | FLAG_B | FLAG_I;
         if self.is_cmos() {
             self.p &= !FLAG_D;
         }

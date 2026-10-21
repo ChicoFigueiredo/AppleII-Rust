@@ -13,7 +13,7 @@ import sys
 
 def main(src, dst):
     with open(src, "rb") as f:
-        text = f.read().decode("utf-8")
+        text = f.read().decode("utf-8", errors="surrogateescape")
     lines = text.splitlines(keepends=True)
     out = []
     i = 0
@@ -36,7 +36,7 @@ def main(src, dst):
         out.append(lines[i])
         i += 1
     with open(dst, "wb") as f:
-        f.write("".join(out).encode("utf-8"))
+        f.write("".join(out).encode("utf-8", errors="surrogateescape"))
     print(f"state-compat: dropped {dropped} Game I/O Connector unit(s)", file=sys.stderr)
 
 

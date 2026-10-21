@@ -67,7 +67,13 @@ tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 500000 
 #   --model   apple2 | apple2p | apple2jp | apple2e | apple2ee   (nomes do AppleWin)
 #   --frames N          em vez de --cycles (1 quadro NTSC = 17030 ciclos)
 #   --disk imagem.dsk   Disk II drive 1 (sha256 vai no cabeçalho)
-#   --state x.aws.yaml  carrega save-state antes de rodar (o modelo vem do arquivo; "cycle" continua do valor salvo)
+#   --state x.aws.yaml  carrega save-state antes de rodar (o modelo vem do arquivo; "cycle" continua do valor salvo).
+#                       O script adapta o arquivo com state-compat.py (remove a unidade Game I/O v4, que o fork não
+#                       conhece), roda com a cwd numa pasta temporária que tem links para as imagens de disco do
+#                       diretório do estado e de ORACLE_IMAGE_DIRS (lista separada por ':'), como o AppleWin as procura.
+#   --video-update      avança o scanner de vídeo do NTSC a cada instrução. SEM ele o barramento flutuante fica
+#                       parado num endereço; use sempre que a RAM não for zero (todo save-state real).
+#   ORACLE_BIN=/caminho binário do oráculo (por padrão o do cache; outro agente pode recompilá-lo com o main.cpp dele)
 #   --memclear 0..7     padrão de preenchimento da RAM (padrão do AppleWin: 2)
 #   --cards disk2|none
 ```

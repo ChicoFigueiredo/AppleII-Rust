@@ -193,7 +193,10 @@ impl Board {
         if addr < 0xC800 {
             let slot = (addr >> 8) as u8 & 7;
             if self.is_e && (intcxrom || (!slotc3rom && slot == 3)) {
-                return self.memory.internal_cx(addr).unwrap_or_else(|| self.floating_bus());
+                return self
+                    .memory
+                    .internal_cx(addr)
+                    .unwrap_or_else(|| self.floating_bus());
             }
             if self.slots.card(slot).is_none() && !self.lc.has_slot(slot) {
                 return self.floating_bus();
@@ -203,7 +206,10 @@ impl Board {
                 .unwrap_or(0);
         }
         if self.is_e && (intcxrom || self.slots.intc8rom()) {
-            return self.memory.internal_cx(addr).unwrap_or_else(|| self.floating_bus());
+            return self
+                .memory
+                .internal_cx(addr)
+                .unwrap_or_else(|| self.floating_bus());
         }
         match self.slots.expansion() {
             ExpansionRom::Slot(slot) => self

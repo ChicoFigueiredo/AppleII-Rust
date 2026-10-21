@@ -9,8 +9,8 @@ pub mod import_check;
 pub mod manifest;
 pub mod report;
 pub mod runner;
-pub mod state;
 pub mod sha256;
+pub mod state;
 pub mod trace;
 
 pub use case::{Case, InputEvent};

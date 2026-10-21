@@ -135,7 +135,12 @@ dependencies = [
 name = "apple2-conformance"
 version = "0.1.0"
 dependencies = [
+ "apple2-audio",
  "apple2-core",
+ "apple2-cpu",
+ "apple2-hostio",
+ "apple2-savestate",
+ "apple2-storage",
  "apple2-video",
  "image",
  "serde",

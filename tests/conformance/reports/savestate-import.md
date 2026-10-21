@@ -70,8 +70,8 @@ Duas verificações por arquivo:
 | v2/audit-A2e-enhanced.aws.yaml | PASS | 100000 | PASS | 38679 instruções idênticas; rows_sha256=ce64c6abcfcd92d6b2eedd79ab37de88f0237ea8759ab737df0e108b6ff3fb20 |
 | v2/audit-A2e.aws.yaml | PASS | 100000 | PASS | 38683 instruções idênticas; rows_sha256=e3ed96e4e20bb2b6602c2384fe018ca23730633cc23b870c77ed78cc80d2fa0f |
 | v2/contiki-apple2-1-request-ip.aws.yaml | BLOCKED | - | FAIL (1) | oráculo não carregou o estado: [oracle] MessageBox: Uthernet Interface: Uthernet interface isn't valid! |
-| v2/dazzledraw1-mouse-rom-page0.aws.yaml | FAIL | 16817 | PASS | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 5088: oráculo 32727109,6CEC,D0,00,0D,00,FB,73 / rust 32727116,0360,D8,00,0D,00,F8,77 |
-| v2/dazzledraw1-mouse-rom-page6.aws.yaml | FAIL | 14069 | PASS | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 4571: oráculo 32710079,6E3D,60,80,A8,14,F7,B0 / rust 32710086,0360,D8,80,A8,14,F4,B4 |
+| v2/dazzledraw1-mouse-rom-page0.aws.yaml | FAIL | 12489 | PASS | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 3847: oráculo 32722781,0360,D8,00,0D,00,F8,77 / rust 32722774,6CEF,8D,00,0D,00,FB,73 |
+| v2/dazzledraw1-mouse-rom-page6.aws.yaml | FAIL | 12489 | PASS | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 4124: oráculo 32708499,0360,D8,00,0D,00,F8,77 / rust 32708492,6CEE,58,00,0D,00,FB,73 |
 | v2/skm-apple2ee.aws.yaml | BLOCKED | - | PASS | o fork do oráculo não tem Shift Key Mod (unidade Game I/O v4); state-compat.py a remove, então o botão lido difere |
 | v2/skm-apple2p.aws.yaml | BLOCKED | - | PASS | o fork do oráculo não tem Shift Key Mod (unidade Game I/O v4); state-compat.py a remove, então o botão lido difere |
 | v2/SmartPort-firmware/SmartPort-firmware.aws.yaml | FAIL | 4373 | PASS | SmartPort: valor de status lido de $C0nX difere \| linha 1330: oráculo 366402089,6193,AA,84,00,13,F0,B0 / rust 366402089,6193,AA,82,00,13,F0,B0 |
@@ -96,7 +96,7 @@ Duas verificações por arquivo:
 | v2/HDD-RW-IO-Boundary/HDD-RW-IO-Boundary.aws.yaml | PASS | 100000 | FAIL (5) | 26908 instruções idênticas; rows_sha256=99499870a5e1b526ef609d5730a499786bbc6ddc5493dca9c483790df3f623d0 |
 | v2/VidHD/SHR-AppleII-64K-Skyfox.aws.yaml | PASS | 100000 | FAIL (2) | 25281 instruções idênticas; rows_sha256=7fc4aca1562ee99f5f2b0c0eb2fbb9496d6176523f93d67202329f469c581409 |
 | v2/RGB card/AppleColorCard-slideshow-lake.aws.yaml | PASS | 100000 | PASS | 26666 instruções idênticas; rows_sha256=52be34f0be26f968f2d3f375afc49731cc81a1aa7a64f1589aa75f7659137fe5 |
-| v2/RGB card/dazzledraw1.aws.yaml | FAIL | 24285 | PASS | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 7877: oráculo 32710078,6CEF,8D,00,0D,00,FB,73 / rust 32710085,0360,D8,00,0D,00,F8,77 |
+| v2/RGB card/dazzledraw1.aws.yaml | FAIL | 7260 | PASS | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 2405: oráculo 32693053,6CF2,AD,00,0C,00,FB,73 / rust 32693060,0360,D8,00,0C,00,F8,77 |
 | v2/RGB card/dragon_wars.aws.yaml | PASS | 100000 | PASS | 37675 instruções idênticas; rows_sha256=a877e5def0f598a6108e47c50a71a55ecfc0c295396fc9dcf3d8a3d41faa9da6 |
 | v2/Video ROM/A2+.aws.yaml | PASS | 100000 | PASS | 26666 instruções idênticas; rows_sha256=ef9d11a9713daf5c9abb5bf31d35ea78e0467b7d46e59c636472c9d1e7560e38 |
 | v2/Video ROM/A2.aws.yaml | PASS | 100000 | PASS | 26666 instruções idênticas; rows_sha256=522a20ae04da0e2fecea32a9700bf3577afa799f1839e5c0c62c4b71d02c6b0b |

@@ -425,6 +425,12 @@ fn rearm_card_events(m: &mut Machine) {
     for slot in 0..8u8 {
         m.with_card(slot, |c, ctx| {
             cards::mockingboard::rearm(c, ctx);
+            if let Some(mc) = c
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<apple2_cards::MouseCard>())
+            {
+                mc.rearm_vbl(ctx);
+            }
             if let Some(d) = c
                 .as_any()
                 .and_then(|a| a.downcast_ref::<apple2_storage::disk2::Disk2Card>())

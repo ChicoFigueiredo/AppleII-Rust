@@ -130,7 +130,7 @@ def main():
     # Cases for the files that matched the oracle.
     cdir = os.path.join(ROOT, "tests/conformance/cases")
     for f in os.listdir(cdir):
-        if f.startswith("savestate-"):
+        if f.startswith(("savestate-wine-", "savestate-corpus-")):
             os.remove(os.path.join(cdir, f))
     n = 0
     for g, name, absp, res, cyc, det, fmt, first in rows:

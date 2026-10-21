@@ -11,8 +11,8 @@
 //!   numbers (`0x0A` = `10`); a field the file has and the re-save lacks is a difference.
 
 use apple2_core::memory::mf;
-use apple2_cpu::Bus;
 use apple2_core::{Machine, Model};
+use apple2_cpu::Bus;
 use apple2_savestate::yaml::{self, Node};
 use apple2_savestate::{save_aws_yaml, SaveOptions};
 use std::collections::BTreeMap;
@@ -91,22 +91,22 @@ const HOST_FIELDS: [&str; 3] = ["Print Filename", "Serial Port Name", "Absolute 
 /// Path fragments of fields the port does not model or normalises on purpose; they are listed in
 /// the report as such and not counted as differences.
 const NOT_MODELLED: [&str; 17] = [
-    "/AY891x/", // AY-3-891x phase counters and RNG: audio only, not visible to the CPU
+    "/AY891x/",       // AY-3-891x phase counters and RNG: audio only, not visible to the CPU
     "/State/Enabled", // mouse card flags AppleWin saves but never reads back as behaviour
     "/State/VBL",
     "/SY6522/Timer1 Latch", // v<7 files: a zero latch becomes 0xFFFF on purpose (6522.cpp:690)
-    "/Shift Key Mod", // frontend setting (see misc.rs)
-    "/Card",                      // card names differ in spelling (`Disk][` / `Disk II`)
-    "/RGB mode",                  // AppleColor adaptor: AUD-C-023
+    "/Shift Key Mod",       // frontend setting (see misc.rs)
+    "/Card",                // card names differ in spelling (`Disk][` / `Disk II`)
+    "/RGB mode",            // AppleColor adaptor: AUD-C-023
     "/Previous AN3",
     "/80COL changed",
     "/Invert bit7",
-    "/Format Track state/",       // Disk II write-format tracking
-    "/DIPSW Default/",            // SSC factory DIP defaults come from the host configuration
+    "/Format Track state/", // Disk II write-format tracking
+    "/DIPSW Default/",      // SSC factory DIP defaults come from the host configuration
     "/Deferred Stepper Address",
-    "/Video/Cycles This Frame",   // reduced modulo the frame length on purpose (AUD-C-060)
+    "/Video/Cycles This Frame", // reduced modulo the frame length on purpose (AUD-C-060)
     "/SSI263/Current Mode",
-    "/Joystick/",                 // trim values and counters of old versions
+    "/Joystick/", // trim values and counters of old versions
     "/Memory/Last Slot to Set Main Mem LC",
 ];
 
@@ -143,8 +143,14 @@ fn flatten(nodes: &[(String, Node)], prefix: &str, out: &mut BTreeMap<String, St
 fn fold_memory_mode(map: &mut BTreeMap<String, String>) {
     let mm = "/Unit[Apple2]/State/Memory/Memory Mode".to_string();
     let lc = "/Unit[Apple2]/State/Memory/MMU LC Mode".to_string();
-    let a = map.get(&mm).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
-    let b = map.remove(&lc).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+    let a = map
+        .get(&mm)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+    let b = map
+        .remove(&lc)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
     if map.contains_key(&mm) {
         map.insert(mm, (a | b).to_string());
     }
@@ -261,8 +267,9 @@ fn a2_hdr(top: &[(String, Node)]) -> &[(String, Node)] {
     top.iter()
         .find_map(|(k, n)| match (k.as_str(), n) {
             ("Unit", Node::Map(m))
-                if m.iter()
-                    .any(|(kk, nn)| kk == "Type" && matches!(nn, Node::Scalar(s) if s == "Apple2")) =>
+                if m.iter().any(|(kk, nn)| {
+                    kk == "Type" && matches!(nn, Node::Scalar(s) if s == "Apple2")
+                }) =>
             {
                 Some(m.as_slice())
             }
@@ -421,8 +428,9 @@ pub fn direct_checks(text: &str, machine: &mut Machine) -> Result<Vec<Diff>, Str
             .unwrap_or(0) as u32;
         let alt = sub(a2, "Video")
             .map(|v| {
-                v.iter()
-                    .any(|(k, n)| k == "Alt Char Set" && matches!(n, Node::Scalar(s) if s == "true"))
+                v.iter().any(|(k, n)| {
+                    k == "Alt Char Set" && matches!(n, Node::Scalar(s) if s == "true")
+                })
             })
             .unwrap_or(false);
         let want: [(u16, &str, bool); 14] = [
