@@ -645,7 +645,18 @@ impl CmdLine {
             .opts
             .iter()
             .any(|o| matches!(o, Opt::InsertCard { slot: 0, .. }));
-        let mut ordered: Vec<&Opt> = self.opts.iter().collect();
+        // `InsertFloppyDisks` (Utilities.cpp) returns before looking at `driveConnected` when no
+        // floppy image was given for the slot: `-d1-disconnected` alone changes nothing, and does
+        // not insert a Disk II into an empty slot 6 (GH#1491).
+        let floppy_image_in_slot6 = self
+            .opts
+            .iter()
+            .any(|o| matches!(o, Opt::DiskImage { slot: 6, .. }));
+        let mut ordered: Vec<&Opt> = self
+            .opts
+            .iter()
+            .filter(|o| floppy_image_in_slot6 || !matches!(o, Opt::DriveDisconnected { .. }))
+            .collect();
         ordered.sort_by_key(|o| o.phase()); // stable: keeps command-line order within a phase
         for o in ordered {
             apply_one(o, s);
