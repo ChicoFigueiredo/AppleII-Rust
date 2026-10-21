@@ -777,8 +777,8 @@ impl Machine {
         if self.board.cpu_owner.is_some() || self.cpu.stopped {
             return false;
         }
-        let nmi = self.board.interrupts.nmi_line();
-        if self.cpu.nmi_pending() || (nmi && !self.nmi_line) {
+        // The NMI line never reaches the CPU (see `step`); only a latent `nmi_pending` counts.
+        if self.cpu.nmi_pending() {
             return true;
         }
         let irq = self.board.interrupts.irq_line();
@@ -795,11 +795,11 @@ impl Machine {
             return n;
         }
         self.board.opcode_ticks = 0;
-        let nmi = self.board.interrupts.nmi_line();
-        if nmi && !self.nmi_line {
-            self.cpu.nmi();
-        }
-        self.nmi_line = nmi;
+        // AppleWin has no NMI: `NMI()` is dead code (`ENABLE_NMI_SUPPORT` is commented out,
+        // CPU.cpp:400-441, "Not used - so don't enable") and no card calls `CpuNmiAssert`
+        // (CPU.cpp:893; the only definition, nothing else in the tree references it). The
+        // line is tracked for the state snapshot but never delivered to the CPU (AUD-C-054).
+        self.nmi_line = self.board.interrupts.nmi_line();
 
         // CPU.cpp IRQ(): an IRQ that appeared on the previous opcode's last cycle waits one opcode.
         let mut irq = self.board.interrupts.irq_line();
@@ -1096,13 +1096,18 @@ mod tests {
     }
 
     #[test]
-    fn nmi_is_edge_triggered_through_the_interrupt_lines() {
+    fn nmi_line_never_reaches_the_cpu_as_in_applewin() {
+        // AUD-C-054: AppleWin's NMI() is compiled out and nothing asserts it.
         let mut m = machine(Model::Apple2, VideoStandard::Ntsc);
         m.board_mut().interrupts.set_nmi(SRC, true);
-        m.step();
-        assert_eq!(m.cpu().pc, 0x500);
-        m.run_cycles(100); // line stays high: no retrigger, handler loops
-        assert_eq!(m.peek(0x11), 1, "handler entered once, not re-triggered");
+        assert!(!m.next_step_is_interrupt_entry());
+        m.run_cycles(100);
+        assert_eq!(m.peek(0x11), 0, "the NMI handler never ran");
+        assert_ne!(m.cpu().pc, 0x500);
+        m.board_mut().interrupts.set_nmi(SRC, false);
+        m.board_mut().interrupts.set_nmi(SRC, true); // a fresh edge changes nothing either
+        m.run_cycles(100);
+        assert_eq!(m.peek(0x11), 0);
     }
 
     #[test]
