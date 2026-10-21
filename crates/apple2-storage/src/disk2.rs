@@ -192,21 +192,74 @@ impl Drive {
     }
 }
 
-/// Seeded xorshift standing in for the C library `rand()` AppleWin uses (reproducible runs).
+/// The C library `rand()` AppleWin calls (weak bits, jitter, empty-drive noise), as glibc's
+/// `random_r` TYPE_3 generator seeded by `srand(1)`: the same sequence as the Linux oracle (the
+/// oracle calls `srand(1)` and only the Disk II code draws numbers), so runs are reproducible and
+/// comparable with it. `calls` (the saved state) lets a loaded state resume the sequence.
 #[derive(Clone, Copy)]
-struct Rng(u32);
+struct Rng {
+    state: [u32; 31],
+    f: usize,
+    r: usize,
+    calls: u32,
+}
 
 impl Rng {
-    fn next(&mut self) -> u32 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 17;
-        self.0 ^= self.0 << 5;
-        self.0
+    const RAND_MAX: u32 = 0x7FFF_FFFF;
+
+    fn new() -> Rng {
+        let mut state = [0u32; 31];
+        state[0] = 1;
+        for i in 1..31 {
+            // Park-Miller "minimal standard" via Schrage's method, as in glibc `srandom_r`.
+            let word = state[i - 1] as i32 as i64;
+            let (hi, lo) = (word / 127_773, word % 127_773);
+            let mut w = 16_807 * lo - 2_836 * hi;
+            if w < 0 {
+                w += 2_147_483_647;
+            }
+            state[i] = w as u32;
+        }
+        let mut g = Rng {
+            state,
+            f: 3,
+            r: 0,
+            calls: 0,
+        };
+        for _ in 0..310 {
+            g.step();
+        }
+        g
     }
 
-    /// `rand() < RAND_THRESHOLD(num, den)`.
+    /// Restores the generator after `calls` draws (clamped: a corrupt count must not hang).
+    fn after(calls: u32) -> Rng {
+        let calls = calls.min(50_000_000);
+        let mut g = Rng::new();
+        for _ in 0..calls {
+            g.step();
+        }
+        g.calls = calls;
+        g
+    }
+
+    fn step(&mut self) -> u32 {
+        self.state[self.f] = self.state[self.f].wrapping_add(self.state[self.r]);
+        let out = self.state[self.f] >> 1;
+        self.f = (self.f + 1) % 31;
+        self.r = (self.r + 1) % 31;
+        out
+    }
+
+    /// `rand()`.
+    fn next(&mut self) -> u32 {
+        self.calls = self.calls.wrapping_add(1);
+        self.step()
+    }
+
+    /// `rand() < RAND_THRESHOLD(num, den)` (non-Windows form: `(RAND_MAX / den) * num`).
     fn chance(&mut self, num: u32, den: u32) -> bool {
-        self.next() % den < num
+        self.next() < (Self::RAND_MAX / den) * num
     }
 }
 
@@ -283,7 +336,7 @@ impl Disk2Card {
             defer_stepper: true,
             t00s00_pattern_idx: 0,
             found_t00s00_pattern: false,
-            rng: Rng(0x2545_F491),
+            rng: Rng::new(),
             events: Vec::new(),
         };
         c.reset_switches();
@@ -1233,7 +1286,7 @@ impl Disk2Card {
         b(&mut o, self.deferred_stepper_event);
         o.push(self.deferred_stepper_address);
         o.extend(self.deferred_stepper_cycles.to_le_bytes());
-        o.extend(self.rng.0.to_le_bytes());
+        o.extend(self.rng.calls.to_le_bytes());
         b(&mut o, self.is_13_sector_firmware);
         b(&mut o, self.force_13_sector_firmware);
         for d in &self.drives {
@@ -1299,7 +1352,7 @@ impl Disk2Card {
         self.deferred_stepper_event = r.bool()?;
         self.deferred_stepper_address = r.u8()?;
         self.deferred_stepper_cycles = r.u64()?;
-        self.rng = Rng(r.u32()?.max(1));
+        self.rng = Rng::after(r.u32()?);
         self.is_13_sector_firmware = r.bool()?;
         self.force_13_sector_firmware = r.bool()?;
         for d in &mut self.drives {
@@ -1655,5 +1708,20 @@ pub mod manager {
                 c.flush();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod rng_tests {
+    use super::Rng;
+
+    /// glibc `srand(1); rand()` -- the sequence the oracle sees.
+    #[test]
+    fn rng_is_the_glibc_rand_with_seed_1() {
+        let mut g = Rng::new();
+        let v: Vec<u32> = (0..5).map(|_| g.next()).collect();
+        assert_eq!(v, [1804289383, 846930886, 1681692777, 1714636915, 1957747793]);
+        let mut h = Rng::after(3);
+        assert_eq!(h.next(), 1714636915);
     }
 }

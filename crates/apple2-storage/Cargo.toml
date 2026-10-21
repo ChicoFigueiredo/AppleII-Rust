@@ -13,4 +13,5 @@ flate2 = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
+apple2-conformance = { path = "../apple2-conformance" }
 apple2-cpu = { path = "../apple2-cpu" }
