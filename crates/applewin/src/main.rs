@@ -3,10 +3,10 @@
 
 mod wincon;
 
+use apple2_config::{CmdLine, Settings};
 use applewin_shell::backend::DefaultBackend;
 use applewin_shell::emu::{Command, Emulator};
 use applewin_shell::headless::{self, HeadlessOptions};
-use apple2_config::{CmdLine, Settings};
 
 fn main() {
     wincon::attach_parent_console();
@@ -14,11 +14,17 @@ fn main() {
     // Informational flags answer before anything touches a window or the saved settings.
     // `-h` / `-V` are shell conveniences (AppleWin itself has -help / -version).
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    if argv.iter().any(|a| matches!(a.as_str(), "--help" | "-help" | "-?" | "-h")) {
+    if argv
+        .iter()
+        .any(|a| matches!(a.as_str(), "--help" | "-help" | "-?" | "-h"))
+    {
         print!("{}", apple2_config::cmdline::HELP);
         return;
     }
-    if argv.iter().any(|a| matches!(a.as_str(), "--version" | "-version" | "-V")) {
+    if argv
+        .iter()
+        .any(|a| matches!(a.as_str(), "--version" | "-version" | "-V"))
+    {
         println!("applewin {}", env!("CARGO_PKG_VERSION"));
         return;
     }
@@ -48,7 +54,10 @@ fn main() {
         eprintln!("warning: {w}");
     }
     if !cmd.unsupported.is_empty() {
-        eprintln!("warning: unsupported command line options: {}", cmd.unsupported.join(" "));
+        eprintln!(
+            "warning: unsupported command line options: {}",
+            cmd.unsupported.join(" ")
+        );
     }
     // `-load-state` is the current save-state file for this session (Snapshot_SetFilename).
     let apply = |settings: &mut Settings, cmd: &CmdLine| {
@@ -88,7 +97,8 @@ fn main() {
         }
         return;
     }
-    let mut settings = conf_settings(&cmd).unwrap_or_else(|| Settings::load_default().unwrap_or_default());
+    let mut settings =
+        conf_settings(&cmd).unwrap_or_else(|| Settings::load_default().unwrap_or_default());
     apply(&mut settings, &cmd);
     // `-power-on` starts the machine running; this shell always does (there is no logo screen).
     cmd.power_on = true;
@@ -111,10 +121,15 @@ fn main() {
 /// settings, used (and saved to) instead of the default location.
 fn conf_settings(cmd: &CmdLine) -> Option<Settings> {
     let path = cmd.conf_file.as_ref()?;
-    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
     match ext.as_str() {
         "ini" | "reg" => match std::fs::read(path) {
-            Ok(b) if ext == "ini" => Some(apple2_config::import::import_ini(&String::from_utf8_lossy(&b))),
+            Ok(b) if ext == "ini" => Some(apple2_config::import::import_ini(
+                &String::from_utf8_lossy(&b),
+            )),
             Ok(b) => Some(apple2_config::import::import_reg(&b)),
             Err(e) => {
                 eprintln!("-conf {}: {e}", path.display());
@@ -136,7 +151,11 @@ fn conf_settings(cmd: &CmdLine) -> Option<Settings> {
 
 /// `-screenshot-and-exit <file>` (with `-load-state`): builds the machine, loads the state,
 /// repaints the screen once and writes it as PNG (`Video_RedrawAndTakeScreenShot`).
-fn screenshot_and_exit(settings: Settings, cmd: &CmdLine, path: &std::path::Path) -> Result<(), String> {
+fn screenshot_and_exit(
+    settings: Settings,
+    cmd: &CmdLine,
+    path: &std::path::Path,
+) -> Result<(), String> {
     let mut emu = Emulator::new(settings, Box::new(DefaultBackend), 48_000)?;
     if let Some(p) = &cmd.load_state {
         emu.apply(Command::LoadState(p.clone()));
@@ -155,8 +174,13 @@ struct GuiArgs {
     type_text: Option<String>,
 }
 
-fn shell_args(args: Vec<String>) -> Result<(Option<HeadlessOptions>, GuiArgs, Vec<String>), String> {
-    let mut h = HeadlessOptions { type_at_frame: 180, ..Default::default() };
+fn shell_args(
+    args: Vec<String>,
+) -> Result<(Option<HeadlessOptions>, GuiArgs, Vec<String>), String> {
+    let mut h = HeadlessOptions {
+        type_at_frame: 180,
+        ..Default::default()
+    };
     let mut headless = false;
     let mut dump_window: Option<std::path::PathBuf> = None;
     let mut window_frames = 120u64;
@@ -166,19 +190,30 @@ fn shell_args(args: Vec<String>) -> Result<(Option<HeadlessOptions>, GuiArgs, Ve
         let mut val = |n: &str| it.next().ok_or(format!("{n} needs a value"));
         match a.as_str() {
             "--headless-frames" => {
-                h.frames = val(&a)?.parse().map_err(|_| "bad frame count".to_string())?;
+                h.frames = val(&a)?
+                    .parse()
+                    .map_err(|_| "bad frame count".to_string())?;
                 headless = true;
             }
             "--dump-screen" => h.dump_screen = Some(val(&a)?.into()),
             "--dump-text" => h.dump_text = true,
             "--no-audio" => {}
             "--dump-window" => dump_window = Some(val(&a)?.into()),
-            "--window-frames" => window_frames = val(&a)?.parse().map_err(|_| "bad frame count".to_string())?,
+            "--window-frames" => {
+                window_frames = val(&a)?
+                    .parse()
+                    .map_err(|_| "bad frame count".to_string())?
+            }
             "--type" => h.type_text = Some(val(&a)?.replace("\\r", "\r").replace("\\n", "\r")),
-            "--type-at-frame" => h.type_at_frame = val(&a)?.parse().map_err(|_| "bad frame".to_string())?,
+            "--type-at-frame" => {
+                h.type_at_frame = val(&a)?.parse().map_err(|_| "bad frame".to_string())?
+            }
             _ => rest.push(a),
         }
     }
-    let gui = GuiArgs { dump_window: dump_window.map(|p| (p, window_frames)), type_text: h.type_text.clone() };
+    let gui = GuiArgs {
+        dump_window: dump_window.map(|p| (p, window_frames)),
+        type_text: h.type_text.clone(),
+    };
     Ok((headless.then_some(h), gui, rest))
 }

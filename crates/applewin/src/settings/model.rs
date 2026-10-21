@@ -144,7 +144,18 @@ pub fn card_name(ty: CardType) -> &'static str {
 /// `CardManager::IsSingleInstanceCard` (CardManager.cpp:367).
 pub fn is_single_instance(ty: CardType) -> bool {
     use CardType::*;
-    matches!(ty, MouseInterface | Ssc | GenericPrinter | Z80 | FourPlay | SnesMax | Uthernet | Uthernet2 | VidHd)
+    matches!(
+        ty,
+        MouseInterface
+            | Ssc
+            | GenericPrinter
+            | Z80
+            | FourPlay
+            | SnesMax
+            | Uthernet
+            | Uthernet2
+            | VidHd
+    )
 }
 
 /// `CPageSlots::CardTypeHasOptions`: the "..." button next to the slot is enabled.
@@ -152,12 +163,26 @@ pub fn has_options(ty: CardType) -> bool {
     use CardType::*;
     matches!(
         ty,
-        Disk2 | GenericHdd | Ssc | GenericPrinter | MockingboardC | MouseInterface | Phasor | Saturn128K | Uthernet | Uthernet2 | RamWorksIII
+        Disk2
+            | GenericHdd
+            | Ssc
+            | GenericPrinter
+            | MockingboardC
+            | MouseInterface
+            | Phasor
+            | Saturn128K
+            | Uthernet
+            | Uthernet2
+            | RamWorksIII
     )
 }
 
 /// Cards for slot 0 on a ][ / ][+ (`cardsOnlyInSlot0`).
-const SLOT0_CARDS: [CardType; 3] = [CardType::Empty, CardType::LanguageCard, CardType::Saturn128K];
+const SLOT0_CARDS: [CardType; 3] = [
+    CardType::Empty,
+    CardType::LanguageCard,
+    CardType::Saturn128K,
+];
 
 /// Cards for slots 1-7 in drop-down order (`cardsInSlots1to7`).
 const SLOT1_7_CARDS: [CardType; 16] = {
@@ -202,7 +227,9 @@ pub fn slot_choices(slot: usize, model: Model, current: &[CardType; 8]) -> Optio
         .iter()
         .copied()
         .filter(|&ty| {
-            if ty == CardType::Uthernet && elsewhere(CardType::Uthernet2) || ty == CardType::Uthernet2 && elsewhere(CardType::Uthernet) {
+            if ty == CardType::Uthernet && elsewhere(CardType::Uthernet2)
+                || ty == CardType::Uthernet2 && elsewhere(CardType::Uthernet)
+            {
                 return false;
             }
             !(is_single_instance(ty) && elsewhere(ty))
@@ -219,7 +246,14 @@ pub fn slot_choices(slot: usize, model: Model, current: &[CardType; 8]) -> Optio
 
 /// `GetCardChoicesForAuxSlot`; only offered on a //e.
 pub fn aux_choices(model: Model) -> Option<Vec<CardType>> {
-    (!model.is_apple2()).then(|| vec![CardType::Empty, CardType::Col80, CardType::Extended80Col, CardType::RamWorksIII])
+    (!model.is_apple2()).then(|| {
+        vec![
+            CardType::Empty,
+            CardType::Col80,
+            CardType::Extended80Col,
+            CardType::RamWorksIII,
+        ]
+    })
 }
 
 pub fn current_types(s: &Settings) -> [CardType; 8] {
@@ -245,7 +279,11 @@ pub fn reset_slots_to_default(s: &mut Settings) {
     for i in 0..8 {
         s.slots.0[i] = SlotCardSpec::default_for_slot(i, m);
     }
-    s.aux.card = if m.is_apple2() { SlotCardSpec::Empty } else { SlotCardSpec::Extended80Col };
+    s.aux.card = if m.is_apple2() {
+        SlotCardSpec::Empty
+    } else {
+        SlotCardSpec::Extended80Col
+    };
     normalize(s);
 }
 
@@ -253,7 +291,9 @@ pub fn reset_slots_to_default(s: &mut Settings) {
 pub fn normalize(s: &mut Settings) {
     let model = s.machine.model;
     let types = current_types(s);
-    if slot_choices(0, model, &types).is_none() && !matches!(types[0], CardType::LanguageCardIIe | CardType::Empty) {
+    if slot_choices(0, model, &types).is_none()
+        && !matches!(types[0], CardType::LanguageCardIIe | CardType::Empty)
+    {
         // //e family: slot 0 holds the //e language card
         s.slots.0[0] = SlotCardSpec::default_for_slot(0, model);
     }
@@ -270,7 +310,10 @@ pub fn normalize(s: &mut Settings) {
 }
 
 pub fn has_mouse_card(s: &Settings) -> bool {
-    s.slots.0.iter().any(|c| c.card_type() == CardType::MouseInterface)
+    s.slots
+        .0
+        .iter()
+        .any(|c| c.card_type() == CardType::MouseInterface)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -298,50 +341,70 @@ pub fn joystick1_label(k: Joystick1Kind) -> &'static str {
 }
 
 fn is_kbd0(k: Joystick0Kind) -> bool {
-    matches!(k, Joystick0Kind::KeyboardCursors | Joystick0Kind::KeyboardNumpad)
+    matches!(
+        k,
+        Joystick0Kind::KeyboardCursors | Joystick0Kind::KeyboardNumpad
+    )
 }
 fn is_kbd1(k: Joystick1Kind) -> bool {
-    matches!(k, Joystick1Kind::KeyboardCursors | Joystick1Kind::KeyboardNumpad)
+    matches!(
+        k,
+        Joystick1Kind::KeyboardCursors | Joystick1Kind::KeyboardNumpad
+    )
 }
 
 /// Joystick 1 choices: the other port's keyboard/mouse mode and the mouse (when a mouse card is
 /// present) are removed (`InitJoystickChoices`, PageInput.cpp:272-316).
 pub fn joystick0_choices(other: Joystick1Kind, mouse_card: bool) -> Vec<Joystick0Kind> {
     use Joystick0Kind::*;
-    [Disabled, HostJoystick1, KeyboardCursors, KeyboardNumpad, Mouse]
-        .into_iter()
-        .filter(|&k| {
-            if is_kbd0(k) && is_kbd1(other) {
-                return false;
-            }
-            if k == Mouse && (mouse_card || other == Joystick1Kind::Mouse) {
-                return false;
-            }
-            true
-        })
-        .collect()
+    [
+        Disabled,
+        HostJoystick1,
+        KeyboardCursors,
+        KeyboardNumpad,
+        Mouse,
+    ]
+    .into_iter()
+    .filter(|&k| {
+        if is_kbd0(k) && is_kbd1(other) {
+            return false;
+        }
+        if k == Mouse && (mouse_card || other == Joystick1Kind::Mouse) {
+            return false;
+        }
+        true
+    })
+    .collect()
 }
 
 pub fn joystick1_choices(other: Joystick0Kind, mouse_card: bool) -> Vec<Joystick1Kind> {
     use Joystick1Kind::*;
-    [Disabled, HostJoystick2, KeyboardCursors, KeyboardNumpad, Mouse, HostJoystick1Thumbstick2]
-        .into_iter()
-        .filter(|&k| {
-            if is_kbd1(k) && is_kbd0(other) {
-                return false;
-            }
-            if k == Mouse && (mouse_card || other == Joystick0Kind::Mouse) {
-                return false;
-            }
-            true
-        })
-        .collect()
+    [
+        Disabled,
+        HostJoystick2,
+        KeyboardCursors,
+        KeyboardNumpad,
+        Mouse,
+        HostJoystick1Thumbstick2,
+    ]
+    .into_iter()
+    .filter(|&k| {
+        if is_kbd1(k) && is_kbd0(other) {
+            return false;
+        }
+        if k == Mouse && (mouse_card || other == Joystick0Kind::Mouse) {
+            return false;
+        }
+        true
+    })
+    .collect()
 }
 
 /// "Allow cursor keys to be read from keyboard" is only enabled with a keyboard joystick on the
 /// cursors; "Keyboard auto-centering" with any keyboard joystick (PageInput.cpp:179-180).
 pub fn cursor_control_enabled(s: &Settings) -> bool {
-    s.joystick.joystick0 == Joystick0Kind::KeyboardCursors || s.joystick.joystick1 == Joystick1Kind::KeyboardCursors
+    s.joystick.joystick0 == Joystick0Kind::KeyboardCursors
+        || s.joystick.joystick1 == Joystick1Kind::KeyboardCursors
 }
 pub fn centering_enabled(s: &Settings) -> bool {
     is_kbd0(s.joystick.joystick0) || is_kbd1(s.joystick.joystick1)
@@ -368,12 +431,19 @@ impl SpeedForm {
             Some(m) => (m * 10.0).round().clamp(SPEED_MIN as f64, SPEED_MAX as f64) as u32,
             None => s.machine.speed.clamp(SPEED_MIN, SPEED_MAX),
         };
-        SpeedForm { authentic: s.machine.clock_multiplier.is_none() && s.machine.speed == SPEED_NORMAL, custom: tenths }
+        SpeedForm {
+            authentic: s.machine.clock_multiplier.is_none() && s.machine.speed == SPEED_NORMAL,
+            custom: tenths,
+        }
     }
 
     pub fn apply(&self, s: &mut Settings) {
         s.machine.clock_multiplier = None;
-        s.machine.speed = if self.authentic { SPEED_NORMAL } else { self.custom.clamp(SPEED_MIN, SPEED_MAX) };
+        s.machine.speed = if self.authentic {
+            SPEED_NORMAL
+        } else {
+            self.custom.clamp(SPEED_MIN, SPEED_MAX)
+        };
     }
 }
 
@@ -424,7 +494,11 @@ pub const SSC_TCP_PORT: u16 = 1977;
 impl SscForm {
     pub fn from_spec(spec: &SlotCardSpec) -> Option<Self> {
         match spec {
-            SlotCardSpec::Ssc { serial_port, tcp_port, support_dcd } => Some(SscForm {
+            SlotCardSpec::Ssc {
+                serial_port,
+                tcp_port,
+                support_dcd,
+            } => Some(SscForm {
                 tcp: tcp_port.is_some(),
                 serial_port: serial_port.clone(),
                 tcp_port: tcp_port.unwrap_or(SSC_TCP_PORT),
@@ -436,7 +510,11 @@ impl SscForm {
 
     pub fn to_spec(&self) -> SlotCardSpec {
         SlotCardSpec::Ssc {
-            serial_port: if self.tcp { String::new() } else { self.serial_port.clone() },
+            serial_port: if self.tcp {
+                String::new()
+            } else {
+                self.serial_port.clone()
+            },
             tcp_port: self.tcp.then_some(self.tcp_port),
             support_dcd: self.support_dcd,
         }
@@ -470,13 +548,24 @@ pub fn restart_reasons(old: &Settings, new: &Settings) -> Vec<String> {
     for i in 0..8 {
         let (a, b) = (&old.slots.0[i], &new.slots.0[i]);
         if a.card_type() != b.card_type() {
-            v.push(format!("Slot {i}: {} -> {}", card_name(a.card_type()), card_name(b.card_type())));
+            v.push(format!(
+                "Slot {i}: {} -> {}",
+                card_name(a.card_type()),
+                card_name(b.card_type())
+            ));
         } else if a != b {
-            v.push(format!("Slot {i}: {} configuration has changed", card_name(b.card_type())));
+            v.push(format!(
+                "Slot {i}: {} configuration has changed",
+                card_name(b.card_type())
+            ));
         }
     }
     if old.aux.card.card_type() != new.aux.card.card_type() {
-        v.push(format!("Slot Aux: {} -> {}", card_name(old.aux.card.card_type()), card_name(new.aux.card.card_type())));
+        v.push(format!(
+            "Slot Aux: {} -> {}",
+            card_name(old.aux.card.card_type()),
+            card_name(new.aux.card.card_type())
+        ));
     } else if old.aux.card != new.aux.card {
         v.push("RamWorks III memory size changed".into());
     }
@@ -513,28 +602,50 @@ pub fn validate(s: &Settings) -> Vec<Problem> {
     let mut v = Vec::new();
     let model = s.machine.model;
     if model == Model::Apple2c {
-        bad(&mut v, "The Apple //c has no ROM here and cannot be emulated");
+        bad(
+            &mut v,
+            "The Apple //c has no ROM here and cannot be emulated",
+        );
     }
     let types = current_types(s);
     for slot in 0..8 {
         let ty = types[slot];
         if slot == 0 && !model.is_apple2() {
             if !matches!(ty, CardType::LanguageCardIIe | CardType::Empty) {
-                bad(&mut v, format!("Slot 0: {} is not allowed on this model", card_name(ty)));
+                bad(
+                    &mut v,
+                    format!("Slot 0: {} is not allowed on this model", card_name(ty)),
+                );
             }
             continue;
         }
         if slot_choices(slot, model, &types).is_some_and(|c| !c.contains(&ty)) {
-            bad(&mut v, format!("Slot {slot}: {} is not allowed here", card_name(ty)));
+            bad(
+                &mut v,
+                format!("Slot {slot}: {} is not allowed here", card_name(ty)),
+            );
         }
         if slot > 0 && is_single_instance(ty) && (1..8).any(|j| j != slot && types[j] == ty) {
-            bad(&mut v, format!("{} can be plugged in only one slot", card_name(ty)));
+            bad(
+                &mut v,
+                format!("{} can be plugged in only one slot", card_name(ty)),
+            );
         }
         match &s.slots.0[slot] {
-            SlotCardSpec::Ssc { tcp_port: Some(0), .. } => bad(&mut v, format!("Slot {slot}: SSC TCP port must be 1-65535")),
-            SlotCardSpec::RamWorksIII { banks } if !(1..=256).contains(banks) => bad(&mut v, "RamWorks III size must be 1-256 banks"),
-            SlotCardSpec::Saturn128K { banks } if !(1..=8).contains(banks) => bad(&mut v, format!("Slot {slot}: Saturn size must be 1-8 banks")),
-            SlotCardSpec::GenericPrinter(p) if p.idle_limit == 0 => bad(&mut v, format!("Slot {slot}: printer idle time must be at least 1 second")),
+            SlotCardSpec::Ssc {
+                tcp_port: Some(0), ..
+            } => bad(&mut v, format!("Slot {slot}: SSC TCP port must be 1-65535")),
+            SlotCardSpec::RamWorksIII { banks } if !(1..=256).contains(banks) => {
+                bad(&mut v, "RamWorks III size must be 1-256 banks")
+            }
+            SlotCardSpec::Saturn128K { banks } if !(1..=8).contains(banks) => bad(
+                &mut v,
+                format!("Slot {slot}: Saturn size must be 1-8 banks"),
+            ),
+            SlotCardSpec::GenericPrinter(p) if p.idle_limit == 0 => bad(
+                &mut v,
+                format!("Slot {slot}: printer idle time must be at least 1 second"),
+            ),
             _ => {}
         }
     }
@@ -546,17 +657,29 @@ pub fn validate(s: &Settings) -> Vec<Problem> {
             bad(&mut v, "RamWorks III size must be 1-256 banks");
         }
     }
-    if !matches!(s.aux.card.card_type(), CardType::Empty | CardType::Col80 | CardType::Extended80Col | CardType::RamWorksIII) {
+    if !matches!(
+        s.aux.card.card_type(),
+        CardType::Empty | CardType::Col80 | CardType::Extended80Col | CardType::RamWorksIII
+    ) {
         bad(&mut v, "Aux slot: card not allowed");
     }
     if s.machine.freeze_f8_rom && !matches!(model, Model::Apple2 | Model::Apple2Plus) {
-        bad(&mut v, "The Freeze's F8 ROM is only for the Apple ][ and ][+");
+        bad(
+            &mut v,
+            "The Freeze's F8 ROM is only for the Apple ][ and ][+",
+        );
     }
     if s.joystick.joystick0 == Joystick0Kind::Mouse && has_mouse_card(s) {
-        bad(&mut v, "Joystick 1 cannot use the mouse while a Mouse Interface card is plugged in");
+        bad(
+            &mut v,
+            "Joystick 1 cannot use the mouse while a Mouse Interface card is plugged in",
+        );
     }
     if s.joystick.joystick1 == Joystick1Kind::Mouse && has_mouse_card(s) {
-        bad(&mut v, "Joystick 2 cannot use the mouse while a Mouse Interface card is plugged in");
+        bad(
+            &mut v,
+            "Joystick 2 cannot use the mouse while a Mouse Interface card is plugged in",
+        );
     }
     if is_kbd0(s.joystick.joystick0) && is_kbd1(s.joystick.joystick1) {
         bad(&mut v, "Both joysticks cannot use the keyboard");
@@ -593,7 +716,10 @@ pub fn warnings(s: &Settings) -> Vec<String> {
             _ => {}
         }
     }
-    for (name, p) in [("Custom ROM", &s.machine.custom_rom), ("Custom F8 ROM", &s.machine.custom_f8_rom)] {
+    for (name, p) in [
+        ("Custom ROM", &s.machine.custom_rom),
+        ("Custom F8 ROM", &s.machine.custom_f8_rom),
+    ] {
         if p.as_deref().is_some_and(missing) {
             v.push(format!("{name}: file not found"));
         }
@@ -632,26 +758,64 @@ mod tests {
         let labels: Vec<_> = ModelChoice::ALL.iter().map(|c| c.label()).collect();
         assert_eq!(
             labels,
-            ["Apple II (original)", "Apple II Plus", "Apple II J-Plus", "Apple //e (original)", "Apple //e (enhanced)", "Clone"]
+            [
+                "Apple II (original)",
+                "Apple II Plus",
+                "Apple II J-Plus",
+                "Apple //e (original)",
+                "Apple //e (enhanced)",
+                "Clone"
+            ]
         );
-        for m in [Model::Pravets82, Model::Pravets8M, Model::Pravets8A, Model::Tk3000e, Model::Base64A] {
+        for m in [
+            Model::Pravets82,
+            Model::Pravets8M,
+            Model::Pravets8A,
+            Model::Tk3000e,
+            Model::Base64A,
+        ] {
             assert_eq!(ModelChoice::of(m), ModelChoice::Clone);
         }
-        assert_eq!(CLONES.iter().map(|c| c.1).collect::<Vec<_>>(), ["Pravets 82", "Pravets 8M", "Pravets 8A", "TK3000 //e", "Base 64A"]);
+        assert_eq!(
+            CLONES.iter().map(|c| c.1).collect::<Vec<_>>(),
+            [
+                "Pravets 82",
+                "Pravets 8M",
+                "Pravets 8A",
+                "TK3000 //e",
+                "Base 64A"
+            ]
+        );
     }
 
     #[test]
     fn clone_choice_keeps_previous_clone() {
-        assert_eq!(model_for_choice(ModelChoice::Clone, Model::Tk3000e), Model::Tk3000e);
-        assert_eq!(model_for_choice(ModelChoice::Clone, Model::Apple2e), Model::Pravets82);
-        assert_eq!(model_for_choice(ModelChoice::Apple2, Model::Tk3000e), Model::Apple2);
+        assert_eq!(
+            model_for_choice(ModelChoice::Clone, Model::Tk3000e),
+            Model::Tk3000e
+        );
+        assert_eq!(
+            model_for_choice(ModelChoice::Clone, Model::Apple2e),
+            Model::Pravets82
+        );
+        assert_eq!(
+            model_for_choice(ModelChoice::Apple2, Model::Tk3000e),
+            Model::Apple2
+        );
     }
 
     #[test]
     fn slot0_choices_by_model() {
         let mut t = current_types(&base());
         t[0] = CardType::LanguageCard;
-        assert_eq!(slot_choices(0, Model::Apple2Plus, &t).unwrap(), [CardType::Empty, CardType::LanguageCard, CardType::Saturn128K]);
+        assert_eq!(
+            slot_choices(0, Model::Apple2Plus, &t).unwrap(),
+            [
+                CardType::Empty,
+                CardType::LanguageCard,
+                CardType::Saturn128K
+            ]
+        );
         assert!(slot_choices(0, Model::Apple2eEnhanced, &t).is_none());
     }
 
@@ -661,7 +825,24 @@ mod tests {
         let t = [Empty; 8];
         assert_eq!(
             slot_choices(3, Model::Apple2Plus, &t).unwrap(),
-            [Empty, Disk2, GenericHdd, GenericPrinter, MouseInterface, Saturn128K, Ssc, FourPlay, SnesMax, MockingboardC, Phasor, Sam, Uthernet, Uthernet2, VidHd, Z80]
+            [
+                Empty,
+                Disk2,
+                GenericHdd,
+                GenericPrinter,
+                MouseInterface,
+                Saturn128K,
+                Ssc,
+                FourPlay,
+                SnesMax,
+                MockingboardC,
+                Phasor,
+                Sam,
+                Uthernet,
+                Uthernet2,
+                VidHd,
+                Z80
+            ]
         );
     }
 
@@ -673,7 +854,10 @@ mod tests {
         t[5] = MouseInterface;
         let c3 = slot_choices(3, Model::Apple2e, &t).unwrap();
         assert!(!c3.contains(&Ssc) && !c3.contains(&MouseInterface));
-        assert!(c3.contains(&Disk2) && c3.contains(&Phasor), "multi-instance cards stay");
+        assert!(
+            c3.contains(&Disk2) && c3.contains(&Phasor),
+            "multi-instance cards stay"
+        );
         assert!(slot_choices(2, Model::Apple2e, &t).unwrap().contains(&Ssc));
     }
 
@@ -684,16 +868,24 @@ mod tests {
         t[4] = Uthernet;
         let c = slot_choices(5, Model::Apple2e, &t).unwrap();
         assert!(!c.contains(&Uthernet) && !c.contains(&Uthernet2));
-        assert!(slot_choices(4, Model::Apple2e, &t).unwrap().contains(&Uthernet));
-        assert!(slot_choices(4, Model::Apple2e, &t).unwrap().contains(&Uthernet2));
+        assert!(slot_choices(4, Model::Apple2e, &t)
+            .unwrap()
+            .contains(&Uthernet));
+        assert!(slot_choices(4, Model::Apple2e, &t)
+            .unwrap()
+            .contains(&Uthernet2));
     }
 
     #[test]
     fn advanced_cards_stay_selectable_where_they_are() {
         let mut t = [CardType::Empty; 8];
         t[3] = CardType::MegaAudio;
-        assert!(slot_choices(3, Model::Apple2e, &t).unwrap().contains(&CardType::MegaAudio));
-        assert!(!slot_choices(4, Model::Apple2e, &[CardType::Empty; 8]).unwrap().contains(&CardType::MegaAudio));
+        assert!(slot_choices(3, Model::Apple2e, &t)
+            .unwrap()
+            .contains(&CardType::MegaAudio));
+        assert!(!slot_choices(4, Model::Apple2e, &[CardType::Empty; 8])
+            .unwrap()
+            .contains(&CardType::MegaAudio));
     }
 
     #[test]
@@ -701,17 +893,43 @@ mod tests {
         assert!(aux_choices(Model::Apple2Plus).is_none());
         assert_eq!(
             aux_choices(Model::Apple2e).unwrap(),
-            [CardType::Empty, CardType::Col80, CardType::Extended80Col, CardType::RamWorksIII]
+            [
+                CardType::Empty,
+                CardType::Col80,
+                CardType::Extended80Col,
+                CardType::RamWorksIII
+            ]
         );
     }
 
     #[test]
     fn options_button_cards() {
         use CardType::*;
-        for ty in [Disk2, GenericHdd, Ssc, GenericPrinter, MockingboardC, MouseInterface, Phasor, Saturn128K, Uthernet, Uthernet2, RamWorksIII] {
+        for ty in [
+            Disk2,
+            GenericHdd,
+            Ssc,
+            GenericPrinter,
+            MockingboardC,
+            MouseInterface,
+            Phasor,
+            Saturn128K,
+            Uthernet,
+            Uthernet2,
+            RamWorksIII,
+        ] {
             assert!(has_options(ty), "{ty:?}");
         }
-        for ty in [Empty, Sam, Z80, VidHd, FourPlay, SnesMax, LanguageCard, Extended80Col] {
+        for ty in [
+            Empty,
+            Sam,
+            Z80,
+            VidHd,
+            FourPlay,
+            SnesMax,
+            LanguageCard,
+            Extended80Col,
+        ] {
             assert!(!has_options(ty), "{ty:?}");
         }
     }
@@ -740,7 +958,10 @@ mod tests {
     #[test]
     fn joystick_choices_exclude_other_port() {
         let c = joystick0_choices(Joystick1Kind::KeyboardCursors, false);
-        assert!(!c.contains(&Joystick0Kind::KeyboardCursors) && !c.contains(&Joystick0Kind::KeyboardNumpad));
+        assert!(
+            !c.contains(&Joystick0Kind::KeyboardCursors)
+                && !c.contains(&Joystick0Kind::KeyboardNumpad)
+        );
         assert!(c.contains(&Joystick0Kind::Mouse));
         let c = joystick0_choices(Joystick1Kind::Disabled, true);
         assert!(!c.contains(&Joystick0Kind::Mouse));
@@ -774,15 +995,28 @@ mod tests {
     #[test]
     fn speed_form_round_trip() {
         let mut s = base();
-        assert_eq!(SpeedForm::from_settings(&s), SpeedForm { authentic: true, custom: 10 });
+        assert_eq!(
+            SpeedForm::from_settings(&s),
+            SpeedForm {
+                authentic: true,
+                custom: 10
+            }
+        );
         for tenths in [5, 10, 17, 40] {
-            let f = SpeedForm { authentic: false, custom: tenths };
+            let f = SpeedForm {
+                authentic: false,
+                custom: tenths,
+            };
             f.apply(&mut s);
             assert_eq!(SpeedForm::from_settings(&s).custom, tenths);
         }
         s.machine.speed = 20;
         assert!(!SpeedForm::from_settings(&s).authentic);
-        SpeedForm { authentic: true, custom: 20 }.apply(&mut s);
+        SpeedForm {
+            authentic: true,
+            custom: 20,
+        }
+        .apply(&mut s);
         assert_eq!(s.machine.speed, 10);
         s.machine.clock_multiplier = Some(3.0);
         let f = SpeedForm::from_settings(&s);
@@ -810,16 +1044,26 @@ mod tests {
 
     #[test]
     fn ssc_form_round_trip() {
-        let serial = SlotCardSpec::Ssc { serial_port: "/dev/ttyUSB0".into(), tcp_port: None, support_dcd: true };
+        let serial = SlotCardSpec::Ssc {
+            serial_port: "/dev/ttyUSB0".into(),
+            tcp_port: None,
+            support_dcd: true,
+        };
         let f = SscForm::from_spec(&serial).unwrap();
         assert!(!f.tcp && f.tcp_port == 1977);
         assert_eq!(f.to_spec(), serial);
-        let tcp = SlotCardSpec::Ssc { serial_port: String::new(), tcp_port: Some(2023), support_dcd: false };
+        let tcp = SlotCardSpec::Ssc {
+            serial_port: String::new(),
+            tcp_port: Some(2023),
+            support_dcd: false,
+        };
         let f = SscForm::from_spec(&tcp).unwrap();
         assert!(f.tcp && f.tcp_port == 2023);
         assert_eq!(f.to_spec(), tcp);
         assert!(SscForm::from_spec(&SlotCardSpec::Empty).is_none());
-        assert!(SSC_TCP_WARNING.contains("ALL network interfaces") && SSC_TCP_WARNING.contains("1977"));
+        assert!(
+            SSC_TCP_WARNING.contains("ALL network interfaces") && SSC_TCP_WARNING.contains("1977")
+        );
     }
 
     #[test]
@@ -839,7 +1083,9 @@ mod tests {
         assert!(restart_reasons(&old, &n)[0].contains("computer"));
         let mut n = old.clone();
         n.slots.0[5] = SlotCardSpec::new(CardType::Phasor);
-        assert!(restart_reasons(&old, &n).iter().any(|r| r.contains("Slot 5")));
+        assert!(restart_reasons(&old, &n)
+            .iter()
+            .any(|r| r.contains("Slot 5")));
         let mut n = old.clone();
         n.machine.refresh_rate = RefreshRate::Hz50;
         assert!(needs_restart(&old, &n));
@@ -855,10 +1101,17 @@ mod tests {
     fn card_option_changes_need_restart() {
         let old = base();
         let mut n = old.clone();
-        n.slots.0[2] = SlotCardSpec::Ssc { serial_port: "COM3".into(), tcp_port: None, support_dcd: false };
+        n.slots.0[2] = SlotCardSpec::Ssc {
+            serial_port: "COM3".into(),
+            tcp_port: None,
+            support_dcd: false,
+        };
         assert!(restart_reasons(&old, &n)[0].contains("configuration has changed"));
         let mut n = old.clone();
-        n.slots.0[4] = SlotCardSpec::MockingboardC(SoundSockets { sc01: false, ..Default::default() });
+        n.slots.0[4] = SlotCardSpec::MockingboardC(SoundSockets {
+            sc01: false,
+            ..Default::default()
+        });
         assert!(needs_restart(&old, &n));
     }
 
@@ -872,7 +1125,10 @@ mod tests {
         let mut s = base();
         s.slots.0[3] = SlotCardSpec::new(CardType::Ssc);
         let v = validate(&s);
-        assert!(v.iter().any(|p| p.message.contains("only one slot")), "{v:?}");
+        assert!(
+            v.iter().any(|p| p.message.contains("only one slot")),
+            "{v:?}"
+        );
 
         let mut s = base();
         s.slots.0[0] = SlotCardSpec::new(CardType::Disk2);
@@ -884,7 +1140,11 @@ mod tests {
         assert!(validate(&s).iter().any(|p| p.message.contains("Uthernet")));
 
         let mut s = base();
-        s.slots.0[2] = SlotCardSpec::Ssc { serial_port: String::new(), tcp_port: Some(0), support_dcd: false };
+        s.slots.0[2] = SlotCardSpec::Ssc {
+            serial_port: String::new(),
+            tcp_port: Some(0),
+            support_dcd: false,
+        };
         assert!(!validate(&s).is_empty());
 
         let mut s = base();
@@ -892,7 +1152,10 @@ mod tests {
         assert!(!validate(&s).is_empty());
 
         let mut s = base();
-        s.slots.0[1] = SlotCardSpec::GenericPrinter(PrinterSpec { idle_limit: 0, ..Default::default() });
+        s.slots.0[1] = SlotCardSpec::GenericPrinter(PrinterSpec {
+            idle_limit: 0,
+            ..Default::default()
+        });
         assert!(!validate(&s).is_empty());
     }
 
@@ -926,13 +1189,18 @@ mod tests {
     #[test]
     fn hdd_swap() {
         let mut s = base();
-        s.slots.0[7] = SlotCardSpec::GenericHdd { firmware: HdcFirmware::Default, images: Default::default() };
+        s.slots.0[7] = SlotCardSpec::GenericHdd {
+            firmware: HdcFirmware::Default,
+            images: Default::default(),
+        };
         if let SlotCardSpec::GenericHdd { images, .. } = &mut s.slots.0[7] {
             images[0] = Some("a.hdv".into());
         }
         swap_hdd_1_2(&mut s, 7);
         match &s.slots.0[7] {
-            SlotCardSpec::GenericHdd { images, .. } => assert_eq!(images[1].as_deref(), Some(std::path::Path::new("a.hdv"))),
+            SlotCardSpec::GenericHdd { images, .. } => {
+                assert_eq!(images[1].as_deref(), Some(std::path::Path::new("a.hdv")))
+            }
             _ => unreachable!(),
         }
     }

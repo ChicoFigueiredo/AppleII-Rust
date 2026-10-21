@@ -42,19 +42,41 @@ fn wr(m: &mut Machine, a: u16, v: u8) {
 #[test]
 fn flag_values_match_applewin() {
     assert_eq!(
-        [mf::STORE80, mf::ALTZP, mf::AUXREAD, mf::AUXWRITE, mf::BANK2, mf::HIGHRAM, mf::HIRES, mf::PAGE2],
+        [
+            mf::STORE80,
+            mf::ALTZP,
+            mf::AUXREAD,
+            mf::AUXWRITE,
+            mf::BANK2,
+            mf::HIGHRAM,
+            mf::HIRES,
+            mf::PAGE2
+        ],
         [1, 2, 4, 8, 0x10, 0x20, 0x40, 0x80]
     );
     assert_eq!(
-        [mf::SLOTC3ROM, mf::INTCXROM, mf::WRITERAM, mf::IOUDIS, mf::ALTROM0, mf::ALTROM1],
+        [
+            mf::SLOTC3ROM,
+            mf::INTCXROM,
+            mf::WRITERAM,
+            mf::IOUDIS,
+            mf::ALTROM0,
+            mf::ALTROM1
+        ],
         [0x100, 0x200, 0x400, 0x800, 0x1000, 0x2000]
     );
 }
 
 #[test]
 fn initial_memmode_per_model() {
-    assert_eq!(e(AuxCardKind::Extended80Col).memmode(), mf::BANK2 | mf::WRITERAM);
-    assert_eq!(machine_with(Model::Apple2, AuxCardKind::Empty, vec![0; 0x3000]).memmode(), 0);
+    assert_eq!(
+        e(AuxCardKind::Extended80Col).memmode(),
+        mf::BANK2 | mf::WRITERAM
+    );
+    assert_eq!(
+        machine_with(Model::Apple2, AuxCardKind::Empty, vec![0; 0x3000]).memmode(),
+        0
+    );
     let p = machine_with(Model::Apple2Plus, AuxCardKind::Empty, vec![0; 0x3000]);
     assert_eq!(p.memmode(), mf::BANK2 | mf::WRITERAM);
 }
@@ -65,7 +87,9 @@ fn rom_is_read_only_and_writes_go_to_lc_ram_underneath() {
     assert_eq!(rd(&mut m, 0xD000), 0xD0);
     wr(&mut m, 0xD000, 0x55); // WRITERAM set: lands in LC RAM, ROM stays visible
     assert_eq!(rd(&mut m, 0xD000), 0xD0);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::HIGHRAM);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::HIGHRAM);
     assert_eq!(rd(&mut m, 0xD000), 0x55);
     m.board_mut().memory.set_memmode(mf::BANK2 | mf::HIGHRAM); // write-protected
     wr(&mut m, 0xD000, 0x66);
@@ -99,12 +123,19 @@ fn altzp_swaps_zero_page_and_stack_and_lc() {
     let mut m = e(AuxCardKind::Extended80Col);
     wr(&mut m, 0x10, 1);
     wr(&mut m, 0x1FF, 2);
-    m.board_mut().memory.set_memmode(mf::ALTZP | mf::HIGHRAM | mf::WRITERAM | mf::BANK2);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::ALTZP | mf::HIGHRAM | mf::WRITERAM | mf::BANK2);
     assert_eq!((rd(&mut m, 0x10), rd(&mut m, 0x1FF)), (0, 0));
     wr(&mut m, 0x10, 3);
     wr(&mut m, 0xD000, 4);
-    m.board_mut().memory.set_memmode(mf::HIGHRAM | mf::WRITERAM | mf::BANK2);
-    assert_eq!((rd(&mut m, 0x10), rd(&mut m, 0x1FF), rd(&mut m, 0xD000)), (1, 2, 0));
+    m.board_mut()
+        .memory
+        .set_memmode(mf::HIGHRAM | mf::WRITERAM | mf::BANK2);
+    assert_eq!(
+        (rd(&mut m, 0x10), rd(&mut m, 0x1FF), rd(&mut m, 0xD000)),
+        (1, 2, 0)
+    );
     assert_eq!((m.peek_aux(0x10), m.peek_aux(0xD000)), (3, 4));
 }
 
@@ -112,10 +143,14 @@ fn altzp_swaps_zero_page_and_stack_and_lc() {
 fn auxread_and_auxwrite_are_independent() {
     let mut m = e(AuxCardKind::Extended80Col);
     wr(&mut m, 0x2000, 0xA);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXWRITE);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXWRITE);
     wr(&mut m, 0x2000, 0xB); // goes to aux
     assert_eq!(rd(&mut m, 0x2000), 0xA); // still reading main
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXREAD);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXREAD);
     assert_eq!(rd(&mut m, 0x2000), 0xB);
     wr(&mut m, 0x2000, 0xC); // writes main
     assert_eq!((m.peek_main(0x2000), m.peek_aux(0x2000)), (0xC, 0xB));
@@ -129,7 +164,9 @@ fn store80_page2_overrides_auxread_write_for_text_page1() {
     m.poke_aux(0x400, 2);
     m.poke_main(0x2000, 3);
     m.poke_aux(0x2000, 4);
-    m.board_mut().memory.set_memmode(base | mf::AUXREAD | mf::AUXWRITE); // PAGE2 off: main
+    m.board_mut()
+        .memory
+        .set_memmode(base | mf::AUXREAD | mf::AUXWRITE); // PAGE2 off: main
     assert_eq!(rd(&mut m, 0x400), 1);
     wr(&mut m, 0x7FF, 7);
     assert_eq!(m.peek_main(0x7FF), 7);
@@ -137,7 +174,9 @@ fn store80_page2_overrides_auxread_write_for_text_page1() {
     m.board_mut().memory.set_memmode(base | mf::PAGE2);
     assert_eq!(rd(&mut m, 0x400), 2);
     assert_eq!(rd(&mut m, 0x2000), 3); // HIRES off: main
-    m.board_mut().memory.set_memmode(base | mf::PAGE2 | mf::HIRES);
+    m.board_mut()
+        .memory
+        .set_memmode(base | mf::PAGE2 | mf::HIRES);
     assert_eq!(rd(&mut m, 0x2000), 4);
     wr(&mut m, 0x3FFF, 9);
     assert_eq!(m.peek_aux(0x3FFF), 9);
@@ -150,10 +189,22 @@ fn intcxrom_shows_internal_rom_in_cx_range() {
     // which is internal while SLOTC3ROM is off.
     assert_eq!(rd(&mut m, 0xC100), 0);
     assert_eq!(rd(&mut m, 0xC300), 0x33);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::SLOTC3ROM);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::SLOTC3ROM);
     assert_eq!(rd(&mut m, 0xC300), 0);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::INTCXROM);
-    assert_eq!((rd(&mut m, 0xC100), rd(&mut m, 0xC300), rd(&mut m, 0xC800), rd(&mut m, 0xCFFE)), (0x11, 0x33, 0x88, 0xCC));
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::INTCXROM);
+    assert_eq!(
+        (
+            rd(&mut m, 0xC100),
+            rd(&mut m, 0xC300),
+            rd(&mut m, 0xC800),
+            rd(&mut m, 0xCFFE)
+        ),
+        (0x11, 0x33, 0x88, 0xCC)
+    );
     wr(&mut m, 0xC100, 0); // ROM: ignored
     assert_eq!(rd(&mut m, 0xC100), 0x11);
 }
@@ -256,7 +307,9 @@ fn soft_switches_drive_real_paging() {
 fn ii_family_ignores_e_switches_but_toggles_page2_hires() {
     let mut m = machine_with(Model::Apple2Plus, AuxCardKind::Empty, vec![0xEA; 0x3000]);
     let before = m.memmode();
-    for a in [0xC001, 0xC003, 0xC005, 0xC007, 0xC009, 0xC00B, 0xC071, 0xC073] {
+    for a in [
+        0xC001, 0xC003, 0xC005, 0xC007, 0xC009, 0xC00B, 0xC071, 0xC073,
+    ] {
         wr(&mut m, a, 1);
     }
     assert_eq!(m.memmode(), before);
@@ -281,7 +334,9 @@ fn ii_family_ignores_e_switches_but_toggles_page2_hires() {
 #[test]
 fn empty_aux_reads_floating_bus_and_discards_writes() {
     let mut m = e(AuxCardKind::Empty);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXREAD | mf::AUXWRITE | mf::ALTZP);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXREAD | mf::AUXWRITE | mf::ALTZP);
     m.board_mut().write(0x2000, 7);
     m.board_mut().write(0x10, 7);
     assert_eq!((rd(&mut m, 0x2000), rd(&mut m, 0x10)), (0, 0));
@@ -294,7 +349,9 @@ fn empty_aux_reads_floating_bus_and_discards_writes() {
 #[test]
 fn col80_1k_mirrors_all_aux_into_1k() {
     let mut m = e(AuxCardKind::Col80_1K);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXREAD | mf::AUXWRITE);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXREAD | mf::AUXWRITE);
     wr(&mut m, 0x2000, 0x5A);
     assert_eq!(rd(&mut m, 0x2000), 0x5A);
     assert_eq!(rd(&mut m, 0x0400), 0x5A, "$2000 and $0400 share a 1K cell");
@@ -308,7 +365,9 @@ fn col80_1k_mirrors_all_aux_into_1k() {
 #[test]
 fn extended_80col_has_64k_aux_and_ignores_bank_select() {
     let mut m = e(AuxCardKind::Extended80Col);
-    m.board_mut().memory.set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXWRITE);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::BANK2 | mf::WRITERAM | mf::AUXWRITE);
     wr(&mut m, 0xBFFF, 3);
     wr(&mut m, 0xC073, 1);
     assert_eq!((m.board().memory.aux_bank(), m.peek_aux(0xBFFF)), (0, 3));
@@ -351,7 +410,9 @@ fn ramworks_bank_survives_reset_but_not_power_cycle() {
 #[test]
 fn reset_clears_e_switches_and_video_but_ii_keeps_them() {
     let mut m = e(AuxCardKind::Extended80Col);
-    for a in [0xC001, 0xC003, 0xC005, 0xC007, 0xC009, 0xC00B, 0xC055, 0xC057, 0xC00D, 0xC051] {
+    for a in [
+        0xC001, 0xC003, 0xC005, 0xC007, 0xC009, 0xC00B, 0xC055, 0xC057, 0xC00D, 0xC051,
+    ] {
         wr(&mut m, a, 0);
     }
     let mode = m.memmode();
@@ -374,7 +435,9 @@ fn reset_clears_e_switches_and_video_but_ii_keeps_them() {
 #[test]
 fn reset_vector_boots_from_rom_after_reset_with_lc_on() {
     let mut m = e(AuxCardKind::Extended80Col);
-    m.board_mut().memory.set_memmode(mf::HIGHRAM | mf::BANK2 | mf::WRITERAM);
+    m.board_mut()
+        .memory
+        .set_memmode(mf::HIGHRAM | mf::BANK2 | mf::WRITERAM);
     m.reset();
     assert_eq!(m.cpu().pc, 0x0300);
 }
@@ -399,7 +462,11 @@ fn base64a_c058_c05b_select_rom_page() {
     assert_eq!(rd(&mut m, 0xD000), 0x10);
     rd(&mut m, 0xC05B);
     m.reset();
-    assert_eq!(m.memmode() & (mf::ALTROM0 | mf::ALTROM1), 0, "RESET goes back to page 0");
+    assert_eq!(
+        m.memmode() & (mf::ALTROM0 | mf::ALTROM1),
+        0,
+        "RESET goes back to page 0"
+    );
 }
 
 #[test]
@@ -424,5 +491,12 @@ fn memory_state_roundtrips() {
     let s = m.board().memory.state();
     m.power_cycle();
     assert!(m.board_mut().memory.restore(&s));
-    assert_eq!((m.peek_aux(0x100), m.peek_main(0x100), m.board().memory.aux_bank()), (7, 8, 1));
+    assert_eq!(
+        (
+            m.peek_aux(0x100),
+            m.peek_main(0x100),
+            m.board().memory.aux_bank()
+        ),
+        (7, 8, 1)
+    );
 }

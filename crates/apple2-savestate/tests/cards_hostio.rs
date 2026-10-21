@@ -2,16 +2,20 @@
 //! the C++ writers), exact writes, and full-machine round trips.
 
 use apple2_core::{Card, Machine, MachineConfig, Model};
+use apple2_hostio::network::MockNetwork;
+use apple2_hostio::printer::{
+    MemorySink, ParallelPrinterCard, PrinterEncoding, PrinterOptions, PrinterSnapshot,
+};
 use apple2_hostio::serial::{Parity, StopBits};
 use apple2_hostio::ssc::{DipSwitches, FirmwareMode, SscSnapshot, SuperSerialCard};
-use apple2_hostio::printer::{MemorySink, ParallelPrinterCard, PrinterEncoding, PrinterOptions, PrinterSnapshot};
-use apple2_hostio::network::MockNetwork;
 use apple2_hostio::uthernet1::{Uthernet1, Uthernet1Snapshot};
 use apple2_hostio::uthernet2::{Uthernet2, Uthernet2Snapshot};
 use apple2_hostio::LoopbackSerial;
 use apple2_savestate::cards::{self, LoadCtx};
 use apple2_savestate::yaml::{self, Map, Writer};
-use apple2_savestate::{default_card, load_aws_yaml, save_aws_yaml, ImageRequest, LoadHost, SaveOptions};
+use apple2_savestate::{
+    default_card, load_aws_yaml, save_aws_yaml, ImageRequest, LoadHost, SaveOptions,
+};
 use apple2_storage::image::DiskImage;
 
 /// Builds the host-bound cards with in-memory back ends.
@@ -27,10 +31,18 @@ impl LoadHost for Host {
 
     fn make_card(&mut self, name: &str, slot: u8, model: Model) -> Option<Box<dyn Card>> {
         match name {
-            "Super Serial Card" => Some(Box::new(SuperSerialCard::new(Box::new(LoopbackSerial::new().0)))),
-            "Generic Printer" => Some(Box::new(ParallelPrinterCard::new(Box::new(self.sink.clone()), PrinterOptions::default()))),
+            "Super Serial Card" => Some(Box::new(SuperSerialCard::new(Box::new(
+                LoopbackSerial::new().0,
+            )))),
+            "Generic Printer" => Some(Box::new(ParallelPrinterCard::new(
+                Box::new(self.sink.clone()),
+                PrinterOptions::default(),
+            ))),
             "Uthernet" => Some(Box::new(Uthernet1::new(Box::new(MockNetwork::new().0)))),
-            "Uthernet II" => Some(Box::new(Uthernet2::new(Box::new(MockNetwork::new().0), true))),
+            "Uthernet II" => Some(Box::new(Uthernet2::new(
+                Box::new(MockNetwork::new().0),
+                true,
+            ))),
             _ => default_card(name, slot, model),
         }
     }
@@ -44,14 +56,25 @@ fn load_entry(text: &str, aw_name: &str) -> Box<dyn Card> {
 fn load_entry_with(host: &mut Host, text: &str, aw_name: &str) -> Box<dyn Card> {
     let top = yaml::parse(text).unwrap();
     let (key, node) = &top[0];
-    let yaml::Node::Map(entry) = node else { panic!("not a map") };
-    let m = Map { name: key, entries: entry };
+    let yaml::Node::Map(entry) = node else {
+        panic!("not a map")
+    };
+    let m = Map {
+        name: key,
+        entries: entry,
+    };
     let version = m.u32("Version").unwrap();
     let state = m.need_sub("State").unwrap();
     let mut warnings = Vec::new();
-    let mut ctx = LoadCtx { host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
+    let mut ctx = LoadCtx {
+        host,
+        model: Model::Apple2eEnhanced,
+        warnings: &mut warnings,
+    };
     let map = cards::by_aw_name(aw_name).unwrap();
-    let card = (map.load)(&mut ctx, key.parse().unwrap(), version, state).unwrap().unwrap();
+    let card = (map.load)(&mut ctx, key.parse().unwrap(), version, state)
+        .unwrap()
+        .unwrap();
     assert!(warnings.is_empty(), "{warnings:?}");
     card
 }
@@ -81,8 +104,17 @@ fn roundtrip(a: &Machine) -> Machine {
 }
 
 fn no_ext(a: &Machine) -> Machine {
-    let saved = save_aws_yaml(a, &SaveOptions { extension: false, ..Default::default() }).unwrap();
-    load_aws_yaml(&saved.text, &mut Host::default()).unwrap().machine
+    let saved = save_aws_yaml(
+        a,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    load_aws_yaml(&saved.text, &mut Host::default())
+        .unwrap()
+        .machine
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -138,7 +170,11 @@ fn ssc_expected() -> SscSnapshot {
 }
 
 fn ssc_snapshot(c: &dyn Card) -> SscSnapshot {
-    c.as_any().unwrap().downcast_ref::<SuperSerialCard>().unwrap().snapshot()
+    c.as_any()
+        .unwrap()
+        .downcast_ref::<SuperSerialCard>()
+        .unwrap()
+        .snapshot()
 }
 
 #[test]
@@ -225,7 +261,10 @@ fn ssc_write_matches_the_cpp_writer() {
 
 #[test]
 fn ssc_full_machine_roundtrip() {
-    let mut a = machine_with(2, Box::new(SuperSerialCard::new(Box::new(LoopbackSerial::new().0))));
+    let mut a = machine_with(
+        2,
+        Box::new(SuperSerialCard::new(Box::new(LoopbackSerial::new().0))),
+    );
     a.with_card(2, |c, ctx| {
         c.io_write(0xB, 0x1E, ctx);
         c.io_write(0xA, 0x0B, ctx);
@@ -262,7 +301,11 @@ const PRINTER_OPEN: &str = "\
 ";
 
 fn printer_snapshot(c: &dyn Card) -> PrinterSnapshot {
-    c.as_any().unwrap().downcast_ref::<ParallelPrinterCard>().unwrap().snapshot()
+    c.as_any()
+        .unwrap()
+        .downcast_ref::<ParallelPrinterCard>()
+        .unwrap()
+        .snapshot()
 }
 
 #[test]
@@ -286,17 +329,30 @@ fn printer_golden_resumes_the_open_job_in_append_mode() {
 
 #[test]
 fn printer_golden_closed_job_keeps_its_fields() {
-    let t = PRINTER_OPEN.replace("Is File Open: true", "Is File Open: false").replace("Printer Append: false", "Printer Append: true");
+    let t = PRINTER_OPEN
+        .replace("Is File Open: true", "Is File Open: false")
+        .replace("Printer Append: false", "Printer Append: true");
     let mut host = Host::default();
     let c = load_entry_with(&mut host, &t, "Generic Printer");
     let s = printer_snapshot(&*c);
-    assert_eq!((s.inactivity, s.is_open, s.options.append, s.options.idle_limit), (1234, false, true, 7));
+    assert_eq!(
+        (
+            s.inactivity,
+            s.is_open,
+            s.options.append,
+            s.options.idle_limit
+        ),
+        (1234, false, true, 7)
+    );
     assert!(!host.sink.is_open());
 }
 
 #[test]
 fn printer_write_matches_the_cpp_writer() {
-    let c = load_entry(&PRINTER_OPEN.replace("Is File Open: true", "Is File Open: false"), "Generic Printer");
+    let c = load_entry(
+        &PRINTER_OPEN.replace("Is File Open: true", "Is File Open: false"),
+        "Generic Printer",
+    );
     let expected = "\
 1:
   Card: Generic Printer
@@ -317,14 +373,27 @@ fn printer_write_matches_the_cpp_writer() {
 
 #[test]
 fn printer_full_machine_roundtrip() {
-    let mut a = machine_with(1, Box::new(ParallelPrinterCard::new(Box::new(MemorySink::new()), PrinterOptions::default())));
+    let mut a = machine_with(
+        1,
+        Box::new(ParallelPrinterCard::new(
+            Box::new(MemorySink::new()),
+            PrinterOptions::default(),
+        )),
+    );
     a.with_card(1, |c, ctx| c.io_write(0, b'X', ctx));
     a.run_frame();
     let snap = printer_snapshot(a.board().slots.card(1).unwrap());
     assert!(snap.is_open && snap.inactivity > 0);
     // The load resumes the job in append mode, then `insert_card`'s power-on reset closes it: the
     // next print reopens it (appending), so only the flag differs.
-    let want = PrinterSnapshot { inactivity: 0, options: PrinterOptions { append: true, ..snap.options }, is_open: false };
+    let want = PrinterSnapshot {
+        inactivity: 0,
+        options: PrinterOptions {
+            append: true,
+            ..snap.options
+        },
+        is_open: false,
+    };
     let b = roundtrip(&a);
     assert_eq!(printer_snapshot(b.board().slots.card(1).unwrap()), want);
     let c = no_ext(&a);
@@ -383,7 +452,11 @@ fn uthernet1_golden_loads_registers_and_derives_filters() {
     assert_eq!(s.io, u1_io());
     assert_eq!(s.packet_page, u1_pp());
     assert_eq!((s.txcollect_buffer, s.rx_buffer), (0x0A12, 0x0402));
-    assert_eq!(u.mac(), [0x02, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE], "derived from the packet page");
+    assert_eq!(
+        u.mac(),
+        [0x02, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE],
+        "derived from the packet page"
+    );
 }
 
 #[test]
@@ -438,10 +511,23 @@ fn u2_text(iface: &str, status1: u8) -> String {
     let mut t = format!(
         "6:\n  Card: Uthernet II\n  Version: 2\n  State:\n    Network Interface: {iface}\n    Virtual DNS: true\n    Mode Register: 0x02\n    Data Address: 0x4010\n"
     );
-    for (name, r) in [("Common Registers", 0..0x30), ("Socket Registers", 0x400..0x800), ("TX Memory", 0x4000..0x6000), ("RX Memory", 0x6000..0x8000)] {
+    for (name, r) in [
+        ("Common Registers", 0..0x30),
+        ("Socket Registers", 0x400..0x800),
+        ("TX Memory", 0x4000..0x6000),
+        ("RX Memory", 0x6000..0x8000),
+    ] {
         t += &format!("    {name}:\n{}", dump(&m[r], 6));
     }
-    for (i, (wr, rsr, sr)) in [(0x0123, 0x0040, 0x42), (0x0010, 0x0002, status1), (0, 0, 0), (0xFFFF, 0, 0)].into_iter().enumerate() {
+    for (i, (wr, rsr, sr)) in [
+        (0x0123, 0x0040, 0x42),
+        (0x0010, 0x0002, status1),
+        (0, 0, 0),
+        (0xFFFF, 0, 0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
         t += &format!("    Socket {i}:\n      RX Write Register: 0x{wr:04X}\n      RX Size Register: 0x{rsr:04X}\n      Socket Register: 0x{sr:02X}\n");
     }
     t
@@ -450,18 +536,40 @@ fn u2_text(iface: &str, status1: u8) -> String {
 #[test]
 fn uthernet2_golden_restores_raw_sockets_and_closes_the_others() {
     let c = load_entry(&u2_text("Ethernet", 0x22), "Uthernet II"); // socket 1 was UDP
-    let s = c.as_any().unwrap().downcast_ref::<Uthernet2>().unwrap().snapshot();
+    let s = c
+        .as_any()
+        .unwrap()
+        .downcast_ref::<Uthernet2>()
+        .unwrap()
+        .snapshot();
     assert!(s.virtual_dns);
     assert_eq!((s.mode_register, s.data_address), (0x02, 0x4010));
     assert_eq!(s.memory, u2_memory());
-    assert_eq!(s.sockets, [(0x0123, 0x0040, 0x42), (0x0010, 0x0002, 0x00), (0, 0, 0), (0xFFFF, 0, 0)]);
+    assert_eq!(
+        s.sockets,
+        [
+            (0x0123, 0x0040, 0x42),
+            (0x0010, 0x0002, 0x00),
+            (0, 0, 0),
+            (0xFFFF, 0, 0)
+        ]
+    );
 }
 
 #[test]
 fn uthernet2_v1_has_no_virtual_dns() {
-    let t = u2_text("x", 0).replace("Version: 2", "Version: 1").replace("    Virtual DNS: true\n", "");
+    let t = u2_text("x", 0)
+        .replace("Version: 2", "Version: 1")
+        .replace("    Virtual DNS: true\n", "");
     let c = load_entry(&t, "Uthernet II");
-    assert!(!c.as_any().unwrap().downcast_ref::<Uthernet2>().unwrap().snapshot().virtual_dns);
+    assert!(
+        !c.as_any()
+            .unwrap()
+            .downcast_ref::<Uthernet2>()
+            .unwrap()
+            .snapshot()
+            .virtual_dns
+    );
 }
 
 #[test]
@@ -472,7 +580,10 @@ fn uthernet2_write_matches_the_cpp_writer() {
 
 #[test]
 fn uthernet2_full_machine_roundtrip() {
-    let mut a = machine_with(6, Box::new(Uthernet2::new(Box::new(MockNetwork::new().0), true)));
+    let mut a = machine_with(
+        6,
+        Box::new(Uthernet2::new(Box::new(MockNetwork::new().0), true)),
+    );
     a.with_card(6, |c, ctx| {
         // Socket 0 to MACRAW (mode register at 0x0400), then OPEN (command at 0x0401).
         for (addr, v) in [(0x0400u16, 0x04u8), (0x0401, 0x01)] {

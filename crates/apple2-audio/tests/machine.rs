@@ -2,7 +2,7 @@
 //! and the Mockingboard family, and the resulting PCM from the [`Mixer`].
 
 use apple2_audio::ssi263::SsiType;
-use apple2_audio::{AudioBus, MockingboardCard, Mixer, SamCard, Sockets, Variant};
+use apple2_audio::{AudioBus, Mixer, MockingboardCard, SamCard, Sockets, Variant};
 use apple2_core::{Machine, MachineConfig, Model, VideoStandard};
 
 const RATE: u32 = 48_000;
@@ -73,7 +73,13 @@ fn speaker_toggle_loop_on_a_machine_is_a_square_wave_of_the_right_pitch() {
     let bus = AudioBus::new(RATE, VideoStandard::Ntsc);
     let mut m = machine();
     // LDA $C030 (4) ; LDX #100 (2) ; DEX (2) ; BNE (3/2) ; JMP (3): one toggle every 508 cycles.
-    load(&mut m, 0x300, &[0xAD, 0x30, 0xC0, 0xA2, 100, 0xCA, 0xD0, 0xFD, 0x4C, 0x00, 0x03]);
+    load(
+        &mut m,
+        0x300,
+        &[
+            0xAD, 0x30, 0xC0, 0xA2, 100, 0xCA, 0xD0, 0xFD, 0x4C, 0x00, 0x03,
+        ],
+    );
     let mut mixer = Mixer::new(&bus);
     let mut all = vec![];
     for _ in 0..30 {
@@ -84,7 +90,11 @@ fn speaker_toggle_loop_on_a_machine_is_a_square_wave_of_the_right_pitch() {
     let secs = cyc / 1_020_484.45;
     let left: Vec<f32> = all.chunks(2).map(|c| c[0]).collect();
     assert_eq!(all.len() % 2, 0);
-    assert!((left.len() as f64 - secs * RATE as f64).abs() < 2.0, "{} frames for {secs}s", left.len());
+    assert!(
+        (left.len() as f64 - secs * RATE as f64).abs() < 2.0,
+        "{} frames for {secs}s",
+        left.len()
+    );
     let edges = crossings(left.iter().copied()) as f64;
     // Toggle period 508 cycles, one edge per toggle.
     let expected = cyc / 508.0;
@@ -167,7 +177,9 @@ fn typical_mockingboard_detection_succeeds_in_the_card_slot_only() {
     assert_eq!(detect(&mut m, 0xC4), (7, 0xFF));
     // The second 6522 (+$80) detects as well; an empty slot does not.
     let (mut m, _bus) = setup(Variant::MockingboardC);
-    let mut code = vec![0xA9, 0xFF, 0x8D, 0x85, 0xC4, 0xAD, 0x84, 0xC4, 0x85, 0x10, 0xAD, 0x84, 0xC4, 0x85, 0x11];
+    let mut code = vec![
+        0xA9, 0xFF, 0x8D, 0x85, 0xC4, 0xAD, 0x84, 0xC4, 0x85, 0x10, 0xAD, 0x84, 0xC4, 0x85, 0x11,
+    ];
     code.extend(spin_at(0x30F));
     load(&mut m, 0x300, &code);
     run_to(&mut m, 0x30F);
@@ -233,7 +245,10 @@ fn one_shot_t1_interrupts_once_at_latch_plus_two_after_the_write() {
     }
     let irq_at = irq_at.expect("no IRQ") - w_end;
     // Edge at 0x1000+2; the CPU takes it at the next opcode boundary (<= 3) + 7-cycle entry.
-    assert!((0x1002 + 7..=0x1002 + 7 + 3).contains(&irq_at), "{irq_at:#x}");
+    assert!(
+        (0x1002 + 7..=0x1002 + 7 + 3).contains(&irq_at),
+        "{irq_at:#x}"
+    );
     assert_eq!(m.peek(0x10), 1);
 }
 
@@ -301,7 +316,7 @@ fn mockingboard_left_6522_plays_the_left_channel_only_at_the_programmed_pitch() 
     assert_eq!(r.clone().fold(0.0f32, |a, b| a.max(b.abs())), 0.0);
     let peak = l.clone().fold(0.0f32, f32::max);
     assert!(peak > 0.2 && peak < 0.25, "{peak}"); // 10752 * 2/3 / 32768
-    // Period 100: 637.8 Hz = ~1275 edges in one second.
+                                                  // Period 100: 637.8 Hz = ~1275 edges in one second.
     let edges = crossings(l);
     assert!((1270..=1282).contains(&edges), "{edges}");
 }
@@ -311,7 +326,10 @@ fn mockingboard_right_6522_plays_the_right_channel() {
     let (mut m, bus) = setup(Variant::MockingboardC);
     load(&mut m, 0x300, &tone_program(0xC480, 0, 80));
     let out = render(&mut m, &bus, 300_000);
-    assert_eq!(out.iter().step_by(2).fold(0.0f32, |a, &b| a.max(b.abs())), 0.0);
+    assert_eq!(
+        out.iter().step_by(2).fold(0.0f32, |a, &b| a.max(b.abs())),
+        0.0
+    );
     assert!(out.iter().skip(1).step_by(2).fold(0.0f32, |a, &b| a.max(b)) > 0.2);
 }
 
@@ -350,7 +368,10 @@ fn megaaudio_and_sdmusic_variants_make_sound_too() {
         let (mut m, bus) = setup(v);
         load(&mut m, 0x300, &tone_program(0xC400, 0, 100));
         let out = render(&mut m, &bus, 200_000);
-        assert!(out.iter().step_by(2).fold(0.0f32, |a, &b| a.max(b)) > 0.2, "{v:?}");
+        assert!(
+            out.iter().step_by(2).fold(0.0f32, |a, &b| a.max(b)) > 0.2,
+            "{v:?}"
+        );
     }
 }
 
@@ -364,14 +385,26 @@ fn volume_handle_scales_and_mutes_a_card() {
     load(&mut m, 0x300, &tone_program(0xC400, 0, 100));
     let mut mixer = Mixer::new(&bus);
     m.run_cycles(100_000);
-    let full = mixer.produce_machine(&mut m).iter().fold(0.0f32, |a, &b| a.max(b));
+    let full = mixer
+        .produce_machine(&mut m)
+        .iter()
+        .fold(0.0f32, |a, &b| a.max(b));
     vol.set_gain(0.5);
     m.run_cycles(100_000);
-    let half = mixer.produce_machine(&mut m).iter().fold(0.0f32, |a, &b| a.max(b));
+    let half = mixer
+        .produce_machine(&mut m)
+        .iter()
+        .fold(0.0f32, |a, &b| a.max(b));
     assert!((half / full - 0.5).abs() < 0.02, "{half} {full}");
     vol.set_mute(true);
     m.run_cycles(50_000);
-    assert_eq!(mixer.produce_machine(&mut m).iter().fold(0.0f32, |a, &b| a.max(b.abs())), 0.0);
+    assert_eq!(
+        mixer
+            .produce_machine(&mut m)
+            .iter()
+            .fold(0.0f32, |a, &b| a.max(b.abs())),
+        0.0
+    );
 }
 
 // ---- SSI263 ----
@@ -390,11 +423,18 @@ fn ssi263_phoneme_is_audible_and_sets_ifr_bit1_when_complete() {
     let (mut m, bus) = setup(Variant::MockingboardC);
     load(&mut m, 0x300, &speech_program(0xC0 | 0x0A));
     let out = render(&mut m, &bus, 100_000);
-    let (l, r): (Vec<f32>, Vec<f32>) = (out.iter().step_by(2).copied().collect(), out.iter().skip(1).step_by(2).copied().collect());
+    let (l, r): (Vec<f32>, Vec<f32>) = (
+        out.iter().step_by(2).copied().collect(),
+        out.iter().skip(1).step_by(2).copied().collect(),
+    );
     assert_eq!(l, r); // mono speech in both channels
     assert!(l.iter().fold(0.0f32, |a, &b| a.max(b.abs())) > 0.02);
     // The 6522 at $C480 receives the SSI263's A/!R on CA1 => IFR bit 1.
-    load(&mut m, 0x320, &[0xAD, 0x8D, 0xC4, 0x85, 0x10, 0x4C, 0x25, 0x03]); // LDA IFR : STA $10
+    load(
+        &mut m,
+        0x320,
+        &[0xAD, 0x8D, 0xC4, 0x85, 0x10, 0x4C, 0x25, 0x03],
+    ); // LDA IFR : STA $10
     m.cpu_mut().pc = 0x320;
     run_to(&mut m, 0x325);
     assert_eq!(m.peek(0x10) & 0x02, 0x02);
@@ -427,8 +467,19 @@ fn votrax_sc01_phoneme_through_port_b_is_audible() {
     // Sockets without the SC-01 stay silent.
     let bus = AudioBus::new(RATE, VideoStandard::Ntsc);
     let mut m = machine();
-    let sockets = Sockets { sc01: false, ssi263: [SsiType::Empty, SsiType::Empty], ..Sockets::default() };
-    m.insert_card(4, Box::new(MockingboardCard::with_sockets(Variant::MockingboardC, &bus, sockets)));
+    let sockets = Sockets {
+        sc01: false,
+        ssi263: [SsiType::Empty, SsiType::Empty],
+        ..Sockets::default()
+    };
+    m.insert_card(
+        4,
+        Box::new(MockingboardCard::with_sockets(
+            Variant::MockingboardC,
+            &bus,
+            sockets,
+        )),
+    );
     load(&mut m, 0x300, &code);
     let out = render(&mut m, &bus, 60_000);
     assert_eq!(out.iter().fold(0.0f32, |a, &b| a.max(b.abs())), 0.0);
@@ -469,7 +520,10 @@ fn card_state_roundtrip_covers_ay_ssi263_and_phasor_mode() {
     assert_eq!(card_bytes(&m2, 4), bytes);
     // A card of another variant refuses the bytes.
     let mut m3 = machine();
-    m3.insert_card(4, Box::new(MockingboardCard::new(Variant::MockingboardC, &bus)));
+    m3.insert_card(
+        4,
+        Box::new(MockingboardCard::new(Variant::MockingboardC, &bus)),
+    );
     assert!(m3.load_state(&st).is_err());
 }
 
@@ -485,7 +539,10 @@ fn expired_t1_then(model: Model, tail: &[u8]) -> u8 {
     cfg.video_standard = VideoStandard::Ntsc;
     cfg.custom_rom = Some(rom);
     let mut m = Machine::new(cfg);
-    assert!(m.insert_card(4, Box::new(MockingboardCard::new(Variant::MockingboardC, &bus))));
+    assert!(m.insert_card(
+        4,
+        Box::new(MockingboardCard::new(Variant::MockingboardC, &bus))
+    ));
     let mut code = sta(0x20, 0xC404).to_vec();
     code.extend(sta(0x00, 0xC405));
     code.extend([0xA2, 0x20, 0xCA, 0xD0, 0xFD]); // delay: LDX #$20 ; DEX ; BNE
@@ -502,7 +559,10 @@ fn expired_t1_then(model: Model, tail: &[u8]) -> u8 {
 
 #[test]
 fn ifr_t1_stays_set_after_a_plain_write_to_t1cl() {
-    assert_eq!(expired_t1_then(Model::Apple2Plus, &[0xA9, 0x33, 0x8D, 0x04, 0xC4]) & 0x40, 0x40);
+    assert_eq!(
+        expired_t1_then(Model::Apple2Plus, &[0xA9, 0x33, 0x8D, 0x04, 0xC4]) & 0x40,
+        0x40
+    );
 }
 
 #[test]
@@ -538,7 +598,14 @@ fn sta_zp_y_false_reads_on_the_6502_but_not_on_the_65c02() {
 #[test]
 fn ier_write_gates_whether_pending_timer_events_defer_an_irq() {
     let (mut m, _bus) = setup(Variant::MockingboardC);
-    let flag = |m: &Machine| m.board().scheduler.events().iter().map(|e| e.can_assert_irq).collect::<Vec<_>>();
+    let flag = |m: &Machine| {
+        m.board()
+            .scheduler
+            .events()
+            .iter()
+            .map(|e| e.can_assert_irq)
+            .collect::<Vec<_>>()
+    };
     let mut code = sta(0x00, 0xC404).to_vec();
     code.extend(sta(0x40, 0xC405)); // T1 pending, IER off: still IRQ-capable until IER is written
     code.extend(sta(0x40, 0xC40E)); // IER: clear T1
@@ -563,5 +630,13 @@ fn a_timer_started_after_ier_cleared_t1_is_also_gated() {
     let end = 0x300 + code.len() as u16 - 3;
     load(&mut m, 0x300, &code);
     run_to(&mut m, end);
-    assert_eq!(m.board().scheduler.events().iter().map(|e| e.can_assert_irq).collect::<Vec<_>>(), [false]);
+    assert_eq!(
+        m.board()
+            .scheduler
+            .events()
+            .iter()
+            .map(|e| e.can_assert_irq)
+            .collect::<Vec<_>>(),
+        [false]
+    );
 }

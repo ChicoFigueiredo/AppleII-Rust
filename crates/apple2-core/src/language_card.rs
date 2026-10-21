@@ -41,7 +41,10 @@ enum Kind {
     Builtin,
     /// ][/][+ 16K card, slot 0 only (`CT_LanguageCard`).
     Card16K,
-    Saturn { banks: u8, active: u8 },
+    Saturn {
+        banks: u8,
+        active: u8,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,11 +113,20 @@ impl LanguageCards {
             let kind = match (s, kind, is_e) {
                 (0, _, true) => Some(Kind::Builtin), // "No slot0 for //e": a configured card is ignored
                 (0, Some(CardKind::LanguageCard16K), false) => Some(Kind::Card16K),
-                (_, Some(CardKind::Saturn128K), _) => Some(Kind::Saturn { banks: SATURN_BANKS, active: 0 }),
+                (_, Some(CardKind::Saturn128K), _) => Some(Kind::Saturn {
+                    banks: SATURN_BANKS,
+                    active: 0,
+                }),
                 _ => None,
             };
             if let Some(kind) = kind {
-                let mut card = Card { slot: s as u8, kind, memmode: 0, last_ram_write: false, region_base: next_region };
+                let mut card = Card {
+                    slot: s as u8,
+                    kind,
+                    memmode: 0,
+                    last_ram_write: false,
+                    region_base: next_region,
+                };
                 if matches!(kind, Kind::Saturn { .. }) {
                     next_region += SATURN_BANKS as usize;
                 }
@@ -122,19 +134,37 @@ impl LanguageCards {
                 cards.push(card);
             }
         }
-        LanguageCards { cards, last_slot: 0 }
+        LanguageCards {
+            cards,
+            last_slot: 0,
+        }
     }
 
     /// 16K RAM regions the memory must provide.
     pub fn regions(&self) -> usize {
-        self.cards.iter().map(|c| c.region_base + if matches!(c.kind, Kind::Saturn { .. }) { SATURN_BANKS as usize } else { 1 }).max().unwrap_or(1)
+        self.cards
+            .iter()
+            .map(|c| {
+                c.region_base
+                    + if matches!(c.kind, Kind::Saturn { .. }) {
+                        SATURN_BANKS as usize
+                    } else {
+                        1
+                    }
+            })
+            .max()
+            .unwrap_or(1)
     }
 
     /// Makes the memory use the region the first card (the one in the lowest slot) owns.
     pub fn attach(&mut self, mem: &mut Memory) {
         mem.alloc_lc_regions(self.regions());
         self.last_slot = 0;
-        let region = self.cards.first().filter(|c| c.slot == 0).map_or(0, Card::region);
+        let region = self
+            .cards
+            .first()
+            .filter(|c| c.slot == 0)
+            .map_or(0, Card::region);
         mem.set_lc_region(region);
     }
 
@@ -176,8 +206,16 @@ impl LanguageCards {
 
     /// Sets the flags, "last access was odd" latch and (Saturn) active bank of the card in
     /// `slot`; false if there is none. The memory is not touched.
-    pub fn set_info(&mut self, slot: u8, memmode: u32, last_ram_write: bool, active_bank: Option<u8>) -> bool {
-        let Some(c) = self.cards.iter_mut().find(|c| c.slot == slot) else { return false };
+    pub fn set_info(
+        &mut self,
+        slot: u8,
+        memmode: u32,
+        last_ram_write: bool,
+        active_bank: Option<u8>,
+    ) -> bool {
+        let Some(c) = self.cards.iter_mut().find(|c| c.slot == slot) else {
+            return false;
+        };
         c.memmode = memmode & mf::LANGCARD_MASK;
         c.last_ram_write = last_ram_write;
         if let (Kind::Saturn { banks, active }, Some(a)) = (&mut c.kind, active_bank) {
@@ -202,15 +240,21 @@ impl LanguageCards {
 
     /// Flags of the card in `slot`, for tests and debuggers.
     pub fn flags(&self, slot: u8) -> Option<u32> {
-        self.cards.iter().find(|c| c.slot == slot).map(|c| c.memmode)
+        self.cards
+            .iter()
+            .find(|c| c.slot == slot)
+            .map(|c| c.memmode)
     }
 
     /// Active Saturn bank (0-7) of the card in `slot`.
     pub fn saturn_bank(&self, slot: u8) -> Option<u8> {
-        self.cards.iter().find(|c| c.slot == slot).and_then(|c| match c.kind {
-            Kind::Saturn { active, .. } => Some(active),
-            _ => None,
-        })
+        self.cards
+            .iter()
+            .find(|c| c.slot == slot)
+            .and_then(|c| match c.kind {
+                Kind::Saturn { active, .. } => Some(active),
+                _ => None,
+            })
     }
 
     /// Access to $C080+`slot`*16+`lo` (`lo` 0-15); `rmw` is `is_rmw_abs` of the executing
@@ -218,14 +262,19 @@ impl LanguageCards {
     /// Reads of a handled access return the floating bus. AppleWin's `MemOptimizeForModeChanging`
     /// shortcut (skipping the paging update before an `STA $C002-5`) is not ported.
     pub fn io(&mut self, slot: u8, lo: u8, write: bool, rmw: bool, mem: &mut Memory) -> bool {
-        let Some(i) = self.cards.iter().position(|c| c.slot == slot) else { return false };
+        let Some(i) = self.cards.iter().position(|c| c.slot == slot) else {
+            return false;
+        };
         let lo = lo & 0xF;
         let before = self.cards[i].memmode;
         let mut moved = false;
         let c = &mut self.cards[i];
         let mut m = before;
         match c.kind {
-            Kind::Saturn { banks, ref mut active } if lo & 4 != 0 => {
+            Kind::Saturn {
+                banks,
+                ref mut active,
+            } if lo & 4 != 0 => {
                 // Bank select, LanguageCard.cpp:410: banks beyond the card's size clamp.
                 *active = (((lo >> 1) & 4) | (lo & 3)).min(banks - 1);
                 self.select_region(i, mem);
@@ -241,7 +290,11 @@ impl LanguageCards {
                 }
                 if matches!(kind, Kind::Saturn { .. }) {
                     // Any two consecutive odd accesses, read or write (LanguageCard.cpp:432).
-                    m = if lo & 1 != 0 && c.last_ram_write { m | mf::WRITERAM } else { m & !mf::WRITERAM };
+                    m = if lo & 1 != 0 && c.last_ram_write {
+                        m | mf::WRITERAM
+                    } else {
+                        m & !mf::WRITERAM
+                    };
                     c.last_ram_write = lo & 1 != 0;
                 } else {
                     if lo & 1 == 0 {

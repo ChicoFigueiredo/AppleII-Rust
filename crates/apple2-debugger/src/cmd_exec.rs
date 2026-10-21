@@ -123,11 +123,16 @@ impl Debugger {
     pub(crate) fn cursor_page(&mut self, m: &Machine, up: bool, align: u16) -> Update {
         if self.window == Window::Data {
             let step = if align == 0 { 128 } else { align };
-            self.data_addr = if up { self.data_addr.wrapping_sub(step) } else { self.data_addr.wrapping_add(step) };
+            self.data_addr = if up {
+                self.data_addr.wrapping_sub(step)
+            } else {
+                self.data_addr.wrapping_add(step)
+            };
             return upd::DISASM;
         }
         if align == 0 {
-            let lines = (self.disasm_height.max(2) as i32 - (self.disasm_cur_line as i32 + 1)).max(1);
+            let lines =
+                (self.disasm_height.max(2) as i32 - (self.disasm_cur_line as i32 + 1)).max(1);
             for _ in 0..lines {
                 if up {
                     self.cursor_line_up(m);
@@ -156,7 +161,11 @@ impl Debugger {
     // ---- running ----
 
     pub(crate) fn cmd_go(&mut self, m: &mut Machine, a: &Args, full: bool) -> Update {
-        let kcmd = if full { Cmd::GoFullSpeed } else { Cmd::GoNormalSpeed };
+        let kcmd = if full {
+            Cmd::GoFullSpeed
+        } else {
+            Cmd::GoNormalSpeed
+        };
         let n = a.n();
         if n > 4 {
             return self.help_for(kcmd);
@@ -272,14 +281,23 @@ impl Debugger {
             }
             self.console.print("Trace stopped.");
         } else {
-            let name = if a.n() > 0 { a.text(1).to_string() } else { "Trace.txt".to_string() };
+            let name = if a.n() > 0 {
+                a.text(1).to_string()
+            } else {
+                "Trace.txt".to_string()
+            };
             self.trace_scanner = a.n() >= 2;
             match self.host.create(&name) {
                 Ok(w) => {
                     self.trace = Some(w);
                     self.trace_header = true;
-                    let hdr = if self.trace_scanner { "Trace (with video info) started" } else { "Trace started" };
-                    self.console.print(&format!("{hdr}: {}{name}", self.host.dir()));
+                    let hdr = if self.trace_scanner {
+                        "Trace (with video info) started"
+                    } else {
+                        "Trace started"
+                    };
+                    self.console
+                        .print(&format!("{hdr}: {}{name}", self.host.dir()));
                     self.attach(m);
                 }
                 Err(_) => self.console.print(&format!("Trace ERROR: {name}")),
@@ -398,7 +416,10 @@ impl Debugger {
             return self.help_for(Cmd::In);
         }
         let v = m.board_mut().read(0xC000 | (a.value(1) & 0xFF));
-        self.console.print(&format!("{CHC_ARG_SEP}${CHC_ADDRESS}{:04X}{CHC_ARG_SEP}: {CHC_NUM_HEX}{v:02X}", 0xC000 | (a.value(1) & 0xFF)));
+        self.console.print(&format!(
+            "{CHC_ARG_SEP}${CHC_ADDRESS}{:04X}{CHC_ARG_SEP}: {CHC_NUM_HEX}{v:02X}",
+            0xC000 | (a.value(1) & 0xFF)
+        ));
         upd::CONSOLE_DISPLAY
     }
 
@@ -406,7 +427,8 @@ impl Debugger {
         if a.n() == 0 {
             return self.help_for(Cmd::Out);
         }
-        m.board_mut().write(0xC000 | (a.value(1) & 0xFF), a.value(2) as u8);
+        m.board_mut()
+            .write(0xC000 | (a.value(1) & 0xFF), a.value(2) as u8);
         upd::CONSOLE_DISPLAY
     }
 
@@ -449,7 +471,9 @@ impl Debugger {
 
     pub(crate) fn cmd_lbr(&mut self) -> Update {
         match self.lbr {
-            None => self.console.print(" LBR not set yet. Hint: Run from the debugger via 'g' command."),
+            None => self
+                .console
+                .print(" LBR not set yet. Hint: Run from the debugger via 'g' command."),
             Some(a) => self.console.print(&format!(" LBR = ${a:04X}")),
         }
         upd::CONSOLE_DISPLAY
@@ -458,13 +482,21 @@ impl Debugger {
     // ---- profile ----
 
     pub(crate) fn cmd_profile(&mut self, m: &mut Machine, a: &Args) -> Update {
-        let sub = if a.n() == 0 { "RESET".to_string() } else { a.text(1).to_ascii_uppercase() };
+        let sub = if a.n() == 0 {
+            "RESET".to_string()
+        } else {
+            a.text(1).to_ascii_uppercase()
+        };
         if a.n() > 1 {
             return self.help_for(Cmd::Profile);
         }
         match sub.as_str() {
             "RESET" => {
-                self.profile = Profile { active: true, begin_cycles: m.cycles(), ..Default::default() };
+                self.profile = Profile {
+                    active: true,
+                    begin_cycles: m.cycles(),
+                    ..Default::default()
+                };
                 self.console.print(" Resetting profile data.");
             }
             "LIST" => {
@@ -504,9 +536,21 @@ impl Debugger {
                 continue;
             }
             let info = table(cmos)[*op];
-            let opc = if export { format!("\"{op:02X}\"") } else { format!("{op:02X}") };
-            let mode = if export { format!("\"{}\"", info.mode.name()) } else { info.mode.name().to_string() };
-            s += &format!("{:7.4}%{sep}{n:9}{sep}{opc}{sep}{}{sep}{mode}\n", 100.0 * *n as f64 / tdiv, info.mnemonic);
+            let opc = if export {
+                format!("\"{op:02X}\"")
+            } else {
+                format!("{op:02X}")
+            };
+            let mode = if export {
+                format!("\"{}\"", info.mode.name())
+            } else {
+                info.mode.name().to_string()
+            };
+            s += &format!(
+                "{:7.4}%{sep}{n:9}{sep}{opc}{sep}{}{sep}{mode}\n",
+                100.0 * *n as f64 / tdiv,
+                info.mnemonic
+            );
         }
         s += &format!("Total:  {sep}{:9}\n\n", if total == 0 { 0 } else { total });
         s += &format!("Percent{sep}Count{sep}Addressing Mode\n");
@@ -517,10 +561,17 @@ impl Debugger {
             if n == 0 && !export {
                 continue;
             }
-            s += &format!("{:7.4}%{sep}{n:9}{sep}{}\n", 100.0 * n as f64 / mtotal.max(1) as f64, ALL_MODES[i].name());
+            s += &format!(
+                "{:7.4}%{sep}{n:9}{sep}{}\n",
+                100.0 * n as f64 / mtotal.max(1) as f64,
+                ALL_MODES[i].name()
+            );
         }
         s += &format!("Total:  {sep}{:9}\n===================\n", mtotal);
-        s += &format!("Cycles: {sep}{:9}\n", m.cycles().saturating_sub(self.profile.begin_cycles));
+        s += &format!(
+            "Cycles: {sep}{:9}\n",
+            m.cycles().saturating_sub(self.profile.begin_cycles)
+        );
         s
     }
 

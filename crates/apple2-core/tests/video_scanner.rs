@@ -8,8 +8,18 @@ use apple2_core::video_scanner::{Switches, VideoScanner, CYCLES_PER_LINE};
 use apple2_core::{AuxCardKind, Machine, MachineConfig, Model, VideoStandard};
 use scanner_ref::{HORZ_E, HORZ_II, VERT_HGR, VERT_TXT};
 
-const TEXT: Switches = Switches { text: true, mixed: false, hires: false, page2: false };
-const HGR: Switches = Switches { text: false, mixed: false, hires: true, page2: false };
+const TEXT: Switches = Switches {
+    text: true,
+    mixed: false,
+    hires: false,
+    page2: false,
+};
+const HGR: Switches = Switches {
+    text: false,
+    mixed: false,
+    hires: true,
+    page2: false,
+};
 
 fn ntsc(ii: bool) -> VideoScanner {
     VideoScanner::new(VideoStandard::Ntsc, ii)
@@ -23,9 +33,17 @@ fn tables_match_applewin_hand_written_tables_for_a_whole_ntsc_frame() {
         for v in 0..262usize {
             for h in 0..65usize {
                 let text = VERT_TXT[v / 8] + horz[(v / 64) * 65 + h] + 0x400;
-                assert_eq!(s.address_at(v as u32, h as u32, TEXT), text, "text ii={ii} v={v} h={h}");
+                assert_eq!(
+                    s.address_at(v as u32, h as u32, TEXT),
+                    text,
+                    "text ii={ii} v={v} h={h}"
+                );
                 let hgr = VERT_HGR[v] + HORZ_E[(v / 64) * 65 + h] + 0x2000;
-                assert_eq!(s.address_at(v as u32, h as u32, HGR), hgr, "hgr ii={ii} v={v} h={h}");
+                assert_eq!(
+                    s.address_at(v as u32, h as u32, HGR),
+                    hgr,
+                    "hgr ii={ii} v={v} h={h}"
+                );
             }
         }
     }
@@ -37,9 +55,31 @@ fn golden_addresses_ntsc() {
     let at = |s: &VideoScanner, v, h, sw| s.address_at(v, h, sw);
     // TEXT: row 12 of the page is line 100: (12 % 8) * $80 + $28 (second third) + (29 - 25).
     assert_eq!(at(&e, 100, 29, TEXT), 0x062C);
-    assert_eq!(at(&e, 100, 29, Switches { page2: true, ..TEXT }), 0x0A2C);
+    assert_eq!(
+        at(
+            &e,
+            100,
+            29,
+            Switches {
+                page2: true,
+                ..TEXT
+            }
+        ),
+        0x0A2C
+    );
     // LORES uses the text addressing.
-    assert_eq!(at(&e, 100, 29, Switches { text: false, ..TEXT }), 0x062C);
+    assert_eq!(
+        at(
+            &e,
+            100,
+            29,
+            Switches {
+                text: false,
+                ..TEXT
+            }
+        ),
+        0x062C
+    );
     // HIRES line 100 (36 within the second third): $1200 + $28 + 4.
     assert_eq!(at(&e, 100, 29, HGR), 0x322C);
     assert_eq!(at(&e, 100, 29, Switches { page2: true, ..HGR }), 0x522C);
@@ -96,8 +136,16 @@ fn vbl_bar_is_set_for_exactly_192_lines_of_every_frame() {
     for (std, frame) in [(VideoStandard::Ntsc, 17030u32), (VideoStandard::Pal, 20280)] {
         let s = VideoScanner::new(std, false);
         assert_eq!(s.cycles_per_frame(), frame);
-        assert_eq!((0..frame).filter(|&c| s.vbl_bar(c)).count() as u32, 192 * CYCLES_PER_LINE);
-        assert!(s.vbl_bar(192 * 65 - 1) && !s.vbl_bar(192 * 65) && !s.vbl_bar(frame - 1) && s.vbl_bar(0));
+        assert_eq!(
+            (0..frame).filter(|&c| s.vbl_bar(c)).count() as u32,
+            192 * CYCLES_PER_LINE
+        );
+        assert!(
+            s.vbl_bar(192 * 65 - 1)
+                && !s.vbl_bar(192 * 65)
+                && !s.vbl_bar(frame - 1)
+                && s.vbl_bar(0)
+        );
     }
 }
 
@@ -115,10 +163,18 @@ fn machine(model: Model, std: VideoStandard) -> Machine {
 /// Runs a NOP sled in RAM so that `LDA abs` starts at cycle `target` of the frame, executes it
 /// and returns A. The sled is outside the text/hires pages.
 fn lda_at(m: &mut Machine, target: u32, abs: u16) -> u8 {
-    let frame = if m.config().video_standard == VideoStandard::Ntsc { 17030 } else { 20280 };
+    let frame = if m.config().video_standard == VideoStandard::Ntsc {
+        17030
+    } else {
+        20280
+    };
     let target = target % frame;
     let cur = m.cycles_in_frame();
-    let mut d = if target >= cur + 3 { target - cur } else { target + frame - cur };
+    let mut d = if target >= cur + 3 {
+        target - cur
+    } else {
+        target + frame - cur
+    };
     let mut at = 0x6000u16;
     for a in 0x6000..0xA000u16 {
         m.poke_main(a, 0xEA);
@@ -176,7 +232,14 @@ fn floating_bus_follows_the_scanner_at_instruction_start_not_at_the_bus_cycle() 
 #[test]
 fn floating_bus_follows_page2_hires_mixed_and_80store() {
     let mut m = machine(Model::Apple2e, VideoStandard::Ntsc);
-    for (a, v) in [(0x062C, 1), (0x0A2C, 2), (0x322C, 3), (0x522C, 4), (0x3DD0, 5), (0x0650, 6)] {
+    for (a, v) in [
+        (0x062C, 1),
+        (0x0A2C, 2),
+        (0x322C, 3),
+        (0x522C, 4),
+        (0x3DD0, 5),
+        (0x0650, 6),
+    ] {
         m.poke_main(a, v);
     }
     let read = |m: &mut Machine, v, h| lda_at(m, start_for(v, h), 0xC040);
@@ -217,7 +280,11 @@ fn floating_bus_in_vbl_pal_and_across_the_frame_boundary() {
     m.poke_main(0x04FC, 0x77);
     m.poke_main(0x079F, 0x88);
     assert_eq!(lda_at(&mut m, start_for(200, 29), 0xC0E0), 0x77);
-    assert_eq!(lda_at(&mut m, 0, 0xC0E0), 0x88, "cycle 0 sees the last clock of the previous frame");
+    assert_eq!(
+        lda_at(&mut m, 0, 0xC0E0),
+        0x88,
+        "cycle 0 sees the last clock of the previous frame"
+    );
     let mut p = machine(Model::Apple2Plus, VideoStandard::Pal);
     p.poke_main(0x077C, 0x99);
     assert_eq!(lda_at(&mut p, start_for(300, 29), 0xC0E0), 0x99);

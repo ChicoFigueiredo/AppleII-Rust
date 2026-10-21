@@ -93,35 +93,71 @@ pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
 mod tests {
     use super::*;
 
-    const NONE: Mods = Mods { shift: false, ctrl: false, alt: false };
-    const CTRL: Mods = Mods { shift: false, ctrl: true, alt: false };
-    const SHIFT: Mods = Mods { shift: true, ctrl: false, alt: false };
+    const NONE: Mods = Mods {
+        shift: false,
+        ctrl: false,
+        alt: false,
+    };
+    const CTRL: Mods = Mods {
+        shift: false,
+        ctrl: true,
+        alt: false,
+    };
+    const SHIFT: Mods = Mods {
+        shift: true,
+        ctrl: false,
+        alt: false,
+    };
 
     #[test]
     fn function_keys_follow_applewin() {
         assert_eq!(action_for(HostKey::F(1), NONE), Some(Action::Help));
         assert_eq!(action_for(HostKey::F(2), NONE), Some(Action::Reboot));
         assert_eq!(action_for(HostKey::F(2), CTRL), Some(Action::SoftReset));
-        assert_eq!(action_for(HostKey::F(4), NONE), Some(Action::DriveSelect(1)));
+        assert_eq!(
+            action_for(HostKey::F(4), NONE),
+            Some(Action::DriveSelect(1))
+        );
         assert_eq!(action_for(HostKey::F(3), CTRL), Some(Action::DriveMenu(0)));
         assert_eq!(action_for(HostKey::F(6), CTRL), Some(Action::ToggleScale));
-        assert_eq!(action_for(HostKey::F(9), SHIFT), Some(Action::PrevVideoMode));
+        assert_eq!(
+            action_for(HostKey::F(9), SHIFT),
+            Some(Action::PrevVideoMode)
+        );
         assert_eq!(action_for(HostKey::F(11), NONE), Some(Action::SaveState));
         assert_eq!(action_for(HostKey::F(12), NONE), Some(Action::LoadState));
-        assert_eq!(action_for(HostKey::PrintScreen, NONE), Some(Action::Screenshot));
-        assert_eq!(action_for(HostKey::PrintScreen, SHIFT), Some(Action::ScreenshotSmall));
-        assert_eq!(action_for(HostKey::PrintScreen, CTRL), Some(Action::CopyScreenText));
+        assert_eq!(
+            action_for(HostKey::PrintScreen, NONE),
+            Some(Action::Screenshot)
+        );
+        assert_eq!(
+            action_for(HostKey::PrintScreen, SHIFT),
+            Some(Action::ScreenshotSmall)
+        );
+        assert_eq!(
+            action_for(HostKey::PrintScreen, CTRL),
+            Some(Action::CopyScreenText)
+        );
     }
 
     #[test]
     fn speed_hotkeys_need_ctrl_without_alt() {
-        assert_eq!(action_for(HostKey::Char('0'), CTRL), Some(Action::SpeedToggleMax));
-        assert_eq!(action_for(HostKey::Char('1'), CTRL), Some(Action::Speed1Mhz));
+        assert_eq!(
+            action_for(HostKey::Char('0'), CTRL),
+            Some(Action::SpeedToggleMax)
+        );
+        assert_eq!(
+            action_for(HostKey::Char('1'), CTRL),
+            Some(Action::Speed1Mhz)
+        );
         assert_eq!(action_for(HostKey::Char('3'), CTRL), Some(Action::SpeedMax));
         assert_eq!(action_for(HostKey::Char('2'), CTRL), None);
         assert_eq!(action_for(HostKey::Char('0'), NONE), None);
         // AltGr also fakes Ctrl (GH#749)
-        assert_eq!(action_for(HostKey::Char('0'), Mods { alt: true, ..CTRL }), None);
+        assert_eq!(
+            action_for(HostKey::Char('0'), Mods { alt: true, ..CTRL }),
+            None
+        );
     }
 
     #[test]
@@ -139,6 +175,9 @@ mod tests {
     fn plain_keys_are_not_actions() {
         assert_eq!(action_for(HostKey::Char('a'), NONE), None);
         assert_eq!(action_for(HostKey::Enter, NONE), None);
-        assert_eq!(action_for(HostKey::Enter, Mods { alt: true, ..NONE }), Some(Action::ToggleFullscreen));
+        assert_eq!(
+            action_for(HostKey::Enter, Mods { alt: true, ..NONE }),
+            Some(Action::ToggleFullscreen)
+        );
     }
 }

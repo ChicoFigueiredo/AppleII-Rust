@@ -24,13 +24,18 @@ fn text40_normal_inverse_and_scanline_pairing() {
     render(&mut r, &s, 1);
     // 'A': rows 00 08 14 22 22 3E 22 22; each dot is two pixels wide; the second pixel row of
     // every Apple scan line is black with the default 50% scan lines.
-    let rows = [".......", "...#...", "..#.#..", ".#...#.", ".#...#.", ".#####.", ".#...#.", ".#...#."];
+    let rows = [
+        ".......", "...#...", "..#.#..", ".#...#.", ".#...#.", ".#####.", ".#...#.", ".#...#.",
+    ];
     for (y, dots) in rows.iter().enumerate() {
         let want: String = dots.chars().flat_map(|c| [c, c]).collect();
         assert_eq!(art(&r, 0, 2 * y, 14), want, "row {y}");
         assert_eq!(art(&r, 0, 2 * y + 1, 14), "..............", "scan line {y}");
         // Inverse: all 7 dots inverted.
-        let inv: String = dots.chars().flat_map(|c| if c == '#' { ['.', '.'] } else { ['#', '#'] }).collect();
+        let inv: String = dots
+            .chars()
+            .flat_map(|c| if c == '#' { ['.', '.'] } else { ['#', '#'] })
+            .collect();
         assert_eq!(art(&r, 14, 2 * y, 14), inv, "inverse row {y}");
     }
 }
@@ -187,7 +192,9 @@ fn dhires_idealized_solid_colours() {
     render(&mut r, &s, 1);
     assert_eq!(rgb(&r, 7 + 14 * 3, 0), 0xFFFFFF);
     // All zero -> black.
-    let s2 = Fake { ..Fake::new(Model::Apple2eEnhanced).hires() };
+    let s2 = Fake {
+        ..Fake::new(Model::Apple2eEnhanced).hires()
+    };
     let mut s2 = s2;
     s2.mode.col80 = true;
     s2.mode.dhires = true;

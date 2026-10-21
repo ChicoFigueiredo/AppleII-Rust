@@ -165,7 +165,16 @@ Enabled: true";
 
     fn expected() -> MouseSnapshot {
         MouseSnapshot {
-            pia: Pia6821 { pra: 10, ddra: 255, cra: 4, prb: 3, ddrb: 62, crb: 4, ia: 170, ib: 192 },
+            pia: Pia6821 {
+                pra: 10,
+                ddra: 255,
+                cra: 4,
+                prb: 3,
+                ddrb: 62,
+                crb: 4,
+                ia: 170,
+                ib: 192,
+            },
             by_a: 0x55,
             by_b: 0x7E,
             buff: [0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0, 0],
@@ -190,7 +199,14 @@ Enabled: true";
     #[test]
     fn golden_state() {
         let c = golden("Mouse Card", 4, 1, BODY);
-        assert_eq!(c.as_any().unwrap().downcast_ref::<MouseCard>().unwrap().snapshot(), expected());
+        assert_eq!(
+            c.as_any()
+                .unwrap()
+                .downcast_ref::<MouseCard>()
+                .unwrap()
+                .snapshot(),
+            expected()
+        );
     }
 
     #[test]
@@ -198,7 +214,10 @@ Enabled: true";
         let mut c = MouseCard::new();
         c.apply_snapshot(&expected());
         let body: String = BODY.lines().map(|l| format!("    {l}\n")).collect();
-        assert_eq!(written(4, &c), format!("4:\n  Card: Mouse Card\n  Version: 1\n  State:\n{body}"));
+        assert_eq!(
+            written(4, &c),
+            format!("4:\n  Card: Mouse Card\n  Version: 1\n  State:\n{body}")
+        );
     }
 
     #[test]
@@ -206,9 +225,22 @@ Enabled: true";
         let entries = parse_state(BODY);
         let mut host = TestHost::default();
         let mut warnings = Vec::new();
-        let mut ctx = LoadCtx { host: &mut host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
+        let mut ctx = LoadCtx {
+            host: &mut host,
+            model: Model::Apple2eEnhanced,
+            warnings: &mut warnings,
+        };
         let map = cards::by_aw_name("Mouse Card").unwrap();
-        assert!((map.load)(&mut ctx, 4, 2, Map { name: "State", entries: &entries }).is_err());
+        assert!((map.load)(
+            &mut ctx,
+            4,
+            2,
+            Map {
+                name: "State",
+                entries: &entries
+            }
+        )
+        .is_err());
     }
 
     #[test]
@@ -224,11 +256,17 @@ Enabled: true";
             m.run_frame();
         });
         let s = t.orig.card::<MouseCard>(4).unwrap().snapshot();
-        assert!(s.state & apple2_cards::mouse::STAT_INT_ALL != 0, "interrupt pending: {s:?}");
+        assert!(
+            s.state & apple2_cards::mouse::STAT_INT_ALL != 0,
+            "interrupt pending: {s:?}"
+        );
         assert_eq!(t.orig.save_state(), t.exact.save_state());
         assert_eq!(t.plain.card::<MouseCard>(4).unwrap().snapshot(), s);
         // GH#677: the loader re-asserts the IRQ line.
-        assert_eq!(t.plain.save_state().interrupts, t.orig.save_state().interrupts);
+        assert_eq!(
+            t.plain.save_state().interrupts,
+            t.orig.save_state().interrupts
+        );
     }
 }
 
@@ -242,15 +280,38 @@ mod softcard {
     fn regs(c: &SoftCard) -> Vec<u32> {
         let z = c.z80().unwrap();
         vec![
-            c.is_active() as u32, z.a as u32, z.b as u32, z.c as u32, z.d as u32, z.e as u32, z.f as u32, z.h as u32, z.l as u32,
-            z.ix as u32, z.iy as u32, z.sp as u32, z.pc as u32, z.i as u32, z.r as u32, z.iff1 as u32, z.iff2 as u32, z.im as u32,
-            z.a2 as u32, z.b2 as u32, z.c2 as u32, z.d2 as u32, z.e2 as u32, z.f2 as u32, z.h2 as u32, z.l2 as u32,
+            c.is_active() as u32,
+            z.a as u32,
+            z.b as u32,
+            z.c as u32,
+            z.d as u32,
+            z.e as u32,
+            z.f as u32,
+            z.h as u32,
+            z.l as u32,
+            z.ix as u32,
+            z.iy as u32,
+            z.sp as u32,
+            z.pc as u32,
+            z.i as u32,
+            z.r as u32,
+            z.iff1 as u32,
+            z.iff2 as u32,
+            z.im as u32,
+            z.a2 as u32,
+            z.b2 as u32,
+            z.c2 as u32,
+            z.d2 as u32,
+            z.e2 as u32,
+            z.f2 as u32,
+            z.h2 as u32,
+            z.l2 as u32,
         ]
     }
 
     const EXPECT: [u32; 26] = [
-        1, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x12, 0x34, 1, 0, 2, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6,
-        0x17, 0x28,
+        1, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x12,
+        0x34, 1, 0, 2, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6, 0x17, 0x28,
     ];
 
     fn sample() -> SoftCard {
@@ -265,7 +326,11 @@ mod softcard {
     fn golden_registers_and_old_card_name() {
         for name in ["Z80 SoftCard", "Z80"] {
             let c = golden(name, 4, 1, BODY);
-            assert_eq!(regs(c.as_any().unwrap().downcast_ref::<SoftCard>().unwrap()), EXPECT, "{name}");
+            assert_eq!(
+                regs(c.as_any().unwrap().downcast_ref::<SoftCard>().unwrap()),
+                EXPECT,
+                "{name}"
+            );
         }
     }
 
@@ -274,7 +339,10 @@ mod softcard {
         let c = sample();
         assert_eq!(regs(&c), EXPECT);
         let body: String = BODY.lines().map(|l| format!("    {l}\n")).collect();
-        assert_eq!(written(4, &c), format!("4:\n  Card: Z80 SoftCard\n  Version: 1\n  State:\n{body}"));
+        assert_eq!(
+            written(4, &c),
+            format!("4:\n  Card: Z80 SoftCard\n  Version: 1\n  State:\n{body}")
+        );
     }
 
     #[test]
@@ -282,9 +350,22 @@ mod softcard {
         let entries = parse_state(BODY);
         let mut host = TestHost::default();
         let mut warnings = Vec::new();
-        let mut ctx = LoadCtx { host: &mut host, model: Model::Apple2eEnhanced, warnings: &mut warnings };
+        let mut ctx = LoadCtx {
+            host: &mut host,
+            model: Model::Apple2eEnhanced,
+            warnings: &mut warnings,
+        };
         let map = cards::by_aw_name("Z80 SoftCard").unwrap();
-        assert!((map.load)(&mut ctx, 0, 1, Map { name: "State", entries: &entries }).is_err());
+        assert!((map.load)(
+            &mut ctx,
+            0,
+            1,
+            Map {
+                name: "State",
+                entries: &entries
+            }
+        )
+        .is_err());
     }
 
     #[test]
@@ -299,8 +380,15 @@ mod softcard {
         });
         assert_eq!(t.orig.cpu_owner(), Some(4));
         assert_eq!(t.orig.save_state(), t.exact.save_state());
-        assert_eq!(t.plain.cpu_owner(), Some(4), "Active restores the CPU owner");
-        assert_eq!(regs(t.plain.card::<SoftCard>(4).unwrap()), regs(t.orig.card::<SoftCard>(4).unwrap()));
+        assert_eq!(
+            t.plain.cpu_owner(),
+            Some(4),
+            "Active restores the CPU owner"
+        );
+        assert_eq!(
+            regs(t.plain.card::<SoftCard>(4).unwrap()),
+            regs(t.orig.card::<SoftCard>(4).unwrap())
+        );
     }
 }
 
@@ -316,7 +404,10 @@ mod breakpoint {
 
     #[test]
     fn writes_null_state() {
-        assert_eq!(written(5, &BreakpointCard::new()), "5:\n  Card: Breakpoint\n  Version: 1\n  State: null\n");
+        assert_eq!(
+            written(5, &BreakpointCard::new()),
+            "5:\n  Card: Breakpoint\n  Version: 1\n  State: null\n"
+        );
     }
 
     #[test]

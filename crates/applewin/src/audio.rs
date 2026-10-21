@@ -52,7 +52,12 @@ impl AudioRing {
 
     pub fn with_rate(capacity_frames: usize, sample_rate: u32) -> Arc<Self> {
         Arc::new(AudioRing {
-            inner: Mutex::new(Inner { data: VecDeque::with_capacity(capacity_frames * 2), level: 1.0, target: 1.0, clear_when_silent: false }),
+            inner: Mutex::new(Inner {
+                data: VecDeque::with_capacity(capacity_frames * 2),
+                level: 1.0,
+                target: 1.0,
+                clear_when_silent: false,
+            }),
             capacity_frames,
             fade_step: 1.0 / (sample_rate.max(1) as f32 * FADE_SECS),
             gain: AtomicU32::new(1.0f32.to_bits()),
@@ -156,7 +161,9 @@ pub struct AudioOut {
 impl AudioOut {
     pub fn open() -> Result<AudioOut, String> {
         let host = cpal::default_host();
-        let device = host.default_output_device().ok_or("no audio output device")?;
+        let device = host
+            .default_output_device()
+            .ok_or("no audio output device")?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let rate = supported.sample_rate().0;
         let channels = usize::from(supported.channels());
@@ -167,20 +174,43 @@ impl AudioOut {
         let build = |config: &cpal::StreamConfig| match format {
             SampleFormat::F32 => {
                 let r = ring.clone();
-                device.build_output_stream(config, move |o: &mut [f32], _| r.pop_into(o, channels), err, None)
+                device.build_output_stream(
+                    config,
+                    move |o: &mut [f32], _| r.pop_into(o, channels),
+                    err,
+                    None,
+                )
             }
             SampleFormat::I16 => {
                 let r = ring.clone();
-                device.build_output_stream(config, move |o: &mut [i16], _| r.pop_into(o, channels), err, None)
+                device.build_output_stream(
+                    config,
+                    move |o: &mut [i16], _| r.pop_into(o, channels),
+                    err,
+                    None,
+                )
             }
             SampleFormat::U16 => {
                 let r = ring.clone();
-                device.build_output_stream(config, move |o: &mut [u16], _| r.pop_into(o, channels), err, None)
+                device.build_output_stream(
+                    config,
+                    move |o: &mut [u16], _| r.pop_into(o, channels),
+                    err,
+                    None,
+                )
             }
-            other => Err(cpal::BuildStreamError::BackendSpecific { err: cpal::BackendSpecificError { description: format!("unsupported sample format {other:?}") } }),
+            other => Err(cpal::BuildStreamError::BackendSpecific {
+                err: cpal::BackendSpecificError {
+                    description: format!("unsupported sample format {other:?}"),
+                },
+            }),
         };
         // A small fixed buffer when the device allows it; otherwise (or on failure) the default.
-        let stream = match device.default_output_config().ok().map(|c| *c.buffer_size()) {
+        let stream = match device
+            .default_output_config()
+            .ok()
+            .map(|c| *c.buffer_size())
+        {
             Some(cpal::SupportedBufferSize::Range { min, max }) => {
                 config.buffer_size = cpal::BufferSize::Fixed(WANTED_BUFFER_FRAMES.clamp(min, max));
                 build(&config).or_else(|_| {
@@ -192,7 +222,11 @@ impl AudioOut {
         }
         .map_err(|e| e.to_string())?;
         stream.play().map_err(|e| e.to_string())?;
-        Ok(AudioOut { _stream: stream, ring, sample_rate: rate })
+        Ok(AudioOut {
+            _stream: stream,
+            ring,
+            sample_rate: rate,
+        })
     }
 }
 
@@ -260,10 +294,18 @@ mod tests {
         ring.set_active(false);
         let out = pop(&ring, 30);
         let left: Vec<f32> = out.iter().step_by(2).copied().collect();
-        assert!(left[0] < 1.0 && left[0] > 0.9, "starts fading at once: {}", left[0]);
+        assert!(
+            left[0] < 1.0 && left[0] > 0.9,
+            "starts fading at once: {}",
+            left[0]
+        );
         assert!(left.windows(2).all(|w| w[1] <= w[0]), "monotonic fade");
         assert_eq!(left[29], 0.0, "silent after the fade");
-        assert_eq!(ring.fill_frames(), 0, "stale samples are dropped once silent");
+        assert_eq!(
+            ring.fill_frames(),
+            0,
+            "stale samples are dropped once silent"
+        );
     }
 
     #[test]

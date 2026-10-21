@@ -10,18 +10,18 @@ use crate::yaml::{Map, Writer};
 use crate::Error;
 use apple2_core::{Card, Model};
 
-mod disk2;
 mod breakpoint;
+mod disk2;
 mod hdd;
-mod printer;
 pub mod mockingboard;
+mod mouse;
+mod printer;
 mod simple;
+mod snesmax;
+mod softcard;
 mod ssc;
 mod uthernet1;
 mod uthernet2;
-mod mouse;
-mod softcard;
-mod snesmax;
 mod vidhd;
 
 /// Loader context handed to [`Mapping::load`].
@@ -46,7 +46,25 @@ pub struct Mapping {
     pub load: LoadFn,
 }
 
-pub const MAPPINGS: &[Mapping] = &[disk2::MAP, hdd::MAP, simple::FOURPLAY, simple::SAM, ssc::MAP, printer::MAP, uthernet1::MAP, uthernet2::MAP, mockingboard::MOCKINGBOARD_C, mockingboard::PHASOR, mockingboard::MEGA_AUDIO, mockingboard::SD_MUSIC, snesmax::MAP, vidhd::MAP, breakpoint::MAP, softcard::MAP, mouse::MAP];
+pub const MAPPINGS: &[Mapping] = &[
+    disk2::MAP,
+    hdd::MAP,
+    simple::FOURPLAY,
+    simple::SAM,
+    ssc::MAP,
+    printer::MAP,
+    uthernet1::MAP,
+    uthernet2::MAP,
+    mockingboard::MOCKINGBOARD_C,
+    mockingboard::PHASOR,
+    mockingboard::MEGA_AUDIO,
+    mockingboard::SD_MUSIC,
+    snesmax::MAP,
+    vidhd::MAP,
+    breakpoint::MAP,
+    softcard::MAP,
+    mouse::MAP,
+];
 
 pub fn by_our_name(name: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.our_name == name)
@@ -65,7 +83,9 @@ pub fn save_card(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
 pub fn make(ctx: &mut LoadCtx, name: &str, slot: u8) -> Option<Box<dyn Card>> {
     let c = ctx.host.make_card(name, slot, ctx.model);
     if c.is_none() {
-        ctx.warnings.push(format!("Slot {slot}: the host cannot provide a '{name}' card; the slot stays empty"));
+        ctx.warnings.push(format!(
+            "Slot {slot}: the host cannot provide a '{name}' card; the slot stays empty"
+        ));
     }
     c
 }

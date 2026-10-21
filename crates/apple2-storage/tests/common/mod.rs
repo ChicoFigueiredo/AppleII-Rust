@@ -7,7 +7,8 @@ use apple2_storage::disk2::Disk2Card;
 use apple2_storage::image::DiskImage;
 
 pub fn disk(name: &str) -> Vec<u8> {
-    let dir = std::env::var("APPLE2_DISKS").unwrap_or_else(|_| format!("{}/../../assets/disks", env!("CARGO_MANIFEST_DIR")));
+    let dir = std::env::var("APPLE2_DISKS")
+        .unwrap_or_else(|_| format!("{}/../../assets/disks", env!("CARGO_MANIFEST_DIR")));
     std::fs::read(format!("{dir}/{name}")).unwrap_or_else(|e| panic!("{dir}/{name}: {e}"))
 }
 
@@ -24,18 +25,31 @@ pub fn machine_with_disk(image: DiskImage) -> Machine {
 }
 
 pub fn screen(m: &Machine) -> String {
-    text_screen(m).iter().map(|l| l.trim_end()).collect::<Vec<_>>().join("\n")
+    text_screen(m)
+        .iter()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Runs frames until `done`, panicking with the screen after `max` frames.
-pub fn run_until(m: &mut Machine, max: u32, what: &str, mut done: impl FnMut(&Machine) -> bool) -> u32 {
+pub fn run_until(
+    m: &mut Machine,
+    max: u32,
+    what: &str,
+    mut done: impl FnMut(&Machine) -> bool,
+) -> u32 {
     for f in 0..=max {
         if done(m) {
             return f;
         }
         m.run_frame();
     }
-    panic!("{what}: not reached in {max} frames. PC={:04X}\n{}", m.cpu().pc, screen(m));
+    panic!(
+        "{what}: not reached in {max} frames. PC={:04X}\n{}",
+        m.cpu().pc,
+        screen(m)
+    );
 }
 
 pub fn screen_has(m: &Machine, text: &str) -> bool {
@@ -111,7 +125,11 @@ pub fn woz2_from_dsk(dsk: Vec<u8>, boot_sector_format: u8) -> Vec<u8> {
     f.extend(&data);
     let size = (f.len() - 256) as u32;
     f[252..256].copy_from_slice(&size.to_le_bytes());
-    let largest = tracks.iter().map(|(b, _)| b.len().div_ceil(512)).max().unwrap() as u16;
+    let largest = tracks
+        .iter()
+        .map(|(b, _)| b.len().div_ceil(512))
+        .max()
+        .unwrap() as u16;
     f[20 + 44..20 + 46].copy_from_slice(&largest.to_le_bytes());
     apple2_storage::woz::update_crc(&mut f);
     f

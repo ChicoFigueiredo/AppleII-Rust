@@ -36,7 +36,13 @@ pub struct TimerPacer {
 
 impl TimerPacer {
     pub fn new(clk_hz: f64) -> Self {
-        TimerPacer { clk_hz, mult: 1.0, base_cycles: 0.0, anchor: Duration::ZERO, max_lag: Duration::from_millis(100) }
+        TimerPacer {
+            clk_hz,
+            mult: 1.0,
+            base_cycles: 0.0,
+            anchor: Duration::ZERO,
+            max_lag: Duration::from_millis(100),
+        }
     }
 
     pub fn set_clock(&mut self, now: Duration, done: u64, clk_hz: f64) {

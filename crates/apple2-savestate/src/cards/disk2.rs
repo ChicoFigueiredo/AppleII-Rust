@@ -10,10 +10,17 @@ use apple2_storage::disk2::{Disk2Card, Disk2Snapshot, DriveSnapshot};
 /// `kUNIT_VERSION` (Disk.cpp:2261).
 const VERSION: u32 = 9;
 
-pub const MAP: Mapping = Mapping { aw_names: &["Disk II", "Disk]["], our_name: "Disk II", save, load };
+pub const MAP: Mapping = Mapping {
+    aw_names: &["Disk II", "Disk]["],
+    our_name: "Disk II",
+    save,
+    load,
+};
 
 fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<Disk2Card>()) else { return false };
+    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<Disk2Card>()) else {
+        return false;
+    };
     let s = c.snapshot();
     w.slot(slot, "Disk II", VERSION, |w| {
         w.uint("Current Drive", s.current_drive as u64);
@@ -27,7 +34,10 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
         w.int("LSS Latch Delay", s.latch_delay as i64);
         w.int("LSS Sequencer Function", s.seq_func as i64);
         w.bool("Deferred Stepper Event", s.deferred_stepper_event);
-        w.hex16("Deferred Stepper Address", s.deferred_stepper_address as u32);
+        w.hex16(
+            "Deferred Stepper Address",
+            s.deferred_stepper_address as u32,
+        );
         w.hex64("Deferred Stepper Cycle", s.deferred_stepper_cycles);
         // FormatTrack::SaveSnapshot: the format-track tracker is not saved by our card; write
         // the idle state ("waiting for the first write").
@@ -76,9 +86,18 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
     true
 }
 
-fn load_floppy(ctx: &mut LoadCtx, f: Map, version: u32, d: &mut DriveSnapshot) -> Result<Option<apple2_storage::image::DiskImage>, Error> {
+fn load_floppy(
+    ctx: &mut LoadCtx,
+    f: Map,
+    version: u32,
+    d: &mut DriveSnapshot,
+) -> Result<Option<apple2_storage::image::DiskImage>, Error> {
     let filename = f.string("Filename")?;
-    let absolute = if version >= 9 { f.string("Absolute Path")? } else { String::new() };
+    let absolute = if version >= 9 {
+        f.string("Absolute Path")?
+    } else {
+        String::new()
+    };
     d.write_protected = f.bool("Write Protected")?;
     d.byte = f.u32("Byte")?;
     d.nibbles = f.u32("Nibbles")?;
@@ -97,14 +116,25 @@ fn load_floppy(ctx: &mut LoadCtx, f: Map, version: u32, d: &mut DriveSnapshot) -
     d.pathname = absolute.clone();
     let mut image = None;
     if !filename.is_empty() {
-        let req = ImageRequest { filename: &filename, absolute_path: &absolute, write_protected: d.write_protected, hard_disk: false };
+        let req = ImageRequest {
+            filename: &filename,
+            absolute_path: &absolute,
+            write_protected: d.write_protected,
+            hard_disk: false,
+        };
         match ctx.host.open_image(&req) {
             Ok(img) => image = Some(img),
-            Err(e) => ctx.warnings.push(format!("Disk II: cannot open '{filename}': {e}")),
+            Err(e) => ctx
+                .warnings
+                .push(format!("Disk II: cannot open '{filename}': {e}")),
         }
     }
     if let (Some(t), Some(img)) = (track, image.as_ref()) {
-        let mut buf = vec![0u8; img.max_nibbles_per_track().max(apple2_storage::nibble::NIBBLES_PER_TRACK)];
+        let mut buf = vec![
+            0u8;
+            img.max_nibbles_per_track()
+                .max(apple2_storage::nibble::NIBBLES_PER_TRACK)
+        ];
         t.load_memory(&mut buf)?;
         buf.truncate(img.max_nibbles_per_track());
         d.track = Some(buf);
@@ -112,13 +142,27 @@ fn load_floppy(ctx: &mut LoadCtx, f: Map, version: u32, d: &mut DriveSnapshot) -
     Ok(image)
 }
 
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if !(1..=VERSION).contains(&version) {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Disk II'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Disk II'."
+        )));
     }
-    let Some(mut card) = make(ctx, "Disk II", slot) else { return Ok(None) };
-    let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<Disk2Card>()) else {
-        return Err(Error::Unsupported("host returned a card that is not a Disk II".into()));
+    let Some(mut card) = make(ctx, "Disk II", slot) else {
+        return Ok(None);
+    };
+    let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<Disk2Card>())
+    else {
+        return Err(Error::Unsupported(
+            "host returned a card that is not a Disk II".into(),
+        ));
     };
     let mut s = Disk2Snapshot {
         current_drive: st.u32("Current Drive")? as u8,
@@ -139,7 +183,11 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
         s.shift_reg = st.u32("LSS Shift Reg")? as u8;
         s.latch_delay = st.i32("LSS Latch Delay")?;
     }
-    s.seq_func = if version >= 5 { (st.i32("LSS Sequencer Function")? & 3) as u8 } else { st.bool("Floppy Write Mode")? as u8 };
+    s.seq_func = if version >= 5 {
+        (st.i32("LSS Sequencer Function")? & 3) as u8
+    } else {
+        st.bool("Floppy Write Mode")? as u8
+    };
     if version >= 8 {
         s.deferred_stepper_event = st.bool("Deferred Stepper Event")?;
         s.deferred_stepper_address = st.u32("Deferred Stepper Address")? as u8;
@@ -148,7 +196,9 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
     let mut images = [None, None];
     for (n, (d, image)) in s.drives.iter_mut().zip(images.iter_mut()).enumerate() {
         let name = format!("Unit{n}");
-        let u = st.sub(&name).ok_or_else(|| Error::Format(format!("Card: Expected key: {name}")))?;
+        let u = st
+            .sub(&name)
+            .ok_or_else(|| Error::Format(format!("Card: Expected key: {name}")))?;
         d.connected = true;
         if version <= 3 {
             *image = load_floppy(ctx, u, version, d)?;
@@ -158,7 +208,9 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
             d.spinning = u.u32("Spinning")?;
             d.write_light = u.u32("Write Light")?;
         } else {
-            let f = u.sub("Floppy").ok_or_else(|| Error::Format("Card: Expected key: Floppy".into()))?;
+            let f = u
+                .sub("Floppy")
+                .ok_or_else(|| Error::Format("Card: Expected key: Floppy".into()))?;
             *image = load_floppy(ctx, f, version, d)?;
             d.phase = u.u32("Phase")? as i32;
             d.phase_precise = u.f64("Phase (precise)")? as f32;

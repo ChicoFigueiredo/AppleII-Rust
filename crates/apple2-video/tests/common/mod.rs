@@ -28,8 +28,21 @@ impl VidHdView for FakeHd {
     fn is_shr(&self) -> bool {
         self.shr
     }
-    fn shr_cell(&self, is_640: bool, fill: bool, palette: &[u16; 16], a: u32, _prev: [u8; 3]) -> [[u8; 3]; 16] {
-        std::array::from_fn(|i| [(a >> (8 * (i / 4))) as u8, palette[i] as u8, (is_640 as u8) << 1 | fill as u8])
+    fn shr_cell(
+        &self,
+        is_640: bool,
+        fill: bool,
+        palette: &[u16; 16],
+        a: u32,
+        _prev: [u8; 3],
+    ) -> [[u8; 3]; 16] {
+        std::array::from_fn(|i| {
+            [
+                (a >> (8 * (i / 4))) as u8,
+                palette[i] as u8,
+                (is_640 as u8) << 1 | fill as u8,
+            ]
+        })
     }
 }
 
@@ -40,7 +53,11 @@ impl Fake {
             aux: vec![0; 0x10000],
             model,
             standard: VideoStandard::Ntsc,
-            aux_card: if model.is_apple2e_family() { AuxCardKind::Extended80Col } else { AuxCardKind::Empty },
+            aux_card: if model.is_apple2e_family() {
+                AuxCardKind::Extended80Col
+            } else {
+                AuxCardKind::Empty
+            },
             mode: VideoMode::default(),
             memmode: mf::INITIAL,
             cycle: 0,
@@ -112,7 +129,10 @@ impl VideoSource for Fake {
 }
 
 pub fn renderer(video_type: VideoType) -> Renderer {
-    Renderer::new(RenderConfig { video_type, ..Default::default() })
+    Renderer::new(RenderConfig {
+        video_type,
+        ..Default::default()
+    })
 }
 
 /// Renders `frames` whole frames of the unchanging `s`.
@@ -130,7 +150,9 @@ pub fn lit(r: &Renderer, x: usize, y: usize) -> bool {
 
 /// Rows `y` of the visible area as a string of '#' (lit) and '.' for pixels `x0..x0+w`.
 pub fn art(r: &Renderer, x0: usize, y: usize, w: usize) -> String {
-    (x0..x0 + w).map(|x| if lit(r, x, y) { '#' } else { '.' }).collect()
+    (x0..x0 + w)
+        .map(|x| if lit(r, x, y) { '#' } else { '.' })
+        .collect()
 }
 
 pub fn rgb(r: &Renderer, x: usize, y: usize) -> u32 {

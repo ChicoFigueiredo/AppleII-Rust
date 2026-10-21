@@ -51,7 +51,11 @@ pub struct JoyOutput {
 
 impl Default for JoyOutput {
     fn default() -> Self {
-        JoyOutput { x: CENTRE, y: CENTRE, buttons: [false; 2] }
+        JoyOutput {
+            x: CENTRE,
+            y: CENTRE,
+            buttons: [false; 2],
+        }
     }
 }
 
@@ -99,7 +103,15 @@ impl Default for KeyJoy {
 
 impl KeyJoy {
     pub fn new(mode: JoyMode) -> Self {
-        let mut j = KeyJoy { mode, pad: [false; 9], cursors: [false; 4], centering: false, trim: (0, 0), x: 0, y: 0 };
+        let mut j = KeyJoy {
+            mode,
+            pad: [false; 9],
+            cursors: [false; 4],
+            centering: false,
+            trim: (0, 0),
+            x: 0,
+            y: 0,
+        };
         j.recentre();
         j
     }
@@ -124,7 +136,13 @@ impl KeyJoy {
 
     /// Feeds a key transition (`JoyProcessKey`). `cursor_control`: cursor keys also reach the
     /// Apple keyboard.
-    pub fn process(&mut self, input: KeyInput, pressed: bool, repeat: bool, cursor_control: bool) -> KeyUse {
+    pub fn process(
+        &mut self,
+        input: KeyInput,
+        pressed: bool,
+        repeat: bool,
+        cursor_control: bool,
+    ) -> KeyUse {
         let mut cursor_key = false;
         match self.mode {
             JoyMode::KeyboardNumpad if input.numpad => match numpad_direction(input.key) {
@@ -185,8 +203,16 @@ impl KeyJoy {
             ykeys += 1;
             ytotal += 255;
         }
-        self.x = if xkeys > 0 { xtotal / xkeys } else { i32::from(CENTRE) + i32::from(self.trim.0) };
-        self.y = if ykeys > 0 { ytotal / ykeys } else { i32::from(CENTRE) + i32::from(self.trim.1) };
+        self.x = if xkeys > 0 {
+            xtotal / xkeys
+        } else {
+            i32::from(CENTRE) + i32::from(self.trim.0)
+        };
+        self.y = if ykeys > 0 {
+            ytotal / ykeys
+        } else {
+            i32::from(CENTRE) + i32::from(self.trim.1)
+        };
     }
 
     pub fn release_all(&mut self) {
@@ -286,7 +312,10 @@ pub struct Autofire {
 
 impl Autofire {
     pub fn new(mask: u8) -> Self {
-        Autofire { mask, since: [None; 3] }
+        Autofire {
+            mask,
+            since: [None; 3],
+        }
     }
 
     /// `pressed` as the host reports it for button `index`; `now_us` is a monotonic clock.
@@ -485,10 +514,16 @@ impl JoySystem {
         }
         if let Some(b) = button_key(input.key, self.cfg.alt_control) {
             self.apple[b] = pressed;
-            return if matches!(input.key, HostKey::ControlLeft | HostKey::ControlRight) { KeyUse::JoystickAndApple } else { KeyUse::Joystick };
+            return if matches!(input.key, HostKey::ControlLeft | HostKey::ControlRight) {
+                KeyUse::JoystickAndApple
+            } else {
+                KeyUse::Joystick
+            };
         }
         let kinds = self.effective_kinds();
-        if (kinds[0] == JoyMode::KeyboardNumpad || kinds[1] == JoyMode::KeyboardNumpad) && input.numpad {
+        if (kinds[0] == JoyMode::KeyboardNumpad || kinds[1] == JoyMode::KeyboardNumpad)
+            && input.numpad
+        {
             if let Some(b) = numpad_button(input.key) {
                 self.key_buttons[b] = pressed;
                 return KeyUse::Joystick;
@@ -524,7 +559,11 @@ impl JoySystem {
         if number > 1 || (kinds[1] != JoyMode::Disabled && number != 0) {
             return;
         }
-        let number = if kinds[1] == JoyMode::Mouse { 1 } else { number };
+        let number = if kinds[1] == JoyMode::Mouse {
+            1
+        } else {
+            number
+        };
         self.mouse_buttons[number] = down;
     }
 
@@ -539,8 +578,16 @@ impl JoySystem {
             JoyMode::KeyboardNumpad | JoyMode::KeyboardCursors => self.kb[i].position(),
             JoyMode::Mouse => self.mouse_pos,
             JoyMode::Gamepad | JoyMode::Thumbstick2 => {
-                let p = if kind == JoyMode::Gamepad { &self.pads[i] } else { &self.pads[0] };
-                let (ax, ay) = if kind == JoyMode::Thumbstick2 { (p.rx, p.ry) } else { (p.lx, p.ly) };
+                let p = if kind == JoyMode::Gamepad {
+                    &self.pads[i]
+                } else {
+                    &self.pads[0]
+                };
+                let (ax, ay) = if kind == JoyMode::Thumbstick2 {
+                    (p.rx, p.ry)
+                } else {
+                    (p.lx, p.ly)
+                };
                 let x = apply_trim(axis_to_paddle(ax, DEFAULT_DEADZONE), trim_x);
                 let y = apply_trim(axis_to_paddle(ay, DEFAULT_DEADZONE), trim_y);
                 square_circle(x, y)
@@ -579,8 +626,16 @@ impl JoySystem {
             pad_b[1] || self.mouse_buttons[1] || self.apple[1] || (keys_ok && self.key_buttons[1]),
             pad_b[2] || self.mouse_buttons[2],
         ];
-        let af = [self.autofire.apply(0, raw[0], now_us), self.autofire.apply(1, raw[1], now_us), self.autofire.apply(2, raw[2], now_us)];
-        let (pb0, pb1) = if self.cfg.swap_buttons { (af[1], af[0]) } else { (af[0], af[1]) };
+        let af = [
+            self.autofire.apply(0, raw[0], now_us),
+            self.autofire.apply(1, raw[1], now_us),
+            self.autofire.apply(2, raw[2], now_us),
+        ];
+        let (pb0, pb1) = if self.cfg.swap_buttons {
+            (af[1], af[0])
+        } else {
+            (af[0], af[1])
+        };
 
         let mut attached = [kinds[0] != JoyMode::Disabled, joy1_present];
         // "SHIFT key mod": PB2 floats high unless Shift pulls it low. Only without joystick 1.
@@ -593,7 +648,18 @@ impl JoySystem {
         let (x0, y0) = self.stick(0, kinds[0]);
         let (x1, y1) = self.stick(1, kinds[1]);
         JoyFinal {
-            out: [JoyOutput { x: x0, y: y0, buttons: [pb0, pb1] }, JoyOutput { x: x1, y: y1, buttons: [pb2, false] }],
+            out: [
+                JoyOutput {
+                    x: x0,
+                    y: y0,
+                    buttons: [pb0, pb1],
+                },
+                JoyOutput {
+                    x: x1,
+                    y: y1,
+                    buttons: [pb2, false],
+                },
+            ],
             attached,
         }
     }
@@ -653,10 +719,16 @@ mod tests {
     #[test]
     fn numlock_off_navigation_keys_are_the_same_directions() {
         let mut j = KeyJoy::new(JoyMode::KeyboardNumpad);
-        assert_eq!(press(&mut j, KeyInput::numpad(HostKey::Left)), KeyUse::Joystick);
+        assert_eq!(
+            press(&mut j, KeyInput::numpad(HostKey::Left)),
+            KeyUse::Joystick
+        );
         assert_eq!(j.position().0, 0);
         // the dedicated (non numpad) cursors are not joystick keys in numpad mode
-        assert_eq!(press(&mut j, KeyInput::new(HostKey::Right)), KeyUse::Ignored);
+        assert_eq!(
+            press(&mut j, KeyInput::new(HostKey::Right)),
+            KeyUse::Ignored
+        );
     }
 
     #[test]
@@ -693,9 +765,15 @@ mod tests {
     fn cursor_mode_only_takes_dedicated_cursors() {
         let mut j = KeyJoy::new(JoyMode::KeyboardCursors);
         assert_eq!(press(&mut j, np('4')), KeyUse::Ignored);
-        assert_eq!(press(&mut j, KeyInput::new(HostKey::Right)), KeyUse::Joystick);
+        assert_eq!(
+            press(&mut j, KeyInput::new(HostKey::Right)),
+            KeyUse::Joystick
+        );
         assert_eq!(j.position().0, 255);
-        assert_eq!(press(&mut j, KeyInput::new(HostKey::Char('a'))), KeyUse::Ignored);
+        assert_eq!(
+            press(&mut j, KeyInput::new(HostKey::Char('a'))),
+            KeyUse::Ignored
+        );
         press(&mut j, KeyInput::new(HostKey::Down));
         assert_eq!(j.position(), (255, 255));
     }
@@ -703,7 +781,10 @@ mod tests {
     #[test]
     fn cursor_control_lets_the_apple_see_the_cursor_keys() {
         let mut j = KeyJoy::new(JoyMode::KeyboardCursors);
-        assert_eq!(j.process(KeyInput::new(HostKey::Left), true, false, true), KeyUse::JoystickAndApple);
+        assert_eq!(
+            j.process(KeyInput::new(HostKey::Left), true, false, true),
+            KeyUse::JoystickAndApple
+        );
     }
 
     #[test]
@@ -760,7 +841,10 @@ mod tests {
             s.joystick.joystick0 = Joystick0Kind::HostJoystick1;
             s.joystick.joystick1 = Joystick1Kind::HostJoystick2;
         });
-        assert_eq!(s.effective_kinds(), [JoyMode::KeyboardNumpad, JoyMode::Disabled]);
+        assert_eq!(
+            s.effective_kinds(),
+            [JoyMode::KeyboardNumpad, JoyMode::Disabled]
+        );
         let mut s = s;
         s.set_pads_connected(2);
         assert_eq!(s.effective_kinds(), [JoyMode::Gamepad, JoyMode::Gamepad]);
@@ -773,24 +857,38 @@ mod tests {
         assert_eq!(s.output(0).out[0].buttons, [true, false]);
         s.process_key(np('0'), false, false);
         s.process_key(KeyInput::new(HostKey::AltRight), true, false);
-        assert_eq!(s.output(0).out[0].buttons, [false, true], "right Alt is button 1 (Closed Apple)");
+        assert_eq!(
+            s.output(0).out[0].buttons,
+            [false, true],
+            "right Alt is button 1 (Closed Apple)"
+        );
         let mut sw = sys(|c| {
             c.joystick.joystick0 = Joystick0Kind::KeyboardNumpad;
             c.joystick.swap_buttons = true;
         });
         sw.process_key(KeyInput::new(HostKey::AltLeft), true, false);
-        assert_eq!(sw.output(0).out[0].buttons, [false, true], "swap affects the Apple keys too");
+        assert_eq!(
+            sw.output(0).out[0].buttons,
+            [false, true],
+            "swap affects the Apple keys too"
+        );
     }
 
     #[test]
     fn alt_control_buttons_variants() {
         let mut s = sys(|c| c.joystick.alt_control_buttons = Some(AltControlButtons::Left));
-        assert_eq!(s.process_key(KeyInput::new(HostKey::ControlLeft), true, false), KeyUse::JoystickAndApple);
+        assert_eq!(
+            s.process_key(KeyInput::new(HostKey::ControlLeft), true, false),
+            KeyUse::JoystickAndApple
+        );
         assert_eq!(s.output(0).out[0].buttons, [true, false]);
         s.process_key(KeyInput::new(HostKey::AltLeft), true, false);
         assert_eq!(s.output(0).out[0].buttons, [true, true]);
         // right Alt does nothing in this mode
-        assert_eq!(s.process_key(KeyInput::new(HostKey::AltRight), true, false), KeyUse::Ignored);
+        assert_eq!(
+            s.process_key(KeyInput::new(HostKey::AltRight), true, false),
+            KeyUse::Ignored
+        );
         let mut r = sys(|c| c.joystick.alt_control_buttons = Some(AltControlButtons::Right));
         r.process_key(KeyInput::new(HostKey::AltRight), true, false);
         assert_eq!(r.output(0).out[0].buttons, [true, false]);
@@ -799,7 +897,10 @@ mod tests {
     #[test]
     fn no_hook_alt_ignores_alt() {
         let mut s = sys(|c| c.joystick.hook_alt_keys = false);
-        assert_eq!(s.process_key(KeyInput::new(HostKey::AltLeft), true, false), KeyUse::Ignored);
+        assert_eq!(
+            s.process_key(KeyInput::new(HostKey::AltLeft), true, false),
+            KeyUse::Ignored
+        );
         assert_eq!(s.output(0).out[0].buttons, [false, false]);
     }
 
@@ -825,7 +926,13 @@ mod tests {
             c.joystick.joystick1 = Joystick1Kind::HostJoystick1Thumbstick2;
         });
         s.set_pads_connected(1);
-        s.pads[0] = PadState { lx: -1.0, ly: 0.0, rx: 1.0, ry: 0.0, buttons: [false, true] };
+        s.pads[0] = PadState {
+            lx: -1.0,
+            ly: 0.0,
+            rx: 1.0,
+            ry: 0.0,
+            buttons: [false, true],
+        };
         let f = s.output(0);
         assert_eq!(f.out[0].x, 0);
         assert_eq!(f.out[1].x, 255);

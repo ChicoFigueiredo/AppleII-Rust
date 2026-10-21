@@ -240,7 +240,11 @@ impl MouseCard {
         if !(0..=0xFFFF).contains(&min) || !(0..=0xFFFF).contains(&max) {
             return;
         }
-        *range = if min > max { (0, (min + max) & 0xFFFF) } else { (min, max) }; // Blazing Paddles
+        *range = if min > max {
+            (0, (min + max) & 0xFFFF)
+        } else {
+            (min, max)
+        }; // Blazing Paddles
     }
 
     /// `OnMouseEvent` (:451).
@@ -474,12 +478,30 @@ impl Card for MouseCard {
     fn save(&self) -> Vec<u8> {
         let mut e = Enc::default();
         let p = &self.pia;
-        e.bytes(&[p.pra, p.ddra, p.cra, p.prb, p.ddrb, p.crb, p.ia, p.ib, self.by_a, self.by_b]);
-        e.bytes(&self.buff).u8(self.buf_pos as u8).u8(self.data_len as u8).u8(self.mode).u8(self.state);
-        for v in [self.n_x, self.n_y, self.i_x, self.i_y, self.clamp_x.0, self.clamp_x.1, self.clamp_y.0, self.clamp_y.1] {
+        e.bytes(&[
+            p.pra, p.ddra, p.cra, p.prb, p.ddrb, p.crb, p.ia, p.ib, self.by_a, self.by_b,
+        ]);
+        e.bytes(&self.buff)
+            .u8(self.buf_pos as u8)
+            .u8(self.data_len as u8)
+            .u8(self.mode)
+            .u8(self.state);
+        for v in [
+            self.n_x,
+            self.n_y,
+            self.i_x,
+            self.i_y,
+            self.clamp_x.0,
+            self.clamp_x.1,
+            self.clamp_y.0,
+            self.clamp_y.1,
+        ] {
             e.i32(v);
         }
-        e.bool(self.btn0).bool(self.btn1).bool(self.buttons[0]).bool(self.buttons[1]);
+        e.bool(self.btn0)
+            .bool(self.btn1)
+            .bool(self.buttons[0])
+            .bool(self.buttons[1]);
         e.0
     }
 
@@ -488,7 +510,16 @@ impl Card for MouseCard {
         let r = (|| {
             let mut regs = [0u8; 10];
             d.bytes(&mut regs)?;
-            self.pia = Pia6821 { pra: regs[0], ddra: regs[1], cra: regs[2], prb: regs[3], ddrb: regs[4], crb: regs[5], ia: regs[6], ib: regs[7] };
+            self.pia = Pia6821 {
+                pra: regs[0],
+                ddra: regs[1],
+                cra: regs[2],
+                prb: regs[3],
+                ddrb: regs[4],
+                crb: regs[5],
+                ia: regs[6],
+                ib: regs[7],
+            };
             (self.by_a, self.by_b) = (regs[8], regs[9]);
             d.bytes(&mut self.buff)?;
             self.buf_pos = usize::from(d.u8()?).min(7);
@@ -510,10 +541,22 @@ const _: () = assert!(SLOT_ROM_SIZE == 0x100);
 
 /// Feeds a host mouse delta to the mouse card in `slot`; false if there is none.
 pub fn mouse_move(m: &mut Machine, slot: u8, dx: i32, dy: i32) -> bool {
-    m.with_card(slot, |c, ctx| c.as_any_mut().and_then(|a| a.downcast_mut::<MouseCard>()).map(|mc| mc.move_by(dx, dy, ctx))).flatten().is_some()
+    m.with_card(slot, |c, ctx| {
+        c.as_any_mut()
+            .and_then(|a| a.downcast_mut::<MouseCard>())
+            .map(|mc| mc.move_by(dx, dy, ctx))
+    })
+    .flatten()
+    .is_some()
 }
 
 /// Feeds a host button change (0 or 1) to the mouse card in `slot`; false if there is none.
 pub fn mouse_button(m: &mut Machine, slot: u8, button: usize, down: bool) -> bool {
-    m.with_card(slot, |c, ctx| c.as_any_mut().and_then(|a| a.downcast_mut::<MouseCard>()).map(|mc| mc.set_button(button, down, ctx))).flatten().is_some()
+    m.with_card(slot, |c, ctx| {
+        c.as_any_mut()
+            .and_then(|a| a.downcast_mut::<MouseCard>())
+            .map(|mc| mc.set_button(button, down, ctx))
+    })
+    .flatten()
+    .is_some()
 }

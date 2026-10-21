@@ -37,7 +37,19 @@ pub enum VideoType {
 impl VideoType {
     pub fn from_value(v: u32) -> Option<VideoType> {
         use VideoType::*;
-        [MonoCustom, ColorIdealized, ColorVideocardRgb, ColorMonitorNtsc, ColorTv, MonoTv, MonoAmber, MonoGreen, MonoWhite].get(v as usize).copied()
+        [
+            MonoCustom,
+            ColorIdealized,
+            ColorVideocardRgb,
+            ColorMonitorNtsc,
+            ColorTv,
+            MonoTv,
+            MonoAmber,
+            MonoGreen,
+            MonoWhite,
+        ]
+        .get(v as usize)
+        .copied()
     }
 }
 
@@ -82,13 +94,30 @@ pub enum Joystick1Kind {
 impl Joystick0Kind {
     pub fn from_value(v: u32) -> Option<Self> {
         use Joystick0Kind::*;
-        [Disabled, HostJoystick1, KeyboardCursors, KeyboardNumpad, Mouse].get(v as usize).copied()
+        [
+            Disabled,
+            HostJoystick1,
+            KeyboardCursors,
+            KeyboardNumpad,
+            Mouse,
+        ]
+        .get(v as usize)
+        .copied()
     }
 }
 impl Joystick1Kind {
     pub fn from_value(v: u32) -> Option<Self> {
         use Joystick1Kind::*;
-        [Disabled, HostJoystick2, KeyboardCursors, KeyboardNumpad, Mouse, HostJoystick1Thumbstick2].get(v as usize).copied()
+        [
+            Disabled,
+            HostJoystick2,
+            KeyboardCursors,
+            KeyboardNumpad,
+            Mouse,
+            HostJoystick1Thumbstick2,
+        ]
+        .get(v as usize)
+        .copied()
     }
 }
 
@@ -108,7 +137,17 @@ pub enum DongleType {
 impl DongleType {
     pub fn from_value(v: u32) -> Option<Self> {
         use DongleType::*;
-        [Empty, SdsSpeedStar, Codewriter, Robocom500, Robocom1000, Robocom1500, HaydenCompiler].get(v as usize).copied()
+        [
+            Empty,
+            SdsSpeedStar,
+            Codewriter,
+            Robocom500,
+            Robocom1000,
+            Robocom1500,
+            HaydenCompiler,
+        ]
+        .get(v as usize)
+        .copied()
     }
 }
 
@@ -364,7 +403,9 @@ pub struct AuxSettings {
 
 impl Default for AuxSettings {
     fn default() -> Self {
-        AuxSettings { card: SlotCardSpec::Extended80Col }
+        AuxSettings {
+            card: SlotCardSpec::Extended80Col,
+        }
     }
 }
 
@@ -464,7 +505,9 @@ pub struct Slots(pub [SlotCardSpec; 8]);
 
 impl Default for Slots {
     fn default() -> Self {
-        Slots(std::array::from_fn(|i| SlotCardSpec::default_for_slot(i, Model::Apple2eEnhanced)))
+        Slots(std::array::from_fn(|i| {
+            SlotCardSpec::default_for_slot(i, Model::Apple2eEnhanced)
+        }))
     }
 }
 
@@ -486,7 +529,10 @@ impl<'de> Deserialize<'de> for Slots {
         let map = std::collections::BTreeMap::<String, toml::Value>::deserialize(d)?;
         let mut slots = Slots::default();
         for (k, v) in map {
-            if let (Some(i), Ok(card)) = (k.parse::<usize>().ok().filter(|i| *i < 8), v.try_into::<SlotCardSpec>()) {
+            if let (Some(i), Ok(card)) = (
+                k.parse::<usize>().ok().filter(|i| *i < 8),
+                v.try_into::<SlotCardSpec>(),
+            ) {
                 slots.0[i] = card;
             }
         }

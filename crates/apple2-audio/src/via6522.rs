@@ -207,7 +207,11 @@ impl Via {
     fn on_t1_underflow(&self, counter: &mut u16) -> bool {
         let mut timer = *counter as i16 as i32;
         if self.mega {
-            let latch = if self.t1_latch != 0 { self.t1_latch as i32 } else { 0xFFFF };
+            let latch = if self.t1_latch != 0 {
+                self.t1_latch as i32
+            } else {
+                0xFFFF
+            };
             while timer < -2 {
                 timer += latch + EXTRA_MEGA;
             }
@@ -322,9 +326,21 @@ impl Via {
                 self.t1_counter = self.t1_latch;
                 self.last = now + 1; // the write cycle itself is not counted
                 self.t1_active = true;
-                let latch = if self.mega && self.t1_latch == 0 { 0xFFFF } else { self.t1_latch as i32 };
-                let extra = if self.mega { EXTRA_MEGA } else { EXTRA_TIMER_CYCLES };
-                return Some(TimerSched { timer: 0, cycles: latch + extra + 1, can_assert_irq: !self.t1_gated });
+                let latch = if self.mega && self.t1_latch == 0 {
+                    0xFFFF
+                } else {
+                    self.t1_latch as i32
+                };
+                let extra = if self.mega {
+                    EXTRA_MEGA
+                } else {
+                    EXTRA_TIMER_CYCLES
+                };
+                return Some(TimerSched {
+                    timer: 0,
+                    cycles: latch + extra + 1,
+                    can_assert_irq: !self.t1_gated,
+                });
             }
             reg::T1LH => {
                 self.update_ifr(IXR_TIMER1, 0);
@@ -337,8 +353,16 @@ impl Via {
                 self.t2_counter = self.t2_latch;
                 self.last = now + 1;
                 self.t2_active = true;
-                let extra = if self.mega { EXTRA_MEGA } else { EXTRA_TIMER_CYCLES };
-                return Some(TimerSched { timer: 1, cycles: self.t2_latch as i32 + extra + 1, can_assert_irq: !self.t2_gated });
+                let extra = if self.mega {
+                    EXTRA_MEGA
+                } else {
+                    EXTRA_TIMER_CYCLES
+                };
+                return Some(TimerSched {
+                    timer: 1,
+                    cycles: self.t2_latch as i32 + extra + 1,
+                    can_assert_irq: !self.t2_gated,
+                });
             }
             reg::SR => {}
             reg::ACR => self.acr = v,
@@ -414,7 +438,14 @@ mod tests {
         v.write(reg::T1LL, 0x10, 100);
         let s = v.write(reg::T1CH, 0x00, 100).unwrap();
         // Write cycle ends at 101; underflow IRQ latch+2 cycles later = 119 = 100 + 19.
-        assert_eq!(s, TimerSched { timer: 0, cycles: 19, can_assert_irq: true });
+        assert_eq!(
+            s,
+            TimerSched {
+                timer: 0,
+                cycles: 19,
+                can_assert_irq: true
+            }
+        );
     }
 
     #[test]
@@ -495,7 +526,14 @@ mod tests {
         let mut v = Via::new(false);
         v.write(reg::T2CL, 0x08, 10);
         let s = v.write(reg::T2CH, 0x00, 10).unwrap();
-        assert_eq!(s, TimerSched { timer: 1, cycles: 11, can_assert_irq: true });
+        assert_eq!(
+            s,
+            TimerSched {
+                timer: 1,
+                cycles: 11,
+                can_assert_irq: true
+            }
+        );
         assert_eq!(v.on_timer2_event(21), 0);
         assert!(!v.t2_active);
         v.update_to(41);

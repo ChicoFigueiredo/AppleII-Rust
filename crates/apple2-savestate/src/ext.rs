@@ -29,10 +29,15 @@ pub struct Extension {
 }
 
 pub fn write(w: &mut Writer, state: &MachineState, cards: &[(u8, String)]) -> Result<(), Error> {
-    let json = serde_json::to_vec(state).map_err(|e| Error::Unsupported(format!("extension: {e}")))?;
+    let json =
+        serde_json::to_vec(state).map_err(|e| Error::Unsupported(format!("extension: {e}")))?;
     let mut z = ZlibEncoder::new(Vec::new(), Compression::new(6));
-    z.write_all(&json).and_then(|_| z.try_finish()).map_err(|e| Error::Unsupported(format!("extension: {e}")))?;
-    let mut data = z.finish().map_err(|e| Error::Unsupported(format!("extension: {e}")))?;
+    z.write_all(&json)
+        .and_then(|_| z.try_finish())
+        .map_err(|e| Error::Unsupported(format!("extension: {e}")))?;
+    let mut data = z
+        .finish()
+        .map_err(|e| Error::Unsupported(format!("extension: {e}")))?;
     let len = data.len();
     data.resize(len.div_ceil(8) * 8, 0);
     w.map(KEY, |w| {
@@ -51,7 +56,9 @@ pub fn write(w: &mut Writer, state: &MachineState, cards: &[(u8, String)]) -> Re
 
 /// Reads the block of an `Apple2` unit state, if there is one.
 pub fn read(apple2_state: Map) -> Result<Option<Extension>, Error> {
-    let Some(m) = apple2_state.sub(KEY) else { return Ok(None) };
+    let Some(m) = apple2_state.sub(KEY) else {
+        return Ok(None);
+    };
     if m.u32("Version")? != VERSION || m.string("Format")? != "json+zlib" {
         return Ok(None); // written by another version: fall back to the AppleWin units
     }
@@ -60,8 +67,11 @@ pub fn read(apple2_state: Map) -> Result<Option<Extension>, Error> {
     m.need_sub("Data")?.load_memory(&mut buf)?;
     buf.truncate(len);
     let mut json = Vec::new();
-    ZlibDecoder::new(&buf[..]).read_to_end(&mut json).map_err(|e| Error::Format(format!("{KEY}: {e}")))?;
-    let state: MachineState = serde_json::from_slice(&json).map_err(|e| Error::Format(format!("{KEY}: {e}")))?;
+    ZlibDecoder::new(&buf[..])
+        .read_to_end(&mut json)
+        .map_err(|e| Error::Format(format!("{KEY}: {e}")))?;
+    let state: MachineState =
+        serde_json::from_slice(&json).map_err(|e| Error::Format(format!("{KEY}: {e}")))?;
     let mut cards = Vec::new();
     if let Some(c) = m.sub("Cards") {
         for (k, _) in c.entries {

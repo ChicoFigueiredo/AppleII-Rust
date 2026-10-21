@@ -9,7 +9,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
     Some(match cmd {
         Cmd::Assemble => &[
             (true, " Usage: [address | symbol]"),
-            (false, " Enter mini-assembler mode [starting at optional address or symbol]."),
+            (
+                false,
+                " Enter mini-assembler mode [starting at optional address or symbol].",
+            ),
         ],
         Cmd::Unassemble => &[
             (true, " Usage: [address | symbol]"),
@@ -19,9 +22,15 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (true, " Usage: address | symbol [Skip,Length]"),
             (true, " Usage: address | symbol [Start:End]"),
             (false, " Skip  : Start address to skip stepping"),
-            (false, " Length: Range of bytes past start address to skip stepping"),
+            (
+                false,
+                " Length: Range of bytes past start address to skip stepping",
+            ),
             (false, " End   : Inclusive end address to skip stepping"),
-            (false, "  If the Program Counter is outside the skip range, resumes single-stepping."),
+            (
+                false,
+                "  If the Program Counter is outside the skip range, resumes single-stepping.",
+            ),
             (false, "  Can be used to skip ROM/OS/user code."),
             (false, " `3Examples`9:`0"),
             (false, "`:  G[G] C600 FA00,600"),
@@ -31,9 +40,15 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (true, " Usage: address | symbol [Skip,Length]"),
             (true, " Usage: address | symbol [Start:End]"),
             (false, " Skip  : Start address to skip stepping"),
-            (false, " Length: Range of bytes past start address to skip stepping"),
+            (
+                false,
+                " Length: Range of bytes past start address to skip stepping",
+            ),
             (false, " End   : Inclusive end address to skip stepping"),
-            (false, "  If the Program Counter is outside the skip range, resumes single-stepping."),
+            (
+                false,
+                "  If the Program Counter is outside the skip range, resumes single-stepping.",
+            ),
             (false, "  Can be used to skip ROM/OS/user code."),
             (false, " `3Examples`9:`0"),
             (false, "`:  G[G] C600 FA00,600"),
@@ -43,9 +58,7 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (true, " Usage: [symbol | address]"),
             (false, "  Pushes PC on stack; calls the named subroutine."),
         ],
-        Cmd::Nop => &[
-            (false, "  Puts a NOP opcode at current instruction"),
-        ],
+        Cmd::Nop => &[(false, "  Puts a NOP opcode at current instruction")],
         Cmd::Out => &[
             (true, " Usage: [address8 | address16 | symbol] ## [##]"),
             (false, "  Output a byte or word to the IO address $C0xx"),
@@ -88,9 +101,7 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  JSR will be stepped into"),
             (false, "  Hotkey: Shift-Space"),
         ],
-        Cmd::TraceFile => &[
-            (true, " Usage: \"[filename]\" [v]"),
-        ],
+        Cmd::TraceFile => &[(true, " Usage: \"[filename]\" [v]")],
         Cmd::TraceLine => &[
             (true, " Usage: [#]"),
             (false, "  Traces into current instruction"),
@@ -99,7 +110,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         Cmd::Bookmark => &[
             (true, " Usage: [address | symbol]"),
             (true, " Usage: # <address | symbol>"),
-            (false, "  If no address or symbol is specified, lists the current bookmarks."),
+            (
+                false,
+                "  If no address or symbol is specified, lists the current bookmarks.",
+            ),
             (false, "  Updates the specified bookmark (#)"),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} RESET "),
@@ -108,7 +122,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         Cmd::BookmarkAdd => &[
             (true, " Usage: [address | symbol]"),
             (true, " Usage: # <address | symbol>"),
-            (false, "  If no address or symbol is specified, lists the current bookmarks."),
+            (
+                false,
+                "  If no address or symbol is specified, lists the current bookmarks.",
+            ),
             (false, "  Updates the specified bookmark (#)"),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} RESET "),
@@ -124,7 +141,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (true, " Usage: [`2ON | `2OFF]"),
             (true, " Usage: [# | # `2ON | # `2OFF]"),
             (true, " Usage: [`2ALL `2ON | `2ALL `2OFF]"),
-            (true, "Where: # is 0=BRK, 1=Invalid Opcode_1, 2=Invalid Opcode_2, 3=Invalid Opcode_3"),
+            (
+                true,
+                "Where: # is 0=BRK, 1=Invalid Opcode_1, 2=Invalid Opcode_2, 3=Invalid Opcode_3",
+            ),
         ],
         Cmd::Breakpoint => &[
             (true, " Usage: [`2LOAD | `2SAVE | `2RESET]"),
@@ -150,11 +170,17 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    1. one memory access at address"),
             (false, "    2. if PC reaches address"),
             (false, "  If an IO address, sets breakpoint on IO access."),
-            (false, "  If register, sets a breakpoint on memory access at address of register."),
+            (
+                false,
+                "  If register, sets a breakpoint on memory access at address of register.",
+            ),
         ],
         Cmd::BreakpointAddPc => &[
             (true, " Usage: [address]"),
-            (false, "  Sets a breakpoint at the current PC or at the specified address."),
+            (
+                false,
+                "  Sets a breakpoint at the current PC or at the specified address.",
+            ),
         ],
         Cmd::BreakpointClear => &[
             (true, " Usage: [# | *]"),
@@ -181,7 +207,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    address : end      [address,end]"),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} D000"),
-            (false, "`:   {cmd} D000,1000       ; break on memory at $D000-DFFF"),
+            (
+                false,
+                "`:   {cmd} D000,1000       ; break on memory at $D000-DFFF",
+            ),
             (false, "`:   {cmd} D000:DFFF       ; (same)"),
             (false, "  Where <address> is of the form:"),
             (false, "    [s<n>/][<nnn>/][l<1|2>/][rom/]<addr>"),
@@ -191,10 +220,22 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    l<1|2> - Lang Card 4K bank 1 or 2"),
             (false, "    rom  - ROM"),
             (false, " `3Examples`9:`0"),
-            (false, "`:   {cmd} 01/L1/D000,1000 ; break on memory for aux LC 4K Bank 1 at $D000-DFFF"),
-            (false, "`:   {cmd} 00/E000         ; break on memory for main LC 8K at $E000"),
-            (false, "`:   {cmd} 01/00FF         ; break on memory for aux at $00FF"),
-            (false, "`:   {cmd} ROM/FF58        ; break on ROM read at $FF58"),
+            (
+                false,
+                "`:   {cmd} 01/L1/D000,1000 ; break on memory for aux LC 4K Bank 1 at $D000-DFFF",
+            ),
+            (
+                false,
+                "`:   {cmd} 00/E000         ; break on memory for main LC 8K at $E000",
+            ),
+            (
+                false,
+                "`:   {cmd} 01/00FF         ; break on memory for aux at $00FF",
+            ),
+            (
+                false,
+                "`:   {cmd} ROM/FF58        ; break on ROM read at $FF58",
+            ),
         ],
         Cmd::BreakpointAddMemr => &[
             (true, " Usage: <range>"),
@@ -203,7 +244,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    address : end      [address,end]"),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} D000"),
-            (false, "`:   {cmd} D000,1000       ; break on memory at $D000-DFFF"),
+            (
+                false,
+                "`:   {cmd} D000,1000       ; break on memory at $D000-DFFF",
+            ),
             (false, "`:   {cmd} D000:DFFF       ; (same)"),
             (false, "  Where <address> is of the form:"),
             (false, "    [s<n>/][<nnn>/][l<1|2>/][rom/]<addr>"),
@@ -213,10 +257,22 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    l<1|2> - Lang Card 4K bank 1 or 2"),
             (false, "    rom  - ROM"),
             (false, " `3Examples`9:`0"),
-            (false, "`:   {cmd} 01/L1/D000,1000 ; break on memory for aux LC 4K Bank 1 at $D000-DFFF"),
-            (false, "`:   {cmd} 00/E000         ; break on memory for main LC 8K at $E000"),
-            (false, "`:   {cmd} 01/00FF         ; break on memory for aux at $00FF"),
-            (false, "`:   {cmd} ROM/FF58        ; break on ROM read at $FF58"),
+            (
+                false,
+                "`:   {cmd} 01/L1/D000,1000 ; break on memory for aux LC 4K Bank 1 at $D000-DFFF",
+            ),
+            (
+                false,
+                "`:   {cmd} 00/E000         ; break on memory for main LC 8K at $E000",
+            ),
+            (
+                false,
+                "`:   {cmd} 01/00FF         ; break on memory for aux at $00FF",
+            ),
+            (
+                false,
+                "`:   {cmd} ROM/FF58        ; break on ROM read at $FF58",
+            ),
         ],
         Cmd::BreakpointAddMemw => &[
             (true, " Usage: <range>"),
@@ -225,7 +281,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    address : end      [address,end]"),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} D000"),
-            (false, "`:   {cmd} D000,1000       ; break on memory at $D000-DFFF"),
+            (
+                false,
+                "`:   {cmd} D000,1000       ; break on memory at $D000-DFFF",
+            ),
             (false, "`:   {cmd} D000:DFFF       ; (same)"),
             (false, "  Where <address> is of the form:"),
             (false, "    [s<n>/][<nnn>/][l<1|2>/][rom/]<addr>"),
@@ -235,20 +294,26 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    l<1|2> - Lang Card 4K bank 1 or 2"),
             (false, "    rom  - ROM"),
             (false, " `3Examples`9:`0"),
-            (false, "`:   {cmd} 01/L1/D000,1000 ; break on memory for aux LC 4K Bank 1 at $D000-DFFF"),
-            (false, "`:   {cmd} 00/E000         ; break on memory for main LC 8K at $E000"),
-            (false, "`:   {cmd} 01/00FF         ; break on memory for aux at $00FF"),
-            (false, "`:   {cmd} ROM/FF58        ; break on ROM read at $FF58"),
+            (
+                false,
+                "`:   {cmd} 01/L1/D000,1000 ; break on memory for aux LC 4K Bank 1 at $D000-DFFF",
+            ),
+            (
+                false,
+                "`:   {cmd} 00/E000         ; break on memory for main LC 8K at $E000",
+            ),
+            (
+                false,
+                "`:   {cmd} 01/00FF         ; break on memory for aux at $00FF",
+            ),
+            (
+                false,
+                "`:   {cmd} ROM/FF58        ; break on ROM read at $FF58",
+            ),
         ],
-        Cmd::BreakpointAddVideo => &[
-            (true, " Usage: <vpos[,length]>"),
-        ],
-        Cmd::ConfigLoad => &[
-            (true, " Usage: [\"filename\"]"),
-        ],
-        Cmd::ConfigSave => &[
-            (true, " Usage: [\"filename\"]"),
-        ],
+        Cmd::BreakpointAddVideo => &[(true, " Usage: <vpos[,length]>")],
+        Cmd::ConfigLoad => &[(true, " Usage: [\"filename\"]")],
+        Cmd::ConfigSave => &[(true, " Usage: [\"filename\"]")],
         Cmd::ConfigColor => &[
             (false, " Usage: [<#> | <# RR GG BB>]"),
             (false, "  0 params: switch to 'color' scheme"),
@@ -263,14 +328,20 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         ],
         Cmd::ConfigDisasm => &[
             (true, " Note: All arguments effect the disassembly view"),
-            (true, " Usage: [`2BRANCH | `2CLICK | `2COLON | `2OPCODE | `2SPACES | `2TARGET]"),
+            (
+                true,
+                " Usage: [`2BRANCH | `2CLICK | `2COLON | `2OPCODE | `2SPACES | `2TARGET]",
+            ),
             (false, "  Display current settings if no args."),
             (true, " Usage: BRANCH [#]"),
             (false, "  Set the type of branch character:"),
             (false, "  0 off, 1 plain, 2 fancy"),
             (false, "  i.e. `:{cmd} BRANCH 1"),
             (true, " Usage: CLICK [#]"),
-            (false, "  Set required key combo. (Alt, Control, or Shift) when left clicking"),
+            (
+                false,
+                "  Set required key combo. (Alt, Control, or Shift) when left clicking",
+            ),
             (false, "    0  Left-Click (no Alt, Ctrl, Shift)"),
             (false, "    1  Alt Left-click"),
             (false, "    2  Ctrl Left-click"),
@@ -298,27 +369,49 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  0 off, 1 value only, 2 address only, 3 both"),
             (false, "  i.e. `:{cmd} TARGET 1"),
         ],
-        Cmd::ConfigFont => &[
-            (false, " No longer applicable with new debugger font"),
-        ],
+        Cmd::ConfigFont => &[(false, " No longer applicable with new debugger font")],
         Cmd::DefineDataByte1 => &[
-            (true, " Usage: {cmd} <address> | <symbol address> | <symbol range>"),
-            (false, "  Tell the diassembler to treat the BYTES as data instead of code."),
+            (
+                true,
+                " Usage: {cmd} <address> | <symbol address> | <symbol range>",
+            ),
+            (
+                false,
+                "  Tell the diassembler to treat the BYTES as data instead of code.",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} WNDTOP 22"),
             (false, "`:   {cmd} WNDBTM 23"),
             (false, "`:   X WNDTOP       // treat as code again"),
-            (false, "`:   B              // list all addresses viewed as data"),
+            (
+                false,
+                "`:   B              // list all addresses viewed as data",
+            ),
         ],
         Cmd::DefineDataWord1 => &[
-            (true, " Usage: {cmd} <address> | <symbol address> | <symbol range>"),
-            (false, "  Tell the diassembler to treat the WORDS as data instead of code."),
+            (
+                true,
+                " Usage: {cmd} <address> | <symbol address> | <symbol range>",
+            ),
+            (
+                false,
+                "  Tell the diassembler to treat the WORDS as data instead of code.",
+            ),
             (true, "  The data is a range of 2-byte pointer data."),
             (false, " `3Examples`9:`0"),
-            (false, "`:   {cmd} NEXT1 801   // AppleSoft Basic Line#1 Pointer to Next line"),
-            (false, "`:   {cmd} LINE1 803   // Applesoft Basic Line#1 Line Number"),
+            (
+                false,
+                "`:   {cmd} NEXT1 801   // AppleSoft Basic Line#1 Pointer to Next line",
+            ),
+            (
+                false,
+                "`:   {cmd} LINE1 803   // Applesoft Basic Line#1 Line Number",
+            ),
             (false, "`:   X NEXT1        // treat as code again"),
-            (false, "`:   B              // list all addresses viewed as data"),
+            (
+                false,
+                "`:   B              // list all addresses viewed as data",
+            ),
         ],
         Cmd::MemoryEnterByte => &[
             (true, " Usage: <address | symbol> ## [## ... ##]"),
@@ -329,7 +422,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         ],
         Cmd::MemoryEnterWord => &[
             (true, " Usage: <address | symbol> #### [#### ... ####]"),
-            (false, "  Sets memory to the specified 16-Bit Values (words)"),
+            (
+                false,
+                "  Sets memory to the specified 16-Bit Values (words)",
+            ),
         ],
         Cmd::MemoryFill => &[
             (true, " Usage: <address | symbol> <address | symbol> ##"),
@@ -342,10 +438,19 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         ],
         Cmd::MemoryMove => &[
             (true, " Usage: destination range"),
-            (false, "  Copies bytes specified by the range to the destination starting address."),
+            (
+                false,
+                "  Copies bytes specified by the range to the destination starting address.",
+            ),
             (false, " `3Examples`9:`0"),
-            (false, "`:  {cmd} 4000 2000:3FFF   // move HGR page 1 to page 2"),
-            (false, "`:  {cmd} 2001 2000:3FFF   // clear $2000-$3FFF with the byte at $2000"),
+            (
+                false,
+                "`:  {cmd} 4000 2000:3FFF   // move HGR page 1 to page 2",
+            ),
+            (
+                false,
+                "`:  {cmd} 2001 2000:3FFF   // clear $2000-$3FFF with the byte at $2000",
+            ),
             (false, "`:  2001<2000:3FFFM"),
         ],
         Cmd::MemMiniDumpAscii1 => &[
@@ -398,8 +503,14 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "    ##   match specific byte"),
             (false, "    #### match specific 16-bit value"),
             (false, "    ?    match any byte"),
-            (false, "    ?#   match any high nibble, match low nibble to specific number"),
-            (false, "    #?   match specific high nibble, match any low nibble"),
+            (
+                false,
+                "    ?#   match any high nibble, match low nibble to specific number",
+            ),
+            (
+                false,
+                "    #?   match specific high nibble, match any low nibble",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} F000,1000 AD ? C0"),
             (false, "`:   U @1"),
@@ -415,7 +526,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Operator is one of: + - * / % ^ ~"),
             (false, " Output order is: Hex Bin Dec Char"),
             (false, "  Note: symbols take priority."),
-            (false, "  Note: #A (if you don't want the accumulator value)"),
+            (
+                false,
+                "  Note: #A (if you don't want the accumulator value)",
+            ),
             (false, "  Note: #F (if you don't want the flags value)"),
             (false, " `3Examples`9:`0"),
             (false, "`:   CALC 5 + #A"),
@@ -429,8 +543,14 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "`:   {cmd} PC"),
         ],
         Cmd::OutputPrint => &[
-            (true, " Usage: <string | expression> [, string | expression]*"),
-            (true, "  Note: To print Register values, they must be in upper case"),
+            (
+                true,
+                " Usage: <string | expression> [, string | expression]*",
+            ),
+            (
+                true,
+                "  Note: To print Register values, they must be in upper case",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} \"A:\",A,\" X:\",X"),
             (false, "`:   {cmd} A,\" \",X,\" \",Y"),
@@ -438,17 +558,32 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         ],
         Cmd::OutputPrintf => &[
             (true, " Usage: <string> [, expression, ...]"),
-            (false, "  The string may contain c-style printf formatting flags: %d %x %z %c"),
-            (false, "  Where: %d decimal, %x hex, %z binary, %c char, %% percent"),
+            (
+                false,
+                "  The string may contain c-style printf formatting flags: %d %x %z %c",
+            ),
+            (
+                false,
+                "  Where: %d decimal, %x hex, %z binary, %c char, %% percent",
+            ),
             (false, " `3Examples`9:`0"),
-            (false, "`:   {cmd} \"Dec: %d  Hex: %x  Bin: %z  Char: %c\",A,A,A,A"),
+            (
+                false,
+                "`:   {cmd} \"Dec: %d  Hex: %x  Bin: %z  Char: %c\",A,A,A,A",
+            ),
             (false, "`:   {cmd} \"%x %x %x\",A,X,Y"),
         ],
         Cmd::SymbolsLookup => &[
             (true, " Usage: symbol [= <address>]"),
             (false, "       `7\"`2symbol`7\" = `8address"),
-            (true, " Note: Valid characters are any characters above ASCII space ($20)."),
-            (false, " You `8MUST`0 double-quote names containing special characters to be recognized."),
+            (
+                true,
+                " Note: Valid characters are any characters above ASCII space ($20).",
+            ),
+            (
+                false,
+                " You `8MUST`0 double-quote names containing special characters to be recognized.",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} HOME"),
             (false, "`:   {cmd} LIFE = 2000"),
@@ -461,7 +596,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
@@ -471,7 +609,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
@@ -481,7 +622,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
@@ -491,7 +635,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
@@ -501,7 +648,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
@@ -511,7 +661,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
@@ -521,96 +674,91 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <cmd> is one of:"),
             (false, "`6ON   `0: Turns symbols on in the disasm window"),
             (false, "`6OFF  `0: Turns symbols off in the disasm window"),
-            (false, "`6LOAD `0: Loads symbols from last/default \"filename\""),
+            (
+                false,
+                "`6LOAD `0: Loads symbols from last/default \"filename\"",
+            ),
             (false, "`6SAVE `0: Saves symbol table to \"filename\""),
             (false, "`6CLEAR`0: Clears the symbol table"),
             (false, "`6!    `0: Remove symbol"),
         ],
         Cmd::SymbolsList => &[
             (true, " Usage: symbol"),
-            (false, "  Looks up symbol in all 3 symbol tables: main, user, source"),
+            (
+                false,
+                "  Looks up symbol in all 3 symbol tables: main, user, source",
+            ),
         ],
         Cmd::CyclesInfo => &[
             (true, " Usage: <abs|rel|part>"),
             (false, "  Where:"),
             (false, "    abs = absolute number of cycles since power-on"),
-            (false, "    rel = number of cycles since last step or breakpoint"),
-            (false, "    part= number of cycles relative to current instruction"),
+            (
+                false,
+                "    rel = number of cycles since last step or breakpoint",
+            ),
+            (
+                false,
+                "    part= number of cycles relative to current instruction",
+            ),
         ],
-        Cmd::CyclesReset => &[
-            (false, "  Use in conjunctioned with 'cycles part' to reset to current instruction"),
-        ],
+        Cmd::CyclesReset => &[(
+            false,
+            "  Use in conjunctioned with 'cycles part' to reset to current instruction",
+        )],
         Cmd::VideoScannerInfo => &[
             (true, " Usage: <dec|hex|real|apple>"),
             (false, "  Where:"),
             (false, "    <dec|hex> changes output to dec/hex"),
-            (false, "    <real|apple> alters horz value to hbl-l,visible,hbl-r or hbl-r+l,visible"),
-            (false, "    `3Yellow`0=invisible (hbl or vbl active) / `2Green`0=visible"),
+            (
+                false,
+                "    <real|apple> alters horz value to hbl-l,visible,hbl-r or hbl-r+l,visible",
+            ),
+            (
+                false,
+                "    `3Yellow`0=invisible (hbl or vbl active) / `2Green`0=visible",
+            ),
         ],
-        Cmd::ViewText4x => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewText41 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewText42 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewText8x => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewText81 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewText82 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewGrx => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewGr1 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewGr2 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewDgrx => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewDgr1 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewDgr2 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewHgrx => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewHgr1 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewHgr2 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewDhgrx => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewDhgr1 => &[
-            (false, "Show the video output in the specified format."),
-        ],
-        Cmd::ViewDhgr2 => &[
-            (false, "Show the video output in the specified format."),
-        ],
+        Cmd::ViewText4x => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewText41 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewText42 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewText8x => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewText81 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewText82 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewGrx => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewGr1 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewGr2 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewDgrx => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewDgr1 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewDgr2 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewHgrx => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewHgr1 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewHgr2 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewDhgrx => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewDhgr1 => &[(false, "Show the video output in the specified format.")],
+        Cmd::ViewDhgr2 => &[(false, "Show the video output in the specified format.")],
         Cmd::WatchAdd => &[
             (true, " Usage: <address | symbol>"),
-            (false, "  Adds the specified memory location to the watch window."),
+            (
+                false,
+                "  Adds the specified memory location to the watch window.",
+            ),
         ],
         Cmd::ZeropagePointer => &[
             (true, " Usage: <address | symbol>"),
             (true, " Usage: # <address | symbol> [address...]"),
-            (false, "  Adds the specified memory location to the zero page pointer window."),
-            (false, "  Update the specified zero page pointer (#) with the address."),
-            (false, " Note: Displayed as symbol name (if possible) and the 16-bit target pointer"),
+            (
+                false,
+                "  Adds the specified memory location to the zero page pointer window.",
+            ),
+            (
+                false,
+                "  Update the specified zero page pointer (#) with the address.",
+            ),
+            (
+                false,
+                " Note: Displayed as symbol name (if possible) and the 16-bit target pointer",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} CH"),
             (false, "`:   {cmd} 0 CV"),
@@ -619,9 +767,18 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         Cmd::ZeropagePointerAdd => &[
             (true, " Usage: <address | symbol>"),
             (true, " Usage: # <address | symbol> [address...]"),
-            (false, "  Adds the specified memory location to the zero page pointer window."),
-            (false, "  Update the specified zero page pointer (#) with the address."),
-            (false, " Note: Displayed as symbol name (if possible) and the 16-bit target pointer"),
+            (
+                false,
+                "  Adds the specified memory location to the zero page pointer window.",
+            ),
+            (
+                false,
+                "  Update the specified zero page pointer (#) with the address.",
+            ),
+            (
+                false,
+                " Note: Displayed as symbol name (if possible) and the 16-bit target pointer",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   {cmd} CH"),
             (false, "`:   {cmd} 0 CV"),
@@ -634,46 +791,79 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
         ],
         Cmd::ZeropagePointer0 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer1 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer2 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer3 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer4 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer5 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer6 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::ZeropagePointer7 => &[
             (true, " Usage: [<address | symbol>]"),
-            (false, "  If no address specified, will remove watching the zero page pointer."),
+            (
+                false,
+                "  If no address specified, will remove watching the zero page pointer.",
+            ),
         ],
         Cmd::OutputLog => &[
             (true, " Usage: [ <cmd> ]"),
             (false, "  Where <cmd> is one of:"),
-            (false, "`6NONE   `0: Show no output save for LOG status, VERSION, and MOTD"),
+            (
+                false,
+                "`6NONE   `0: Show no output save for LOG status, VERSION, and MOTD",
+            ),
             (false, "`6ERROR  `0: Show errors only"),
             (false, "`6WARN   `0: Show warnings and errors"),
             (false, "`6INFO   `0: Show info., warnings, and errors"),
-            (false, "`6DEFAULT`0: Show default messages, info., warnings, and errors"),
+            (
+                false,
+                "`6DEFAULT`0: Show default messages, info., warnings, and errors",
+            ),
             (false, "`6ALL    `0: Show all messages"),
-            (false, " No arguments will display the current debugger verbosity level"),
+            (
+                false,
+                " No arguments will display the current debugger verbosity level",
+            ),
         ],
         Cmd::Version => &[
             (true, " Usage: [*]"),
@@ -685,7 +875,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <range> is of the form:"),
             (false, "    address , length   [address,address+length)"),
             (false, "    address : end      [address,end]"),
-            (false, "  Notes: If no filename specified, defaults to the last filename (if possible)"),
+            (
+                false,
+                "  Notes: If no filename specified, defaults to the last filename (if possible)",
+            ),
             (false, " `3Examples`9:`0"),
             (false, "`:   BSAVE \"test\",FF00,100"),
             (false, "`:   BLOAD \"test\",2000:2010"),
@@ -702,7 +895,10 @@ pub fn usage(cmd: Cmd) -> Option<Lines> {
             (false, "  Where <range> is of the form:"),
             (false, "    address , length   [address,address+length)"),
             (false, "    address : end      [address,end]"),
-            (false, "  Notes: If no filename specified, defaults to: '####.####.[bank##].bin'"),
+            (
+                false,
+                "  Notes: If no filename specified, defaults to: '####.####.[bank##].bin'",
+            ),
             (false, "    Where the form is <address>.<length>.bin"),
             (false, " `3Examples`9:`0"),
             (false, "`:   BSAVE \"test\",FF00,100"),

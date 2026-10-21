@@ -125,7 +125,11 @@ pub fn parse_markup(s: &str, start_color: u8) -> (Line, u8) {
 
 /// Text of a line without colors.
 pub fn line_string(l: &Line) -> String {
-    l.iter().map(|c| c.ch).collect::<String>().trim_end().to_string()
+    l.iter()
+        .map(|c| c.ch)
+        .collect::<String>()
+        .trim_end()
+        .to_string()
 }
 
 impl Console {

@@ -30,7 +30,12 @@ fn bcd(v: u8) -> u64 {
 
 /// The uPD1990AC 40-bit register for `t`.
 pub fn register_for(t: &WallTime) -> u64 {
-    bcd(t.second) | bcd(t.minute) << 8 | bcd(t.hour) << 16 | bcd(t.day) << 24 | u64::from(t.weekday & 0xF) << 32 | u64::from(t.month & 0xF) << 36
+    bcd(t.second)
+        | bcd(t.minute) << 8
+        | bcd(t.hour) << 16
+        | bcd(t.day) << 24
+        | u64::from(t.weekday & 0xF) << 32
+        | u64::from(t.month & 0xF) << 36
 }
 
 /// Which firmware/card variant.
@@ -64,7 +69,16 @@ impl ThunderClock {
         slot_rom.copy_from_slice(&rom[..256]);
         let mut expansion = Box::new([0u8; EXPANSION_ROM_SIZE]);
         expansion.copy_from_slice(&rom[exp_at..exp_at + EXPANSION_ROM_SIZE]);
-        ThunderClock { model, clock, slot_rom, expansion, register: 0, command: 0, stb: false, clk: false }
+        ThunderClock {
+            model,
+            clock,
+            slot_rom,
+            expansion,
+            register: 0,
+            command: 0,
+            stb: false,
+            clk: false,
+        }
     }
 
     pub fn model(&self) -> ClockModel {
@@ -129,7 +143,10 @@ impl Card for ThunderClock {
 
     fn save(&self) -> Vec<u8> {
         let mut e = Enc::default();
-        e.u64(self.register).u8(self.command).bool(self.stb).bool(self.clk);
+        e.u64(self.register)
+            .u8(self.command)
+            .bool(self.stb)
+            .bool(self.clk);
         e.0
     }
 
@@ -138,7 +155,8 @@ impl Card for ThunderClock {
         let r = (|| Some((d.u64()?, d.u8()?, d.bool()?, d.bool()?)))();
         match r {
             Some((reg, cmd, stb, clk)) if d.done() && cmd < 8 => {
-                (self.register, self.command, self.stb, self.clk) = (reg & ((1 << 40) - 1), cmd, stb, clk);
+                (self.register, self.command, self.stb, self.clk) =
+                    (reg & ((1 << 40) - 1), cmd, stb, clk);
                 true
             }
             _ => false,

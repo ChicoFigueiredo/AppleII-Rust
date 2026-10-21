@@ -10,8 +10,8 @@
 use crate::ay8910::{Ay, AyType};
 use crate::bus::{lock, AudioBus, CardVolume, Source};
 use crate::clock::SampleClock;
-use crate::ssi263::{Ssi263, SsiOut, SsiType, PH_ECHO_PLUS, PH_MOCKINGBOARD, PH_PHASOR};
 use crate::snapshot::{MockingboardSnapshot, UnitSnapshot, ViaSnapshot};
+use crate::ssi263::{Ssi263, SsiOut, SsiType, PH_ECHO_PLUS, PH_MOCKINGBOARD, PH_PHASOR};
 use crate::via6522::{reg, TimerSched, Via};
 use apple2_core::{Card, CardCtx, IrqSource};
 
@@ -36,7 +36,11 @@ pub struct Sockets {
 
 impl Default for Sockets {
     fn default() -> Self {
-        Sockets { ssi263: [SsiType::Empty, SsiType::Ap], sc01: true, ay: AyType::Ay3_8913 }
+        Sockets {
+            ssi263: [SsiType::Empty, SsiType::Ap],
+            sc01: true,
+            ay: AyType::Ay3_8913,
+        }
     }
 }
 
@@ -173,7 +177,11 @@ impl MockingboardCard {
 
     fn set_ay_clocks(&mut self) {
         // Phasor native mode clocks the AYs at twice the base clock (SetPhasorMode, cpp:893).
-        let scale = if self.phasor_mode == PH_PHASOR { 2.0 } else { 1.0 };
+        let scale = if self.phasor_mode == PH_PHASOR {
+            2.0
+        } else {
+            1.0
+        };
         let (clk, rate) = (self.clock.clk_hz() * scale, self.clock.rate_hz);
         for s in &mut self.subs {
             for ay in &mut s.ay {
@@ -208,7 +216,11 @@ impl MockingboardCard {
         }
         // 2/3 attenuation of the summed voices (MixAllAndCopyToRingBuffer, cpp:376).
         let mix = |a: [i32; 3], b: [i32; 3]| -> f32 {
-            let sum: i32 = a.iter().chain(b.iter()).map(|&v| (v as f64 * (2.0 / 3.0)) as i32).sum();
+            let sum: i32 = a
+                .iter()
+                .chain(b.iter())
+                .map(|&v| (v as f64 * (2.0 / 3.0)) as i32)
+                .sum();
             sum.clamp(-32768, 32767) as f32 / 32768.0
         };
         let echo = self.phasor_mode == PH_ECHO_PLUS && self.is_phasor();
@@ -220,7 +232,11 @@ impl MockingboardCard {
             let (l0, l1) = (s0.ay[0].sample(), s0.ay[1].sample());
             let (r0, r1) = (s1.ay[0].sample(), s1.ay[1].sample());
             // Echo+: the right speaker's AYs are also output to the left.
-            let (mut l, mut r) = if echo { (mix(r0, r1), mix(r0, r1)) } else { (mix(l0, l1), mix(r0, r1)) };
+            let (mut l, mut r) = if echo {
+                (mix(r0, r1), mix(r0, r1))
+            } else {
+                (mix(l0, l1), mix(r0, r1))
+            };
             if speech {
                 let sp = s0.ssi.sample_at(c, &clock) + s1.ssi.sample_at(c, &clock);
                 l += sp;
@@ -261,7 +277,11 @@ impl MockingboardCard {
 
     fn schedule_timer(&self, unit: usize, t: Option<TimerSched>, ctx: &mut CardCtx) {
         if let Some(t) = t {
-            ctx.schedule_gated((unit * 2) as u16 + t.timer as u16, t.cycles, t.can_assert_irq);
+            ctx.schedule_gated(
+                (unit * 2) as u16 + t.timer as u16,
+                t.cycles,
+                t.can_assert_irq,
+            );
         }
     }
 
@@ -346,7 +366,9 @@ impl MockingboardCard {
             // Votrax speech data; DDRB's zero bits are high-impedance, so output as 1 (GH#952).
             let ddrb = self.subs[0].via.ddrb;
             let clk = self.clock;
-            let out = self.subs[0].ssi.votrax_write((value & ddrb) | (ddrb ^ 0xFF), now, &clk);
+            let out = self.subs[0]
+                .ssi
+                .votrax_write((value & ddrb) | (ddrb ^ 0xFF), now, &clk);
             self.pending_ssi = Some((0, out));
             return;
         }
@@ -376,7 +398,11 @@ impl MockingboardCard {
                 self.subs[unit].set_bus(false);
             }
         } else {
-            let u = if self.variant == Variant::SdMusic { unit_for_ay } else { unit };
+            let u = if self.variant == Variant::SdMusic {
+                unit_for_ay
+            } else {
+                unit
+            };
             if value & 4 == 0 {
                 self.ay_reset(u);
                 return;
@@ -426,7 +452,11 @@ impl MockingboardCard {
             self.sync_irq(ctx);
             return if accessed { res } else { ctx.floating_bus };
         }
-        let unit = if self.variant == Variant::SdMusic || a & 0x80 == 0 { 0 } else { 1 };
+        let unit = if self.variant == Variant::SdMusic || a & 0x80 == 0 {
+            0
+        } else {
+            1
+        };
         let v = self.subs[unit].via.read(r, now);
         self.sync_irq(ctx);
         v
@@ -577,7 +607,10 @@ impl MockingboardCard {
                 bus_driven: s.bus_driven,
             }
         };
-        MockingboardSnapshot { phasor_mode: self.phasor_mode, units: [unit(&self.subs[0]), unit(&self.subs[1])] }
+        MockingboardSnapshot {
+            phasor_mode: self.phasor_mode,
+            units: [unit(&self.subs[0]), unit(&self.subs[1])],
+        }
     }
 
     /// Applies a [`MockingboardSnapshot`] (`LoadSnapshot`, Mockingboard.cpp:1298, :1413). The
@@ -589,8 +622,10 @@ impl MockingboardCard {
         for (sub, u) in self.subs.iter_mut().zip(&s.units) {
             let (v, w) = (&mut sub.via, &u.via);
             (v.orb, v.ora, v.ddrb, v.ddra) = (w.orb, w.ora, w.ddrb, w.ddra);
-            (v.t1_counter, v.t1_latch, v.t1_irq_delay, v.t1_active) = (w.t1_counter, w.t1_latch, w.t1_irq_delay, w.t1_active);
-            (v.t2_counter, v.t2_latch, v.t2_irq_delay, v.t2_active) = (w.t2_counter, w.t2_latch, w.t2_irq_delay, w.t2_active);
+            (v.t1_counter, v.t1_latch, v.t1_irq_delay, v.t1_active) =
+                (w.t1_counter, w.t1_latch, w.t1_irq_delay, w.t1_active);
+            (v.t2_counter, v.t2_latch, v.t2_irq_delay, v.t2_active) =
+                (w.t2_counter, w.t2_latch, w.t2_irq_delay, w.t2_active);
             (v.sr, v.acr, v.pcr, v.ifr, v.ier) = (w.serial_shift, w.acr, w.pcr, w.ifr, w.ier);
             // The events' `m_canAssertIRQ` follows IER (cpp:727); IFR bit 7 is re-derived (GH#677).
             v.t1_gated = v.ier & crate::via6522::IXR_TIMER1 == 0;
@@ -599,7 +634,11 @@ impl MockingboardCard {
             sub.ay[0].apply_snapshot(&u.ay[0]);
             sub.ay[1].apply_snapshot(&u.ay[1]);
             sub.ssi.apply_snapshot(&u.ssi);
-            sub.ssi.card_mode = if phasor { s.phasor_mode } else { PH_MOCKINGBOARD };
+            sub.ssi.card_mode = if phasor {
+                s.phasor_mode
+            } else {
+                PH_MOCKINGBOARD
+            };
             sub.state = u.state;
             sub.cur_reg = u.ay_current_register;
             sub.chip_sel = u.chip_selected;
@@ -625,16 +664,35 @@ impl MockingboardCard {
         for u in 0..2 {
             let v = &mut self.subs[u].via;
             v.last = now;
-            let extra = if v.mega { crate::via6522::EXTRA_TIMER_CYCLES + 1 } else { crate::via6522::EXTRA_TIMER_CYCLES };
+            let extra = if v.mega {
+                crate::via6522::EXTRA_TIMER_CYCLES + 1
+            } else {
+                crate::via6522::EXTRA_TIMER_CYCLES
+            };
             if v.t1_active {
-                ctx.schedule_gated((u * 2) as u16, (v.t1_counter as i16 as i32 + extra).max(1), !v.t1_gated);
+                ctx.schedule_gated(
+                    (u * 2) as u16,
+                    (v.t1_counter as i16 as i32 + extra).max(1),
+                    !v.t1_gated,
+                );
             }
             if v.t2_active {
-                ctx.schedule_gated((u * 2) as u16 + 1, (v.t2_counter as i16 as i32 + extra).max(1), !v.t2_gated);
+                ctx.schedule_gated(
+                    (u * 2) as u16 + 1,
+                    (v.t2_counter as i16 as i32 + extra).max(1),
+                    !v.t2_gated,
+                );
             }
             if self.subs[u].ssi.needs_restart() {
                 let schedule = self.subs[u].ssi.restart(now, &clk);
-                self.apply_ssi(u, SsiOut { schedule, ..Default::default() }, ctx);
+                self.apply_ssi(
+                    u,
+                    SsiOut {
+                        schedule,
+                        ..Default::default()
+                    },
+                    ctx,
+                );
             }
         }
         self.sync_irq(ctx);
@@ -743,7 +801,9 @@ impl Card for MockingboardCard {
         let mut w = vec![SAVE_VERSION, self.variant as u8, self.phasor_mode];
         for s in &self.subs {
             let v = &s.via;
-            w.extend([v.orb, v.ora, v.ddrb, v.ddra, v.sr, v.acr, v.pcr, v.ifr, v.ier]);
+            w.extend([
+                v.orb, v.ora, v.ddrb, v.ddra, v.sr, v.acr, v.pcr, v.ifr, v.ier,
+            ]);
             for x in [v.t1_counter, v.t1_latch, v.t2_counter, v.t2_latch] {
                 w.extend(x.to_le_bytes());
             }
@@ -786,10 +846,12 @@ impl Card for MockingboardCard {
         for s in &mut self.subs {
             let b = &st[p..p + PER_SUB];
             let v = &mut s.via;
-            (v.orb, v.ora, v.ddrb, v.ddra, v.sr, v.acr, v.pcr, v.ifr, v.ier) =
-                (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]);
+            (
+                v.orb, v.ora, v.ddrb, v.ddra, v.sr, v.acr, v.pcr, v.ifr, v.ier,
+            ) = (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]);
             let u16_at = |i: usize| u16::from_le_bytes([b[i], b[i + 1]]);
-            (v.t1_counter, v.t1_latch, v.t2_counter, v.t2_latch) = (u16_at(9), u16_at(11), u16_at(13), u16_at(15));
+            (v.t1_counter, v.t1_latch, v.t2_counter, v.t2_latch) =
+                (u16_at(9), u16_at(11), u16_at(13), u16_at(15));
             let f = b[17];
             (v.t1_irq_delay, v.t2_irq_delay, v.t1_active, v.t2_active) =
                 (f & 1 != 0, f & 2 != 0, f & 4 != 0, f & 8 != 0);

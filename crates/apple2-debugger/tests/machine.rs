@@ -30,7 +30,11 @@ fn load(m: &mut Machine, at: u16, bytes: &[u8]) {
 }
 
 fn console_text(d: &Debugger) -> String {
-    d.console.lines().map(line_string).collect::<Vec<_>>().join("\n")
+    d.console
+        .lines()
+        .map(line_string)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn debugger(m: &mut Machine) -> Debugger {
@@ -42,7 +46,11 @@ fn debugger(m: &mut Machine) -> Debugger {
 
 /// Runs the stepping loop until the debugger stops (or the cycle budget is gone).
 fn go(d: &mut Debugger, m: &mut Machine, budget: u64) -> u64 {
-    assert!(d.is_stepping(), "G did not start stepping:\n{}", console_text(d));
+    assert!(
+        d.is_stepping(),
+        "G did not start stepping:\n{}",
+        console_text(d)
+    );
     d.run(m, budget)
 }
 
@@ -57,13 +65,26 @@ fn pc_breakpoint_on_cout_during_boot() {
     assert_eq!(d.mode, RunMode::Debug, "{}", console_text(&d));
     assert_eq!(m.cpu().pc, 0xFDED);
     let text = console_text(&d);
-    assert!(text.contains("Stop reason: [B#0] Register PC matches value"), "{text}");
+    assert!(
+        text.contains("Stop reason: [B#0] Register PC matches value"),
+        "{text}"
+    );
     // The code window is centered on COUT and shows its symbol from APPLE2E.SYM.
     let g = d.render(&m);
-    assert!(g.text().lines().any(|l| l.starts_with("FDED:") && l.contains("COUT")), "{}", g.text());
+    assert!(
+        g.text()
+            .lines()
+            .any(|l| l.starts_with("FDED:") && l.contains("COUT")),
+        "{}",
+        g.text()
+    );
     // Hit counters are tracked and the breakpoint list shows it.
     d.execute(&mut m, "bpl");
-    assert!(console_text(&d).contains("#0 E  S    -  *   00000001"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("#0 E  S    -  *   00000001"),
+        "{}",
+        console_text(&d)
+    );
 }
 
 #[test]
@@ -79,7 +100,13 @@ fn memory_write_breakpoint_on_the_text_page() {
     // AppleWin stops *before* the instruction that is about to write: the opcode at PC is a store.
     let op = m.peek(m.cpu().pc);
     let info = apple2_debugger::opcodes::OPCODES_65C02[op as usize];
-    assert!(info.mem & apple2_debugger::opcodes::MEM_W != 0, "PC=${:04X} {} {:?}", m.cpu().pc, info.mnemonic, info.mode);
+    assert!(
+        info.mem & apple2_debugger::opcodes::MEM_W != 0,
+        "PC=${:04X} {} {:?}",
+        m.cpu().pc,
+        info.mnemonic,
+        info.mode
+    );
 }
 
 #[test]
@@ -91,7 +118,11 @@ fn io_breakpoint_on_the_speaker() {
     d.execute(&mut m, "g");
     go(&mut d, &mut m, 10_000);
     assert_eq!(m.cpu().pc, 0x300, "stops before the access");
-    assert!(console_text(&d).contains("Memory access at"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("Memory access at"),
+        "{}",
+        console_text(&d)
+    );
     assert_eq!(m.drain_speaker_toggles().count(), 0);
     d.execute(&mut m, "t");
     assert_eq!(m.cpu().pc, 0x303);
@@ -110,7 +141,11 @@ fn bus_observer_catches_accesses_the_target_prediction_cannot_see() {
     d.execute(&mut m, "g");
     go(&mut d, &mut m, 10_000);
     assert_eq!(d.mode, RunMode::Debug);
-    assert!(console_text(&d).contains("Write access at 01FC"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("Write access at 01FC"),
+        "{}",
+        console_text(&d)
+    );
     assert_eq!(m.cpu().pc, 0x400, "stopped right after the interrupt entry");
 }
 
@@ -171,10 +206,25 @@ fn trace_goes_to_a_writer_in_applewin_format() {
     go(&mut d, &mut m, 1000);
     let text = String::from_utf8(out.borrow().clone()).unwrap();
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines[0], "Cycles   A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic");
-    assert!(lines[1].ends_with("FF FF FF 01FC ..R..I..  0300:A9 41     LDA #$41"), "{}", lines[1]);
-    assert!(lines[2].contains(" 41 FF FF 01FC") && lines[2].contains("0302:AA        TAX"), "{}", lines[2]);
-    assert!(lines[3].contains("0303:8D 00 04  STA $0400") && lines[3].contains(" 41 41 FF 01FC"), "{}", lines[3]);
+    assert_eq!(
+        lines[0],
+        "Cycles   A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic"
+    );
+    assert!(
+        lines[1].ends_with("FF FF FF 01FC ..R..I..  0300:A9 41     LDA #$41"),
+        "{}",
+        lines[1]
+    );
+    assert!(
+        lines[2].contains(" 41 FF FF 01FC") && lines[2].contains("0302:AA        TAX"),
+        "{}",
+        lines[2]
+    );
+    assert!(
+        lines[3].contains("0303:8D 00 04  STA $0400") && lines[3].contains(" 41 41 FF 01FC"),
+        "{}",
+        lines[3]
+    );
 }
 
 #[test]
@@ -182,7 +232,10 @@ fn monitor_style_shortcuts_edit_and_list_memory() {
     let mut m = bare(Model::Apple2e);
     let mut d = debugger(&mut m);
     d.execute(&mut m, "300: A9 00 8D 00 04 4C 00 03");
-    assert_eq!((m.peek(0x300), m.peek(0x305), m.peek(0x307)), (0xA9, 0x4C, 0x03));
+    assert_eq!(
+        (m.peek(0x300), m.peek(0x305), m.peek(0x307)),
+        (0xA9, 0x4C, 0x03)
+    );
     d.execute(&mut m, "300L");
     assert_eq!(d.disasm_top, 0x300);
     let g = d.render(&m);
@@ -194,7 +247,11 @@ fn monitor_style_shortcuts_edit_and_list_memory() {
     d.execute(&mut m, "4000<2000.20FFM");
     assert_eq!((m.peek(0x4000), m.peek(0x40FF)), (0x77, 0x77));
     d.execute(&mut m, "s 2000,100 77 77");
-    assert!(console_text(&d).contains("Total: 255"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("Total: 255"),
+        "{}",
+        console_text(&d)
+    );
     d.execute(&mut m, "bogus");
     assert!(console_text(&d).contains("Illegal Command"));
 }
@@ -210,7 +267,10 @@ fn assembler_prompt_writes_code_and_resolves_labels() {
     }
     assert_eq!(d.console.prompt(), '>');
     let code: Vec<u8> = (0x300..0x30B).map(|a| m.peek(a)).collect();
-    assert_eq!(code, [0xA9, 0x41, 0x20, 0xED, 0xFD, 0x80, 0x01, 0xEA, 0x60, 0x00, 0x00]);
+    assert_eq!(
+        code,
+        [0xA9, 0x41, 0x20, 0xED, 0xFD, 0x80, 0x01, 0xEA, 0x60, 0x00, 0x00]
+    );
     // `a addr instruction` one-liner
     d.execute(&mut m, "a 320 INC");
     assert_eq!(m.peek(0x320), 0x1A);
@@ -224,17 +284,29 @@ fn expression_calc_and_symbols_commands() {
     assert!(console_text(&d).contains("$FDF0"), "{}", console_text(&d));
     d.execute(&mut m, "sym myvar = 1234");
     d.execute(&mut m, "sym myvar");
-    assert!(console_text(&d).contains("User1: $1234 myvar"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("User1: $1234 myvar"),
+        "{}",
+        console_text(&d)
+    );
     d.execute(&mut m, "sym ! myvar");
     d.execute(&mut m, "sym 1234");
     assert!(console_text(&d).contains("Address not found"));
     d.execute(&mut m, "symmain fded");
     assert!(console_text(&d).contains("Main: $FDED COUT"));
     d.execute(&mut m, "symbasic PRINT.FAC");
-    assert!(console_text(&d).contains("Basic: $ED2E PRINT.FAC"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("Basic: $ED2E PRINT.FAC"),
+        "{}",
+        console_text(&d)
+    );
     // The DOS 3.3 .SYM2 script defined symbols and data blocks.
     d.execute(&mut m, "symdos33 DOS.COS0");
-    assert!(console_text(&d).contains("DOS33: $9EEB DOS.COS0"), "{}", console_text(&d));
+    assert!(
+        console_text(&d).contains("DOS33: $9EEB DOS.COS0"),
+        "{}",
+        console_text(&d)
+    );
     assert!(d.data.find(0xA884).is_some(), "ASC T_INIT range");
 }
 
@@ -249,10 +321,16 @@ fn data_directives_show_in_the_listing() {
     d.execute(&mut m, "u 2000");
     let g = d.render(&m);
     let text = g.text();
-    assert!(text.contains("2000:C8 C5 CC") && text.contains("ASC \"HELLO\""), "{text}");
+    assert!(
+        text.contains("2000:C8 C5 CC") && text.contains("ASC \"HELLO\""),
+        "{text}"
+    );
     d.execute(&mut m, "u 2010");
     let text = d.render(&m).text();
-    assert!(text.contains("words") && text.contains("dw") && text.contains("1234"), "{text}");
+    assert!(
+        text.contains("words") && text.contains("dw") && text.contains("1234"),
+        "{text}"
+    );
     d.execute(&mut m, "x 2000:2004");
     assert!(d.data.find(0x2000).is_none());
 }
@@ -260,7 +338,11 @@ fn data_directives_show_in_the_listing() {
 #[test]
 fn screen_grid_snapshot() {
     let mut m = bare(Model::Apple2Plus);
-    load(&mut m, 0x300, &[0xA9, 0x41, 0x8D, 0x00, 0x04, 0xD0, 0xFB, 0x60]);
+    load(
+        &mut m,
+        0x300,
+        &[0xA9, 0x41, 0x8D, 0x00, 0x04, 0xD0, 0xFB, 0x60],
+    );
     let mut d = Debugger::new();
     d.enter(&mut m);
     d.execute(&mut m, "bp 304");
@@ -300,9 +382,20 @@ fn io_breakpoint_on_the_speaker_during_a_real_boot() {
     assert_eq!(d.mode, RunMode::Debug, "{}", console_text(&d));
     let op = m.peek(m.cpu().pc);
     assert_eq!(op, 0xAD, "LDA abs");
-    assert_eq!(m.peek(m.cpu().pc + 1) as u16 | (m.peek(m.cpu().pc + 2) as u16) << 8, 0xC030);
-    assert!(console_text(&d).contains("Memory access at") && console_text(&d).contains("C030"), "{}", console_text(&d));
-    assert_eq!(m.drain_speaker_toggles().count(), 0, "stops before the toggle");
+    assert_eq!(
+        m.peek(m.cpu().pc + 1) as u16 | (m.peek(m.cpu().pc + 2) as u16) << 8,
+        0xC030
+    );
+    assert!(
+        console_text(&d).contains("Memory access at") && console_text(&d).contains("C030"),
+        "{}",
+        console_text(&d)
+    );
+    assert_eq!(
+        m.drain_speaker_toggles().count(),
+        0,
+        "stops before the toggle"
+    );
     d.execute(&mut m, "t");
     assert_eq!(m.drain_speaker_toggles().count(), 1);
 }

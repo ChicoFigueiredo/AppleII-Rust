@@ -9,7 +9,11 @@ use apple2_core::Model;
 /// The 24 rows of the displayed text page, 40 or 80 characters each.
 pub fn screen_text(s: &dyn VideoSource) -> Vec<String> {
     let model = s.model();
-    let lowercase = !model.is_apple2() || matches!(model, Model::Pravets82 | Model::Pravets8M | Model::Pravets8A);
+    let lowercase = !model.is_apple2()
+        || matches!(
+            model,
+            Model::Pravets82 | Model::Pravets8M | Model::Pravets8A
+        );
     let mode = s.mode();
     let mm = s.memmode();
     let alt = mode.altcharset && !model.is_apple2();

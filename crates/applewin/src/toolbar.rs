@@ -20,8 +20,16 @@ pub enum Button {
 
 impl Button {
     /// In AppleWin's order: F1..F8.
-    pub const ALL: [Button; 8] =
-        [Button::Help, Button::Run, Button::Drive1, Button::Drive2, Button::Swap, Button::Fullscreen, Button::Debug, Button::Settings];
+    pub const ALL: [Button; 8] = [
+        Button::Help,
+        Button::Run,
+        Button::Drive1,
+        Button::Drive2,
+        Button::Swap,
+        Button::Fullscreen,
+        Button::Debug,
+        Button::Settings,
+    ];
 
     pub fn fkey(self) -> u8 {
         Button::ALL.iter().position(|b| *b == self).unwrap_or(0) as u8 + 1
@@ -102,7 +110,13 @@ pub fn drive_text(n: usize, d: &DriveStatus) -> String {
         return format!("Drive {}: -", n + 1);
     }
     let image = d.image.as_deref().unwrap_or("(empty)");
-    format!("Drive {}: T{} {}{}", n + 1, d.track, image, if d.write_protected { " [WP]" } else { "" })
+    format!(
+        "Drive {}: T{} {}{}",
+        n + 1,
+        d.track,
+        image,
+        if d.write_protected { " [WP]" } else { "" }
+    )
 }
 
 /// Window title, like AppleWin's `GetAppModeTitle` text: model, mode, speed.
@@ -122,7 +136,11 @@ pub fn title(s: &EmuStatus) -> String {
 
 /// One-line status bar text.
 pub fn status_line(s: &EmuStatus) -> String {
-    let audio = if s.underruns > 0 { format!("  audio underruns: {}", s.underruns) } else { String::new() };
+    let audio = if s.underruns > 0 {
+        format!("  audio underruns: {}", s.underruns)
+    } else {
+        String::new()
+    };
     format!("{:.2} MHz  {}{audio}", s.mhz, s.video)
 }
 
@@ -139,13 +157,23 @@ mod tests {
         use crate::keymap::{HostKey, Mods};
         for b in Button::ALL {
             let key = HostKey::F(b.fkey());
-            assert_eq!(crate::actions::action_for(key, Mods::default()), Some(b.action()), "{b:?}");
+            assert_eq!(
+                crate::actions::action_for(key, Mods::default()),
+                Some(b.action()),
+                "{b:?}"
+            );
         }
     }
 
     #[test]
     fn led_and_drive_text() {
-        let d = DriveStatus { present: true, image: Some("DOS33.dsk".into()), track: 17, activity: DriveActivity::Write, write_protected: true };
+        let d = DriveStatus {
+            present: true,
+            image: Some("DOS33.dsk".into()),
+            track: 17,
+            activity: DriveActivity::Write,
+            write_protected: true,
+        };
         assert_eq!(led(&d), Led::Red);
         assert_eq!(drive_text(0, &d), "Drive 1: T17 DOS33.dsk [WP]");
         assert_eq!(drive_text(1, &DriveStatus::default()), "Drive 2: -");
@@ -153,7 +181,11 @@ mod tests {
 
     #[test]
     fn title_reflects_mode() {
-        let mut s = EmuStatus { model: "Apple2eEnhanced".into(), speed_label: "1.0x".into(), ..Default::default() };
+        let mut s = EmuStatus {
+            model: "Apple2eEnhanced".into(),
+            speed_label: "1.0x".into(),
+            ..Default::default()
+        };
         assert_eq!(title(&s), "AppleII-Rust - Apple2eEnhanced");
         s.paused = true;
         assert!(title(&s).ends_with("PAUSED"));

@@ -7,7 +7,10 @@ use apple2_core::{EventId, IrqSource, Machine, MachineConfig, Model, Scheduler, 
 const SRC: IrqSource = IrqSource::Mouse;
 
 fn deltas(s: &Scheduler) -> Vec<(u32, i32)> {
-    s.events().iter().map(|e| (e.id.0, e.cycles_remaining)).collect()
+    s.events()
+        .iter()
+        .map(|e| (e.id.0, e.cycles_remaining))
+        .collect()
 }
 
 #[test]

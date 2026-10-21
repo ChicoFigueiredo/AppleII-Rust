@@ -114,9 +114,21 @@ fn all_sixteen_switches_match_the_utaiie_table() {
         rd(&mut m, 0xC080 + n);
         let f = flags(&m);
         let expect = |b: bool, flag| (f & flag != 0) == b;
-        assert!(expect(bank2[(n >> 1) as usize & 7], mf::BANK2), "bank2 ${:04X}", 0xC080 + n);
-        assert!(expect(ram_read[n as usize & 3], mf::HIGHRAM), "ram read ${:04X}", 0xC080 + n);
-        assert!(expect(write[n as usize & 3], mf::WRITERAM), "write ${:04X}", 0xC080 + n);
+        assert!(
+            expect(bank2[(n >> 1) as usize & 7], mf::BANK2),
+            "bank2 ${:04X}",
+            0xC080 + n
+        );
+        assert!(
+            expect(ram_read[n as usize & 3], mf::HIGHRAM),
+            "ram read ${:04X}",
+            0xC080 + n
+        );
+        assert!(
+            expect(write[n as usize & 3], mf::WRITERAM),
+            "write ${:04X}",
+            0xC080 + n
+        );
     }
 }
 
@@ -180,7 +192,9 @@ fn e_lc_ram_follows_altzp_into_aux() {
 /// store reached the Language Card RAM.
 fn rmw_enables_write(model: Model, opcode: u8, x: u8) -> bool {
     let mut m = machine(model, &[]);
-    let prog = [0xA2, x, 0xAD, 0x80, 0xC0, opcode, 0x83, 0xC0, 0xA9, 0x55, 0x8D, 0x00, 0xD0];
+    let prog = [
+        0xA2, x, 0xAD, 0x80, 0xC0, opcode, 0x83, 0xC0, 0xA9, 0x55, 0x8D, 0x00, 0xD0,
+    ];
     for (i, b) in prog.iter().enumerate() {
         m.poke(0x300 + i as u16, *b);
     }
@@ -194,15 +208,24 @@ fn rmw_enables_write(model: Model, opcode: u8, x: u8) -> bool {
 fn gh700_inc_abs_x_with_x_zero_enables_on_both_cpus() {
     for model in [Model::Apple2Plus, Model::Apple2eEnhanced] {
         assert!(rmw_enables_write(model, 0xFE, 0), "{model:?}");
-        assert!(!rmw_enables_write(model, 0xFE, 1), "{model:?}: X != 0 touches another address");
+        assert!(
+            !rmw_enables_write(model, 0xFE, 1),
+            "{model:?}: X != 0 touches another address"
+        );
     }
 }
 
 #[test]
 fn gh700_rmw_abs_enables_on_65c02_only() {
     for op in [0xEE, 0xCE, 0x6E, 0x4E, 0x2E, 0x0E, 0x0C, 0x1C] {
-        assert!(rmw_enables_write(Model::Apple2eEnhanced, op, 0), "65C02 opcode {op:02X}");
-        assert!(!rmw_enables_write(Model::Apple2Plus, op, 0), "NMOS opcode {op:02X}");
+        assert!(
+            rmw_enables_write(Model::Apple2eEnhanced, op, 0),
+            "65C02 opcode {op:02X}"
+        );
+        assert!(
+            !rmw_enables_write(Model::Apple2Plus, op, 0),
+            "NMOS opcode {op:02X}"
+        );
     }
 }
 
@@ -221,13 +244,21 @@ fn saturn_selects_one_of_eight_banks() {
     rd(&mut m, 0xC0C3);
     for bank in 0..8u16 {
         // $C0n4-7 = banks 0-3, $C0nC-F = banks 4-7
-        let sel = if bank < 4 { 0xC0C4 + bank } else { 0xC0C8 + bank };
+        let sel = if bank < 4 {
+            0xC0C4 + bank
+        } else {
+            0xC0C8 + bank
+        };
         rd(&mut m, sel);
         wr(&mut m, 0xD000, 0x10 + bank as u8);
         wr(&mut m, 0xE000, 0x20 + bank as u8);
     }
     for bank in 0..8u16 {
-        let sel = if bank < 4 { 0xC0C4 + bank } else { 0xC0C8 + bank };
+        let sel = if bank < 4 {
+            0xC0C4 + bank
+        } else {
+            0xC0C8 + bank
+        };
         rd(&mut m, sel);
         assert_eq!(rd(&mut m, 0xD000), 0x10 + bank as u8);
         assert_eq!(rd(&mut m, 0xE000), 0x20 + bank as u8);
@@ -350,9 +381,19 @@ fn with_real_rom(model: Model, lc: bool, freeze: bool) -> Machine {
 fn original_apple2_with_a_language_card_gets_the_plus_f8_rom() {
     let plain = apple2_roms::APPLE2;
     let plus = apple2_roms::APPLE2_PLUS;
-    assert_ne!(plain[0x2800..], plus[0x2800..], "premise: the two F8 ROMs differ");
-    assert_eq!(f8(&with_real_rom(Model::Apple2, false, false)), plain[0x2800..]);
-    assert_eq!(f8(&with_real_rom(Model::Apple2, true, false)), plus[0x2800..]);
+    assert_ne!(
+        plain[0x2800..],
+        plus[0x2800..],
+        "premise: the two F8 ROMs differ"
+    );
+    assert_eq!(
+        f8(&with_real_rom(Model::Apple2, false, false)),
+        plain[0x2800..]
+    );
+    assert_eq!(
+        f8(&with_real_rom(Model::Apple2, true, false)),
+        plus[0x2800..]
+    );
     // the rest of the ][ ROM is untouched
     let m = with_real_rom(Model::Apple2, true, false);
     assert_eq!(m.peek(0xD000), plain[0]);
@@ -366,8 +407,16 @@ fn original_apple2_with_a_language_card_gets_the_plus_f8_rom() {
 fn freezes_f8_replaces_f8_on_the_ii_family_only() {
     let freeze = apple2_roms::FREEZES_NON_AUTOSTART_F8_ROM;
     assert_eq!(freeze.len(), 0x800);
-    for (model, lc) in [(Model::Apple2, false), (Model::Apple2, true), (Model::Apple2Plus, true)] {
-        assert_eq!(f8(&with_real_rom(model, lc, true)), freeze, "{model:?} lc={lc}");
+    for (model, lc) in [
+        (Model::Apple2, false),
+        (Model::Apple2, true),
+        (Model::Apple2Plus, true),
+    ] {
+        assert_eq!(
+            f8(&with_real_rom(model, lc, true)),
+            freeze,
+            "{model:?} lc={lc}"
+        );
     }
     let e = with_real_rom(Model::Apple2e, false, true);
     assert_ne!(f8(&e), freeze);

@@ -13,15 +13,31 @@ use apple2_core::Card;
 /// Unit version (z80.cpp:6469, `Slot(..., 1)`).
 const VERSION: u32 = 1;
 
-pub const MAP: Mapping = Mapping { aw_names: &["Z80 SoftCard", "Z80"], our_name: "Z80 SoftCard", save, load };
+pub const MAP: Mapping = Mapping {
+    aw_names: &["Z80 SoftCard", "Z80"],
+    our_name: "Z80 SoftCard",
+    save,
+    load,
+};
 
 fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<SoftCard>()) else { return false };
+    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<SoftCard>()) else {
+        return false;
+    };
     let Some(z) = c.z80() else { return false };
     w.slot(slot, "Z80 SoftCard", VERSION, |w| {
         // `Active`: whether the Z80 owns the CPU (z80.cpp:6490).
         w.int("Active", c.is_active() as i64);
-        for (k, v) in [("A", z.a), ("B", z.b), ("C", z.c), ("D", z.d), ("E", z.e), ("F", z.f), ("H", z.h), ("L", z.l)] {
+        for (k, v) in [
+            ("A", z.a),
+            ("B", z.b),
+            ("C", z.c),
+            ("D", z.d),
+            ("E", z.e),
+            ("F", z.f),
+            ("H", z.h),
+            ("L", z.l),
+        ] {
             w.hex8(k, v as u32);
         }
         w.hex16("IX", z.ix as u32);
@@ -33,27 +49,51 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
         w.hex8("IFF1", z.iff1 as u32);
         w.hex8("IFF2", z.iff2 as u32);
         w.hex8("IM Mode", z.im as u32);
-        for (k, v) in [("A'", z.a2), ("B'", z.b2), ("C'", z.c2), ("D'", z.d2), ("E'", z.e2), ("F'", z.f2), ("H'", z.h2), ("L'", z.l2)] {
+        for (k, v) in [
+            ("A'", z.a2),
+            ("B'", z.b2),
+            ("C'", z.c2),
+            ("D'", z.d2),
+            ("E'", z.e2),
+            ("F'", z.f2),
+            ("H'", z.h2),
+            ("L'", z.l2),
+        ] {
             w.hex8(k, v as u32);
         }
     });
     true
 }
 
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if slot == 0 {
-        return Err(Error::Format("Card 'Z80 SoftCard' cannot be in slot 0".into()));
+        return Err(Error::Format(
+            "Card 'Z80 SoftCard' cannot be in slot 0".into(),
+        ));
     }
     if version != VERSION {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Z80 SoftCard'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Z80 SoftCard'."
+        )));
     }
-    let Some(mut card) = make(ctx, "Z80 SoftCard", slot) else { return Ok(None) };
+    let Some(mut card) = make(ctx, "Z80 SoftCard", slot) else {
+        return Ok(None);
+    };
     let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<SoftCard>()) else {
-        return Err(Error::Unsupported("host returned a card that is not a Z80 SoftCard".into()));
+        return Err(Error::Unsupported(
+            "host returned a card that is not a Z80 SoftCard".into(),
+        ));
     };
     let g = |k: &str| st.u32(k);
     {
-        let z = c.z80_mut().ok_or_else(|| Error::Unsupported("Z80 SoftCard: CPU is not available".into()))?;
+        let z = c
+            .z80_mut()
+            .ok_or_else(|| Error::Unsupported("Z80 SoftCard: CPU is not available".into()))?;
         z.a = g("A")? as u8;
         z.b = g("B")? as u8;
         z.c = g("C")? as u8;

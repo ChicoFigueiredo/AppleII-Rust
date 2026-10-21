@@ -144,9 +144,16 @@ impl HardDiskCard {
         };
         let mut firmware = [0u8; SLOT_ROM_SIZE];
         firmware.copy_from_slice(rom);
-        if matches!(mode, HdcMode::BlockMode2Devices | HdcMode::BlockMode4Devices) {
+        if matches!(
+            mode,
+            HdcMode::BlockMode2Devices | HdcMode::BlockMode4Devices
+        ) {
             firmware[0x07] = 0x3C; // block mode (not SmartPort)
-            let drives: u8 = if mode == HdcMode::BlockMode2Devices { 1 } else { 3 };
+            let drives: u8 = if mode == HdcMode::BlockMode2Devices {
+                1
+            } else {
+                3
+            };
             firmware[0xFE] = (firmware[0xFE] & 0xCF) | (drives << 4); // 2 or 4 drives
         } else if model != Model::Apple2eEnhanced && mode != HdcMode::SmartPort {
             firmware[0x07] = 0x3C;
@@ -189,7 +196,13 @@ impl HardDiskCard {
         }
         let previous = self.unplug(drive);
         for i in 0..NUM_HARDDISKS {
-            if i != drive && !image.pathname().is_empty() && self.units[i].image.as_ref().is_some_and(|o| o.pathname() == image.pathname()) {
+            if i != drive
+                && !image.pathname().is_empty()
+                && self.units[i]
+                    .image
+                    .as_ref()
+                    .is_some_and(|o| o.pathname() == image.pathname())
+            {
                 self.unplug(i);
             }
         }
@@ -247,13 +260,21 @@ impl HardDiskCard {
     /// LED state of `drive` (`GetLightStatus`/`UpdateLightStatus`): reads and writes show
     /// while the DMA is "busy".
     pub fn light_status(&self, drive: usize) -> DiskStatus {
-        self.units.get(drive).map_or(DiskStatus::Empty, |u| u.status_prev)
+        self.units
+            .get(drive)
+            .map_or(DiskStatus::Empty, |u| u.status_prev)
     }
 
     /// LED of the unit addressed last.
     pub fn current_light_status(&self) -> DiskStatus {
-        let unit = if self.command & SP_CMD_BASE != 0 { self.unit_num as usize } else { self.pro_dos_block_device_unit() };
-        self.units.get(unit).map_or(DiskStatus::Off, |u| u.status_prev)
+        let unit = if self.command & SP_CMD_BASE != 0 {
+            self.unit_num as usize
+        } else {
+            self.pro_dos_block_device_unit()
+        };
+        self.units
+            .get(unit)
+            .map_or(DiskStatus::Off, |u| u.status_prev)
     }
 
     /// Writes back nothing (blocks are written through at once); here for symmetry with the
@@ -266,7 +287,14 @@ impl HardDiskCard {
         if self.user_num_blocks != 0 {
             return self.user_num_blocks;
         }
-        let size = if unit == usize::MAX { 0 } else { self.units[unit].image.as_ref().map_or(0, DiskImage::image_size) };
+        let size = if unit == usize::MAX {
+            0
+        } else {
+            self.units[unit]
+                .image
+                .as_ref()
+                .map_or(0, DiskImage::image_size)
+        };
         let mut n = (size / HD_BLOCK_SIZE) as u32;
         n = n.min(MAX_NUM_BLOCKS);
         if is_16bit {
@@ -284,7 +312,10 @@ impl HardDiskCard {
 
     fn num_connected_devices(&self) -> u8 {
         // Scan backwards for the index of the last attached HDD.
-        self.units.iter().rposition(Unit::loaded).map_or(0, |i| i as u8 + 1)
+        self.units
+            .iter()
+            .rposition(Unit::loaded)
+            .map_or(0, |i| i as u8 + 1)
     }
 
     fn pro_dos_block_device_unit(&self) -> usize {
@@ -344,7 +375,9 @@ impl HardDiskCard {
             u.error = DEVICE_NOT_CONNECTED; // GH#452
             return self.cmd_status(idx, now);
         }
-        if (command == SP_CMD_READBLOCK || command == SP_CMD_WRITEBLOCK) && self.unit_mut(idx).diskblock > MAX_NUM_BLOCKS {
+        if (command == SP_CMD_READBLOCK || command == SP_CMD_WRITEBLOCK)
+            && self.unit_mut(idx).diskblock > MAX_NUM_BLOCKS
+        {
             let u = self.unit_mut(idx);
             u.status_next = DiskStatus::Off;
             u.error = DEVICE_IO_ERROR;
@@ -353,7 +386,13 @@ impl HardDiskCard {
         self.unit_mut(idx).error = DEVICE_OK;
         match command {
             BLK_CMD_STATUS => {
-                if idx != usize::MAX && self.units[idx].image.as_ref().map_or(0, DiskImage::image_size) == 0 {
+                if idx != usize::MAX
+                    && self.units[idx]
+                        .image
+                        .as_ref()
+                        .map_or(0, DiskImage::image_size)
+                        == 0
+                {
                     self.unit_mut(idx).error = DEVICE_IO_ERROR;
                 }
             }
@@ -374,12 +413,20 @@ impl HardDiskCard {
         let u = self.unit_mut(idx);
         u.status_next = DiskStatus::Read;
         let (block, mem) = (u.diskblock, u.memblock);
-        let ok = idx != usize::MAX && (block as u64 * HD_BLOCK_SIZE as u64) < self.units[idx].image.as_ref().map_or(0, DiskImage::image_size) as u64;
+        let ok = idx != usize::MAX
+            && (block as u64 * HD_BLOCK_SIZE as u64)
+                < self.units[idx]
+                    .image
+                    .as_ref()
+                    .map_or(0, DiskImage::image_size) as u64;
         let mut done = false;
         if ok {
             let u = &mut self.units[idx];
             let mut buf = [0u8; HD_BLOCK_SIZE];
-            if u.image.as_ref().is_some_and(|i| i.read_block(block, &mut buf)) {
+            if u.image
+                .as_ref()
+                .is_some_and(|i| i.read_block(block, &mut buf))
+            {
                 u.buf = buf;
                 u.buf_ptr = 0;
                 // The MMU may map reads and writes to different memory: DMA writes as the CPU would.
@@ -406,7 +453,10 @@ impl HardDiskCard {
             return;
         }
         let (block, mem) = (self.units[idx].diskblock, self.units[idx].memblock);
-        let write_protected = self.units[idx].image.as_ref().is_none_or(DiskImage::is_write_protected);
+        let write_protected = self.units[idx]
+            .image
+            .as_ref()
+            .is_none_or(DiskImage::is_write_protected);
         if write_protected {
             let u = &mut self.units[idx];
             u.status_next = DiskStatus::Prot;
@@ -415,7 +465,10 @@ impl HardDiskCard {
         }
         self.units[idx].status_next = DiskStatus::Write;
         let mut ok = true;
-        let image_size = self.units[idx].image.as_ref().map_or(0, DiskImage::image_size);
+        let image_size = self.units[idx]
+            .image
+            .as_ref()
+            .map_or(0, DiskImage::image_size);
         if block as usize * HD_BLOCK_SIZE >= image_size {
             // Writing past the end grows the image with zero blocks.
             let zero = [0u8; HD_BLOCK_SIZE];
@@ -434,7 +487,11 @@ impl HardDiskCard {
             for (i, b) in buf.iter_mut().enumerate() {
                 *b = ctx.dma_read(mem.wrapping_add(i as u16));
             }
-            ok = self.units[idx].image.as_mut().expect("loaded").write_block(block, &buf);
+            ok = self.units[idx]
+                .image
+                .as_mut()
+                .expect("loaded")
+                .write_block(block, &buf);
         }
         if ok {
             self.units[idx].error = DEVICE_OK;
@@ -449,7 +506,11 @@ impl HardDiskCard {
             self.unit_mut(idx).error = DEVICE_IO_ERROR;
             return;
         }
-        if self.units[idx].image.as_ref().is_none_or(DiskImage::is_write_protected) {
+        if self.units[idx]
+            .image
+            .as_ref()
+            .is_none_or(DiskImage::is_write_protected)
+        {
             self.units[idx].error = NOWRITE;
             return;
         }
@@ -458,7 +519,11 @@ impl HardDiskCard {
         self.not_busy_cycle = now;
         let mut ok = true;
         for b in 0..blocks {
-            ok = self.units[idx].image.as_mut().expect("loaded").write_block(b, &zero);
+            ok = self.units[idx]
+                .image
+                .as_mut()
+                .expect("loaded")
+                .write_block(b, &zero);
             if !ok {
                 break;
             }
@@ -487,7 +552,8 @@ impl HardDiskCard {
                     status.extend([0; 7]);
                     if code == SP_STATUS_GETDIB {
                         Self::id_string(&mut status, "AppleWin SP");
-                        status.extend([0x00, 0x00, FW_VERSION.0, FW_VERSION.1]); // memory expansion card
+                        status.extend([0x00, 0x00, FW_VERSION.0, FW_VERSION.1]);
+                        // memory expansion card
                     }
                 }
                 _ => r = BADCTL,
@@ -499,16 +565,25 @@ impl HardDiskCard {
                     let loaded = self.units[unit].loaded();
                     // b7 block device, b6 write allowed, b5 read allowed, b4 online, b3 format allowed, b2 write protected.
                     let mut general: u8 = if loaded { 0xF8 } else { 0xE8 };
-                    if self.units[idx].image.as_ref().is_some_and(DiskImage::is_write_protected) {
+                    if self.units[idx]
+                        .image
+                        .as_ref()
+                        .is_some_and(DiskImage::is_write_protected)
+                    {
                         general |= 1 << 2;
                     }
                     status.push(general);
-                    let blocks = if loaded { self.image_size_in_blocks(idx, false) } else { 0 };
+                    let blocks = if loaded {
+                        self.image_size_in_blocks(idx, false)
+                    } else {
+                        0
+                    };
                     status.extend([blocks as u8, (blocks >> 8) as u8, (blocks >> 16) as u8]);
                     if code == SP_STATUS_GETDIB {
                         let id = format!("AppleWin SP D#{:02}", self.unit_num);
                         Self::id_string(&mut status, &id);
-                        status.extend([0x02, 0x20, FW_VERSION.0, FW_VERSION.1]); // hard disk
+                        status.extend([0x02, 0x20, FW_VERSION.0, FW_VERSION.1]);
+                        // hard disk
                     }
                 }
                 _ => r = BADCTL,
@@ -537,7 +612,13 @@ impl HardDiskCard {
     }
 
     fn encode(&self) -> Vec<u8> {
-        let mut o = vec![1u8, self.unit_num, self.command, self.fifo_idx, self.status_code];
+        let mut o = vec![
+            1u8,
+            self.unit_num,
+            self.command,
+            self.fifo_idx,
+            self.status_code,
+        ];
         o.extend(self.not_busy_cycle.to_le_bytes());
         for u in self.units.iter().chain(std::iter::once(&self.controller)) {
             o.push(u.error);
@@ -551,13 +632,26 @@ impl HardDiskCard {
     }
 
     fn decode(&mut self, s: &[u8]) -> Option<()> {
-        const STATUSES: [DiskStatus; 6] = [DiskStatus::Off, DiskStatus::Read, DiskStatus::Write, DiskStatus::Prot, DiskStatus::Empty, DiskStatus::Spin];
+        const STATUSES: [DiskStatus; 6] = [
+            DiskStatus::Off,
+            DiskStatus::Read,
+            DiskStatus::Write,
+            DiskStatus::Prot,
+            DiskStatus::Empty,
+            DiskStatus::Spin,
+        ];
         if s.len() != 5 + 8 + (NUM_HARDDISKS + 1) * 11 || s[0] != 1 {
             return None;
         }
-        (self.unit_num, self.command, self.fifo_idx, self.status_code) = (s[1], s[2], s[3] % 7, s[4]);
+        (self.unit_num, self.command, self.fifo_idx, self.status_code) =
+            (s[1], s[2], s[3] % 7, s[4]);
         self.not_busy_cycle = u64::from_le_bytes(s[5..13].try_into().ok()?);
-        for (i, u) in self.units.iter_mut().chain(std::iter::once(&mut self.controller)).enumerate() {
+        for (i, u) in self
+            .units
+            .iter_mut()
+            .chain(std::iter::once(&mut self.controller))
+            .enumerate()
+        {
             let c = &s[13 + i * 11..13 + (i + 1) * 11];
             u.error = c[0];
             u.memblock = u16::from_le_bytes([c[1], c[2]]);
@@ -584,7 +678,11 @@ impl HardDiskCard {
             0x0 => {
                 let r = self.cmd_execute(unit, ctx);
                 // Subsequent reads from IO addr 0 just execute 'Status'.
-                self.command = if self.command & SP_CMD_BASE != 0 { SP_CMD_BUSY_STATUS } else { BLK_CMD_STATUS };
+                self.command = if self.command & SP_CMD_BASE != 0 {
+                    SP_CMD_BUSY_STATUS
+                } else {
+                    BLK_CMD_STATUS
+                };
                 self.fifo_idx = 0;
                 r
             }
@@ -763,22 +861,37 @@ impl HardDiskCard {
     /// units without an image are skipped. The firmware stays the card's own (AppleWin keeps the
     /// saved one only for old revisions).
     pub fn apply_snapshot(&mut self, s: &HddSnapshot) {
-        const STATUSES: [DiskStatus; 6] = [DiskStatus::Off, DiskStatus::Read, DiskStatus::Write, DiskStatus::Prot, DiskStatus::Empty, DiskStatus::Spin];
+        const STATUSES: [DiskStatus; 6] = [
+            DiskStatus::Off,
+            DiskStatus::Read,
+            DiskStatus::Write,
+            DiskStatus::Prot,
+            DiskStatus::Empty,
+            DiskStatus::Spin,
+        ];
         self.unit_num = s.unit_num;
         self.command = s.command;
         self.not_busy_cycle = s.not_busy_cycle;
         self.status_code = s.status_code;
         self.fifo_idx = s.fifo_idx % 7;
         for (i, us) in &s.units {
-            let Some(u) = self.units.get_mut(*i) else { continue };
+            let Some(u) = self.units.get_mut(*i) else {
+                continue;
+            };
             if u.image.is_none() {
                 continue;
             }
             u.error = us.error;
             u.memblock = us.memblock;
             u.diskblock = us.diskblock;
-            u.status_next = STATUSES.get(us.status_next as usize).copied().unwrap_or(DiskStatus::Off);
-            u.status_prev = STATUSES.get(us.status_prev as usize).copied().unwrap_or(DiskStatus::Off);
+            u.status_next = STATUSES
+                .get(us.status_next as usize)
+                .copied()
+                .unwrap_or(DiskStatus::Off);
+            u.status_prev = STATUSES
+                .get(us.status_prev as usize)
+                .copied()
+                .unwrap_or(DiskStatus::Off);
             u.buf_ptr = us.buf_ptr.min(HD_BLOCK_SIZE as u16 - 1);
             let n = us.buf.len().min(HD_BLOCK_SIZE);
             u.buf[..n].copy_from_slice(&us.buf[..n]);

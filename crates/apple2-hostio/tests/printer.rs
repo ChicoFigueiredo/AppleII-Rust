@@ -10,7 +10,10 @@ const IO: u16 = 0xC080 + 16; // slot 1
 fn machine(opts: PrinterOptions) -> (Machine, MemorySink) {
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
     let sink = MemorySink::new();
-    assert!(m.insert_card(1, Box::new(ParallelPrinterCard::new(Box::new(sink.clone()), opts))));
+    assert!(m.insert_card(
+        1,
+        Box::new(ParallelPrinterCard::new(Box::new(sink.clone()), opts))
+    ));
     (m, sink)
 }
 
@@ -30,7 +33,11 @@ fn pr_number_1_prints_basic_output() {
     run_frames(&mut m, 30);
     assert!(m.paste("PRINT \"HELLO PRINTER\"\r"));
     run_frames(&mut m, 60);
-    assert!(sink.text().contains("HELLO PRINTER"), "printed {:?}", sink.text());
+    assert!(
+        sink.text().contains("HELLO PRINTER"),
+        "printed {:?}",
+        sink.text()
+    );
     assert!(sink.is_open());
 }
 
@@ -45,18 +52,29 @@ fn reads_return_ff_and_only_port_zero_prints() {
 
 #[test]
 fn idle_printer_closes_the_job_and_next_print_starts_a_new_one() {
-    let (mut m, sink) = machine(PrinterOptions { idle_limit: 1, ..Default::default() });
+    let (mut m, sink) = machine(PrinterOptions {
+        idle_limit: 1,
+        ..Default::default()
+    });
     m.board_mut().write(IO, b'a');
     assert!(sink.is_open());
     m.run_cycles(CYCLES_PER_IDLE_SECOND + 1000);
     assert!(!sink.is_open());
     m.board_mut().write(IO, b'b');
-    assert_eq!((sink.text().as_str(), sink.jobs()), ("b", 2), "overwrite mode starts fresh");
+    assert_eq!(
+        (sink.text().as_str(), sink.jobs()),
+        ("b", 2),
+        "overwrite mode starts fresh"
+    );
 }
 
 #[test]
 fn append_mode_keeps_earlier_jobs() {
-    let (mut m, sink) = machine(PrinterOptions { idle_limit: 1, append: true, ..Default::default() });
+    let (mut m, sink) = machine(PrinterOptions {
+        idle_limit: 1,
+        append: true,
+        ..Default::default()
+    });
     m.board_mut().write(IO, b'a');
     m.run_cycles(CYCLES_PER_IDLE_SECOND + 1000);
     m.board_mut().write(IO, b'b');
@@ -65,7 +83,10 @@ fn append_mode_keeps_earlier_jobs() {
 
 #[test]
 fn filter_unprintable_keeps_cr_and_lf_only() {
-    let (mut m, sink) = machine(PrinterOptions { filter_unprintable: true, ..Default::default() });
+    let (mut m, sink) = machine(PrinterOptions {
+        filter_unprintable: true,
+        ..Default::default()
+    });
     for c in [7u8, b'h', 13, 10, 27, b'i'] {
         m.board_mut().write(IO, c);
     }

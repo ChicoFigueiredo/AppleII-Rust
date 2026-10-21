@@ -13,16 +13,24 @@ use std::path::PathBuf;
 pub type RegDump = BTreeMap<String, BTreeMap<String, String>>;
 
 fn insert(d: &mut RegDump, section: &str, key: &str, value: String) {
-    d.entry(section.to_ascii_lowercase()).or_default().insert(key.to_ascii_lowercase(), value);
+    d.entry(section.to_ascii_lowercase())
+        .or_default()
+        .insert(key.to_ascii_lowercase(), value);
 }
 
 /// Decodes a `.reg` file: UTF-16LE with BOM (what regedit writes) or plain UTF-8/ANSI.
 pub fn decode_reg_bytes(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xFF, 0xFE]) {
-        let units: Vec<u16> = bytes[2..].as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
+        let units: Vec<u16> = bytes[2..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
+            .collect();
         String::from_utf16_lossy(&units)
     } else {
-        String::from_utf8_lossy(bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes)).into_owned()
+        String::from_utf8_lossy(bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes))
+            .into_owned()
     }
 }
 
@@ -38,8 +46,12 @@ pub fn parse_reg_text(text: &str) -> RegDump {
             let lower = h.to_ascii_lowercase();
             section = lower.find(MARK).map(|i| h[i + MARK.len()..].to_string());
         } else if let (Some(sec), Some(rest)) = (&section, line.strip_prefix('"')) {
-            let Some((name, val)) = split_quoted(rest) else { continue };
-            let Some(val) = val.strip_prefix('=') else { continue };
+            let Some((name, val)) = split_quoted(rest) else {
+                continue;
+            };
+            let Some(val) = val.strip_prefix('=') else {
+                continue;
+            };
             let val = if let Some(q) = val.strip_prefix('"') {
                 match split_quoted(q) {
                     Some((s, _)) => s,
@@ -95,7 +107,10 @@ struct View<'a>(&'a RegDump);
 
 impl View<'_> {
     fn s(&self, section: &str, key: &str) -> Option<&str> {
-        self.0.get(&section.to_ascii_lowercase())?.get(&key.to_ascii_lowercase()).map(String::as_str)
+        self.0
+            .get(&section.to_ascii_lowercase())?
+            .get(&key.to_ascii_lowercase())
+            .map(String::as_str)
     }
     fn n(&self, section: &str, key: &str) -> Option<u32> {
         let v = self.s(section, key)?.trim();
@@ -108,7 +123,9 @@ impl View<'_> {
         self.n(section, key).map(|v| v != 0)
     }
     fn path(&self, section: &str, key: &str) -> Option<PathBuf> {
-        self.s(section, key).filter(|s| !s.is_empty()).map(PathBuf::from)
+        self.s(section, key)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
     }
 }
 
@@ -123,7 +140,10 @@ fn model_from_registry(v: u32) -> Model {
     match v {
         0x110 | 0x102 | 0x100 => Model::Pravets82,
         0x111 => Model::Pravets8M,
-        v => u16::try_from(v).ok().and_then(|v| Model::try_from(v).ok()).unwrap_or(Model::Apple2eEnhanced),
+        v => u16::try_from(v)
+            .ok()
+            .and_then(|v| Model::try_from(v).ok())
+            .unwrap_or(Model::Apple2eEnhanced),
     }
 }
 
@@ -151,7 +171,9 @@ pub fn settings_from_dump(dump: &RegDump) -> Settings {
     // Joysticks (with the pre-1.24 fallback)
     for j in 0..2 {
         let key = |sfx: &str| format!("Joystick{j}{sfx}");
-        let v = r.n(c, &key(" Emu Type v3")).or_else(|| r.n(c, &key(" Emu Type")));
+        let v = r
+            .n(c, &key(" Emu Type v3"))
+            .or_else(|| r.n(c, &key(" Emu Type")));
         if j == 0 {
             if let Some(k) = v.and_then(Joystick0Kind::from_value) {
                 s.joystick.joystick0 = k;
@@ -178,21 +200,48 @@ pub fn settings_from_dump(dump: &RegDump) -> Settings {
             }
         }
     }
-    set(&mut s.joystick.pdl_x_trim, r.n(c, "PDL X-Trim").map(|v| v as i16));
-    set(&mut s.joystick.pdl_y_trim, r.n(c, "PDL Y-Trim").map(|v| v as i16));
-    set(&mut s.joystick.cursor_control, r.b(c, "Joystick Cursor Control"));
-    set(&mut s.joystick.centering, r.b(c, "Joystick Centering Control"));
-    set(&mut s.joystick.autofire, r.n(c, "Autofire").map(|v| v as u8));
+    set(
+        &mut s.joystick.pdl_x_trim,
+        r.n(c, "PDL X-Trim").map(|v| v as i16),
+    );
+    set(
+        &mut s.joystick.pdl_y_trim,
+        r.n(c, "PDL Y-Trim").map(|v| v as i16),
+    );
+    set(
+        &mut s.joystick.cursor_control,
+        r.b(c, "Joystick Cursor Control"),
+    );
+    set(
+        &mut s.joystick.centering,
+        r.b(c, "Joystick Centering Control"),
+    );
+    set(
+        &mut s.joystick.autofire,
+        r.n(c, "Autofire").map(|v| v as u8),
+    );
     set(&mut s.joystick.swap_buttons, r.b(c, "Swap buttons 0 and 1"));
     set(&mut s.joystick.shift_key_mod, r.b(c, "Shift Key Mod"));
-    if let Some(d) = r.n("Configuration\\Game I/O Connector", "Game I/O type").and_then(DongleType::from_value) {
+    if let Some(d) = r
+        .n("Configuration\\Game I/O Connector", "Game I/O type")
+        .and_then(DongleType::from_value)
+    {
         s.joystick.dongle = d;
     }
 
     // Keyboard / mouse
-    set(&mut s.keyboard.scroll_lock_toggle, r.b(c, "ScrollLock Toggle"));
-    set(&mut s.keyboard.mouse_show_crosshair, r.b(c, "Mouse crosshair"));
-    set(&mut s.keyboard.mouse_restrict_to_window, r.b(c, "Mouse restrict to window"));
+    set(
+        &mut s.keyboard.scroll_lock_toggle,
+        r.b(c, "ScrollLock Toggle"),
+    );
+    set(
+        &mut s.keyboard.mouse_show_crosshair,
+        r.b(c, "Mouse crosshair"),
+    );
+    set(
+        &mut s.keyboard.mouse_restrict_to_window,
+        r.b(c, "Mouse restrict to window"),
+    );
 
     // Machine
     set(&mut s.machine.speed, r.n(c, "Emulation Speed"));
@@ -219,25 +268,55 @@ pub fn settings_from_dump(dump: &RegDump) -> Settings {
     }
     set(&mut s.video.window_scale, r.n(c, "Window Scale"));
     set(&mut s.video.show_disk_leds, r.b(c, "Show Disk II Status"));
-    set(&mut s.video.fullscreen_show_subunit_status, r.b(c, "Full-screen show subunit status"));
-    if let (Some(x), Some(y)) = (r.n("Preferences", "Window X-Position"), r.n("Preferences", "Window Y-Position")) {
+    set(
+        &mut s.video.fullscreen_show_subunit_status,
+        r.b(c, "Full-screen show subunit status"),
+    );
+    if let (Some(x), Some(y)) = (
+        r.n("Preferences", "Window X-Position"),
+        r.n("Preferences", "Window Y-Position"),
+    ) {
         s.video.window_pos = Some((x as i32, y as i32));
     }
 
     // Sound, misc, storage
-    set(&mut s.sound.master_volume, r.n(c, "Master volume").or_else(|| r.n(c, "Speaker Volume")));
+    set(
+        &mut s.sound.master_volume,
+        r.n(c, "Master volume").or_else(|| r.n(c, "Speaker Volume")),
+    );
     set(&mut s.misc.confirm_reboot, r.b(c, "Confirm Reboot"));
-    s.misc.imported_applewin_version = r.s(c, "Version").filter(|v| !v.is_empty()).map(str::to_string);
-    set(&mut s.storage.enhance_disk_speed, r.b(c, "Enhance Disk Speed"));
-    set(&mut s.storage.save_state_on_exit, r.b(c, "Save State On Exit"));
+    s.misc.imported_applewin_version = r
+        .s(c, "Version")
+        .filter(|v| !v.is_empty())
+        .map(str::to_string);
+    set(
+        &mut s.storage.enhance_disk_speed,
+        r.b(c, "Enhance Disk Speed"),
+    );
+    set(
+        &mut s.storage.save_state_on_exit,
+        r.b(c, "Save State On Exit"),
+    );
     s.storage.savestate_filename = r.path(c, "Save State Filename");
     s.storage.ciderpress_path = r.path(c, "CiderPress Location");
     s.storage.disk_dir = r.path("Preferences", "Starting Directory");
     s.storage.hdv_dir = r.path("Preferences", "HDV Starting Directory");
-    set(&mut s.storage.new_disk_copy_bitsy_boot, r.b("Preferences", "NewDiskCopyBitsyBoot"));
-    set(&mut s.storage.new_disk_copy_bitsy_bye, r.b("Preferences", "NewDiskCopyBitsyBye"));
-    set(&mut s.storage.new_disk_copy_basic, r.b("Preferences", "NewDiskCopyBASIC"));
-    set(&mut s.storage.new_disk_copy_prodos, r.b("Preferences", "NewDiskCopyProDOS"));
+    set(
+        &mut s.storage.new_disk_copy_bitsy_boot,
+        r.b("Preferences", "NewDiskCopyBitsyBoot"),
+    );
+    set(
+        &mut s.storage.new_disk_copy_bitsy_bye,
+        r.b("Preferences", "NewDiskCopyBitsyBye"),
+    );
+    set(
+        &mut s.storage.new_disk_copy_basic,
+        r.b("Preferences", "NewDiskCopyBASIC"),
+    );
+    set(
+        &mut s.storage.new_disk_copy_prodos,
+        r.b("Preferences", "NewDiskCopyProDOS"),
+    );
 
     // Slots
     s.reset_slot0_for_model();
@@ -249,17 +328,26 @@ pub fn settings_from_dump(dump: &RegDump) -> Settings {
             // Legacy (AppleWin <= 1.30.3), Utilities.cpp:240-257
             s.slots.0[slot] = match slot {
                 3 => {
-                    let mut c = SlotCardSpec::new(if r.b(c, "Uthernet Active") == Some(true) { CardType::Uthernet } else { CardType::Empty });
+                    let mut c = SlotCardSpec::new(if r.b(c, "Uthernet Active") == Some(true) {
+                        CardType::Uthernet
+                    } else {
+                        CardType::Empty
+                    });
                     if let SlotCardSpec::Uthernet { interface } = &mut c {
                         *interface = r.s(c_str(), "Uthernet Interface").unwrap_or("").to_string();
                     }
                     c
                 }
-                4 | 5 => match r.n(c, &format!("Slot {slot}")).and_then(CardType::from_value) {
+                4 | 5 => match r
+                    .n(c, &format!("Slot {slot}"))
+                    .and_then(CardType::from_value)
+                {
                     Some(t) => SlotCardSpec::new(t),
                     None => SlotCardSpec::default_for_slot(slot, s.machine.model),
                 },
-                7 if r.n(c, "Harddisk Enable") == Some(1) => SlotCardSpec::new(CardType::GenericHdd),
+                7 if r.n(c, "Harddisk Enable") == Some(1) => {
+                    SlotCardSpec::new(CardType::GenericHdd)
+                }
                 _ => SlotCardSpec::default_for_slot(slot, s.machine.model),
             };
         }
@@ -277,7 +365,9 @@ pub fn settings_from_dump(dump: &RegDump) -> Settings {
         s.aux.card = match ty {
             CardType::Empty => SlotCardSpec::Empty,
             CardType::Col80 => SlotCardSpec::Col80,
-            CardType::RamWorksIII => SlotCardSpec::RamWorksIII { banks: r.n(aux, "Number of Banks").unwrap_or(16).clamp(1, 256) as u16 },
+            CardType::RamWorksIII => SlotCardSpec::RamWorksIII {
+                banks: r.n(aux, "Number of Banks").unwrap_or(16).clamp(1, 256) as u16,
+            },
             _ => SlotCardSpec::Extended80Col,
         };
     }
@@ -291,7 +381,10 @@ fn c_str() -> &'static str {
 fn load_slot_card(r: &View, sec: &str, ty: CardType) -> SlotCardSpec {
     let mut card = SlotCardSpec::new(ty);
     match &mut card {
-        SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
+        SlotCardSpec::Disk2 {
+            firmware_13_sector,
+            drives,
+        } => {
             set(firmware_13_sector, r.b(sec, "13-sector Firmware"));
             drives[0].image = r.path(sec, "Last Disk Image 1");
             drives[1].image = r.path(sec, "Last Disk Image 2");
@@ -309,31 +402,54 @@ fn load_slot_card(r: &View, sec: &str, ty: CardType) -> SlotCardSpec {
         }
         SlotCardSpec::GenericPrinter(p) => {
             set(&mut p.dump_to_printer, r.b(sec, "Dump to printer"));
-            set(&mut p.convert_encoding, r.b(sec, "Convert printer encoding for clones"));
-            set(&mut p.filter_unprintable, r.b(sec, "Filter unprintable characters"));
+            set(
+                &mut p.convert_encoding,
+                r.b(sec, "Convert printer encoding for clones"),
+            );
+            set(
+                &mut p.filter_unprintable,
+                r.b(sec, "Filter unprintable characters"),
+            );
             set(&mut p.append, r.b(sec, "Append to printer file"));
             p.filename = r.path(sec, "Printer Filename");
             set(&mut p.idle_limit, r.n(sec, "Printer idle limit"));
         }
-        SlotCardSpec::MockingboardC(k) | SlotCardSpec::Phasor(k) | SlotCardSpec::MegaAudio(k) | SlotCardSpec::SdMusic(k) => {
+        SlotCardSpec::MockingboardC(k)
+        | SlotCardSpec::Phasor(k)
+        | SlotCardSpec::MegaAudio(k)
+        | SlotCardSpec::SdMusic(k) => {
             for i in 0..4 {
-                if let Some(t) = r.n(sec, &format!("AY Socket {i}")).and_then(AyChip::from_value) {
+                if let Some(t) = r
+                    .n(sec, &format!("AY Socket {i}"))
+                    .and_then(AyChip::from_value)
+                {
                     k.ay[i] = t;
                 }
             }
             for i in 0..2 {
-                if let Some(t) = r.n(sec, &format!("SSI263 Socket {i}")).and_then(Ssi263Chip::from_value) {
+                if let Some(t) = r
+                    .n(sec, &format!("SSI263 Socket {i}"))
+                    .and_then(Ssi263Chip::from_value)
+                {
                     k.ssi263[i] = t;
                 }
             }
             set(&mut k.sc01, r.b(sec, "SC01"));
         }
-        SlotCardSpec::Uthernet { interface } => *interface = r.s(sec, "Uthernet Interface").unwrap_or("").to_string(),
-        SlotCardSpec::Uthernet2 { interface, virtual_dns } => {
+        SlotCardSpec::Uthernet { interface } => {
+            *interface = r.s(sec, "Uthernet Interface").unwrap_or("").to_string()
+        }
+        SlotCardSpec::Uthernet2 {
+            interface,
+            virtual_dns,
+        } => {
             *interface = r.s(sec, "Uthernet Interface").unwrap_or("").to_string();
             set(virtual_dns, r.b(sec, "Uthernet Virtual DNS"));
         }
-        SlotCardSpec::Saturn128K { banks } => set(banks, r.n(sec, "Number of Banks").map(|v| v.clamp(1, 8) as u8)),
+        SlotCardSpec::Saturn128K { banks } => set(
+            banks,
+            r.n(sec, "Number of Banks").map(|v| v.clamp(1, 8) as u8),
+        ),
         _ => {}
     }
     card
@@ -395,10 +511,16 @@ mod tests {
         assert_eq!(s.machine.refresh_rate, RefreshRate::Hz50);
         assert_eq!(s.joystick.pdl_x_trim, -3);
         assert_eq!(s.sound.master_volume, 5);
-        assert_eq!(s.storage.savestate_filename, Some(PathBuf::from("C:\\saves\\my.aws")));
+        assert_eq!(
+            s.storage.savestate_filename,
+            Some(PathBuf::from("C:\\saves\\my.aws"))
+        );
         assert_eq!(s.slot(0).card_type(), CardType::LanguageCard);
         match s.slot(6) {
-            SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
+            SlotCardSpec::Disk2 {
+                firmware_13_sector,
+                drives,
+            } => {
                 assert!(*firmware_13_sector);
                 assert_eq!(drives[0].image, Some(PathBuf::from("C:\\disks\\dos33.dsk")));
             }
@@ -424,7 +546,10 @@ mod tests {
         }
         assert_eq!(import_reg(&bytes).machine.model, Model::Pravets82);
         let bad = "[HKEY_CURRENT_USER\\Software\\AppleWin\\CurrentVersion\\Configuration]\n\"Apple2 Type\"=\"9999\"\n";
-        assert_eq!(import_reg(bad.as_bytes()).machine.model, Model::Apple2eEnhanced);
+        assert_eq!(
+            import_reg(bad.as_bytes()).machine.model,
+            Model::Apple2eEnhanced
+        );
     }
 
     #[test]
@@ -440,8 +565,15 @@ mod tests {
 
     #[test]
     fn legacy_hdd_enable_and_uthernet() {
-        let s = import_ini("[Configuration]\nHarddisk Enable=1\nUthernet Active=1\nUthernet Interface=eth9\n");
+        let s = import_ini(
+            "[Configuration]\nHarddisk Enable=1\nUthernet Active=1\nUthernet Interface=eth9\n",
+        );
         assert_eq!(s.slot(7).card_type(), CardType::GenericHdd);
-        assert_eq!(s.slot(3), &SlotCardSpec::Uthernet { interface: "eth9".into() });
+        assert_eq!(
+            s.slot(3),
+            &SlotCardSpec::Uthernet {
+                interface: "eth9".into()
+            }
+        );
     }
 }

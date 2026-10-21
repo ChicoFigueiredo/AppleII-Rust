@@ -12,7 +12,11 @@ impl Debugger {
     /// `_CmdSymbolsInfoHeader`
     fn symbols_info_header(&self, t: Table, display_size: Option<usize>) -> String {
         let n = display_size.unwrap_or_else(|| self.symbols.len(t));
-        let color = if self.symbols.is_displayed(t) { CHC_NUM_DEC } else { CHC_WARNING };
+        let color = if self.symbols.is_displayed(t) {
+            CHC_NUM_DEC
+        } else {
+            CHC_WARNING
+        };
         format!("{CHC_USAGE}{}{CHC_ARG_SEP}:{color}{n} ", t.name())
     }
 
@@ -40,7 +44,10 @@ impl Debugger {
     }
 
     fn print_symbol(&mut self, name: &str, addr: u16, t: Table) {
-        self.console.print(&format!("  {CHC_USAGE}{}{CHC_ARG_SEP}: ${CHC_ADDRESS}{addr:04X} {CHC_SYMBOL}{name}", t.name()));
+        self.console.print(&format!(
+            "  {CHC_USAGE}{}{CHC_ARG_SEP}: ${CHC_ADDRESS}{addr:04X} {CHC_SYMBOL}{name}",
+            t.name()
+        ));
     }
 
     /// `String2Address`: `$hex` or `0hex`/`0xhex`.
@@ -91,7 +98,12 @@ impl Debugger {
             let val = a.value(i);
             if a.raw.get(i).map(|r| r.is_op("*")).unwrap_or(false) {
                 for t in tables.iter().copied() {
-                    let entries: Vec<(u16, String)> = self.symbols.table(t).iter().map(|(k, v)| (*k, v.clone())).collect();
+                    let entries: Vec<(u16, String)> = self
+                        .symbols
+                        .table(t)
+                        .iter()
+                        .map(|(k, v)| (*k, v.clone()))
+                        .collect();
                     if !entries.is_empty() {
                         for (ad, n) in entries {
                             self.print_symbol(&n, ad, t);
@@ -102,16 +114,22 @@ impl Debugger {
                 }
             } else if val != 0 {
                 if !sym2addr(self, &text) && !addr2sym(self, val) {
-                    self.console.print(&format!(" Address not found: {CHC_ARG_SEP}${CHC_ADDRESS}{val:04X}{CHC_DEFAULT}"));
+                    self.console.print(&format!(
+                        " Address not found: {CHC_ARG_SEP}${CHC_ADDRESS}{val:04X}{CHC_DEFAULT}"
+                    ));
                 }
             } else if !sym2addr(self, &text) {
                 match Self::string_to_address(&text) {
                     Some(ad) => {
                         if !addr2sym(self, ad) {
-                            self.console.print(&format!(" {CHC_ERROR}Symbol not found: {CHC_SYMBOL}{text}{CHC_DEFAULT}"));
+                            self.console.print(&format!(
+                                " {CHC_ERROR}Symbol not found: {CHC_SYMBOL}{text}{CHC_DEFAULT}"
+                            ));
                         }
                     }
-                    None => self.console.print(&format!(" {CHC_ERROR}Symbol not found: {CHC_SYMBOL}{text}{CHC_DEFAULT}")),
+                    None => self.console.print(&format!(
+                        " {CHC_ERROR}Symbol not found: {CHC_SYMBOL}{text}{CHC_DEFAULT}"
+                    )),
                 }
             }
         }
@@ -186,7 +204,10 @@ impl Debugger {
             "CLEAR" => {
                 self.symbols.clear(table);
                 self.data.0.retain(|d| table != Table::Asm || d.removed);
-                self.console.print(&format!(" Cleared symbol table: {CHC_STRING}{}", table.name()));
+                self.console.print(&format!(
+                    " Cleared symbol table: {CHC_STRING}{}",
+                    table.name()
+                ));
                 upd::CONSOLE_DISPLAY | upd::SYMBOLS
             }
             "LOAD" => {
@@ -207,7 +228,11 @@ impl Debugger {
             "ON" | "OFF" => {
                 let on = a.text(i).eq_ignore_ascii_case("ON");
                 self.symbols.set_displayed(table, on);
-                let h = format!("{}{CHC_ARG_SEP}({CHC_COMMAND}{}{CHC_ARG_SEP})", self.symbols_info_header(table, None), if on { "ON" } else { "OFF" });
+                let h = format!(
+                    "{}{CHC_ARG_SEP}({CHC_COMMAND}{}{CHC_ARG_SEP})",
+                    self.symbols_info_header(table, None),
+                    if on { "ON" } else { "OFF" }
+                );
                 self.console.print(&h);
                 upd::CONSOLE_DISPLAY | upd::DISASM
             }
@@ -218,7 +243,13 @@ impl Debugger {
     /// `CmdSymbolsLoad`: from the host file `file` (or the table's default file name), falling back
     /// to the files shipped with AppleWin that are built in. `.SYM2` files are scripts. Returns the
     /// number of symbols read.
-    pub fn load_symbol_file(&mut self, m: &mut Machine, table: Table, file: Option<&str>, offset: u32) -> (usize, Update) {
+    pub fn load_symbol_file(
+        &mut self,
+        m: &mut Machine,
+        table: Table,
+        file: Option<&str>,
+        offset: u32,
+    ) -> (usize, Update) {
         let name = file.unwrap_or(table.file_name()).to_string();
         let text: Option<String> = match self.host.read(&name) {
             Ok(b) => Some(String::from_utf8_lossy(&b).into_owned()),
@@ -233,7 +264,8 @@ impl Debugger {
         let Some(text) = text else {
             if file.is_some() {
                 self.console.error("Symbol File not found:");
-                self.console.print(&format!("{CHC_PATH}{}", self.host.dir()));
+                self.console
+                    .print(&format!("{CHC_PATH}{}", self.host.dir()));
             }
             return (0, upd::DISASM);
         };
@@ -249,10 +281,14 @@ impl Debugger {
             let rep = self.symbols.parse_table(&text, table, offset);
             n = rep.loaded;
             for s in rep.aliases.iter().take(3) {
-                self.console.print_level(OutputLevel::All, &format!(" {CHC_INFO}Info.: {CHC_SYMBOL}{s}"));
+                self.console.print_level(
+                    OutputLevel::All,
+                    &format!(" {CHC_INFO}Info.: {CHC_SYMBOL}{s}"),
+                );
             }
             for s in rep.duplicates.iter().take(3) {
-                self.console.print_level(OutputLevel::All, &format!("{CHC_ERROR} {s}"));
+                self.console
+                    .print_level(OutputLevel::All, &format!("{CHC_ERROR} {s}"));
             }
         }
         (n, upd::DISASM | if n > 0 { upd::SYMBOLS } else { 0 })

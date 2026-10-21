@@ -86,9 +86,17 @@ pub fn process_chunks(data: &[u8]) -> Option<WozLayout> {
     Some(WozLayout {
         version,
         write_protected: data[info + 2] == 1,
-        optimal_bit_timing: if v2 { data[info + 39] } else { OPTIMAL_BIT_TIMING_5_25 },
+        optimal_bit_timing: if v2 {
+            data[info + 39]
+        } else {
+            OPTIMAL_BIT_TIMING_5_25
+        },
         boot_sector_format: if v2 { data[info + 38] } else { 0 },
-        max_nibbles_per_track: if v2 { u16le(data, info + 44) as usize * BLOCK_SIZE } else { WOZ1_TRACK_SIZE },
+        max_nibbles_per_track: if v2 {
+            u16le(data, info + 44) as usize * BLOCK_SIZE
+        } else {
+            WOZ1_TRACK_SIZE
+        },
         tmap,
         trks,
         trks_size,
@@ -110,13 +118,22 @@ pub fn update_crc(data: &mut [u8]) {
 
 /// TMAP entry for quarter track `quarter` (`phase * 2`).
 pub fn tmap_entry(data: &[u8], l: &WozLayout, quarter: usize) -> u8 {
-    data.get(l.tmap + quarter).copied().filter(|_| quarter < MAX_QUARTER_TRACKS_5_25).unwrap_or(TMAP_TRACK_EMPTY)
+    data.get(l.tmap + quarter)
+        .copied()
+        .filter(|_| quarter < MAX_QUARTER_TRACKS_5_25)
+        .unwrap_or(TMAP_TRACK_EMPTY)
 }
 
 /// `TRKv2` record `index`: (start block, block count, bit count).
 pub fn trk2(data: &[u8], l: &WozLayout, index: usize) -> Option<(u32, u32, u32)> {
     let at = l.trks + index * 8;
-    (index < MAX_QUARTER_TRACKS_5_25 && at + 8 <= data.len()).then(|| (u16le(data, at) as u32, u16le(data, at + 2) as u32, u32le(data, at + 4)))
+    (index < MAX_QUARTER_TRACKS_5_25 && at + 8 <= data.len()).then(|| {
+        (
+            u16le(data, at) as u32,
+            u16le(data, at + 2) as u32,
+            u32le(data, at + 4),
+        )
+    })
 }
 
 /// `CWOZHelper::CreateEmptyDisk`: an empty 5.25" WOZ2 (3 blocks, every track empty).
@@ -157,7 +174,10 @@ mod tests {
         assert_eq!(d.len(), 1536);
         let l = process_chunks(&d).unwrap();
         assert_eq!((l.tmap, l.trks, l.trks_size), (88, 256, 1280));
-        assert_eq!((l.version, l.optimal_bit_timing, l.max_nibbles_per_track), (2, 32, 13 * 512));
+        assert_eq!(
+            (l.version, l.optimal_bit_timing, l.max_nibbles_per_track),
+            (2, 32, 13 * 512)
+        );
         assert_eq!(tmap_entry(&d, &l, 0), TMAP_TRACK_EMPTY);
         assert_eq!(u32le(&d, 8), body_crc(&d));
     }

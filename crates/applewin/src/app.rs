@@ -44,7 +44,9 @@ pub struct Options {
 }
 
 pub fn run(opts: Options) -> Result<(), String> {
-    let event_loop = EventLoop::<UserEvent>::with_user_event().build().map_err(|e| e.to_string())?;
+    let event_loop = EventLoop::<UserEvent>::with_user_event()
+        .build()
+        .map_err(|e| e.to_string())?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
     let mut app = App::new(opts, proxy)?;
@@ -92,7 +94,15 @@ struct App {
 
 impl App {
     fn new(opts: Options, proxy: EventLoopProxy<UserEvent>) -> Result<App, String> {
-        let Options { settings, factory, no_audio, load_state, open, dump_window, type_text } = opts;
+        let Options {
+            settings,
+            factory,
+            no_audio,
+            load_state,
+            open,
+            dump_window,
+            type_text,
+        } = opts;
         let settings_caps = settings.keyboard.caps_lock;
         let settings_for_joy = settings.clone();
         let audio = if no_audio || settings.sound.disable_sound {
@@ -110,7 +120,13 @@ impl App {
             Some(a) => (Some(a.ring.clone()), a.sample_rate),
             None => (None, 48_000),
         };
-        let emu = emu::spawn(settings.clone(), factory, ring, rate, Box::new(move || drop(proxy.send_event(UserEvent::Frame))))?;
+        let emu = emu::spawn(
+            settings.clone(),
+            factory,
+            ring,
+            rate,
+            Box::new(move || drop(proxy.send_event(UserEvent::Frame))),
+        )?;
         if let Some(p) = load_state {
             emu.send(Command::LoadState(p));
         }
@@ -143,7 +159,9 @@ impl App {
             joy: JoySystem::new(JoyConfig::from_settings(&settings_for_joy)),
             last_joy: None,
             started: std::time::Instant::now(),
-            gilrs: gilrs::Gilrs::new().map_err(|e| eprintln!("gamepads unavailable: {e}")).ok(),
+            gilrs: gilrs::Gilrs::new()
+                .map_err(|e| eprintln!("gamepads unavailable: {e}"))
+                .ok(),
             pad_ids: Vec::new(),
             clipboard: None,
             cursor: None,
@@ -174,7 +192,11 @@ impl App {
             Action::SwapDrives => self.emu.send(Command::SwapDrives),
             Action::ToggleFullscreen => {
                 if let Some(w) = self.window() {
-                    let fs = if w.fullscreen().is_some() { None } else { Some(Fullscreen::Borderless(None)) };
+                    let fs = if w.fullscreen().is_some() {
+                        None
+                    } else {
+                        Some(Fullscreen::Borderless(None))
+                    };
                     w.set_fullscreen(fs);
                 }
             }
@@ -219,17 +241,25 @@ impl App {
             self.ui.message = format!("Could not save settings: {e}");
         }
         self.emu.send(Command::SetStatePath(path.clone()));
-        self.emu.send(if save { Command::SaveState(path) } else { Command::LoadState(path) });
+        self.emu.send(if save {
+            Command::SaveState(path)
+        } else {
+            Command::LoadState(path)
+        });
     }
 
     fn pick_disk(&mut self, drive: usize) {
         // Pause while the modal dialog is open so sound does not stutter and time does not pass.
         let was_paused = self.status.paused;
         self.emu.send(Command::SetPaused(true));
-        let mut dialog = rfd::FileDialog::new().set_title(format!("Select disk image for drive {}", drive + 1)).add_filter(
-            "Disk images",
-            &["dsk", "do", "po", "nib", "woz", "2mg", "2img", "hdv", "gz", "zip", "iie"],
-        );
+        let mut dialog = rfd::FileDialog::new()
+            .set_title(format!("Select disk image for drive {}", drive + 1))
+            .add_filter(
+                "Disk images",
+                &[
+                    "dsk", "do", "po", "nib", "woz", "2mg", "2img", "hdv", "gz", "zip", "iie",
+                ],
+            );
         if let Some(dir) = &self.settings.storage.disk_dir {
             dialog = dialog.set_directory(dir);
         }
@@ -264,7 +294,9 @@ impl App {
 
     fn paste(&mut self) {
         if let Some(text) = self.clipboard().and_then(|c| c.get_text().ok()) {
-            self.emu.send(Command::Paste(text.replace("\r\n", "\r").replace('\n', "\r")));
+            self.emu.send(Command::Paste(
+                text.replace("\r\n", "\r").replace('\n', "\r"),
+            ));
         }
     }
 
@@ -274,7 +306,11 @@ impl App {
             Speed::Max => Speed::NORMAL,
             s => s,
         };
-        self.emu.send(Command::SetSpeed(if self.status.full_speed { custom } else { Speed::Max }));
+        self.emu.send(Command::SetSpeed(if self.status.full_speed {
+            custom
+        } else {
+            Speed::Max
+        }));
     }
 
     // ---- input ----
@@ -289,10 +325,16 @@ impl App {
         }
         for i in 0..2 {
             if prev.is_none_or(|p| p.attached[i] != f.attached[i]) {
-                self.emu.send(Command::JoyAttached { index: i, attached: f.attached[i] });
+                self.emu.send(Command::JoyAttached {
+                    index: i,
+                    attached: f.attached[i],
+                });
             }
             if prev.is_none_or(|p| p.out[i] != f.out[i]) {
-                self.emu.send(Command::Joy { index: i, out: f.out[i] });
+                self.emu.send(Command::Joy {
+                    index: i,
+                    out: f.out[i],
+                });
             }
         }
         self.last_joy = Some(f);
@@ -317,7 +359,9 @@ impl App {
                     self.pad_ids.push(ev.id);
                     self.joy.set_pads_connected(self.pad_ids.len());
                 }
-                let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) else { continue };
+                let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) else {
+                    continue;
+                };
                 let p = &mut self.joy.pads[slot];
                 match ev.event {
                     EventType::AxisChanged(Axis::LeftStickX, v, _) => p.lx = v,
@@ -410,7 +454,9 @@ impl App {
         self.mouse_captured = on;
         if let Some(w) = &self.window {
             if on {
-                let _ = w.set_cursor_grab(CursorGrabMode::Locked).or_else(|_| w.set_cursor_grab(CursorGrabMode::Confined));
+                let _ = w
+                    .set_cursor_grab(CursorGrabMode::Locked)
+                    .or_else(|_| w.set_cursor_grab(CursorGrabMode::Confined));
             } else {
                 let _ = w.set_cursor_grab(CursorGrabMode::None);
             }
@@ -425,7 +471,11 @@ impl App {
         }
         self.joy_cursor = on;
         if let Some(w) = &self.window {
-            let _ = w.set_cursor_grab(if on { CursorGrabMode::Confined } else { CursorGrabMode::None });
+            let _ = w.set_cursor_grab(if on {
+                CursorGrabMode::Confined
+            } else {
+                CursorGrabMode::None
+            });
             w.set_cursor_visible(!on);
         }
         if !on {
@@ -438,7 +488,10 @@ impl App {
     /// Pointer position inside the Apple screen as paddle values.
     fn mouse_joy_position(&mut self) {
         if let (Some((cx, cy)), Some(r)) = (self.cursor, self.ui.screen_rect) {
-            self.joy.set_mouse_position(mouse_to_paddle(cx - r.min.x, r.width()), mouse_to_paddle(cy - r.min.y, r.height()));
+            self.joy.set_mouse_position(
+                mouse_to_paddle(cx - r.min.x, r.width()),
+                mouse_to_paddle(cy - r.min.y, r.height()),
+            );
             self.update_joy();
         }
     }
@@ -459,7 +512,10 @@ impl App {
             if pressed && release {
                 self.set_mouse_capture(false); // AppleWin: Ctrl/Shift+click releases the mouse
             } else {
-                self.emu.send(Command::MouseButton { button: idx, down: pressed });
+                self.emu.send(Command::MouseButton {
+                    button: idx,
+                    down: pressed,
+                });
             }
         } else if self.joy_cursor {
             if pressed && release {
@@ -487,7 +543,8 @@ impl App {
                 UiEvent::Action(a) => self.do_action(a),
                 UiEvent::Apply(s) => {
                     self.settings = (*s).clone();
-                    self.joy.set_config(JoyConfig::from_settings(&self.settings));
+                    self.joy
+                        .set_config(JoyConfig::from_settings(&self.settings));
                     if !self.joy.using_mouse() {
                         self.set_joy_cursor(false);
                     }
@@ -510,14 +567,22 @@ impl App {
                     self.ui.disk.note_inserted(&path);
                     self.emu.send(Command::InsertDisk { drive, path });
                 }
-                UiEvent::SetWriteProtect { drive, on } => self.emu.send(Command::SetWriteProtect { drive, on }),
+                UiEvent::SetWriteProtect { drive, on } => {
+                    self.emu.send(Command::SetWriteProtect { drive, on })
+                }
                 UiEvent::Paste => self.paste(),
             }
         }
     }
 
     fn redraw(&mut self) {
-        let (Some(window), Some(gfx), Some(state)) = (self.window.clone(), self.gfx.as_mut(), self.egui_state.as_mut()) else { return };
+        let (Some(window), Some(gfx), Some(state)) = (
+            self.window.clone(),
+            self.gfx.as_mut(),
+            self.egui_state.as_mut(),
+        ) else {
+            return;
+        };
         let seq = self.emu.shared.frame_seq();
         if seq != self.frame_seq {
             self.frame_seq = seq;
@@ -560,7 +625,10 @@ impl App {
             help.draw(ctx);
         });
         state.handle_platform_output(&window, output.platform_output.clone());
-        let repaint = output.viewport_output.values().any(|v| v.repaint_delay.is_zero());
+        let repaint = output
+            .viewport_output
+            .values()
+            .any(|v| v.repaint_delay.is_zero());
         if let Some((path, frames)) = &self.dump_window {
             // egui windows are invisible during their first (sizing) pass: wait a few passes
             if self.status.frames >= *frames && self.egui_ctx.cumulative_pass_nr() > 6 {
@@ -603,13 +671,19 @@ fn open_command(p: &std::path::Path) -> Command {
     if crate::state_io::is_state_file(p) {
         Command::LoadState(p.to_path_buf())
     } else {
-        Command::InsertDisk { drive: 0, path: p.to_path_buf() }
+        Command::InsertDisk {
+            drive: 0,
+            path: p.to_path_buf(),
+        }
     }
 }
 
 fn window_size(scale: u32, toolbar: bool) -> LogicalSize<f64> {
     let s = f64::from(scale.clamp(1, 4));
-    LogicalSize::new(560.0 * s + if toolbar { 92.0 + 17.0 } else { 0.0 }, 384.0 * s + if toolbar { 34.0 } else { 0.0 })
+    LogicalSize::new(
+        560.0 * s + if toolbar { 92.0 + 17.0 } else { 0.0 },
+        384.0 * s + if toolbar { 34.0 } else { 0.0 },
+    )
 }
 
 impl App {
@@ -632,7 +706,10 @@ impl ApplicationHandler<UserEvent> for App {
         if self.window.is_some() {
             return;
         }
-        let attrs = Window::default_attributes().with_title("AppleII-Rust").with_window_icon(crate::icon::window_icon()).with_inner_size(window_size(self.settings.video.window_scale, true));
+        let attrs = Window::default_attributes()
+            .with_title("AppleII-Rust")
+            .with_window_icon(crate::icon::window_icon())
+            .with_inner_size(window_size(self.settings.video.window_scale, true));
         let window = match el.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
@@ -650,7 +727,14 @@ impl ApplicationHandler<UserEvent> for App {
                 return;
             }
         }
-        self.egui_state = Some(egui_winit::State::new(self.egui_ctx.clone(), egui::ViewportId::ROOT, &window, None, None, None));
+        self.egui_state = Some(egui_winit::State::new(
+            self.egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        ));
         if self.settings.video.fullscreen {
             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
         }
@@ -673,9 +757,21 @@ impl ApplicationHandler<UserEvent> for App {
                 window.request_redraw();
             }
             egui_wants_keys = r.consumed && self.egui_ctx.wants_keyboard_input();
-            if r.consumed && !matches!(event, WindowEvent::KeyboardInput { .. } | WindowEvent::RedrawRequested | WindowEvent::CloseRequested) {
+            if r.consumed
+                && !matches!(
+                    event,
+                    WindowEvent::KeyboardInput { .. }
+                        | WindowEvent::RedrawRequested
+                        | WindowEvent::CloseRequested
+                )
+            {
                 // pointer events over egui widgets do not reach the Apple
-                if !matches!(event, WindowEvent::CursorMoved { .. } | WindowEvent::ModifiersChanged(_) | WindowEvent::Focused(_)) {
+                if !matches!(
+                    event,
+                    WindowEvent::CursorMoved { .. }
+                        | WindowEvent::ModifiersChanged(_)
+                        | WindowEvent::Focused(_)
+                ) {
                     return;
                 }
             }
@@ -706,12 +802,17 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::Focused(false) => self.release_inputs(),
             WindowEvent::KeyboardInput { event, .. } if !egui_wants_keys => self.keyboard(&event),
             WindowEvent::CursorMoved { position, .. } => {
-                self.cursor = Some((position.x as f32 / self.egui_ctx.pixels_per_point(), position.y as f32 / self.egui_ctx.pixels_per_point()));
+                self.cursor = Some((
+                    position.x as f32 / self.egui_ctx.pixels_per_point(),
+                    position.y as f32 / self.egui_ctx.pixels_per_point(),
+                ));
                 if self.joy_cursor {
                     self.mouse_joy_position();
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } => self.mouse_button(button, state == ElementState::Pressed),
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.mouse_button(button, state == ElementState::Pressed)
+            }
             WindowEvent::DroppedFile(path) => {
                 self.emu.send(open_command(&path));
                 if matches!(open_command(&path), Command::InsertDisk { .. }) {
@@ -724,7 +825,10 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn device_event(&mut self, _el: &ActiveEventLoop, _id: DeviceId, event: DeviceEvent) {
         if let (DeviceEvent::MouseMotion { delta }, true) = (event, self.mouse_captured) {
-            self.emu.send(Command::MouseMove { dx: delta.0.round() as i32, dy: delta.1.round() as i32 });
+            self.emu.send(Command::MouseMove {
+                dx: delta.0.round() as i32,
+                dy: delta.1.round() as i32,
+            });
         }
     }
 

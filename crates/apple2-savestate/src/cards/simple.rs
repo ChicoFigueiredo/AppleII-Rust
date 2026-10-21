@@ -13,9 +13,17 @@ fn save_null(w: &mut Writer, slot: u8, name: &str) {
     });
 }
 
-fn load_stateless(ctx: &mut LoadCtx, slot: u8, version: u32, _st: Map, name: &str) -> Result<Option<Box<dyn Card>>, Error> {
+fn load_stateless(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    _st: Map,
+    name: &str,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if !(1..=1).contains(&version) {
-        return Err(Error::Format(format!("Version {version} is not supported for card '{name}'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card '{name}'."
+        )));
     }
     Ok(make(ctx, name, slot))
 }

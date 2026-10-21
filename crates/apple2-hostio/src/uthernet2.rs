@@ -165,8 +165,10 @@ impl Socket {
     }
 
     fn is_open(&self) -> bool {
-        !matches!(self.host, HostSocket::None | HostSocket::Listener(_) | HostSocket::Connecting(_))
-            && (self.status == SR_ESTABLISHED || self.status == SR_UDP)
+        !matches!(
+            self.host,
+            HostSocket::None | HostSocket::Listener(_) | HostSocket::Connecting(_)
+        ) && (self.status == SR_ESTABLISHED || self.status == SR_UDP)
     }
 
     /// `isThereRoomFor`: never fills the buffer completely.
@@ -282,7 +284,9 @@ impl Uthernet2 {
             self.dns_cache.clear();
         }
         self.memory = vec![0; MEM_SIZE];
-        self.sockets = (0..4).map(|i| Socket::new(S0_BASE + ((i as u16) << 8))).collect();
+        self.sockets = (0..4)
+            .map(|i| Socket::new(S0_BASE + ((i as u16) << 8)))
+            .collect();
         for i in 0..4 {
             self.reset_rx_tx_buffers(i);
             let base = self.sockets[i].register_address;
@@ -303,12 +307,24 @@ impl Uthernet2 {
 
     pub fn snapshot(&self) -> Uthernet2Snapshot {
         let mut memory = vec![0u8; MEM_SIZE];
-        for r in [0..UPORT1 as usize + 1, S0_BASE as usize..S3_MAX as usize + 1, TX_BASE as usize..MEM_SIZE] {
+        for r in [
+            0..UPORT1 as usize + 1,
+            S0_BASE as usize..S3_MAX as usize + 1,
+            TX_BASE as usize..MEM_SIZE,
+        ] {
             memory[r.clone()].copy_from_slice(&self.memory[r]);
         }
         let mut sockets = [(0, 0, SR_CLOSED); 4];
         for (o, s) in sockets.iter_mut().zip(&self.sockets) {
-            *o = (s.rx_wr, s.rx_rsr, if matches!(s.status, SR_MACRAW | SR_IPRAW) { s.status } else { SR_CLOSED });
+            *o = (
+                s.rx_wr,
+                s.rx_rsr,
+                if matches!(s.status, SR_MACRAW | SR_IPRAW) {
+                    s.status
+                } else {
+                    SR_CLOSED
+                },
+            );
         }
         Uthernet2Snapshot {
             interface: self.backend.interface_name().to_string(),
@@ -327,7 +343,11 @@ impl Uthernet2 {
         self.reset_chip(true);
         self.mode_register = s.mode_register;
         self.data_address = s.data_address;
-        for r in [0..UPORT1 as usize + 1, S0_BASE as usize..S3_MAX as usize + 1, TX_BASE as usize..MEM_SIZE] {
+        for r in [
+            0..UPORT1 as usize + 1,
+            S0_BASE as usize..S3_MAX as usize + 1,
+            TX_BASE as usize..MEM_SIZE,
+        ] {
             let end = r.end.min(s.memory.len());
             if r.start < end {
                 self.memory[r.start..end].copy_from_slice(&s.memory[r.start..end]);
@@ -339,7 +359,11 @@ impl Uthernet2 {
         for (sock, &(wr, rsr, status)) in self.sockets.iter_mut().zip(&s.sockets) {
             sock.rx_wr = wr;
             sock.rx_rsr = rsr;
-            sock.set_status(if matches!(status, SR_MACRAW | SR_IPRAW) { status } else { SR_CLOSED });
+            sock.set_status(if matches!(status, SR_MACRAW | SR_IPRAW) {
+                status
+            } else {
+                SR_CLOSED
+            });
         }
     }
 
@@ -384,7 +408,12 @@ impl Uthernet2 {
 
     fn dest_ip(&self, i: usize) -> Ipv4 {
         let a = (self.sockets[i].register_address + SN_DIPR0) as usize;
-        [self.memory[a], self.memory[a + 1], self.memory[a + 2], self.memory[a + 3]]
+        [
+            self.memory[a],
+            self.memory[a + 1],
+            self.memory[a + 2],
+            self.memory[a + 3],
+        ]
     }
 
     fn tx_data_size(&self, i: usize) -> u16 {
@@ -439,14 +468,17 @@ impl Uthernet2 {
             mac_raw = true;
             accept_all = self.reg(0, SN_MR) & SN_MR_MF == 0;
         }
-        let Some((frame, dest)) = self.receive_for_mac(accept_all) else { return };
+        let Some((frame, dest)) = self.receive_for_mac(accept_all) else {
+            return;
+        };
         let frame = &frame[..frame.len().min(MAX_RXLENGTH)];
         let ip = ip_payload(frame);
         let mut ip_raw = None;
         if !matches!(dest, PacketDestination::Other) {
             if let Some(p) = &ip {
-                ip_raw = (0..self.sockets.len())
-                    .find(|&i| self.sockets[i].status == SR_IPRAW && self.reg(i, SN_PROTO) == p.protocol);
+                ip_raw = (0..self.sockets.len()).find(|&i| {
+                    self.sockets[i].status == SR_IPRAW && self.reg(i, SN_PROTO) == p.protocol
+                });
             }
         }
         if let (Some(i), Some(p)) = (ip_raw, &ip) {
@@ -460,7 +492,11 @@ impl Uthernet2 {
             let s = &mut self.sockets[0];
             if s.is_there_room_for(frame.len()) {
                 // The size includes its own two bytes.
-                ring_write(s, &mut self.memory, &((frame.len() + 2) as u16).to_be_bytes());
+                ring_write(
+                    s,
+                    &mut self.memory,
+                    &((frame.len() + 2) as u16).to_be_bytes(),
+                );
                 ring_write(s, &mut self.memory, frame);
             }
         } // else the packet is dropped
@@ -486,7 +522,14 @@ impl Uthernet2 {
                     0
                 }
                 Ok(n) => n,
-                Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted) => 0,
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                    ) =>
+                {
+                    0
+                }
                 Err(_) => {
                     closed = true;
                     0
@@ -532,18 +575,26 @@ impl Uthernet2 {
         if let Some(m) = self.arp_cache.get(&ip) {
             return *m;
         }
-        let source: Ipv4 = self.memory[SIPR0 as usize..=SIPR3 as usize].try_into().unwrap();
+        let source: Ipv4 = self.memory[SIPR0 as usize..=SIPR3 as usize]
+            .try_into()
+            .unwrap();
         let mac = if ip == source {
-            self.memory[SHAR0 as usize..=SHAR5 as usize].try_into().unwrap()
+            self.memory[SHAR0 as usize..=SHAR5 as usize]
+                .try_into()
+                .unwrap()
         } else {
             let mut mac = [0xFF; 6]; // fall back to broadcast
             if ip != [255; 4] {
-                let subnet: Ipv4 = self.memory[SUBR0 as usize..=SUBR3 as usize].try_into().unwrap();
+                let subnet: Ipv4 = self.memory[SUBR0 as usize..=SUBR3 as usize]
+                    .try_into()
+                    .unwrap();
                 let same = (0..4).all(|k| ip[k] & subnet[k] == source[k] & subnet[k]);
                 let target = if same {
                     ip // same network: ask for the host itself
                 } else {
-                    self.memory[GAR0 as usize..=GAR3 as usize].try_into().unwrap() // via the gateway
+                    self.memory[GAR0 as usize..=GAR3 as usize]
+                        .try_into()
+                        .unwrap() // via the gateway
                 };
                 if let Some(m) = self.backend.mac_for_ip(target) {
                     mac = m;
@@ -579,9 +630,13 @@ impl Uthernet2 {
                 let ttl = self.reg(i, SN_TTL);
                 let tos = self.reg(i, SN_TOS);
                 let protocol = self.reg(i, SN_PROTO);
-                let source: Ipv4 = self.memory[SIPR0 as usize..=SIPR3 as usize].try_into().unwrap();
+                let source: Ipv4 = self.memory[SIPR0 as usize..=SIPR3 as usize]
+                    .try_into()
+                    .unwrap();
                 let dest = self.dest_ip(i);
-                let smac: Mac = self.memory[SHAR0 as usize..=SHAR5 as usize].try_into().unwrap();
+                let smac: Mac = self.memory[SHAR0 as usize..=SHAR5 as usize]
+                    .try_into()
+                    .unwrap();
                 let dmac = self.mac_for(dest);
                 let frame = create_eth2_frame(&data, smac, dmac, ttl, tos, protocol, source, dest);
                 self.backend.transmit(&frame);
@@ -614,7 +669,9 @@ impl Uthernet2 {
     fn reset_rx_tx_buffers(&mut self, i: usize) {
         self.sockets[i].rx_wr = 0;
         self.sockets[i].rx_rsr = 0;
-        for off in [SN_TX_RD0, SN_TX_RD1, SN_TX_WR0, SN_TX_WR1, SN_RX_RD0, SN_RX_RD1] {
+        for off in [
+            SN_TX_RD0, SN_TX_RD1, SN_TX_WR0, SN_TX_WR1, SN_RX_RD0, SN_RX_RD1,
+        ] {
             self.set_reg(i, off, 0);
         }
     }
@@ -635,7 +692,8 @@ impl Uthernet2 {
             SN_MR_UDP => {
                 // Bind to the requested port when it is set, else any port (AppleWin uses the latter).
                 let port = self.reg_word(i, SN_PORT0);
-                let sock = UdpSocket::bind(("0.0.0.0", port)).or_else(|_| UdpSocket::bind(("0.0.0.0", 0)));
+                let sock =
+                    UdpSocket::bind(("0.0.0.0", port)).or_else(|_| UdpSocket::bind(("0.0.0.0", 0)));
                 match sock {
                     Ok(u) if u.set_nonblocking(true).is_ok() => {
                         self.sockets[i].host = HostSocket::Udp(u);
@@ -659,7 +717,8 @@ impl Uthernet2 {
         let mut ip = [0u8; 4];
         if len <= SN_DNS_NAME_CPTY {
             let start = (base + SN_DNS_NAME_BEGIN) as usize;
-            let name = String::from_utf8_lossy(&self.memory[start..start + len as usize]).into_owned();
+            let name =
+                String::from_utf8_lossy(&self.memory[start..start + len as usize]).into_owned();
             ip = match self.dns_cache.get(&name) {
                 Some(ip) => *ip,
                 None => {
@@ -728,12 +787,20 @@ impl Uthernet2 {
             }
             SN_TX_FSR0 | SN_TX_FSR1 => {
                 let free = self.sockets[i].transmit_size - self.tx_data_size(i);
-                if loc == SN_TX_FSR0 { (free >> 8) as u8 } else { free as u8 }
+                if loc == SN_TX_FSR0 {
+                    (free >> 8) as u8
+                } else {
+                    free as u8
+                }
             }
             SN_RX_RSR0 | SN_RX_RSR1 => {
                 self.receive_one_packet(i);
                 let rsr = self.sockets[i].rx_rsr;
-                if loc == SN_RX_RSR0 { (rsr >> 8) as u8 } else { rsr as u8 }
+                if loc == SN_RX_RSR0 {
+                    (rsr >> 8) as u8
+                } else {
+                    rsr as u8
+                }
             }
             _ => self.memory[address as usize],
         }
@@ -769,8 +836,10 @@ impl Uthernet2 {
         let loc = address & 0xFF;
         match loc {
             SN_CR => self.set_command_register(i, value),
-            SN_MR | SN_PORT0 | SN_PORT1 | SN_DPORT0 | SN_DPORT1 | SN_PROTO | SN_TOS | SN_TTL | SN_TX_WR0
-            | SN_TX_WR1 | SN_RX_RD0 | SN_RX_RD1 => self.memory[address as usize] = value,
+            SN_MR | SN_PORT0 | SN_PORT1 | SN_DPORT0 | SN_DPORT1 | SN_PROTO | SN_TOS | SN_TTL
+            | SN_TX_WR0 | SN_TX_WR1 | SN_RX_RD0 | SN_RX_RD1 => {
+                self.memory[address as usize] = value
+            }
             SN_DIPR0..=SN_DIPR3 => self.memory[address as usize] = value,
             _ => {
                 if self.virtual_dns && loc >= SN_DNS_NAME_LEN {
@@ -921,12 +990,20 @@ impl Card for Uthernet2 {
 
     /// Registers, RAM and RAW sockets survive; TCP/UDP connections cannot (:337-363).
     fn save(&self) -> Vec<u8> {
-        let mut v = vec![self.mode_register, self.data_address as u8, (self.data_address >> 8) as u8];
+        let mut v = vec![
+            self.mode_register,
+            self.data_address as u8,
+            (self.data_address >> 8) as u8,
+        ];
         v.extend_from_slice(&self.memory);
         for s in &self.sockets {
             v.extend_from_slice(&s.rx_wr.to_le_bytes());
             v.extend_from_slice(&s.rx_rsr.to_le_bytes());
-            v.push(if matches!(s.status, SR_MACRAW | SR_IPRAW) { s.status } else { SR_CLOSED });
+            v.push(if matches!(s.status, SR_MACRAW | SR_IPRAW) {
+                s.status
+            } else {
+                SR_CLOSED
+            });
         }
         v
     }

@@ -5,10 +5,13 @@ mod common;
 use apple2_audio::ay8910::AyType;
 use apple2_audio::ssi263::SsiType;
 use apple2_audio::{
-    AudioBus, AySnapshot, MockingboardCard, MockingboardSnapshot, SsiSnapshot, UnitSnapshot, Variant, ViaSnapshot,
+    AudioBus, AySnapshot, MockingboardCard, MockingboardSnapshot, SsiSnapshot, UnitSnapshot,
+    Variant, ViaSnapshot,
 };
 use apple2_core::{Card, Machine, MachineConfig, Model};
-use apple2_savestate::{default_card, load_aws_yaml, save_aws_yaml, ImageRequest, LoadHost, SaveOptions};
+use apple2_savestate::{
+    default_card, load_aws_yaml, save_aws_yaml, ImageRequest, LoadHost, SaveOptions,
+};
 use apple2_storage::image::DiskImage;
 
 struct Host {
@@ -17,7 +20,9 @@ struct Host {
 
 impl Host {
     fn new() -> Self {
-        Host { bus: AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc) }
+        Host {
+            bus: AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc),
+        }
     }
 }
 
@@ -47,22 +52,40 @@ fn machine_with(variant: Variant, slot: u8, bus: &AudioBus) -> Machine {
 /// A plain machine's file with `slots_body` (entries indented by 4) as its `Slots` unit.
 fn file_with_slots(slots_body: &str) -> String {
     let m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
-    let base = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    let base = save_aws_yaml(
+        &m,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .text;
     let marker = "\nUnit:\n  Type: Game I/O Connector";
     let at = base.find(marker).expect("game I/O unit");
     let mut body = String::new();
     for l in slots_body.lines() {
         body.push_str(&format!("    {l}\n"));
     }
-    format!("{}\nUnit:\n  Type: Slots\n  Version: 1\n  State:\n{}{}", &base[..at], body, &base[at..])
+    format!(
+        "{}\nUnit:\n  Type: Slots\n  Version: 1\n  State:\n{}{}",
+        &base[..at],
+        body,
+        &base[at..]
+    )
 }
 
 /// The slots body of a saved file (the lines of `Unit: Slots` State, dedented by 4).
 fn slots_body(text: &str) -> String {
-    let start = text.find("  Type: Slots\n  Version: 1\n  State:\n").expect("slots unit");
+    let start = text
+        .find("  Type: Slots\n  Version: 1\n  State:\n")
+        .expect("slots unit");
     let rest = &text[start + "  Type: Slots\n  Version: 1\n  State:\n".len()..];
     let end = rest.find("\nUnit:").unwrap_or(rest.len());
-    rest[..end].lines().map(|l| format!("{}\n", l.strip_prefix("    ").unwrap_or(l))).collect()
+    rest[..end]
+        .lines()
+        .map(|l| format!("{}\n", l.strip_prefix("    ").unwrap_or(l)))
+        .collect()
 }
 
 fn load_card(text: &str, host: &mut Host, slot: u8) -> (Machine, Vec<String>) {
@@ -276,7 +299,10 @@ fn ay0() -> AySnapshot {
         env_first: false,
         env_rev: true,
         env_counter: 12,
-        regs: [0x1C, 0x01, 0xD5, 0x00, 0xFF, 0x02, 0x0A, 0x38, 0x0F, 0x0B, 0x00, 0x00, 0x10, 0x0A, 0, 0],
+        regs: [
+            0x1C, 0x01, 0xD5, 0x00, 0xFF, 0x02, 0x0A, 0x38, 0x0F, 0x0B, 0x00, 0x00, 0x10, 0x0A, 0,
+            0,
+        ],
     }
 }
 
@@ -362,7 +388,9 @@ fn mb_c_expected() -> MockingboardSnapshot {
 }
 
 fn snapshot_in(m: &Machine, slot: u8) -> MockingboardSnapshot {
-    m.card::<MockingboardCard>(slot).expect("mockingboard card").snapshot()
+    m.card::<MockingboardCard>(slot)
+        .expect("mockingboard card")
+        .snapshot()
 }
 
 #[test]
@@ -380,7 +408,11 @@ fn golden_mockingboard_c_v15_loads_into_the_card() {
 
 fn regs_only(s: &mut MockingboardSnapshot) {
     for a in s.units.iter_mut().flat_map(|u| u.ay.iter_mut()) {
-        *a = AySnapshot { ty: a.ty, regs: a.regs, ..ay_idle() };
+        *a = AySnapshot {
+            ty: a.ty,
+            regs: a.regs,
+            ..ay_idle()
+        };
     }
 }
 
@@ -388,10 +420,23 @@ fn regs_only(s: &mut MockingboardSnapshot) {
 fn mockingboard_c_writes_exactly_the_cpp_text() {
     let bus = AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc);
     let mut m = machine_with(Variant::MockingboardC, 4, &bus);
-    m.card_mut::<MockingboardCard>(4).unwrap().apply_snapshot(&mb_c_expected());
-    let text = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    m.card_mut::<MockingboardCard>(4)
+        .unwrap()
+        .apply_snapshot(&mb_c_expected());
+    let text = save_aws_yaml(
+        &m,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .text;
     let tick_incr = m.card::<MockingboardCard>(4).unwrap().snapshot().units[0].ay[0].tick_incr;
-    assert_eq!(slots_body(&text), MB_C_V15.replace("Tick Incr: 4321", &format!("Tick Incr: {tick_incr}")));
+    assert_eq!(
+        slots_body(&text),
+        MB_C_V15.replace("Tick Incr: 4321", &format!("Tick Incr: {tick_incr}"))
+    );
 }
 
 // ---- golden: Phasor, unit version 15 ---------------------------------------------------------
@@ -457,7 +502,9 @@ IER: 0x40
 ";
 
 fn indent(s: &str, n: usize) -> String {
-    s.lines().map(|l| format!("{}{l}\n", " ".repeat(n))).collect()
+    s.lines()
+        .map(|l| format!("{}{l}\n", " ".repeat(n)))
+        .collect()
 }
 
 fn phasor_v15() -> String {
@@ -490,11 +537,20 @@ Bus Driven by AY: false\n",
 }
 
 fn phasor_expected() -> MockingboardSnapshot {
-    let via = ViaSnapshot { ora: 0, ifr: 0, t2_latch: 0x777, ier: 0x40, ..via1() };
+    let via = ViaSnapshot {
+        ora: 0,
+        ifr: 0,
+        t2_latch: 0x777,
+        ier: 0x40,
+        ..via1()
+    };
     let u0 = UnitSnapshot {
         via: via.clone(),
         ay: [ay_idle(), ay_idle()],
-        ssi: SsiSnapshot { is_votrax_phoneme: false, ..ssi_empty_sc01() },
+        ssi: SsiSnapshot {
+            is_votrax_phoneme: false,
+            ..ssi_empty_sc01()
+        },
         state: [6, 7],
         ay_current_register: [7, 9],
         chip_selected: [true, true],
@@ -511,7 +567,10 @@ fn phasor_expected() -> MockingboardSnapshot {
         latch_valid: [false, true],
         bus_driven: false,
     };
-    MockingboardSnapshot { phasor_mode: 5, units: [u0, u1] }
+    MockingboardSnapshot {
+        phasor_mode: 5,
+        units: [u0, u1],
+    }
 }
 
 #[test]
@@ -529,18 +588,38 @@ fn golden_phasor_v15_loads_into_the_card() {
 fn phasor_writes_exactly_the_cpp_text() {
     let bus = AudioBus::new(44_100, apple2_core::VideoStandard::Ntsc);
     let mut m = machine_with(Variant::Phasor, 4, &bus);
-    m.card_mut::<MockingboardCard>(4).unwrap().apply_snapshot(&phasor_expected());
-    let text = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    m.card_mut::<MockingboardCard>(4)
+        .unwrap()
+        .apply_snapshot(&phasor_expected());
+    let text = save_aws_yaml(
+        &m,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .text;
     let tick = m.card::<MockingboardCard>(4).unwrap().snapshot().units[0].ay[0].tick_incr;
-    assert_eq!(slots_body(&text), phasor_v15().replace("Tick Incr: 4321", &format!("Tick Incr: {tick}")));
+    assert_eq!(
+        slots_body(&text),
+        phasor_v15().replace("Tick Incr: 4321", &format!("Tick Incr: {tick}"))
+    );
 }
 
 // ---- older unit versions ---------------------------------------------------------------------
 
 /// An `AY8910` (pre-v15) body: no `Type`, `Vol0` tells the chips apart.
 fn ay_old(vol0: u8) -> String {
-    let body: String = AY_IDLE_BODY.lines().skip(1).map(|l| format!("{l}\n")).collect();
-    indent(&body.replace("Vol0: 0x00", &format!("Vol0: 0x{vol0:02X}")), 6)
+    let body: String = AY_IDLE_BODY
+        .lines()
+        .skip(1)
+        .map(|l| format!("{l}\n"))
+        .collect();
+    indent(
+        &body.replace("Vol0: 0x00", &format!("Vol0: 0x{vol0:02X}")),
+        6,
+    )
 }
 
 fn via_old(extra: &str, t1_latch: &str) -> String {
@@ -567,13 +646,20 @@ Timer1 IRQ Pending: false\n    Timer2 IRQ Pending: false\n    Speech IRQ Pending
             ay_old(9),
         )
     };
-    let text = format!("4:\n  Card: Mockingboard C\n  Version: 3\n  State:\n    Unit0:\n{}    Unit1:\n{}", indent(&unit("0x00", "0x3"), 2), indent(&unit("0x40", "0x2"), 2));
+    let text = format!(
+        "4:\n  Card: Mockingboard C\n  Version: 3\n  State:\n    Unit0:\n{}    Unit1:\n{}",
+        indent(&unit("0x00", "0x3"), 2),
+        indent(&unit("0x40", "0x2"), 2)
+    );
     let mut host = Host::new();
     let (m, warnings) = load_card(&file_with_slots(&text), &mut host, 4);
     assert!(warnings.is_empty(), "{warnings:?}");
     let s = snapshot_in(&m, 4);
     let (u0, u1) = (&s.units[0], &s.units[1]);
-    assert_eq!(u0.via.t1_latch, 0xFFFF, "a zero latch is lifted so detection works (6522.cpp:690)");
+    assert_eq!(
+        u0.via.t1_latch, 0xFFFF,
+        "a zero latch is lifted so detection works (6522.cpp:690)"
+    );
     assert_eq!(u0.via.t2_latch, 0x777);
     assert!(u0.via.t1_active && !u0.via.t2_active && !u0.via.t1_irq_delay);
     assert_eq!(u0.ay[0].regs[8], 9);
@@ -582,7 +668,11 @@ Timer1 IRQ Pending: false\n    Timer2 IRQ Pending: false\n    Speech IRQ Pending
     // v<12: function 0 is replaced by the usual one with interrupts off; otherwise interrupts on.
     assert_eq!(u0.ssi.current_mode, 0xC0);
     assert_eq!(u1.ssi.current_mode, 0x60);
-    assert_eq!((u0.state[0], u0.bus_driven), (3, true), "bus driven = AY_READ");
+    assert_eq!(
+        (u0.state[0], u0.bus_driven),
+        (3, true),
+        "bus driven = AY_READ"
+    );
     assert_eq!((u1.state[0], u1.bus_driven), (2, false));
     assert_eq!(u0.state[1], 2);
 }
@@ -625,8 +715,20 @@ fn every_variant_is_written_under_its_applewin_card_name() {
         (Variant::SdMusic, "SD Music"),
     ] {
         let m = machine_with(v, 5, &bus);
-        let text = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
-        assert!(slots_body(&text).starts_with(&format!("5:\n  Card: {name}\n  Version: 15\n  State:\n")), "{name}");
+        let text = save_aws_yaml(
+            &m,
+            &SaveOptions {
+                extension: false,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .text;
+        assert!(
+            slots_body(&text)
+                .starts_with(&format!("5:\n  Card: {name}\n  Version: 15\n  State:\n")),
+            "{name}"
+        );
     }
 }
 
@@ -639,9 +741,14 @@ fn play(m: &mut Machine, slot: u8, variant: Variant) {
         if variant == Variant::Phasor {
             c.io_write(0x0D, 0, ctx); // native Phasor mode
         }
-        let bases = if variant == Variant::Phasor { [0x10u8, 0x80] } else { [0x00, 0x80] };
+        let bases = if variant == Variant::Phasor {
+            [0x10u8, 0x80]
+        } else {
+            [0x00, 0x80]
+        };
         for base in bases {
-            let w = |c: &mut dyn Card, ctx: &mut _, r: u8, v: u8| c.slot_rom_write(base + r, v, ctx);
+            let w =
+                |c: &mut dyn Card, ctx: &mut _, r: u8, v: u8| c.slot_rom_write(base + r, v, ctx);
             w(c, ctx, 0x02, 0xFF); // DDRB
             w(c, ctx, 0x03, 0xFF); // DDRA
             w(c, ctx, 0x00, 0x04); // ORB: AY idle (reset released)
@@ -680,10 +787,21 @@ fn round_trip(variant: Variant) {
     let mut host = Host::new();
     let b = load_aws_yaml(&saved.text, &mut host).unwrap();
     assert!(b.warnings.is_empty(), "{:?}", b.warnings);
-    assert_eq!(a.save_state(), b.machine.save_state(), "{variant:?}: exact state");
+    assert_eq!(
+        a.save_state(),
+        b.machine.save_state(),
+        "{variant:?}: exact state"
+    );
 
     // Without it: the card's AppleWin state, and the machine keeps running.
-    let saved = save_aws_yaml(&a, &SaveOptions { extension: false, ..Default::default() }).unwrap();
+    let saved = save_aws_yaml(
+        &a,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     let mut host = Host::new();
     let mut c = load_aws_yaml(&saved.text, &mut host).unwrap();
     assert!(c.warnings.is_empty(), "{:?}", c.warnings);
@@ -692,20 +810,35 @@ fn round_trip(variant: Variant) {
     regs_only(&mut want);
     assert_eq!(got, want, "{variant:?}: card state through AppleWin units");
     c.machine.with_card(4, |card, ctx| {
-        card.slot_rom_write(if variant == Variant::Phasor { 0x1D } else { 0x0D }, 0x40, ctx); // IFR: clear timer 1 flag
+        card.slot_rom_write(
+            if variant == Variant::Phasor {
+                0x1D
+            } else {
+                0x0D
+            },
+            0x40,
+            ctx,
+        ); // IFR: clear timer 1 flag
     });
     assert_eq!(snapshot_in(&c.machine, 4).units[0].via.ifr & 0x40, 0);
     for _ in 0..3 {
         c.machine.run_frame();
     }
     // Timer 1 free-runs again after the load: its flag shows up in IFR.
-    assert_ne!(snapshot_in(&c.machine, 4).units[0].via.ifr & 0x40, 0, "{variant:?}: timer 1 events re-armed");
+    assert_ne!(
+        snapshot_in(&c.machine, 4).units[0].via.ifr & 0x40,
+        0,
+        "{variant:?}: timer 1 events re-armed"
+    );
 }
 
 #[test]
 fn a_phoneme_playing_when_saved_restarts_and_completes_after_the_load() {
     // Unit 1 of MB_C_V15 with CTL low (phoneme active) instead of power-down.
-    let text = MB_C_V15.replace("Control / Articulation / Amplitude: 0x8A", "Control / Articulation / Amplitude: 0x0A");
+    let text = MB_C_V15.replace(
+        "Control / Articulation / Amplitude: 0x8A",
+        "Control / Articulation / Amplitude: 0x0A",
+    );
     let text = text.replace("Current Mode: 0x61", "Current Mode: 0x60"); // D7 clear, interrupts on
     let mut host = Host::new();
     let (mut m, warnings) = load_card(&file_with_slots(&text), &mut host, 4);
@@ -715,8 +848,16 @@ fn a_phoneme_playing_when_saved_restarts_and_completes_after_the_load() {
         m.run_frame();
     }
     let s = snapshot_in(&m, 4);
-    assert_eq!(s.units[1].ssi.current_mode & 1, 1, "phoneme complete: D7 set");
-    assert_ne!(s.units[1].via.ifr & 0x02, 0, "and the SSI263 flag raised in the 6522");
+    assert_eq!(
+        s.units[1].ssi.current_mode & 1,
+        1,
+        "phoneme complete: D7 set"
+    );
+    assert_ne!(
+        s.units[1].via.ifr & 0x02,
+        0,
+        "and the SSI263 flag raised in the 6522"
+    );
 }
 
 #[test]

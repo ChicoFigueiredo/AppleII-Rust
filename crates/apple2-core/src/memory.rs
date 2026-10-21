@@ -58,7 +58,10 @@ struct Page {
     base: u32,
 }
 
-const NONE: Page = Page { seg: Seg::None, base: 0 };
+const NONE: Page = Page {
+    seg: Seg::None,
+    base: 0,
+};
 
 /// Serializable RAM and paging state (the ROM comes from the configuration).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,7 +230,13 @@ impl Memory {
     /// written (RamWorks bank). Reads and writes alike toggle $C054-$C057; the //e switches are
     /// ignored on the ][ family; $C058-$C05B select the Base64A ROM page.
     pub fn set_paging(&mut self, lo: u8, value: u8) {
-        let bit = |m: u32, on: bool| if on { self.memmode | m } else { self.memmode & !m };
+        let bit = |m: u32, on: bool| {
+            if on {
+                self.memmode | m
+            } else {
+                self.memmode & !m
+            }
+        };
         let on = lo & 1 != 0;
         let mut mode = self.memmode;
         if self.is_e {
@@ -251,7 +260,11 @@ impl Memory {
             };
         } else if matches!(lo, 0x54..=0x57) {
             // No MMU, but the video-side PAGE2/HIRES state is kept here too.
-            mode = if lo < 0x56 { bit(mf::PAGE2, on) } else { bit(mf::HIRES, on) };
+            mode = if lo < 0x56 {
+                bit(mf::PAGE2, on)
+            } else {
+                bit(mf::HIRES, on)
+            };
         }
         if self.is_base64a {
             mode = match lo {
@@ -317,7 +330,10 @@ impl Memory {
     /// True if a CPU write to `addr` lands in RAM (AppleWin `memwrite[page] != NULL`); false for
     /// ROM, I/O space and the write-protected Language Card.
     pub fn is_writable(&self, addr: u16) -> bool {
-        matches!(self.wr[(addr >> 8) as usize].seg, Seg::Main | Seg::Aux | Seg::Lc)
+        matches!(
+            self.wr[(addr >> 8) as usize].seg,
+            Seg::Main | Seg::Aux | Seg::Lc
+        )
     }
 
     /// Internal Cx ROM at $C100-$CFFF (Memory.cpp:1367-1387): used for everything when INTCXROM,
@@ -326,7 +342,11 @@ impl Memory {
     pub fn read_cx(&self, addr: u16) -> Option<u8> {
         let internal = self.memmode & mf::INTCXROM != 0
             || (addr >> 8 == 0xC3 && self.memmode & mf::SLOTC3ROM == 0);
-        if internal { self.internal_cx(addr) } else { None }
+        if internal {
+            self.internal_cx(addr)
+        } else {
+            None
+        }
     }
 
     /// Byte of the internal Cx ROM at `addr` (`$C100-$CFFF`) whatever the switches say; `None`
@@ -409,9 +429,18 @@ impl Memory {
     fn aux_page(&self, off: u32, write: bool) -> Page {
         match self.aux_kind {
             AuxCardKind::Empty if write => NONE,
-            AuxCardKind::Empty => Page { seg: Seg::Floating, base: 0 },
-            AuxCardKind::Col80_1K => Page { seg: Seg::Aux, base: off & 0x300 },
-            _ => Page { seg: Seg::Aux, base: self.aux_bank as u32 * BANK_SIZE as u32 + off },
+            AuxCardKind::Empty => Page {
+                seg: Seg::Floating,
+                base: 0,
+            },
+            AuxCardKind::Col80_1K => Page {
+                seg: Seg::Aux,
+                base: off & 0x300,
+            },
+            _ => Page {
+                seg: Seg::Aux,
+                base: self.aux_bank as u32 * BANK_SIZE as u32 + off,
+            },
         }
     }
 
@@ -419,7 +448,10 @@ impl Memory {
     fn update_paging(&mut self) {
         let f = self.memmode;
         let has = |m: u32| f & m != 0;
-        let main = |p: u32| Page { seg: Seg::Main, base: p << 8 };
+        let main = |p: u32| Page {
+            seg: Seg::Main,
+            base: p << 8,
+        };
         let mut rd = [NONE; 256];
         let mut wr = [NONE; 256];
         for p in 0..0xC0u32 {
@@ -429,8 +461,16 @@ impl Memory {
                 (self.aux_page(p << 8, false), self.aux_page(p << 8, true))
             } else {
                 (
-                    if has(mf::AUXREAD) { self.aux_page(p << 8, false) } else { main(p) },
-                    if has(mf::AUXWRITE) { self.aux_page(p << 8, true) } else { main(p) },
+                    if has(mf::AUXREAD) {
+                        self.aux_page(p << 8, false)
+                    } else {
+                        main(p)
+                    },
+                    if has(mf::AUXWRITE) {
+                        self.aux_page(p << 8, true)
+                    } else {
+                        main(p)
+                    },
                 )
             };
             rd[p as usize] = r;
@@ -450,27 +490,45 @@ impl Memory {
             }
         }
         for p in 0xC0..0xD0 {
-            rd[p] = Page { seg: Seg::Io, base: 0 };
+            rd[p] = Page {
+                seg: Seg::Io,
+                base: 0,
+            };
             wr[p] = rd[p];
         }
         // $D000-$FFFF: Language Card RAM (aux when ALTZP) or ROM (+ Base64A page offset).
-        let rom_page = ((has(mf::ALTROM0) as usize) | (has(mf::ALTROM1) as usize) << 1) % self.rom_pages;
+        let rom_page =
+            ((has(mf::ALTROM0) as usize) | (has(mf::ALTROM1) as usize) << 1) % self.rom_pages;
         for p in 0xD0..0x100u32 {
-            let bank_off = if p < 0xE0 && !has(mf::BANK2) { 0x1000 } else { 0 };
+            let bank_off = if p < 0xE0 && !has(mf::BANK2) {
+                0x1000
+            } else {
+                0
+            };
             let ram = |aux: bool, write: bool| {
                 if aux {
                     self.aux_page((p << 8) - bank_off, write)
                 } else {
-                    Page { seg: Seg::Lc, base: (self.lc_region * LC_SIZE) as u32 + ((p - 0xC0) << 8) - bank_off }
+                    Page {
+                        seg: Seg::Lc,
+                        base: (self.lc_region * LC_SIZE) as u32 + ((p - 0xC0) << 8) - bank_off,
+                    }
                 }
             };
             let altzp = has(mf::ALTZP);
             rd[p as usize] = if has(mf::HIGHRAM) {
                 ram(altzp, false)
             } else {
-                Page { seg: Seg::Rom, base: (rom_page * SYS_ROM_SIZE) as u32 + ((p - 0xD0) << 8) }
+                Page {
+                    seg: Seg::Rom,
+                    base: (rom_page * SYS_ROM_SIZE) as u32 + ((p - 0xD0) << 8),
+                }
             };
-            wr[p as usize] = if has(mf::WRITERAM) { ram(altzp, true) } else { NONE };
+            wr[p as usize] = if has(mf::WRITERAM) {
+                ram(altzp, true)
+            } else {
+                NONE
+            };
         }
         self.rd = rd;
         self.wr = wr;

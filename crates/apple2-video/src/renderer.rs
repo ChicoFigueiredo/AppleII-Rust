@@ -72,7 +72,10 @@ pub(crate) enum Screen {
 
 impl Screen {
     fn is_text(self) -> bool {
-        matches!(self, Screen::Text40 | Screen::Text40Rgb | Screen::Text80 | Screen::Text80Rgb)
+        matches!(
+            self,
+            Screen::Text40 | Screen::Text40Rgb | Screen::Text80 | Screen::Text80Rgb
+        )
     }
 }
 
@@ -200,8 +203,14 @@ impl Renderer {
             model: Model::Apple2e,
             pal: false,
             addr: 0,
-            flags: VideoFlags { text: true, ..Default::default() },
-            new_flags: VideoFlags { text: true, ..Default::default() },
+            flags: VideoFlags {
+                text: true,
+                ..Default::default()
+            },
+            new_flags: VideoFlags {
+                text: true,
+                ..Default::default()
+            },
             delay_mode: false,
             col80_text: false,
             prev_dhires: false,
@@ -219,12 +228,26 @@ impl Renderer {
             color_burst: 0,
             color_phase: 0,
             signal_bits: 0,
-            bnw_fn: PixFn { tv: true, mono: true, single: true },
-            hue_fn: PixFn { tv: true, mono: false, single: true },
+            bnw_fn: PixFn {
+                tv: true,
+                mono: true,
+                single: true,
+            },
+            hue_fn: PixFn {
+                tv: true,
+                mono: false,
+                single: true,
+            },
             mono_monitor: vec![0; NUM_SEQUENCES],
             mono_tv: vec![0; NUM_SEQUENCES],
             palette: lookup().palette_ntsc,
-            rgb: RgbState { flags: 0, mode: 0, text_fb: false, dhgr_last_cell_is_color: true, dhgr_last_bit: 0 },
+            rgb: RgbState {
+                flags: 0,
+                mode: 0,
+                text_fb: false,
+                dhgr_last_cell_is_color: true,
+                dhgr_last_bit: 0,
+            },
             hgr_matrix: vec![0; VISIBLE_W * MAT_H],
             double_mask,
             pixel_mask_gr,
@@ -421,7 +444,9 @@ impl Renderer {
     }
 
     fn palette_for_type(&self) -> [u32; PALETTE_SIZE] {
-        if self.cfg.video_type == VideoType::ColorVideocardRgb && self.cfg.rgb_card == RgbCard::LeChatMauveFeline {
+        if self.cfg.video_type == VideoType::ColorVideocardRgb
+            && self.cfg.rgb_card == RgbCard::LeChatMauveFeline
+        {
             PALETTE_FELINE
         } else {
             lookup().palette_ntsc
@@ -454,8 +479,16 @@ impl Renderer {
         let single = self.cfg.half_scanlines;
         let (r, g, b);
         let (mut bnw, mut hue) = (
-            PixFn { tv: false, mono: true, single },
-            PixFn { tv: false, mono: false, single },
+            PixFn {
+                tv: false,
+                mono: true,
+                single,
+            },
+            PixFn {
+                tv: false,
+                mono: false,
+                single,
+            },
         );
         match self.cfg.video_type {
             VideoType::ColorTv => {
@@ -533,7 +566,8 @@ impl Renderer {
     fn sets_for(&mut self, jplus_ascii: bool) -> &'static [Glyphs] {
         if let Some(rom) = &self.cfg.user_video_rom {
             let key = std::sync::Arc::as_ptr(rom) as usize;
-            let cached = matches!(&self.user_sets, Some((k, m, _)) if *k == key && *m == self.model);
+            let cached =
+                matches!(&self.user_sets, Some((k, m, _)) if *k == key && *m == self.model);
             if !cached {
                 self.user_sets = Some((key, self.model, user_char_sets(self.model, rom)));
             }
@@ -604,7 +638,11 @@ impl Renderer {
         {
             self.rgb.text_fb = true;
             if f.text {
-                self.gfx = if f.col80 { Screen::Text80Rgb } else { Screen::Text40Rgb };
+                self.gfx = if f.col80 {
+                    Screen::Text80Rgb
+                } else {
+                    Screen::Text40Rgb
+                };
             } else if f.hires {
                 self.gfx = Screen::SingleHires40Duochrome;
                 self.txt = Screen::Text40Rgb;
@@ -678,8 +716,16 @@ impl Renderer {
     /// A VidHD appears or goes away: the framebuffer changes size (`Video::GetFrameBuffer*`).
     fn set_vidhd(&mut self, on: bool) {
         self.vidhd = on;
-        (self.vis_w, self.vis_h) = if on { (VIDHD_W, VIDHD_H) } else { (VISIBLE_W, VISIBLE_H) };
-        (self.cx, self.cy) = if on { ((VIDHD_W - VISIBLE_W) / 2, (VIDHD_H - VISIBLE_H) / 2) } else { (0, 0) };
+        (self.vis_w, self.vis_h) = if on {
+            (VIDHD_W, VIDHD_H)
+        } else {
+            (VISIBLE_W, VISIBLE_H)
+        };
+        (self.cx, self.cy) = if on {
+            ((VIDHD_W - VISIBLE_W) / 2, (VIDHD_H - VISIBLE_H) / 2)
+        } else {
+            (0, 0)
+        };
         self.fb_w = self.vis_w + 2 * BORDER_W;
         self.fb_h = self.vis_h + 2 * BORDER_H;
         self.fb = vec![OPAQUE_BLACK; self.fb_w * self.fb_h];
@@ -708,7 +754,11 @@ impl Renderer {
     }
 
     pub(crate) fn get(&self, idx: isize) -> u32 {
-        usize::try_from(idx).ok().and_then(|i| self.fb.get(i)).copied().unwrap_or(0)
+        usize::try_from(idx)
+            .ok()
+            .and_then(|i| self.fb.get(i))
+            .copied()
+            .unwrap_or(0)
     }
 
     /// `updateVideoScannerAddress` (NTSC.cpp:748).
@@ -724,18 +774,32 @@ impl Renderer {
         }
         if self.gfx == Screen::Shr {
             // g_pScanLines[2*vert]: returns before the colour-phase reset (NTSC.cpp:758-762).
-            self.addr = self.shr_line(if self.vert < Y_DISPLAY_IIGS { 2 * self.vert as usize } else { 0 });
+            self.addr = self.shr_line(if self.vert < Y_DISPLAY_IIGS {
+                2 * self.vert as usize
+            } else {
+                0
+            });
             return;
         }
-        self.addr = self.scan_line(if self.vert < Y_DISPLAY { 2 * self.vert as usize } else { 0 });
-        if vt == VideoType::MonoTv || vt == VideoType::ColorTv || (vt == VideoType::ColorMonitorNtsc && self.color_burst_on())
+        self.addr = self.scan_line(if self.vert < Y_DISPLAY {
+            2 * self.vert as usize
+        } else {
+            0
+        });
+        if vt == VideoType::MonoTv
+            || vt == VideoType::ColorTv
+            || (vt == VideoType::ColorMonitorNtsc && self.color_burst_on())
         {
             self.addr -= 2;
         }
         // GH#555: the 14M video modes start one 14M pixel early.
         let g = self.gfx;
-        let wide = matches!(g, Screen::DoubleHires80 | Screen::DoubleLores80 | Screen::Text80 | Screen::Text80Rgb)
-            || (self.mixed && self.vert >= Y_MIXED && (self.txt == Screen::Text80 || g == Screen::Text80Rgb));
+        let wide = matches!(
+            g,
+            Screen::DoubleHires80 | Screen::DoubleLores80 | Screen::Text80 | Screen::Text80Rgb
+        ) || (self.mixed
+            && self.vert >= Y_MIXED
+            && (self.txt == Screen::Text80 || g == Screen::Text80Rgb));
         if wide && vt != VideoType::ColorIdealized && vt != VideoType::ColorVideocardRgb {
             self.addr -= 1;
         }
@@ -818,20 +882,33 @@ impl Renderer {
 
     /// `getVideoScannerAddressTXT`.
     fn addr_txt(&self) -> u16 {
-        let sw = Switches { text: true, mixed: false, hires: false, page2: self.text_page2 };
+        let sw = Switches {
+            text: true,
+            mixed: false,
+            hires: false,
+            page2: self.text_page2,
+        };
         self.scanner.address_at(self.vert, self.horz, sw)
     }
 
     /// `getVideoScannerAddressHGR`.
     fn addr_hgr(&self) -> u16 {
-        let sw = Switches { text: false, mixed: false, hires: true, page2: self.hires_page2 };
+        let sw = Switches {
+            text: false,
+            mixed: false,
+            hires: true,
+            page2: self.hires_page2,
+        };
         let a = self.scanner.address_at(self.vert, self.horz, sw);
         match self.pseudo_page {
             // `aPageAddr[g_nHiresPage]` (NTSC.cpp:870-886): swap the page 1/2 base for the pseudo page's.
             Some(p) => {
-                const PAGE_ADDR: [u16; 9] = [0x0000, 0x2000, 0x4000, 0x6000, 0x8000, 0xA000, 0xC000, 0xD000, 0xE000];
+                const PAGE_ADDR: [u16; 9] = [
+                    0x0000, 0x2000, 0x4000, 0x6000, 0x8000, 0xA000, 0xC000, 0xD000, 0xE000,
+                ];
                 let base = if self.hires_page2 { 0x4000 } else { 0x2000 };
-                a.wrapping_sub(base).wrapping_add(PAGE_ADDR[(p as usize).min(8)])
+                a.wrapping_sub(base)
+                    .wrapping_add(PAGE_ADDR[(p as usize).min(8)])
             }
             None => a,
         }
@@ -861,7 +938,11 @@ impl Renderer {
             self.put(a, color0);
             // GH#650: draw the final in-between scan line to avoid residue from other modes.
             if self.vert == Y_DISPLAY - 1 {
-                let last = if f.single { (color0 & 0x00FC_FCFC) >> 2 } else { (color0 & 0x00FE_FEFE) >> 1 };
+                let last = if f.single {
+                    (color0 & 0x00FC_FCFC) >> 2
+                } else {
+                    (color0 & 0x00FE_FEFE) >> 1
+                };
                 self.put(a + fw, last | ALPHA);
             }
         } else {
@@ -875,7 +956,11 @@ impl Renderer {
 
     /// `updatePixels`: 14 dots, bit 0 first.
     fn update_pixels(&mut self, bits: u16) {
-        let f = if self.color_burst_on() { self.hue_fn } else { self.bnw_fn };
+        let f = if self.color_burst_on() {
+            self.hue_fn
+        } else {
+            self.bnw_fn
+        };
         for k in 0..14 {
             self.dot(((bits >> k) & 1) as u32, f);
         }
@@ -1074,7 +1159,11 @@ impl Renderer {
                 let bits = lo >> ((1 - (self.horz & 1)) * 2);
                 self.update_pixels(bits);
             }
-            Screen::Text40 | Screen::Text40Rgb | Screen::Text80 | Screen::Text80Rgb | Screen::Shr => {}
+            Screen::Text40
+            | Screen::Text40Rgb
+            | Screen::Text80
+            | Screen::Text80Rgb
+            | Screen::Shr => {}
         }
     }
 
@@ -1183,7 +1272,9 @@ impl Renderer {
     fn shr_cell(&mut self, s: &dyn VideoSource, v: &dyn VidHdView) {
         let (y, x) = (self.vert as u16, (self.horz - HORZ_START) as u16);
         let addr = 0x2000 + 160 * y + 4 * x;
-        let a = (0..4).fold(0u32, |a, i| a | (s.aux(addr.wrapping_add(i)) as u32) << (8 * i));
+        let a = (0..4).fold(0u32, |a, i| {
+            a | (s.aux(addr.wrapping_add(i)) as u32) << (8 * i)
+        });
         let c = s.aux(0x9D00 + y);
         let pal = 0x9E00 + (c as u16 & 0xF) * 32;
         let palette: [u16; 16] = std::array::from_fn(|i| {

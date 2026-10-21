@@ -28,15 +28,23 @@ pub struct SavedState {
 }
 
 pub fn save_machine(machine: &apple2_core::Machine) -> Result<SavedState, String> {
-    let opts = SaveOptions { date_stamp: date_stamp(), ..Default::default() };
+    let opts = SaveOptions {
+        date_stamp: date_stamp(),
+        ..Default::default()
+    };
     let saved = apple2_savestate::save_aws_yaml(machine, &opts).map_err(|e| e.to_string())?;
-    Ok(SavedState { text: saved.text, warnings: saved.warnings })
+    Ok(SavedState {
+        text: saved.text,
+        warnings: saved.warnings,
+    })
 }
 
 /// The "append .aws.yaml if it's not there" rules of `SaveStateSelectImage` (:218-247): `file`,
 /// `file.aws` and `file.yaml` all become `file.aws.yaml`.
 pub fn ensure_aws_yaml_ext(path: &Path) -> PathBuf {
-    let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else { return path.to_path_buf() };
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        return path.to_path_buf();
+    };
     let lower = name.to_ascii_lowercase();
     let stem = if lower.ends_with(EXT) {
         return path.to_path_buf();
@@ -55,7 +63,10 @@ pub fn ensure_aws_yaml_ext(path: &Path) -> PathBuf {
 pub fn media_default(settings: &Settings) -> Option<(String, PathBuf)> {
     let split = |p: &Path| -> Option<(String, PathBuf)> {
         let stem = p.file_stem()?.to_string_lossy().into_owned();
-        let dir = p.parent().filter(|d| !d.as_os_str().is_empty()).map(Path::to_path_buf)?;
+        let dir = p
+            .parent()
+            .filter(|d| !d.as_os_str().is_empty())
+            .map(Path::to_path_buf)?;
         Some((stem, dir))
     };
     for spec in settings.slots.0.iter().rev() {
@@ -81,7 +92,10 @@ pub fn media_default(settings: &Settings) -> Option<(String, PathBuf)> {
 pub fn default_state_path(settings: &Settings, current_dir: &Path) -> PathBuf {
     let explicit = settings.storage.savestate_filename.clone();
     if let Some((stem, dir)) = media_default(settings) {
-        let same_dir = explicit.as_ref().and_then(|e| e.parent()).is_some_and(|p| p == dir);
+        let same_dir = explicit
+            .as_ref()
+            .and_then(|e| e.parent())
+            .is_some_and(|p| p == dir);
         if !same_dir {
             return dir.join(format!("{stem}{EXT}"));
         }
@@ -99,7 +113,11 @@ pub fn remember_path(settings: &mut Settings, path: &Path) -> Result<(), String>
 /// file. Saving appends `.aws.yaml`; loading accepts any file.
 pub fn pick_file(save: bool, current: &Path) -> Option<PathBuf> {
     let mut d = rfd::FileDialog::new()
-        .set_title(if save { "Select Save State file" } else { "Select Save State file to load" })
+        .set_title(if save {
+            "Select Save State file"
+        } else {
+            "Select Save State file to load"
+        })
         .add_filter("Save State files (*.aws.yaml)", &["yaml", "aws"])
         .add_filter("All Files", &["*"]);
     if let Some(dir) = current.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -151,8 +169,15 @@ fn card_type_of(name: &str) -> Option<CardType> {
 
 impl LoadHost for StateHost<'_> {
     fn open_image(&mut self, req: &ImageRequest) -> Result<DiskImage, String> {
-        let class = if req.hard_disk { Class::HardDisk } else { Class::Floppy };
-        let base = Path::new(req.filename).file_name().map(PathBuf::from).unwrap_or_default();
+        let class = if req.hard_disk {
+            Class::HardDisk
+        } else {
+            Class::Floppy
+        };
+        let base = Path::new(req.filename)
+            .file_name()
+            .map(PathBuf::from)
+            .unwrap_or_default();
         let mut candidates = vec![PathBuf::from(req.filename)];
         if let Some(d) = &self.state_dir {
             candidates.push(d.join(&base));
@@ -160,7 +185,11 @@ impl LoadHost for StateHost<'_> {
         if !req.absolute_path.is_empty() {
             candidates.push(PathBuf::from(req.absolute_path));
         }
-        let dir = if req.hard_disk { &self.settings.storage.hdv_dir } else { &self.settings.storage.disk_dir };
+        let dir = if req.hard_disk {
+            &self.settings.storage.hdv_dir
+        } else {
+            &self.settings.storage.disk_dir
+        };
         if let Some(d) = dir {
             candidates.push(d.join(&base));
         }
@@ -179,20 +208,34 @@ impl LoadHost for StateHost<'_> {
         // Media comes from the state, not from the settings: only the host-bound options carry over.
         let spec = match ty {
             CardType::Disk2 | CardType::GenericHdd => SlotCardSpec::new(ty),
-            _ => self.settings.slots.0.iter().find(|s| s.card_type() == ty).cloned().unwrap_or_else(|| SlotCardSpec::new(ty)),
+            _ => self
+                .settings
+                .slots
+                .0
+                .iter()
+                .find(|s| s.card_type() == ty)
+                .cloned()
+                .unwrap_or_else(|| SlotCardSpec::new(ty)),
         };
         let mut settings = self.settings.clone();
         settings.machine.model = model;
-        let env = Env { settings: &settings, bus: self.bus };
+        let env = Env {
+            settings: &settings,
+            bus: self.bus,
+        };
         let card = factory::build_card(&spec, slot, &env, &mut self.warnings);
         if card.is_none() {
-            self.warnings.push(format!("slot {slot}: '{name}' not available with the current settings"));
+            self.warnings.push(format!(
+                "slot {slot}: '{name}' not available with the current settings"
+            ));
         }
         card
     }
 
     fn make_no_slot_clock(&mut self) -> Option<Box<dyn RomTap>> {
-        Some(Box::new(apple2_cards::NoSlotClock::new(Box::new(SystemClock))))
+        Some(Box::new(apple2_cards::NoSlotClock::new(Box::new(
+            SystemClock,
+        ))))
     }
 
     fn make_dongle(&mut self, kind: DongleKind) -> Option<Box<dyn GameIoDevice>> {
@@ -202,8 +245,18 @@ impl LoadHost for StateHost<'_> {
 
 /// Parses `text` and builds the machine (`Snapshot_LoadState_v2`). Warnings from the loader and
 /// from the host are merged.
-pub fn load_machine(text: &str, settings: &Settings, bus: &AudioBus, state_dir: Option<&Path>) -> Result<Loaded, String> {
-    let mut host = StateHost { settings, bus, state_dir: state_dir.map(Path::to_path_buf), warnings: Vec::new() };
+pub fn load_machine(
+    text: &str,
+    settings: &Settings,
+    bus: &AudioBus,
+    state_dir: Option<&Path>,
+) -> Result<Loaded, String> {
+    let mut host = StateHost {
+        settings,
+        bus,
+        state_dir: state_dir.map(Path::to_path_buf),
+        warnings: Vec::new(),
+    };
     let mut loaded = apple2_savestate::load_aws_yaml(text, &mut host).map_err(|e| e.to_string())?;
     loaded.warnings.append(&mut host.warnings);
     Ok(loaded)
@@ -219,7 +272,10 @@ pub fn check_loadable(path: &Path) -> Result<(), String> {
 }
 
 pub fn is_state_file(path: &Path) -> bool {
-    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
     name.ends_with(EXT) || name.ends_with(".aws") || name.ends_with(".yaml")
 }
 
@@ -243,19 +299,49 @@ mod tests {
     fn default_path_follows_media_like_snapshot_update_path() {
         let cwd = Path::new("/cwd");
         let mut s = Settings::default();
-        assert_eq!(default_state_path(&s, cwd), Path::new("/cwd/SaveState.aws.yaml"));
+        assert_eq!(
+            default_state_path(&s, cwd),
+            Path::new("/cwd/SaveState.aws.yaml")
+        );
         s.storage.savestate_filename = Some("/saves/mine.aws.yaml".into());
-        assert_eq!(default_state_path(&s, cwd), Path::new("/saves/mine.aws.yaml"));
+        assert_eq!(
+            default_state_path(&s, cwd),
+            Path::new("/saves/mine.aws.yaml")
+        );
         // a floppy in another directory renames the file; in the same directory it keeps the name
         s.slots.0[6] = SlotCardSpec::Disk2 {
             firmware_13_sector: false,
-            drives: [DriveSpec { image: Some("/games/Choplifter.dsk".into()), ..Default::default() }, DriveSpec::default()],
+            drives: [
+                DriveSpec {
+                    image: Some("/games/Choplifter.dsk".into()),
+                    ..Default::default()
+                },
+                DriveSpec::default(),
+            ],
         };
-        assert_eq!(default_state_path(&s, cwd), Path::new("/games/Choplifter.aws.yaml"));
+        assert_eq!(
+            default_state_path(&s, cwd),
+            Path::new("/games/Choplifter.aws.yaml")
+        );
         s.storage.savestate_filename = Some("/games/mine.aws.yaml".into());
-        assert_eq!(default_state_path(&s, cwd), Path::new("/games/mine.aws.yaml"));
+        assert_eq!(
+            default_state_path(&s, cwd),
+            Path::new("/games/mine.aws.yaml")
+        );
         // hard disks win over floppies
-        s.slots.0[7] = SlotCardSpec::GenericHdd { firmware: Default::default(), images: [Some("/hd/Work.hdv".into()), None, None, None, None, None, None, None] };
+        s.slots.0[7] = SlotCardSpec::GenericHdd {
+            firmware: Default::default(),
+            images: [
+                Some("/hd/Work.hdv".into()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+        };
         assert_eq!(default_state_path(&s, cwd), Path::new("/hd/Work.aws.yaml"));
     }
 

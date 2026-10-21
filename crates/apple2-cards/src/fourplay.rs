@@ -19,7 +19,10 @@ pub struct Stick {
 impl Stick {
     /// `MakeByte` (FourPlay.cpp:44): bit 4 always low, bit 5 always high.
     pub fn byte(&self) -> u8 {
-        u8::from(self.up) | u8::from(self.down) << 1 | u8::from(self.left) << 2 | u8::from(self.right) << 3
+        u8::from(self.up)
+            | u8::from(self.down) << 1
+            | u8::from(self.left) << 2
+            | u8::from(self.right) << 3
             | 0x20
             | u8::from(self.trigger2) << 6
             | u8::from(self.trigger1) << 7
@@ -67,9 +70,19 @@ mod tests {
     #[test]
     fn byte_layout_matches_makebyte() {
         assert_eq!(Stick::default().byte(), 0x20);
-        let s = Stick { up: true, right: true, trigger1: true, ..Default::default() };
+        let s = Stick {
+            up: true,
+            right: true,
+            trigger1: true,
+            ..Default::default()
+        };
         assert_eq!(s.byte(), 0x01 | 0x08 | 0x20 | 0x80);
-        let s = Stick { down: true, left: true, trigger2: true, ..Default::default() };
+        let s = Stick {
+            down: true,
+            left: true,
+            trigger2: true,
+            ..Default::default()
+        };
         assert_eq!(s.byte(), 0x02 | 0x04 | 0x20 | 0x40);
     }
 }

@@ -10,13 +10,23 @@ use apple2_storage::hdd::{HardDiskCard, HddSnapshot, HddUnitSnapshot};
 /// `kUNIT_VERSION` (Harddisk.cpp:1277).
 const VERSION: u32 = 6;
 
-pub const MAP: Mapping = Mapping { aw_names: &["Hard Disk Controller", "Generic HDD"], our_name: "Hard Disk Controller", save, load };
+pub const MAP: Mapping = Mapping {
+    aw_names: &["Hard Disk Controller", "Generic HDD"],
+    our_name: "Hard Disk Controller",
+    save,
+    load,
+};
 
 fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<HardDiskCard>()) else { return false };
+    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<HardDiskCard>()) else {
+        return false;
+    };
     let s = c.snapshot();
     w.slot(slot, "Hard Disk Controller", VERSION, |w| {
-        w.line(&format!("Current Unit: {} # b7=unit for ProDOS BLK device", s.unit_num));
+        w.line(&format!(
+            "Current Unit: {} # b7=unit for ProDOS BLK device",
+            s.unit_num
+        ));
         w.hex8("Command", s.command as u32);
         w.hex64("Not Busy Cycle", s.not_busy_cycle);
         w.hex8("SP Status Code", s.status_code as u32);
@@ -41,18 +51,36 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
     true
 }
 
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if !(1..=VERSION).contains(&version) {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Hard Disk Controller'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Hard Disk Controller'."
+        )));
     }
-    let Some(mut card) = make(ctx, "Hard Disk Controller", slot) else { return Ok(None) };
-    let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<HardDiskCard>()) else {
-        return Err(Error::Unsupported("host returned a card that is not a hard disk controller".into()));
+    let Some(mut card) = make(ctx, "Hard Disk Controller", slot) else {
+        return Ok(None);
+    };
+    let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<HardDiskCard>())
+    else {
+        return Err(Error::Unsupported(
+            "host returned a card that is not a hard disk controller".into(),
+        ));
     };
     let mut s = HddSnapshot {
         unit_num: st.u32("Current Unit")? as u8,
         command: st.u32("Command")? as u8,
-        not_busy_cycle: if version >= 3 { st.u64("Not Busy Cycle")? } else { 0 },
+        not_busy_cycle: if version >= 3 {
+            st.u64("Not Busy Cycle")?
+        } else {
+            0
+        },
         status_code: 0,
         fifo_idx: 0,
         firmware: Vec::new(),
@@ -61,16 +89,24 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
     if version >= 5 {
         s.status_code = st.u32("SP Status Code")? as u8;
         s.fifo_idx = st.u32("FIFO Index")? as u8;
-        let fw = st.need_sub("Firmware").map_err(|_| Error::Format("HDC: Missing: Firmware".into()))?;
+        let fw = st
+            .need_sub("Firmware")
+            .map_err(|_| Error::Format("HDC: Missing: Firmware".into()))?;
         let mut b = vec![0u8; 256];
         fw.load_memory(&mut b)?;
         s.firmware = b;
     }
     let base = if version >= 5 { 1 } else { 0 };
     for unit in 0..2usize {
-        let Some(u) = st.sub(&format!("Unit{}", base + unit)) else { continue };
+        let Some(u) = st.sub(&format!("Unit{}", base + unit)) else {
+            continue;
+        };
         let filename = u.string("Filename")?;
-        let absolute = if version >= 6 { u.string("Absolute Path")? } else { String::new() };
+        let absolute = if version >= 6 {
+            u.string("Absolute Path")?
+        } else {
+            String::new()
+        };
         let mut snap = HddUnitSnapshot {
             filename: filename.clone(),
             pathname: absolute.clone(),
@@ -83,16 +119,24 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
             buf: vec![0; 512],
         };
         u.bool("ImageLoaded")?;
-        let b = u.sub("Buffer").ok_or_else(|| Error::Format(format!("Unit{}: Missing: Buffer", base + unit)))?;
+        let b = u
+            .sub("Buffer")
+            .ok_or_else(|| Error::Format(format!("Unit{}: Missing: Buffer", base + unit)))?;
         b.load_memory(&mut snap.buf)?;
         if !filename.is_empty() {
-            let req = ImageRequest { filename: &filename, absolute_path: &absolute, write_protected: false, hard_disk: true };
+            let req = ImageRequest {
+                filename: &filename,
+                absolute_path: &absolute,
+                write_protected: false,
+                hard_disk: true,
+            };
             match ctx.host.open_image(&req) {
                 Ok(img) => {
                     c.insert(unit, img);
                 }
                 Err(e) => {
-                    ctx.warnings.push(format!("HDC: cannot open '{filename}': {e}"));
+                    ctx.warnings
+                        .push(format!("HDC: cannot open '{filename}': {e}"));
                     continue;
                 }
             }

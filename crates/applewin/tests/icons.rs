@@ -8,8 +8,20 @@ use image::{imageops, Rgba, RgbaImage};
 use std::path::{Path, PathBuf};
 
 const FORBIDDEN: [&str; 14] = [
-    "<style", "class=", "<animate", "<set ", "<foreignobject", "<image", "<text", "<tspan", "href", "@import", "url(http", "<script",
-    "<filter", "<mask",
+    "<style",
+    "class=",
+    "<animate",
+    "<set ",
+    "<foreignobject",
+    "<image",
+    "<text",
+    "<tspan",
+    "href",
+    "@import",
+    "url(http",
+    "<script",
+    "<filter",
+    "<mask",
 ];
 
 fn to_rgba(img: &ColorImage, bg: [u8; 3]) -> RgbaImage {
@@ -64,27 +76,53 @@ fn every_icon_is_plain_svg_and_renders() {
     let cols = 2usize;
     let rows = Icon::ALL.len().div_ceil(cols);
     let block_w = 5 * cw as u32 + 24;
-    let mut sheet = RgbaImage::from_pixel(block_w * cols as u32, rows as u32 * ch as u32, Rgba([128, 128, 128, 255]));
+    let mut sheet = RgbaImage::from_pixel(
+        block_w * cols as u32,
+        rows as u32 * ch as u32,
+        Rgba([128, 128, 128, 255]),
+    );
 
     for (n, icon) in Icon::ALL.iter().copied().enumerate() {
         let bytes = icon.svg();
-        assert!(bytes.len() < 8 * 1024, "{} is {} bytes", icon.name(), bytes.len());
+        assert!(
+            bytes.len() < 8 * 1024,
+            "{} is {} bytes",
+            icon.name(),
+            bytes.len()
+        );
         let text = String::from_utf8(bytes.to_vec()).unwrap().to_lowercase();
         for f in FORBIDDEN {
             assert!(!text.contains(f), "{} uses forbidden `{f}`", icon.name());
         }
         for px in [24u32, 48, 128] {
-            let img = rasterize(bytes, px).unwrap_or_else(|| panic!("{} does not parse", icon.name()));
+            let img =
+                rasterize(bytes, px).unwrap_or_else(|| panic!("{} does not parse", icon.name()));
             assert_eq!(img.size, [px as usize, px as usize]);
-            assert!(img.pixels.iter().any(|p| p.a() > 0), "{} renders empty at {px}", icon.name());
+            assert!(
+                img.pixels.iter().any(|p| p.a() > 0),
+                "{} renders empty at {px}",
+                icon.name()
+            );
             if px == 128 {
                 if let Some(o) = &out {
-                    to_rgba(&img, [0, 0, 0]).save(o.join(format!("{}.png", icon.name()))).ok();
+                    to_rgba(&img, [0, 0, 0])
+                        .save(o.join(format!("{}.png", icon.name())))
+                        .ok();
                     let mut t = RgbaImage::new(128, 128);
                     for (i, p) in img.pixels.iter().enumerate() {
                         let a = p.a();
-                        let un = |c: u8| if a == 0 { 0 } else { (c as u32 * 255 / a as u32).min(255) as u8 };
-                        t.put_pixel((i % 128) as u32, (i / 128) as u32, Rgba([un(p.r()), un(p.g()), un(p.b()), a]));
+                        let un = |c: u8| {
+                            if a == 0 {
+                                0
+                            } else {
+                                (c as u32 * 255 / a as u32).min(255) as u8
+                            }
+                        };
+                        t.put_pixel(
+                            (i % 128) as u32,
+                            (i / 128) as u32,
+                            Rgba([un(p.r()), un(p.g()), un(p.b()), a]),
+                        );
                     }
                     t.save(o.join(format!("{}-128.png", icon.name()))).ok();
                 }
@@ -96,7 +134,8 @@ fn every_icon_is_plain_svg_and_renders() {
             let y = by + 4;
             if let Some(r) = refd.as_deref().map(Path::new) {
                 if let Ok(im) = image::open(r.join(format!("{}.png", ref_name(icon)))) {
-                    let im = imageops::resize(&im.to_rgba8(), 128, 128, imageops::FilterType::Nearest);
+                    let im =
+                        imageops::resize(&im.to_rgba8(), 128, 128, imageops::FilterType::Nearest);
                     imageops::overlay(&mut sheet, &im, x as i64, y as i64);
                 }
             }

@@ -41,7 +41,10 @@ pub trait LoadHost {
     }
 
     /// Creates the copy-protection dongle of the game I/O connector.
-    fn make_dongle(&mut self, kind: apple2_cards::DongleKind) -> Option<Box<dyn apple2_core::hooks::GameIoDevice>> {
+    fn make_dongle(
+        &mut self,
+        kind: apple2_cards::DongleKind,
+    ) -> Option<Box<dyn apple2_core::hooks::GameIoDevice>> {
         Some(Box::new(apple2_cards::Dongle::new(kind)))
     }
 }

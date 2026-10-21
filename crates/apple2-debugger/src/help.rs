@@ -8,7 +8,21 @@ use crate::debugger::*;
 
 /// Help categories (`_PARAM_HELPCATEGORIES`), with the command ranges they list.
 pub const CATEGORIES: [&str; 15] = [
-    "BOOKMARKS", "BREAKPOINTS", "CONFIG", "CPU", "FLAGS", "HELP", "KEYBOARD", "MEMORY", "OUTPUT", "OPERATORS", "RANGE", "SYMBOLS", "VIEW", "WATCHES", "WINDOW",
+    "BOOKMARKS",
+    "BREAKPOINTS",
+    "CONFIG",
+    "CPU",
+    "FLAGS",
+    "HELP",
+    "KEYBOARD",
+    "MEMORY",
+    "OUTPUT",
+    "OPERATORS",
+    "RANGE",
+    "SYMBOLS",
+    "VIEW",
+    "WATCHES",
+    "WINDOW",
 ];
 
 /// `Colorize` (Debugger_Help.cpp:292): colors the markup of a plain help line.
@@ -21,7 +35,10 @@ pub fn colorize(src: &str) -> String {
         let mut matched = false;
         for h in ["Usage:", "See also:", "Note:", "Total:", "Examples:"] {
             if starts(i, h) {
-                out += &format!("{CHC_USAGE}{}{CHC_ARG_SEP}:{CHC_DEFAULT}", &h[..h.len() - 1]);
+                out += &format!(
+                    "{CHC_USAGE}{}{CHC_ARG_SEP}:{CHC_DEFAULT}",
+                    &h[..h.len() - 1]
+                );
                 i += h.len();
                 matched = true;
                 break;
@@ -51,7 +68,10 @@ pub fn colorize(src: &str) -> String {
                 while j < b.len() && b[j].is_ascii_hexdigit() {
                     j += 1;
                 }
-                out += &format!("{CHC_NUM_HEX}{}{CHC_DEFAULT}", b[i..j].iter().collect::<String>());
+                out += &format!(
+                    "{CHC_NUM_HEX}{}{CHC_DEFAULT}",
+                    b[i..j].iter().collect::<String>()
+                );
                 i = j;
             }
             _ => {
@@ -66,7 +86,11 @@ pub fn colorize(src: &str) -> String {
 impl Debugger {
     /// Name of the first table entry for `cmd`.
     pub fn command_name(cmd: Cmd) -> &'static str {
-        COMMANDS.iter().find(|e| e.cmd == cmd).map(|e| e.name).unwrap_or("?")
+        COMMANDS
+            .iter()
+            .find(|e| e.cmd == cmd)
+            .map(|e| e.name)
+            .unwrap_or("?")
     }
 
     /// `Help_Arg_1` / `CmdHelpSpecific` for one command: summary line then usage.
@@ -74,14 +98,18 @@ impl Debugger {
         let entry = COMMANDS.iter().find(|e| e.cmd == cmd);
         if let Some(e) = entry {
             if let Some(h) = e.help {
-                self.console.print(&format!("{CHC_COMMAND}{}{CHC_ARG_SEP}, {CHC_DEFAULT}{h}", e.name));
+                self.console.print(&format!(
+                    "{CHC_COMMAND}{}{CHC_ARG_SEP}, {CHC_DEFAULT}{h}",
+                    e.name
+                ));
             }
         }
         if let Some(lines) = crate::helptext::usage(cmd) {
             let name = entry.map(|e| e.name).unwrap_or("");
             for (colorized, l) in lines {
                 let l = l.replace("{cmd}", name);
-                self.console.print(&if *colorized { colorize(&l) } else { l });
+                self.console
+                    .print(&if *colorized { colorize(&l) } else { l });
             }
         }
         upd::CONSOLE_DISPLAY
@@ -145,15 +173,29 @@ impl Debugger {
     }
 
     fn help_range(&mut self) {
-        for l in ["  Where <range> is of the form:", "    address , length   [address,address+length)", "    address : end      [address,end]"] {
+        for l in [
+            "  Where <range> is of the form:",
+            "    address , length   [address,address+length)",
+            "    address : end      [address,end]",
+        ] {
             self.console.print(l);
         }
     }
 
     fn help_keyboard(&mut self) {
         for l in [
-            "  Scrolling:", "    Up Arrow", "    Down Arrow", "    Shift + Up Arrow", "    Shift + Down Arrow", "    Page Up", "    Page Down", "    Shift + Page Up",
-            "    Shift + Page Down", "  Bookmarks:", "    Ctrl-Shift-#", "    Ctrl-#      ",
+            "  Scrolling:",
+            "    Up Arrow",
+            "    Down Arrow",
+            "    Shift + Up Arrow",
+            "    Shift + Down Arrow",
+            "    Page Up",
+            "    Page Down",
+            "    Shift + Page Up",
+            "    Shift + Page Down",
+            "  Bookmarks:",
+            "    Ctrl-Shift-#",
+            "    Ctrl-#      ",
         ] {
             self.console.print(l);
         }
@@ -206,10 +248,15 @@ impl Debugger {
                     continue;
                 }
             }
-            let cats: Vec<&&str> = CATEGORIES.iter().filter(|c| c.starts_with(up.as_str())).collect();
+            let cats: Vec<&&str> = CATEGORIES
+                .iter()
+                .filter(|c| c.starts_with(up.as_str()))
+                .collect();
             if cats.len() == 1 {
                 let cat = **cats.first().unwrap();
-                self.console.print(&format!("{CHC_USAGE}Category{CHC_DEFAULT}: {CHC_CATEGORY}{cat}"));
+                self.console.print(&format!(
+                    "{CHC_USAGE}Category{CHC_DEFAULT}: {CHC_CATEGORY}{cat}"
+                ));
                 match cat {
                     "OPERATORS" => self.help_operators(),
                     "RANGE" => self.help_range(),
@@ -218,7 +265,10 @@ impl Debugger {
                         for c in Self::category_commands(cat) {
                             if let Some(e) = COMMANDS.iter().find(|e| e.cmd == c) {
                                 if let Some(h) = e.help {
-                                    self.console.print(&format!("{CHC_COMMAND}{:>8}{CHC_ARG_SEP}, {CHC_DEFAULT}{h}", e.name));
+                                    self.console.print(&format!(
+                                        "{CHC_COMMAND}{:>8}{CHC_ARG_SEP}, {CHC_DEFAULT}{h}",
+                                        e.name
+                                    ));
                                 }
                             }
                         }
@@ -231,10 +281,14 @@ impl Debugger {
                     self.help_for(c);
                 }
                 crate::commands::Found::Many(v) => {
-                    self.console.print(&format!("Ambiguous {CHC_NUM_DEC}{}{CHC_DEFAULT} Commands:", v.len()));
+                    self.console.print(&format!(
+                        "Ambiguous {CHC_NUM_DEC}{}{CHC_DEFAULT} Commands:",
+                        v.len()
+                    ));
                 }
                 crate::commands::Found::None => {
-                    self.console.error(&format!("Illegal Command: {}", a.text(i)));
+                    self.console
+                        .error(&format!("Illegal Command: {}", a.text(i)));
                 }
             }
         }

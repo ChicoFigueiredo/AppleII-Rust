@@ -99,7 +99,12 @@ impl AudioBus {
     }
 
     pub(crate) fn new_source(&self) -> Source {
-        let s = Arc::new(Mutex::new(SourceBuf { frames: VecDeque::new(), first: 0, gain: 1.0, mute: false }));
+        let s = Arc::new(Mutex::new(SourceBuf {
+            frames: VecDeque::new(),
+            first: 0,
+            gain: 1.0,
+            mute: false,
+        }));
         lock(&self.0.sources).push(s.clone());
         s
     }

@@ -44,7 +44,14 @@ impl Card for Other {
 #[test]
 fn cards_can_dma_and_be_downcast() {
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2Plus));
-    assert!(m.insert_card(4, Box::new(DmaCard { ok: false, access: 0, cycles: 0 })));
+    assert!(m.insert_card(
+        4,
+        Box::new(DmaCard {
+            ok: false,
+            access: 0,
+            cycles: 0
+        })
+    ));
     assert!(m.insert_card(5, Box::new(Other)));
     m.board_mut().write(0xC0C0, 0);
     assert_eq!(m.peek_main(0x300), 0x5A);
@@ -52,7 +59,11 @@ fn cards_can_dma_and_be_downcast() {
     assert!(m.card_mut::<DmaCard>(4).unwrap().ok);
     m.board_mut().write(0xC0C0, 1); // I/O space is not RAM
     assert!(!m.card::<DmaCard>(4).unwrap().ok);
-    assert!(m.card_mut::<Other>(4).is_none() && m.card_mut::<DmaCard>(3).is_none() && m.card_mut::<Other>(5).is_some());
+    assert!(
+        m.card_mut::<Other>(4).is_none()
+            && m.card_mut::<DmaCard>(3).is_none()
+            && m.card_mut::<Other>(5).is_some()
+    );
     let c = m.card::<DmaCard>(4).unwrap();
     assert!(c.access <= c.cycles);
 }

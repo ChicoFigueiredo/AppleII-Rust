@@ -40,7 +40,13 @@ pub struct Slots {
 
 impl Default for Slots {
     fn default() -> Self {
-        Slots { cards: Default::default(), ops: Vec::new(), io_select: 0, intc8rom: false, expansion: ExpansionRom::Null }
+        Slots {
+            cards: Default::default(),
+            ops: Vec::new(),
+            io_select: 0,
+            intc8rom: false,
+            expansion: ExpansionRom::Null,
+        }
     }
 }
 
@@ -143,7 +149,11 @@ impl Slots {
 
     pub fn save(&self) -> SlotsState {
         SlotsState {
-            cards: self.cards.iter().map(|c| c.as_ref().map(|c| c.save())).collect(),
+            cards: self
+                .cards
+                .iter()
+                .map(|c| c.as_ref().map(|c| c.save()))
+                .collect(),
             io_select: self.io_select,
             intc8rom: self.intc8rom,
             expansion: self.expansion,
@@ -152,7 +162,12 @@ impl Slots {
 
     /// Restores a state taken from a machine with the same cards inserted.
     pub fn load(&mut self, s: &SlotsState) -> bool {
-        let fits = s.cards.len() == 8 && self.cards.iter().zip(&s.cards).all(|(c, st)| c.is_some() == st.is_some());
+        let fits = s.cards.len() == 8
+            && self
+                .cards
+                .iter()
+                .zip(&s.cards)
+                .all(|(c, st)| c.is_some() == st.is_some());
         if !fits {
             return false;
         }

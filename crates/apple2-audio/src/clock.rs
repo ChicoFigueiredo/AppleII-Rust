@@ -20,7 +20,10 @@ impl SampleClock {
     }
 
     pub fn with_clock(rate_hz: u32, clk_hz: f64) -> Self {
-        SampleClock { rate_hz, clk_mhz: (clk_hz * 1000.0).round() as u64 }
+        SampleClock {
+            rate_hz,
+            clk_mhz: (clk_hz * 1000.0).round() as u64,
+        }
     }
 
     pub fn clk_hz(&self) -> f64 {
@@ -49,7 +52,8 @@ impl SampleClock {
 
     /// Cycles taken by `samples` samples of a `sample_rate` Hz stream (rounded).
     pub fn cycles_for_samples(&self, samples: u64, sample_rate: u32) -> u64 {
-        (samples as u128 * self.clk_mhz as u128 + (sample_rate as u128 * 1000) / 2) as u64 / (sample_rate as u64 * 1000)
+        (samples as u128 * self.clk_mhz as u128 + (sample_rate as u128 * 1000) / 2) as u64
+            / (sample_rate as u64 * 1000)
     }
 
     /// Samples of a `sample_rate` Hz stream elapsed in `cycles` (floor).

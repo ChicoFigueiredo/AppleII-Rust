@@ -34,7 +34,8 @@ fn expected_name(ty: CardType) -> Option<&'static str> {
         SnesMax => "SNES MAX",
         VidHd => "VidHD",
         BreakpointCard => "Breakpoint",
-        Empty | GenericClock | Echo | Col80 | Extended80Col | RamWorksIII | LanguageCard | LanguageCardIIe | Saturn128K => return None,
+        Empty | GenericClock | Echo | Col80 | Extended80Col | RamWorksIII | LanguageCard
+        | LanguageCardIIe | Saturn128K => return None,
     })
 }
 
@@ -48,7 +49,8 @@ fn every_card_type_boots_and_is_built() {
             _ => 5,
         };
         let s = settings_with(slot, spec);
-        let mut emu = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap_or_else(|e| panic!("{ty:?}: {e}"));
+        let mut emu = Emulator::new(s, Box::new(DefaultBackend), 48_000)
+            .unwrap_or_else(|e| panic!("{ty:?}: {e}"));
         for _ in 0..90 {
             emu.run_frame();
         }
@@ -77,12 +79,27 @@ fn all_cards_at_once() {
 #[test]
 fn disk2_firmware_13_sector_differs() {
     let boot_rom = |p5: bool| {
-        let s = settings_with(6, SlotCardSpec::Disk2 { firmware_13_sector: p5, drives: Default::default() });
+        let s = settings_with(
+            6,
+            SlotCardSpec::Disk2 {
+                firmware_13_sector: p5,
+                drives: Default::default(),
+            },
+        );
         let mut emu = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
-        emu.machine.with_card(6, |c, ctx| (0..=255u8).map(|i| c.slot_rom_read(i, ctx)).collect::<Vec<_>>()).unwrap()
+        emu.machine
+            .with_card(6, |c, ctx| {
+                (0..=255u8)
+                    .map(|i| c.slot_rom_read(i, ctx))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
     };
     let (p6, p5) = (boot_rom(false), boot_rom(true));
-    assert_ne!(p6, p5, "13-sector (P5A) firmware must differ from the 16-sector one");
+    assert_ne!(
+        p6, p5,
+        "13-sector (P5A) firmware must differ from the 16-sector one"
+    );
     assert_eq!(p6[0], 0xA2);
 }
 
@@ -94,9 +111,18 @@ fn hard_disk_images_come_from_the_settings() {
     std::fs::write(&img, vec![0u8; 512 * 64]).unwrap();
     let mut images: [Option<std::path::PathBuf>; 8] = Default::default();
     images[0] = Some(img.clone());
-    let s = settings_with(7, SlotCardSpec::GenericHdd { firmware: Default::default(), images });
+    let s = settings_with(
+        7,
+        SlotCardSpec::GenericHdd {
+            firmware: Default::default(),
+            images,
+        },
+    );
     let mut emu = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
-    let hdd = emu.machine.card_mut::<apple2_storage::hdd::HardDiskCard>(7).expect("HDD card in slot 7");
+    let hdd = emu
+        .machine
+        .card_mut::<apple2_storage::hdd::HardDiskCard>(7)
+        .expect("HDD card in slot 7");
     assert_eq!(hdd.base_name(0), "work");
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -115,9 +141,17 @@ fn vidhd_makes_the_frame_640_by_400() {
 #[test]
 fn no_slot_clock_follows_the_setting() {
     let mut s = Settings::default();
-    assert!(Emulator::new(s.clone(), Box::new(DefaultBackend), 48_000).unwrap().machine.rom_tap_mut().is_some());
+    assert!(Emulator::new(s.clone(), Box::new(DefaultBackend), 48_000)
+        .unwrap()
+        .machine
+        .rom_tap_mut()
+        .is_some());
     s.machine.no_slot_clock = false;
-    assert!(Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap().machine.rom_tap_mut().is_none());
+    assert!(Emulator::new(s, Box::new(DefaultBackend), 48_000)
+        .unwrap()
+        .machine
+        .rom_tap_mut()
+        .is_none());
 }
 
 #[test]
@@ -143,7 +177,8 @@ fn rom_overrides_from_the_command_line() {
     std::fs::create_dir_all(&dir).unwrap();
     let f8 = dir.join("f8.rom");
     std::fs::write(&f8, vec![0xEAu8; 0x800]).unwrap();
-    let cmd = apple2_config::CmdLine::parse(&["-model", "apple2p", "-f8rom", f8.to_str().unwrap()]).unwrap();
+    let cmd = apple2_config::CmdLine::parse(&["-model", "apple2p", "-f8rom", f8.to_str().unwrap()])
+        .unwrap();
     let mut s = Settings::default();
     cmd.apply(&mut s);
     let emu = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
@@ -165,5 +200,8 @@ fn power_cycle_and_apply_settings_keep_the_cards() {
     let mut emu = Emulator::new(s.clone(), Box::new(DefaultBackend), 48_000).unwrap();
     emu.apply(Command::PowerCycle);
     emu.apply(Command::ApplySettings(Box::new(s)));
-    assert_eq!(emu.machine.board().slots.card(4).map(|c| c.name()), Some("Mockingboard C"));
+    assert_eq!(
+        emu.machine.board().slots.card(4).map(|c| c.name()),
+        Some("Mockingboard C")
+    );
 }

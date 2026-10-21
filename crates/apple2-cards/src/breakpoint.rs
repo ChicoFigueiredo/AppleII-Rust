@@ -90,9 +90,12 @@ impl BreakpointCard {
         let got = self.deferred;
         let ok = exp.kind == got.kind
             && match got.kind {
-                BPTYPE_PC | BPTYPE_MEM => exp.addr_start == got.addr_start && exp.access == got.access,
+                BPTYPE_PC | BPTYPE_MEM => {
+                    exp.addr_start == got.addr_start && exp.access == got.access
+                }
                 BPTYPE_DMA => {
-                    let overlap = (got.addr_start >= exp.addr_start && got.addr_start < exp.addr_end)
+                    let overlap = (got.addr_start >= exp.addr_start
+                        && got.addr_start < exp.addr_end)
                         || (exp.addr_start >= got.addr_start && exp.addr_start < got.addr_end);
                     overlap && exp.access == got.access
                 }
@@ -165,7 +168,11 @@ impl Card for BreakpointCard {
     fn save(&self) -> Vec<u8> {
         // AppleWin saves no state; the FIFO and flags are kept so a save/load round-trips.
         let mut e = Enc::default();
-        e.u8(self.status).bool(self.intercept_by_card).bytes(&self.set).u8(self.set_idx as u8).u8(self.fifo.len() as u8);
+        e.u8(self.status)
+            .bool(self.intercept_by_card)
+            .bytes(&self.set)
+            .u8(self.set_idx as u8)
+            .u8(self.fifo.len() as u8);
         for b in self.fifo.iter().chain([&self.deferred]) {
             e.u8(b.kind).u16(b.addr_start).u16(b.addr_end).u8(b.access);
         }
@@ -182,14 +189,28 @@ impl Card for BreakpointCard {
             if idx >= PARAMS || n > FIFO_SIZE {
                 return None;
             }
-            let mut bp = || Some(Breakpoint { kind: d.u8()?, addr_start: d.u16()?, addr_end: d.u16()?, access: d.u8()? });
+            let mut bp = || {
+                Some(Breakpoint {
+                    kind: d.u8()?,
+                    addr_start: d.u16()?,
+                    addr_end: d.u16()?,
+                    access: d.u8()?,
+                })
+            };
             let fifo: Option<VecDeque<_>> = (0..n).map(|_| bp()).collect();
             let deferred = bp()?;
             Some((status, icpt, set, idx, fifo?, deferred))
         })();
         match r {
             Some((status, icpt, set, idx, fifo, deferred)) if d.done() => {
-                (self.status, self.intercept_by_card, self.set, self.set_idx, self.fifo, self.deferred) = (status, icpt, set, idx, fifo, deferred);
+                (
+                    self.status,
+                    self.intercept_by_card,
+                    self.set,
+                    self.set_idx,
+                    self.fifo,
+                    self.deferred,
+                ) = (status, icpt, set, idx, fifo, deferred);
                 true
             }
             _ => false,

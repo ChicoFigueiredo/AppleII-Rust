@@ -140,7 +140,10 @@ pub fn rasterize(svg: &[u8], px: u32) -> Option<ColorImage> {
     let size = tree.size();
     let tf = tiny_skia::Transform::from_scale(px as f32 / size.width(), px as f32 / size.height());
     resvg::render(&tree, tf, &mut pm.as_mut());
-    Some(ColorImage::from_rgba_premultiplied([px as usize, px as usize], pm.data()))
+    Some(ColorImage::from_rgba_premultiplied(
+        [px as usize, px as usize],
+        pm.data(),
+    ))
 }
 
 /// Textures per (icon, pixel size); a new scale (`pixels_per_point`) rasterises afresh.
@@ -155,7 +158,11 @@ impl IconCache {
         let px = (points * ctx.pixels_per_point()).round().max(8.0) as u32;
         if let std::collections::hash_map::Entry::Vacant(e) = self.textures.entry((icon, px)) {
             let img = rasterize(icon.svg(), px)?;
-            e.insert(ctx.load_texture(format!("icon-{}-{px}", icon.name()), img, TextureOptions::LINEAR));
+            e.insert(ctx.load_texture(
+                format!("icon-{}-{px}", icon.name()),
+                img,
+                TextureOptions::LINEAR,
+            ));
         }
         self.textures.get(&(icon, px))
     }
@@ -174,6 +181,9 @@ mod tests {
         assert_eq!(Icon::caps_for_model("Apple2Plus", true), None);
         assert_eq!(Icon::caps_for_model("Apple2e", true), Some(Icon::CapsOn));
         assert_eq!(Icon::caps_for_model("Apple2e", false), Some(Icon::CapsOff));
-        assert_eq!(Icon::caps_for_model("Pravets82", true), Some(Icon::CapsOnP8));
+        assert_eq!(
+            Icon::caps_for_model("Pravets82", true),
+            Some(Icon::CapsOnP8)
+        );
     }
 }

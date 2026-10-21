@@ -37,7 +37,12 @@ pub const SD_MUSIC: Mapping = per_variant!("SD Music", Variant::SdMusic);
 // ---- save --------------------------------------------------------------------------------------
 
 fn save(w: &mut Writer, slot: u8, card: &dyn Card, variant: Variant) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<MockingboardCard>()) else { return false };
+    let Some(c) = card
+        .as_any()
+        .and_then(|a| a.downcast_ref::<MockingboardCard>())
+    else {
+        return false;
+    };
     if c.variant() != variant {
         return false;
     }
@@ -144,7 +149,10 @@ fn save_ay(w: &mut Writer, suffix: &str, a: &AySnapshot) {
         let r = &a.regs;
         w.map("Registers", |w| {
             for i in 0..3 {
-                w.hex12(&format!("Tone{i} Period"), (r[2 * i + 1] as u32) << 8 | r[2 * i] as u32);
+                w.hex12(
+                    &format!("Tone{i} Period"),
+                    (r[2 * i + 1] as u32) << 8 | r[2 * i] as u32,
+                );
             }
             w.hex8("Noise Period", r[6] as u32);
             w.hex8("Mixer", r[7] as u32);
@@ -192,16 +200,30 @@ fn save_ssi(w: &mut Writer, s: &SsiSnapshot, has_sc01_slot: bool) {
 
 // ---- load --------------------------------------------------------------------------------------
 
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map, name: &str, variant: Variant) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+    name: &str,
+    variant: Variant,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if slot == 0 || slot == 3 {
         return Err(Error::Format("Card: wrong slot".into()));
     }
     if !(1..=VERSION).contains(&version) {
         return Err(Error::Format("Card: wrong version".into()));
     }
-    let Some(mut card) = make(ctx, name, slot) else { return Ok(None) };
-    let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<MockingboardCard>()) else {
-        return Err(Error::Unsupported(format!("host returned a card that is not a '{name}'")));
+    let Some(mut card) = make(ctx, name, slot) else {
+        return Ok(None);
+    };
+    let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<MockingboardCard>())
+    else {
+        return Err(Error::Unsupported(format!(
+            "host returned a card that is not a '{name}'"
+        )));
     };
     let phasor = variant == Variant::Phasor;
     let mut s = c.snapshot();
@@ -213,7 +235,11 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map, name: &str, variant:
         }
         let mut mode = st.u32("Mode")?;
         if version < 6 {
-            mode = if mode == 0 { PH_MOCKINGBOARD } else { PH_PHASOR };
+            mode = if mode == 0 {
+                PH_MOCKINGBOARD
+            } else {
+                PH_PHASOR
+            };
         }
         s.phasor_mode = mode as u8;
     }
@@ -223,7 +249,9 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map, name: &str, variant:
 
     for unit in 0..2usize {
         let key = format!("Unit{unit}");
-        let u = st.sub(&key).ok_or_else(|| Error::Format(format!("Card: Expected key: {key}")))?;
+        let u = st
+            .sub(&key)
+            .ok_or_else(|| Error::Format(format!("Card: Expected key: {key}")))?;
         load_via(u, version, &mut s.units[unit].via)?;
         if phasor {
             // The AY pairs were swapped in versions 5-9 (Mockingboard.cpp:1451-1467).
@@ -286,7 +314,9 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map, name: &str, variant:
 
 /// `SY6522::LoadSnapshot` (6522.cpp:660).
 fn load_via(unit: Map, version: u32, v: &mut ViaSnapshot) -> Result<(), Error> {
-    let m = unit.sub("SY6522").ok_or_else(|| Error::Format("Card: Expected key: SY6522".into()))?;
+    let m = unit
+        .sub("SY6522")
+        .ok_or_else(|| Error::Format("Card: Expected key: SY6522".into()))?;
     v.orb = m.u32("ORB")? as u8;
     v.ora = m.u32("ORA")? as u8;
     v.ddrb = m.u32("DDRB")? as u8;
@@ -318,8 +348,13 @@ fn load_via(unit: Map, version: u32, v: &mut ViaSnapshot) -> Result<(), Error> {
 
 /// `AY8913::LoadSnapshot` (AY8910.cpp:1157); `Change` is ignored.
 fn load_ay(unit: Map, suffix: &str, version: u32, mut a: AySnapshot) -> Result<AySnapshot, Error> {
-    let key = format!("{}{suffix}", if version >= 15 { "AY891x" } else { "AY8910" });
-    let m = unit.sub(&key).ok_or_else(|| Error::Format(format!("Card: Expected key: {key}")))?;
+    let key = format!(
+        "{}{suffix}",
+        if version >= 15 { "AY891x" } else { "AY8910" }
+    );
+    let m = unit
+        .sub(&key)
+        .ok_or_else(|| Error::Format(format!("Card: Expected key: {key}")))?;
     a.ty = AyType::Ay3_8913;
     if version >= 15 {
         a.ty = match m.string("Type")?.as_str() {
@@ -354,7 +389,9 @@ fn load_ay(unit: Map, suffix: &str, version: u32, mut a: AySnapshot) -> Result<A
     a.env_first = m.u32("Env First")? != 0;
     a.env_rev = m.u32("Env Rev")? != 0;
     a.env_counter = m.u32("Env Counter")? as i32;
-    let r = m.sub("Registers").ok_or_else(|| Error::Format("Card: Expected key: Registers".into()))?;
+    let r = m
+        .sub("Registers")
+        .ok_or_else(|| Error::Format("Card: Expected key: Registers".into()))?;
     for i in 0..3 {
         let p = r.u32(&format!("Tone{i} Period"))? as u16;
         a.regs[2 * i] = p as u8;
@@ -376,7 +413,9 @@ fn load_ay(unit: Map, suffix: &str, version: u32, mut a: AySnapshot) -> Result<A
 
 /// `SSI263::LoadSnapshot` (SSI263.cpp:1032) and, for unit 0, `SC01_LoadSnapshot` (:1136).
 fn load_ssi(unit: Map, version: u32, unit0: bool, s: &mut SsiSnapshot) -> Result<(), Error> {
-    let m = unit.sub("SSI263").ok_or_else(|| Error::Format("Card: Expected key: SSI263".into()))?;
+    let m = unit
+        .sub("SSI263")
+        .ok_or_else(|| Error::Format("Card: Expected key: SSI263".into()))?;
     s.ty = SsiType::P; // default prior to v14
     if version >= 14 {
         s.ty = match m.string("Type")?.as_str() {
@@ -408,8 +447,14 @@ fn load_ssi(unit: Map, version: u32, unit0: bool, s: &mut SsiSnapshot) -> Result
         if version < 12 {
             s.votrax_phoneme = 0;
         } else {
-            let c = unit.sub("SC01").ok_or_else(|| Error::Format("Card: Expected key: SC01".into()))?;
-            s.has_sc01 = if version >= 14 { c.string("Type")? == "SC01" } else { true };
+            let c = unit
+                .sub("SC01")
+                .ok_or_else(|| Error::Format("Card: Expected key: SC01".into()))?;
+            s.has_sc01 = if version >= 14 {
+                c.string("Type")? == "SC01"
+            } else {
+                true
+            };
             if s.has_sc01 {
                 s.votrax_phoneme = c.u32("SC01 Phoneme")? as u8;
                 s.is_votrax_phoneme = c.bool("SC01 Active Phoneme")?;
@@ -423,7 +468,10 @@ fn load_ssi(unit: Map, version: u32, unit0: bool, s: &mut SsiSnapshot) -> Result
 /// phoneme restarted from its beginning and the IRQ lines. Called after the machine state is
 /// loaded without the extension block.
 pub fn rearm(card: &mut dyn Card, ctx: &mut CardCtx) {
-    if let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<MockingboardCard>()) {
+    if let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<MockingboardCard>())
+    {
         c.rearm_events(ctx);
     }
 }

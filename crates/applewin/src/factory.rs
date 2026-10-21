@@ -17,7 +17,10 @@ use apple2_core::{Card, Machine, Model};
 use apple2_hostio::network::{NetworkBackend, NullNetwork};
 use apple2_hostio::printer::{PrinterEncoding, PrinterOptions};
 use apple2_hostio::serial::SerialBackend;
-use apple2_hostio::{FileSink, LoopbackSerial, ParallelPrinterCard, SuperSerialCard, TcpServerSerial, Uthernet1, Uthernet2};
+use apple2_hostio::{
+    FileSink, LoopbackSerial, ParallelPrinterCard, SuperSerialCard, TcpServerSerial, Uthernet1,
+    Uthernet2,
+};
 use apple2_storage::disk2::Disk2Card;
 use apple2_storage::hdd::{HardDiskCard, HdcFirmware as HddFirmware, HdcMode};
 use std::path::PathBuf;
@@ -66,7 +69,11 @@ fn ssi_type(c: Ssi263Chip) -> SsiType {
 /// Socket population as the sound card crate models it (one AY type per card; the Phasor's
 /// third and fourth sockets and the "bad 6522" switches are not modelled there).
 pub fn sockets(s: &SoundSockets) -> Sockets {
-    Sockets { ssi263: [ssi_type(s.ssi263[0]), ssi_type(s.ssi263[1])], sc01: s.sc01, ay: ay_type(s.ay[0]) }
+    Sockets {
+        ssi263: [ssi_type(s.ssi263[0]), ssi_type(s.ssi263[1])],
+        sc01: s.sc01,
+        ay: ay_type(s.ay[0]),
+    }
 }
 
 pub fn dongle_kind(t: DongleType) -> Option<DongleKind> {
@@ -83,7 +90,9 @@ pub fn dongle_kind(t: DongleType) -> Option<DongleKind> {
 
 pub fn printer_encoding(model: Model) -> Option<PrinterEncoding> {
     match model {
-        Model::Pravets8M | Model::Pravets82 | Model::BadPravets82 | Model::BadPravets8M => Some(PrinterEncoding::Pravets82),
+        Model::Pravets8M | Model::Pravets82 | Model::BadPravets82 | Model::BadPravets8M => {
+            Some(PrinterEncoding::Pravets82)
+        }
         Model::Pravets8A => Some(PrinterEncoding::Pravets8A),
         _ => None,
     }
@@ -93,22 +102,41 @@ pub fn printer_options(spec: &PrinterSpec, model: Model, real_printer: bool) -> 
     PrinterOptions {
         idle_limit: spec.idle_limit,
         dump_to_printer: spec.dump_to_printer || real_printer,
-        convert_encoding: if spec.convert_encoding { printer_encoding(model) } else { None },
+        convert_encoding: if spec.convert_encoding {
+            printer_encoding(model)
+        } else {
+            None
+        },
         filter_unprintable: spec.filter_unprintable,
         append: spec.append,
     }
 }
 
 pub fn printer_card(spec: &PrinterSpec, model: Model, real_printer: bool) -> ParallelPrinterCard {
-    let path: PathBuf = spec.filename.clone().unwrap_or_else(|| PathBuf::from(DEFAULT_PRINTER_FILE));
-    ParallelPrinterCard::new(Box::new(FileSink::new(path)), printer_options(spec, model, real_printer))
+    let path: PathBuf = spec
+        .filename
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PRINTER_FILE));
+    ParallelPrinterCard::new(
+        Box::new(FileSink::new(path)),
+        printer_options(spec, model, real_printer),
+    )
 }
 
 /// SSC back end: TCP server when a port is set, else the named host serial port (feature
 /// `serialport`), else a loopback (nothing connected, bytes sent come back like a jumpered plug).
-pub fn ssc_backend(serial_port: &str, tcp_port: Option<u16>, support_dcd: bool, warnings: &mut Vec<String>) -> Box<dyn SerialBackend> {
+pub fn ssc_backend(
+    serial_port: &str,
+    tcp_port: Option<u16>,
+    support_dcd: bool,
+    warnings: &mut Vec<String>,
+) -> Box<dyn SerialBackend> {
     if let Some(p) = tcp_port {
-        return Box::new(TcpServerSerial::new(if p == 0 { apple2_hostio::serial::TCP_SERIAL_PORT_DEFAULT } else { p }));
+        return Box::new(TcpServerSerial::new(if p == 0 {
+            apple2_hostio::serial::TCP_SERIAL_PORT_DEFAULT
+        } else {
+            p
+        }));
     }
     if !serial_port.is_empty() {
         #[cfg(feature = "serialport")]
@@ -118,7 +146,9 @@ pub fn ssc_backend(serial_port: &str, tcp_port: Option<u16>, support_dcd: bool, 
             return Box::new(port);
         }
         #[cfg(not(feature = "serialport"))]
-        warnings.push(format!("SSC: serial port '{serial_port}' needs the `serialport` feature; using loopback"));
+        warnings.push(format!(
+            "SSC: serial port '{serial_port}' needs the `serialport` feature; using loopback"
+        ));
     }
     let _ = (support_dcd, &warnings);
     Box::new(LoopbackSerial::new().0)
@@ -131,7 +161,9 @@ pub fn network_backend(interface: &str, warnings: &mut Vec<String>) -> Box<dyn N
         #[cfg(feature = "pcap")]
         return Box::new(apple2_hostio::pcap_backend::PcapNetwork::open(interface));
         #[cfg(not(feature = "pcap"))]
-        warnings.push(format!("Uthernet: interface '{interface}' needs the `pcap` feature; no network attached"));
+        warnings.push(format!(
+            "Uthernet: interface '{interface}' needs the `pcap` feature; no network attached"
+        ));
     }
     let _ = &warnings;
     Box::new(NullNetwork)
@@ -154,16 +186,26 @@ pub struct Env<'a> {
 
 /// Builds the card for `slot`, or `None` when the slot stays empty / the core owns the card.
 /// Non-fatal problems (an image that does not open) are appended to `warnings`.
-pub fn build_card(spec: &SlotCardSpec, slot: u8, env: &Env, warnings: &mut Vec<String>) -> Option<Box<dyn Card>> {
+pub fn build_card(
+    spec: &SlotCardSpec,
+    slot: u8,
+    env: &Env,
+    warnings: &mut Vec<String>,
+) -> Option<Box<dyn Card>> {
     let s = env.settings;
     let sound = !s.sound.disable_sound;
     let mockingboard = sound && !s.sound.disable_mockingboard;
     let mb = |variant: Variant, k: &SoundSockets| -> Option<Box<dyn Card>> {
-        mockingboard.then(|| Box::new(MockingboardCard::with_sockets(variant, env.bus, sockets(k))) as Box<dyn Card>)
+        mockingboard.then(|| {
+            Box::new(MockingboardCard::with_sockets(variant, env.bus, sockets(k))) as Box<dyn Card>
+        })
     };
     match spec {
         SlotCardSpec::Empty => None,
-        SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
+        SlotCardSpec::Disk2 {
+            firmware_13_sector,
+            drives,
+        } => {
             let mut c = Disk2Card::new();
             c.set_force_13_sector_firmware(*firmware_13_sector);
             c.set_enhance_disk(s.storage.enhance_disk_speed);
@@ -173,20 +215,35 @@ pub fn build_card(spec: &SlotCardSpec, slot: u8, env: &Env, warnings: &mut Vec<S
                 }
                 if let Some(path) = &drive.image {
                     if let Err(e) = c.insert_path(d, path, drive.write_protect) {
-                        warnings.push(format!("slot {slot} drive {}: {}: {e:?}", d + 1, path.display()));
+                        warnings.push(format!(
+                            "slot {slot} drive {}: {}: {e:?}",
+                            d + 1,
+                            path.display()
+                        ));
                     }
                 }
             }
             Some(Box::new(c))
         }
-        SlotCardSpec::Ssc { serial_port, tcp_port, support_dcd } => {
-            Some(Box::new(SuperSerialCard::new(ssc_backend(serial_port, *tcp_port, *support_dcd, warnings))))
-        }
+        SlotCardSpec::Ssc {
+            serial_port,
+            tcp_port,
+            support_dcd,
+        } => Some(Box::new(SuperSerialCard::new(ssc_backend(
+            serial_port,
+            *tcp_port,
+            *support_dcd,
+            warnings,
+        )))),
         SlotCardSpec::MockingboardC(k) => mb(Variant::MockingboardC, k),
         SlotCardSpec::Phasor(k) => mb(Variant::Phasor, k),
         SlotCardSpec::MegaAudio(k) => mb(Variant::MegaAudio, k),
         SlotCardSpec::SdMusic(k) => mb(Variant::SdMusic, k),
-        SlotCardSpec::GenericPrinter(p) => Some(Box::new(printer_card(p, s.machine.model, s.misc.enable_dump_to_real_printer))),
+        SlotCardSpec::GenericPrinter(p) => Some(Box::new(printer_card(
+            p,
+            s.machine.model,
+            s.misc.enable_dump_to_real_printer,
+        ))),
         SlotCardSpec::GenericHdd { firmware, images } => {
             let fw = match (s.misc.hdc_firmware_v1, s.misc.hdc_firmware_v2) {
                 (true, _) => HddFirmware::HddrvrV1,
@@ -200,7 +257,11 @@ pub fn build_card(spec: &SlotCardSpec, slot: u8, env: &Env, warnings: &mut Vec<S
             for (u, path) in images.iter().enumerate() {
                 if let Some(path) = path {
                     if let Err(e) = c.insert_path(u, path) {
-                        warnings.push(format!("slot {slot} hard disk {}: {}: {e:?}", u + 1, path.display()));
+                        warnings.push(format!(
+                            "slot {slot} hard disk {}: {}: {e:?}",
+                            u + 1,
+                            path.display()
+                        ));
                     }
                 }
             }
@@ -218,10 +279,16 @@ pub fn build_card(spec: &SlotCardSpec, slot: u8, env: &Env, warnings: &mut Vec<S
         | SlotCardSpec::LanguageCard
         | SlotCardSpec::LanguageCardIIe
         | SlotCardSpec::Saturn128K { .. } => None,
-        SlotCardSpec::Uthernet { interface } => Some(Box::new(Uthernet1::new(network_backend(interface, warnings)))),
-        SlotCardSpec::Uthernet2 { interface, virtual_dns } => {
-            Some(Box::new(Uthernet2::new(network_backend(interface, warnings), *virtual_dns)))
-        }
+        SlotCardSpec::Uthernet { interface } => Some(Box::new(Uthernet1::new(network_backend(
+            interface, warnings,
+        )))),
+        SlotCardSpec::Uthernet2 {
+            interface,
+            virtual_dns,
+        } => Some(Box::new(Uthernet2::new(
+            network_backend(interface, warnings),
+            *virtual_dns,
+        ))),
         SlotCardSpec::FourPlay => Some(Box::new(apple2_cards::FourPlay::new())),
         SlotCardSpec::SnesMax { .. } => Some(Box::new(apple2_cards::SnesMax::new())),
         SlotCardSpec::VidHd => Some(Box::new(apple2_cards::VidHd::new())),
@@ -236,7 +303,10 @@ pub fn build_machine(settings: &Settings, bus: &AudioBus) -> Result<Machine, Str
 }
 
 /// [`build_machine`] plus the non-fatal warnings.
-pub fn build_machine_report(settings: &Settings, bus: &AudioBus) -> Result<(Machine, Vec<String>), String> {
+pub fn build_machine_report(
+    settings: &Settings,
+    bus: &AudioBus,
+) -> Result<(Machine, Vec<String>), String> {
     let config = settings.to_machine_config_with_roms()?;
     let mut m = Machine::try_new(config).map_err(|e| e.to_string())?;
     let mut warnings = Vec::new();

@@ -9,7 +9,10 @@ const SLOT: u8 = 4;
 
 fn with_clock(model: ClockModel, t: WallTime) -> Machine {
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2Plus));
-    assert!(m.insert_card(SLOT, Box::new(ThunderClock::new(model, Box::new(FixedClock(t))))));
+    assert!(m.insert_card(
+        SLOT,
+        Box::new(ThunderClock::new(model, Box::new(FixedClock(t))))
+    ));
     m
 }
 
@@ -25,7 +28,16 @@ fn run_until(m: &mut Machine, pc: u16) {
 
 /// `JSR entry; JMP *` with the ProDOS clock-driver call convention.
 fn call_driver(m: &mut Machine, entry: u16, a: u8) {
-    let code = [0xA9, a, 0x20, entry as u8, (entry >> 8) as u8, 0x4C, 0x05, 0x03];
+    let code = [
+        0xA9,
+        a,
+        0x20,
+        entry as u8,
+        (entry >> 8) as u8,
+        0x4C,
+        0x05,
+        0x03,
+    ];
     for (i, b) in code.iter().enumerate() {
         m.poke(0x300 + i as u16, *b);
     }
@@ -37,7 +49,10 @@ fn call_driver(m: &mut Machine, entry: u16, a: u8) {
 fn rom_carries_the_prodos_clock_signature() {
     for model in [ClockModel::ThunderClockPlus, ClockModel::TkClock] {
         let mut m = with_clock(model, WallTime::SAMPLE);
-        let sig: Vec<u8> = [0xC400u16, 0xC402, 0xC404, 0xC406].iter().map(|&a| m.board_mut().read(a)).collect();
+        let sig: Vec<u8> = [0xC400u16, 0xC402, 0xC404, 0xC406]
+            .iter()
+            .map(|&a| m.board_mut().read(a))
+            .collect();
         assert_eq!(sig, [0x08, 0x28, 0x58, 0x70], "{model:?}");
     }
 }
@@ -47,7 +62,10 @@ fn expansion_rom_appears_at_c800_after_touching_the_slot() {
     let mut m = with_clock(ClockModel::ThunderClockPlus, WallTime::SAMPLE);
     m.board_mut().read(0xC400);
     assert_eq!(m.board_mut().read(0xC800), apple2_roms::THUNDERCLOCKPLUS[0]);
-    assert_eq!(m.board_mut().read(0xCFFE), apple2_roms::THUNDERCLOCKPLUS[0x7FE]);
+    assert_eq!(
+        m.board_mut().read(0xCFFE),
+        apple2_roms::THUNDERCLOCKPLUS[0x7FE]
+    );
     let mut m = with_clock(ClockModel::TkClock, WallTime::SAMPLE);
     m.board_mut().read(0xC400);
     assert_eq!(m.board_mut().read(0xC800), apple2_roms::TKCLOCK[0x100]);
@@ -71,7 +89,14 @@ fn thunderclock_firmware_reads_the_host_time_through_the_chip() {
 
 #[test]
 fn time_follows_the_host_clock() {
-    let later = WallTime { month: 12, day: 3, hour: 9, minute: 5, second: 41, ..WallTime::SAMPLE };
+    let later = WallTime {
+        month: 12,
+        day: 3,
+        hour: 9,
+        minute: 5,
+        second: 41,
+        ..WallTime::SAMPLE
+    };
     let mut m = with_clock(ClockModel::ThunderClockPlus, later);
     call_driver(&mut m, 0xC408, 0xA3);
     assert_eq!(buffer_text(&m), "12/03 09;05;41.000");

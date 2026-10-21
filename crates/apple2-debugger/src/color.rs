@@ -115,7 +115,10 @@ pub struct ColorTable {
 
 impl Default for ColorTable {
     fn default() -> Self {
-        let mut t = ColorTable { scheme: Scheme::Color, colors: [vec![], vec![], vec![]] };
+        let mut t = ColorTable {
+            scheme: Scheme::Color,
+            colors: [vec![], vec![], vec![]],
+        };
         t.reset();
         t
     }
@@ -172,7 +175,10 @@ mod tests {
 
     #[test]
     fn mono_and_bw_schemes() {
-        let mut t = ColorTable { scheme: Scheme::Mono, ..Default::default() };
+        let mut t = ColorTable {
+            scheme: Scheme::Mono,
+            ..Default::default()
+        };
         let (r, g, b) = t.get(DebugColor::FG_DISASM_TARGET);
         assert!(r == g && g == b);
         t.scheme = Scheme::Bw;

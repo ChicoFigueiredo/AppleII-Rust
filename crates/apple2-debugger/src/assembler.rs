@@ -26,28 +26,45 @@ fn parse_number(s: &str, symbols: &Symbols) -> Result<Option<u32>, String> {
         return Err("Syntax Error: missing operand".into());
     }
     // symbol+n / symbol-n
-    let split = s.char_indices().skip(1).find(|(_, c)| *c == '+' || *c == '-');
+    let split = s
+        .char_indices()
+        .skip(1)
+        .find(|(_, c)| *c == '+' || *c == '-');
     if let Some((i, c)) = split {
         if !s.starts_with('$') || s[..i].chars().skip(1).any(|c| !c.is_ascii_hexdigit()) {
             if let Some(base) = parse_number(&s[..i], symbols)? {
                 let off = parse_number(&s[i + 1..], symbols)?.ok_or("Syntax Error: offset")?;
-                return Ok(Some(if c == '+' { base.wrapping_add(off) } else { base.wrapping_sub(off) } & 0xFFFF));
+                return Ok(Some(
+                    if c == '+' {
+                        base.wrapping_add(off)
+                    } else {
+                        base.wrapping_sub(off)
+                    } & 0xFFFF,
+                ));
             }
             return Ok(None);
         }
     }
     if let Some(h) = s.strip_prefix('$') {
-        return u32::from_str_radix(h, 16).map(|v| Some(v & 0xFFFF)).map_err(|_| format!("Syntax Error: '{s}'"));
+        return u32::from_str_radix(h, 16)
+            .map(|v| Some(v & 0xFFFF))
+            .map_err(|_| format!("Syntax Error: '{s}'"));
     }
     if s.bytes().all(|b| b.is_ascii_digit()) {
-        return s.parse::<u32>().map(|v| Some(v & 0xFFFF)).map_err(|_| format!("Syntax Error: '{s}'"));
+        return s
+            .parse::<u32>()
+            .map(|v| Some(v & 0xFFFF))
+            .map_err(|_| format!("Syntax Error: '{s}'"));
     }
     Ok(symbols.find_address(s).map(|(a, _)| a as u32))
 }
 
 impl Assembler {
     pub fn new(address: u16) -> Self {
-        Assembler { address, delayed: Vec::new() }
+        Assembler {
+            address,
+            delayed: Vec::new(),
+        }
     }
 
     /// Number of forward references still to be resolved (`AssemblerDelayedTargetsSize`).
@@ -56,7 +73,13 @@ impl Assembler {
     }
 
     /// Assembles `text` ("LDA #$10", "BNE LOOP", ...) at [`Self::address`]; returns the bytes written.
-    pub fn assemble(&mut self, mem: &mut dyn DebugMem, symbols: &Symbols, cmos: bool, text: &str) -> Result<usize, String> {
+    pub fn assemble(
+        &mut self,
+        mem: &mut dyn DebugMem,
+        symbols: &Symbols,
+        cmos: bool,
+        text: &str,
+    ) -> Result<usize, String> {
         self.resolve_delayed(mem, symbols);
         let text = text.split(';').next().unwrap_or("").trim();
         let (mn, rest) = match text.find(char::is_whitespace) {
@@ -64,7 +87,9 @@ impl Assembler {
             None => (text, ""),
         };
         let tbl = table(cmos);
-        let mut cands: Vec<u8> = (0..=255u8).filter(|o| tbl[*o as usize].mnemonic.eq_ignore_ascii_case(mn)).collect();
+        let mut cands: Vec<u8> = (0..=255u8)
+            .filter(|o| tbl[*o as usize].mnemonic.eq_ignore_ascii_case(mn))
+            .collect();
         // Exact-case spelling first, then documented (upper-case) entries, then the aliases.
         cands.sort_by_key(|o| {
             let m = tbl[*o as usize].mnemonic;
@@ -122,7 +147,13 @@ impl Assembler {
 
         let operand_text = match &shape {
             Shape::None => "",
-            Shape::Imm(t) | Shape::Ind(t) | Shape::IndX(t) | Shape::IndY(t) | Shape::IdxX(t) | Shape::IdxY(t) | Shape::Plain(t) => t,
+            Shape::Imm(t)
+            | Shape::Ind(t)
+            | Shape::IndX(t)
+            | Shape::IndY(t)
+            | Shape::IdxX(t)
+            | Shape::IdxY(t)
+            | Shape::Plain(t) => t,
         };
         // `#<sym` / `#>sym`
         let (hi_lo, operand_text) = match (&shape, operand_text.chars().next()) {
@@ -130,7 +161,11 @@ impl Assembler {
             (Shape::Imm(_), Some('>')) => (Some(true), &operand_text[1..]),
             _ => (None, operand_text),
         };
-        let value = if matches!(shape, Shape::None) { Some(0) } else { parse_number(operand_text, symbols)? };
+        let value = if matches!(shape, Shape::None) {
+            Some(0)
+        } else {
+            parse_number(operand_text, symbols)?
+        };
         let unresolved = value.is_none();
         let mut v = value.unwrap_or(0);
         if let Some(hi) = hi_lo {
@@ -181,7 +216,10 @@ impl Assembler {
             }
         };
         let Some(opcode) = opcode else {
-            return Err(format!("Syntax Error: {mn} does not support {} addressing", mode.name()));
+            return Err(format!(
+                "Syntax Error: {mn} does not support {} addressing",
+                mode.name()
+            ));
         };
 
         let value16 = if mode == Mode::Rel && !unresolved {
@@ -201,7 +239,11 @@ impl Assembler {
             if hi_lo.is_some() || matches!(mode, Mode::Imm) {
                 return Err("Syntax Error: undefined symbol in immediate operand".into());
             }
-            self.delayed.push(Delayed { name: operand_text.trim().to_string(), base, mode });
+            self.delayed.push(Delayed {
+                name: operand_text.trim().to_string(),
+                base,
+                mode,
+            });
         }
         self.address = base.wrapping_add(n as u16);
         Ok(n)
@@ -291,7 +333,9 @@ mod tests {
         assert_eq!(asm("BRA $302", true), [0x80, 0x00]);
         let mut ram = Ram::default();
         let mut a = Assembler::new(0x300);
-        assert!(a.assemble(&mut ram, &Symbols::default(), false, "PHX").is_err());
+        assert!(a
+            .assemble(&mut ram, &Symbols::default(), false, "PHX")
+            .is_err());
     }
 
     #[test]
@@ -300,7 +344,9 @@ mod tests {
         assert_eq!(asm("BEQ $302", false), [0xF0, 0x00]);
         let mut ram = Ram::default();
         let mut a = Assembler::new(0x300);
-        assert!(a.assemble(&mut ram, &Symbols::default(), false, "BNE $400").is_err());
+        assert!(a
+            .assemble(&mut ram, &Symbols::default(), false, "BNE $400")
+            .is_err());
     }
 
     #[test]
@@ -326,13 +372,23 @@ mod tests {
         // Assemble the disassembly of each documented 65C02 opcode and compare the bytes.
         let syms = Symbols::default();
         let data = DataBlocks::default();
-        let cfg = DisasmConfig { branch_type: 0, ..Default::default() };
+        let cfg = DisasmConfig {
+            branch_type: 0,
+            ..Default::default()
+        };
         let mut checked = 0;
         for op in 0..=255u8 {
             let info = &OPCODES_65C02[op as usize];
             let mut ram = Ram::default();
             ram.load(0x300, &[op, 0x12, 0x03]);
-            let ctx = DisasmCtx { mem: &ram, regs: Regs::default(), cmos: true, symbols: &syms, data: &data, cfg: &cfg };
+            let ctx = DisasmCtx {
+                mem: &ram,
+                regs: Regs::default(),
+                cmos: true,
+                symbols: &syms,
+                data: &data,
+                cfg: &cfg,
+            };
             let l = disassemble(&ctx, 0x300);
             let spans = render_line(&l, None, &cfg);
             // Rebuild "MNEMONIC operand" from the instruction column on, dropping the pointer columns.
@@ -340,16 +396,27 @@ mod tests {
             let text = line_text(&spans);
             let tail: String = text.chars().skip(ins_col).collect();
             let imm_col = Tabs::new(&cfg).immediate - ins_col;
-            let src: String = tail.chars().take(imm_col).collect::<String>().trim().to_string();
+            let src: String = tail
+                .chars()
+                .take(imm_col)
+                .collect::<String>()
+                .trim()
+                .to_string();
             let mut out = Ram::default();
             let mut a = Assembler::new(0x300);
             let res = a.assemble(&mut out, &syms, true, &src);
             let n = info.mode.bytes() as usize;
-            let Ok(got) = res else { panic!("{op:02X} '{src}': {res:?}") };
+            let Ok(got) = res else {
+                panic!("{op:02X} '{src}': {res:?}")
+            };
             assert_eq!(got, n, "{op:02X} '{src}'");
             // Same instruction semantics: same mnemonic family and mode => same bytes unless aliased NOP.
             if info.mnemonic != "nop" {
-                assert_eq!(out.0[0x300..0x300 + n], ram.0[0x300..0x300 + n], "{op:02X} '{src}'");
+                assert_eq!(
+                    out.0[0x300..0x300 + n],
+                    ram.0[0x300..0x300 + n],
+                    "{op:02X} '{src}'"
+                );
             }
             checked += 1;
         }

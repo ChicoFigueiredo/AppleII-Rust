@@ -47,7 +47,12 @@ pub struct Grid {
 
 impl Grid {
     pub fn new(bg: Rgb, fg: Rgb) -> Self {
-        Grid { w: GRID_W, h: GRID_H, cells: vec![GridCell { ch: ' ', fg, bg }; GRID_W * GRID_H], cursor: None }
+        Grid {
+            w: GRID_W,
+            h: GRID_H,
+            cells: vec![GridCell { ch: ' ', fg, bg }; GRID_W * GRID_H],
+            cursor: None,
+        }
     }
 
     pub fn cell(&self, x: usize, y: usize) -> &GridCell {
@@ -85,7 +90,10 @@ impl Grid {
     }
 
     pub fn text(&self) -> String {
-        (0..self.h).map(|y| self.row_text(y)).collect::<Vec<_>>().join("\n")
+        (0..self.h)
+            .map(|y| self.row_text(y))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -112,7 +120,10 @@ impl Debugger {
     /// `Debugger_Display.cpp:UpdateDisplay`: draws everything.
     pub fn render(&mut self, m: &Machine) -> Grid {
         let col = |c: DebugColor| self.colors.get(c);
-        let mut g = Grid::new(col(DebugColor::BG_CONSOLE_OUTPUT), col(DebugColor::FG_CONSOLE_OUTPUT));
+        let mut g = Grid::new(
+            col(DebugColor::BG_CONSOLE_OUTPUT),
+            col(DebugColor::FG_CONSOLE_OUTPUT),
+        );
         if self.disasm_height != self.window_height() {
             self.update_window_size();
             self.calc_top_bot(m);
@@ -150,13 +161,22 @@ impl Debugger {
             let l = self.disasm_line(m, addr);
             let (active, enabled) = self.breakpoint_info(addr);
             let at_pc = addr == pc;
-            let cursor_line = (!self.disasm_cur_bad && line == self.disasm_cur_line) || (self.disasm_cur_bad && line == 0);
+            let cursor_line = (!self.disasm_cur_bad && line == self.disasm_cur_line)
+                || (self.disasm_cur_bad && line == 0);
             use DebugColor::*;
-            let mut bg_id = if line & 1 == 1 { BG_DISASM_1 } else { BG_DISASM_2 };
+            let mut bg_id = if line & 1 == 1 {
+                BG_DISASM_1
+            } else {
+                BG_DISASM_2
+            };
             let mut fg_id = FG_DISASM_ADDRESS;
             if cursor_line {
                 if active {
-                    (bg_id, fg_id) = if enabled { (BG_DISASM_BP_S_C, FG_DISASM_BP_S_C) } else { (BG_DISASM_BP_0_C, FG_DISASM_BP_0_C) };
+                    (bg_id, fg_id) = if enabled {
+                        (BG_DISASM_BP_S_C, FG_DISASM_BP_S_C)
+                    } else {
+                        (BG_DISASM_BP_0_C, FG_DISASM_BP_0_C)
+                    };
                 } else if at_pc {
                     (bg_id, fg_id) = (BG_DISASM_PC_C, FG_DISASM_PC_C);
                 } else {
@@ -164,7 +184,11 @@ impl Debugger {
                     self.disasm_cur = addr;
                 }
             } else if active {
-                fg_id = if enabled { FG_DISASM_BP_S_X } else { FG_DISASM_BP_0_X };
+                fg_id = if enabled {
+                    FG_DISASM_BP_S_X
+                } else {
+                    FG_DISASM_BP_0_X
+                };
             } else if at_pc {
                 (bg_id, fg_id) = (BG_DISASM_PC_X, FG_DISASM_PC_X);
             }
@@ -173,7 +197,11 @@ impl Debugger {
             let label = self.symbols.find_symbol(addr);
             let spans = render_line(&l, label, &self.cfg);
             for sp in spans {
-                let fg = if cursor_line { self.colors.get(fg_id) } else { self.colors.get(sp.fg) };
+                let fg = if cursor_line {
+                    self.colors.get(fg_id)
+                } else {
+                    self.colors.get(sp.fg)
+                };
                 let mut sp_bg = bg;
                 let mut text = sp.text.clone();
                 if sp.col == 0 && sp.text == l.address {
@@ -188,7 +216,11 @@ impl Debugger {
                         continue;
                     }
                 }
-                let fg = if sp.col == 0 && !cursor_line { self.colors.get(fg_id) } else { fg };
+                let fg = if sp.col == 0 && !cursor_line {
+                    self.colors.get(fg_id)
+                } else {
+                    fg
+                };
                 g.put(sp.col, y, &text, fg, sp_bg);
             }
             addr = addr.wrapping_add(l.bytes as u16);
@@ -212,19 +244,39 @@ impl Debugger {
         let mut a = self.data_addr;
         for line in 0..height {
             let y = y0 + line;
-            let bg = col(if line & 1 == 1 { DebugColor::BG_DATA_1 } else { DebugColor::BG_DATA_2 });
+            let bg = col(if line & 1 == 1 {
+                DebugColor::BG_DATA_1
+            } else {
+                DebugColor::BG_DATA_2
+            });
             g.fill(0, y, INFO_COL_1 - 1, bg);
-            g.put(0, y, &format!("{a:04X}"), col(DebugColor::FG_DISASM_ADDRESS), bg);
+            g.put(
+                0,
+                y,
+                &format!("{a:04X}"),
+                col(DebugColor::FG_DISASM_ADDRESS),
+                bg,
+            );
             if self.cfg.address_colon {
                 g.put(4, y, ":", col(DebugColor::FG_DISASM_OPERATOR), bg);
             }
-            let bytes: String = (0..DATA_BYTES_PER_LINE).map(|i| format!("{:02X} ", m.peek(a.wrapping_add(i as u16)))).collect();
+            let bytes: String = (0..DATA_BYTES_PER_LINE)
+                .map(|i| format!("{:02X} ", m.peek(a.wrapping_add(i as u16))))
+                .collect();
             g.put(6, y, &bytes, col(DebugColor::FG_DATA_BYTE), bg);
             let x = 6 + DATA_BYTES_PER_LINE * 3;
             g.put(x, y, "  |  ", col(DebugColor::FG_DISASM_OPERATOR), bg);
-            let chars: String = (0..DATA_BYTES_PER_LINE).map(|i| printable(m.peek(a.wrapping_add(i as u16)))).collect();
+            let chars: String = (0..DATA_BYTES_PER_LINE)
+                .map(|i| printable(m.peek(a.wrapping_add(i as u16))))
+                .collect();
             g.put(x + 5, y, &chars, col(DebugColor::FG_DISASM_CHAR), bg);
-            g.put(x + 5 + DATA_BYTES_PER_LINE, y, "  |  ", col(DebugColor::FG_DISASM_OPERATOR), bg);
+            g.put(
+                x + 5 + DATA_BYTES_PER_LINE,
+                y,
+                "  |  ",
+                col(DebugColor::FG_DISASM_OPERATOR),
+                bg,
+            );
             a = a.wrapping_add(DATA_BYTES_PER_LINE as u16);
         }
     }
@@ -259,7 +311,16 @@ impl Debugger {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn draw_register(&self, g: &mut Grid, y: usize, name: &str, bytes: u8, value: u16, source_reg: bool, sp: bool) {
+    fn draw_register(
+        &self,
+        g: &mut Grid,
+        y: usize,
+        name: &str,
+        bytes: u8,
+        value: u16,
+        source_reg: bool,
+        sp: bool,
+    ) {
         let c = |id: DebugColor| self.colors.get(id);
         let bg = c(DebugColor::BG_DATA_1);
         g.fill(INFO_COL_1, y, 10, bg);
@@ -267,20 +328,54 @@ impl Debugger {
         if !source_reg {
             x += 1;
         }
-        g.put(x, y, &format!("{name:<2}"), if source_reg { c(DebugColor::FG_INFO_REG) } else { c(DebugColor::FG_INFO_TITLE) }, bg);
+        g.put(
+            x,
+            y,
+            &format!("{name:<2}"),
+            if source_reg {
+                c(DebugColor::FG_INFO_REG)
+            } else {
+                c(DebugColor::FG_INFO_TITLE)
+            },
+            bg,
+        );
         if sp {
             let depth = 0xFFu8.wrapping_sub(value as u8);
-            g.put(INFO_COL_1 + 2, y, &hex(depth), c(DebugColor::FG_INFO_OPERATOR), bg);
+            g.put(
+                INFO_COL_1 + 2,
+                y,
+                &hex(depth),
+                c(DebugColor::FG_INFO_OPERATOR),
+                bg,
+            );
         }
         let bg2 = c(DebugColor::BG_DATA_1);
         if bytes == 2 {
-            g.put(INFO_COL_1 + 6, y, &format!("{value:04X}"), c(DebugColor::FG_INFO_ADDRESS), bg2);
+            g.put(
+                INFO_COL_1 + 6,
+                y,
+                &format!("{value:04X}"),
+                c(DebugColor::FG_INFO_ADDRESS),
+                bg2,
+            );
         } else {
             let b = value as u8;
             g.put(INFO_COL_1 + 3, y, "'", c(DebugColor::FG_INFO_OPERATOR), bg2);
-            g.put(INFO_COL_1 + 4, y, &printable(b).to_string(), c(DebugColor::FG_INFO_CHAR_HI), bg2);
+            g.put(
+                INFO_COL_1 + 4,
+                y,
+                &printable(b).to_string(),
+                c(DebugColor::FG_INFO_CHAR_HI),
+                bg2,
+            );
             g.put(INFO_COL_1 + 5, y, "'", c(DebugColor::FG_INFO_OPERATOR), bg2);
-            g.put(INFO_COL_1 + 8, y, &hex(b), c(DebugColor::FG_INFO_OPCODE), bg2);
+            g.put(
+                INFO_COL_1 + 8,
+                y,
+                &hex(b),
+                c(DebugColor::FG_INFO_OPCODE),
+                bg2,
+            );
         }
     }
 
@@ -294,14 +389,39 @@ impl Debugger {
         // flags: "P " title, hex below; letters N V R B D I Z C with 0/1 under each
         let c = |id: DebugColor| self.colors.get(id);
         let fy = y + 4;
-        g.put(INFO_COL_1, fy, "P ", c(DebugColor::FG_INFO_REG), c(DebugColor::BG_DATA_1));
-        g.put(INFO_COL_1, fy + 1, &hex(r.p), c(DebugColor::FG_INFO_OPCODE), c(DebugColor::BG_INFO));
+        g.put(
+            INFO_COL_1,
+            fy,
+            "P ",
+            c(DebugColor::FG_INFO_REG),
+            c(DebugColor::BG_DATA_1),
+        );
+        g.put(
+            INFO_COL_1,
+            fy + 1,
+            &hex(r.p),
+            c(DebugColor::FG_INFO_OPCODE),
+            c(DebugColor::BG_INFO),
+        );
         for (i, ch) in ['C', 'Z', 'I', 'D', 'B', 'R', 'V', 'N'].iter().enumerate() {
             let set = r.p & (1 << i) != 0;
             let x = INFO_COL_1 + 2 + (7 - i);
-            let (fg, bg) = if set { (c(DebugColor::FG_INFO_INVERSE), c(DebugColor::BG_INFO_INVERSE)) } else { (c(DebugColor::FG_INFO_TITLE), c(DebugColor::BG_INFO)) };
+            let (fg, bg) = if set {
+                (
+                    c(DebugColor::FG_INFO_INVERSE),
+                    c(DebugColor::BG_INFO_INVERSE),
+                )
+            } else {
+                (c(DebugColor::FG_INFO_TITLE), c(DebugColor::BG_INFO))
+            };
             g.put(x, fy, &ch.to_string(), fg, bg);
-            g.put(x, fy + 1, if set { "1" } else { "0" }, c(DebugColor::FG_INFO_TITLE), c(DebugColor::BG_INFO));
+            g.put(
+                x,
+                fy + 1,
+                if set { "1" } else { "0" },
+                c(DebugColor::FG_INFO_TITLE),
+                c(DebugColor::BG_INFO),
+            );
         }
         self.draw_register(g, y + 6, "S", 2, 0x100 | r.sp as u16, true, true);
     }
@@ -314,7 +434,11 @@ impl Debugger {
         let n_tail = 0x100u32;
         // regs.sp in AppleWin is 0x1xx; the loop uses its low byte + base.
         let mut stack = 0x100 + sp;
-        let end = if (stack & 0xFF) >= 0xFE { (((stack & 0xFF) & 1) + 1) | 0x100 } else { (0x100 + n_head).min(0x100 + n_tail + 0xFF + 1) };
+        let end = if (stack & 0xFF) >= 0xFE {
+            (((stack & 0xFF) & 1) + 1) | 0x100
+        } else {
+            (0x100 + n_head).min(0x100 + n_tail + 0xFF + 1)
+        };
         let _ = n_head;
         let mut i = 0;
         while i < 8 {
@@ -323,8 +447,20 @@ impl Debugger {
                 break;
             }
             stack = 0x100 | (stack & 0xFF);
-            g.put(INFO_COL_1, y + i, &format!("{stack:04X}: "), c(DebugColor::FG_INFO_TITLE), c(DebugColor::BG_DATA_1));
-            g.put(INFO_COL_1 + 6, y + i, &format!("  {:02X}", m.peek(stack as u16)), c(DebugColor::FG_INFO_OPCODE), c(DebugColor::BG_DATA_1));
+            g.put(
+                INFO_COL_1,
+                y + i,
+                &format!("{stack:04X}: "),
+                c(DebugColor::FG_INFO_TITLE),
+                c(DebugColor::BG_DATA_1),
+            );
+            g.put(
+                INFO_COL_1 + 6,
+                y + i,
+                &format!("  {:02X}", m.peek(stack as u16)),
+                c(DebugColor::FG_INFO_OPCODE),
+                c(DebugColor::BG_DATA_1),
+            );
             i += 1;
         }
     }
@@ -345,11 +481,35 @@ impl Debugger {
             } else {
                 ("-none-".to_string(), String::new())
             };
-            let (a0, d0) = if idx == 0 { ("-none-".to_string(), String::new()) } else { (addr, data) };
+            let (a0, d0) = if idx == 0 {
+                ("-none-".to_string(), String::new())
+            } else {
+                (addr, data)
+            };
             let row = y + idx;
             let bg = c(DebugColor::BG_INFO);
-            g.put(INFO_COL_1, row, &format!("{a0:<7}"), if idx == 0 { c(DebugColor::FG_INFO_TITLE) } else { c(DebugColor::FG_INFO_ADDRESS) }, bg);
-            g.put(INFO_COL_1 + 7, row, &format!("{d0:<3}"), if idx == 0 { c(DebugColor::FG_INFO_ADDRESS) } else { c(DebugColor::FG_INFO_OPCODE) }, bg);
+            g.put(
+                INFO_COL_1,
+                row,
+                &format!("{a0:<7}"),
+                if idx == 0 {
+                    c(DebugColor::FG_INFO_TITLE)
+                } else {
+                    c(DebugColor::FG_INFO_ADDRESS)
+                },
+                bg,
+            );
+            g.put(
+                INFO_COL_1 + 7,
+                row,
+                &format!("{d0:<3}"),
+                if idx == 0 {
+                    c(DebugColor::FG_INFO_ADDRESS)
+                } else {
+                    c(DebugColor::FG_INFO_OPCODE)
+                },
+                bg,
+            );
         }
     }
 
@@ -365,28 +525,83 @@ impl Debugger {
             let a1 = zp.address as u8;
             let a2 = a1.wrapping_add(1);
             g.put(INFO_COL_1, row, "Z", c(DebugColor::FG_INFO_TITLE), bg);
-            g.put(INFO_COL_1 + 1, row, &format!("{i:X} "), c(DebugColor::FG_INFO_BULLET), bg);
-            let sym = self.symbols.find_symbol(a1 as u16).map(|s| s.0.chars().take(7).collect::<String>());
-            let shown = if self.symbols.find_symbol(a2 as u16).is_some() && sym.is_none() { String::new() } else { sym.clone().unwrap_or_default() };
-            g.put(INFO_COL_1 + 3, row, &format!("{shown:<7}"), c(DebugColor::FG_DISASM_SYMBOL), bg);
+            g.put(
+                INFO_COL_1 + 1,
+                row,
+                &format!("{i:X} "),
+                c(DebugColor::FG_INFO_BULLET),
+                bg,
+            );
+            let sym = self
+                .symbols
+                .find_symbol(a1 as u16)
+                .map(|s| s.0.chars().take(7).collect::<String>());
+            let shown = if self.symbols.find_symbol(a2 as u16).is_some() && sym.is_none() {
+                String::new()
+            } else {
+                sym.clone().unwrap_or_default()
+            };
+            g.put(
+                INFO_COL_1 + 3,
+                row,
+                &format!("{shown:<7}"),
+                c(DebugColor::FG_DISASM_SYMBOL),
+                bg,
+            );
             let target = m.peek(a1 as u16) as u16 | (m.peek(a2 as u16) as u16) << 8;
-            let x = g.put(INFO_COL_1, row + 1, &hex(a1), c(DebugColor::FG_DISASM_ADDRESS), bg);
+            let x = g.put(
+                INFO_COL_1,
+                row + 1,
+                &hex(a1),
+                c(DebugColor::FG_DISASM_ADDRESS),
+                bg,
+            );
             let x = g.put(x, row + 1, ":", c(DebugColor::FG_INFO_OPERATOR), bg);
-            let x = g.put(x, row + 1, &format!("{target:04X}"), c(DebugColor::FG_INFO_ADDRESS), bg);
+            let x = g.put(
+                x,
+                row + 1,
+                &format!("{target:04X}"),
+                c(DebugColor::FG_INFO_ADDRESS),
+                bg,
+            );
             let x = g.put(x, row + 1, ":", c(DebugColor::FG_INFO_OPERATOR), bg);
-            g.put(x, row + 1, &hex(m.peek(target)), c(DebugColor::FG_INFO_OPCODE), bg);
+            g.put(
+                x,
+                row + 1,
+                &hex(m.peek(target)),
+                c(DebugColor::FG_INFO_OPCODE),
+                bg,
+            );
         }
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn switch_line(&self, g: &mut Grid, y: usize, prefix: &str, on: &str, off: &str, suffix: &str, set: bool) {
+    fn switch_line(
+        &self,
+        g: &mut Grid,
+        y: usize,
+        prefix: &str,
+        on: &str,
+        off: &str,
+        suffix: &str,
+        set: bool,
+    ) {
         let c = |id: DebugColor| self.colors.get(id);
         let bg = c(DebugColor::BG_INFO);
         let mut x = INFO_COL_1;
         if !prefix.is_empty() {
             x = g.put(x, y, prefix, c(DebugColor::FG_INFO_TITLE), bg);
         }
-        let hi = |on: bool| if on { (c(DebugColor::FG_INFO_INVERSE), c(DebugColor::BG_INFO_INVERSE)) } else { (c(DebugColor::FG_INFO_TITLE), bg) };
+        let hi = |on: bool| {
+            if on {
+                (
+                    c(DebugColor::FG_INFO_INVERSE),
+                    c(DebugColor::BG_INFO_INVERSE),
+                )
+            } else {
+                (c(DebugColor::FG_INFO_TITLE), bg)
+            }
+        };
         let (f, b) = hi(set);
         x = g.put(x, y, on, f, b);
         x = g.put(x, y, "/", c(DebugColor::FG_INFO_OPERATOR), bg);
@@ -437,9 +652,25 @@ impl Debugger {
             h = hi as u32;
         }
         let visible = v < 192 && (h >= 25);
-        let numc = if visible { c(DebugColor::FG_VIDEOSCANNER_VISIBLE) } else { c(DebugColor::FG_VIDEOSCANNER_INVISIBLE) };
-        let fmt = |n: u32| if self.video_decimal { format!("{n:03}") } else { format!("{n:03X}") };
-        let mut x = g.put(INFO_COL_3, y, "v:", c(DebugColor::FG_VIDEOSCANNER_TITLE), bgt);
+        let numc = if visible {
+            c(DebugColor::FG_VIDEOSCANNER_VISIBLE)
+        } else {
+            c(DebugColor::FG_VIDEOSCANNER_INVISIBLE)
+        };
+        let fmt = |n: u32| {
+            if self.video_decimal {
+                format!("{n:03}")
+            } else {
+                format!("{n:03X}")
+            }
+        };
+        let mut x = g.put(
+            INFO_COL_3,
+            y,
+            "v:",
+            c(DebugColor::FG_VIDEOSCANNER_TITLE),
+            bgt,
+        );
         x = g.put(x, y, &fmt(v), numc, bgt);
         x = g.put(x, y, " h:", c(DebugColor::FG_VIDEOSCANNER_TITLE), bgt);
         g.put(x, y, &fmt(h), numc, bgt);
@@ -448,10 +679,28 @@ impl Debugger {
             1 => self.cycle_delta,
             _ => m.cycles().saturating_sub(self.cycle_mark),
         };
-        let x = g.put(INFO_COL_3, y + 1, "cycles:", c(DebugColor::FG_VIDEOSCANNER_TITLE), bgt);
-        g.put(x, y + 1, &format!("{:08X}", cycles as u32), c(DebugColor::FG_VIDEOSCANNER_TITLE), bgt);
+        let x = g.put(
+            INFO_COL_3,
+            y + 1,
+            "cycles:",
+            c(DebugColor::FG_VIDEOSCANNER_TITLE),
+            bgt,
+        );
+        g.put(
+            x,
+            y + 1,
+            &format!("{:08X}", cycles as u32),
+            c(DebugColor::FG_VIDEOSCANNER_TITLE),
+            bgt,
+        );
         let irq = m.board().interrupts.irq_line();
-        g.put(INFO_COL_3 + 12, y, if irq { "IRQ" } else { "   " }, c(DebugColor::FG_IRQ_TITLE), c(DebugColor::BG_IRQ_TITLE));
+        g.put(
+            INFO_COL_3 + 12,
+            y,
+            if irq { "IRQ" } else { "   " },
+            c(DebugColor::FG_IRQ_TITLE),
+            c(DebugColor::BG_IRQ_TITLE),
+        );
     }
 
     /// `DrawBreakpoints`
@@ -483,11 +732,21 @@ impl Debugger {
                 x += 1;
             }
             x = g.put(x, y, b.op.symbol(), c(DebugColor::FG_INFO_BULLET), bg);
-            let (fbg, ffg) = if b.enabled { (DebugColor::BG_DISASM_BP_S_C, DebugColor::FG_DISASM_BP_S_C) } else { (DebugColor::BG_INFO, DebugColor::FG_DISASM_BP_0_X) };
+            let (fbg, ffg) = if b.enabled {
+                (DebugColor::BG_DISASM_BP_S_C, DebugColor::FG_DISASM_BP_S_C)
+            } else {
+                (DebugColor::BG_INFO, DebugColor::FG_DISASM_BP_0_X)
+            };
             x = g.put(x, y, &format!("{:04X}", b.address), c(ffg), c(fbg));
             if b.length > 1 {
                 x = g.put(x, y, ":", c(DebugColor::FG_INFO_OPERATOR), bg);
-                x = g.put(x, y, &format!("{:04X}", b.address as u32 + b.length - 1), c(ffg), c(fbg));
+                x = g.put(
+                    x,
+                    y,
+                    &format!("{:04X}", b.address as u32 + b.length - 1),
+                    c(ffg),
+                    c(fbg),
+                );
             } else {
                 x += 5;
             }
@@ -515,11 +774,29 @@ impl Debugger {
                 let hi = m.peek(w.address.wrapping_add(1));
                 let mut x = g.put(INFO_COL_2, y, "W", c(DebugColor::FG_INFO_TITLE), bg);
                 x = g.put(x, y, &format!("{i:X} "), c(DebugColor::FG_INFO_BULLET), bg);
-                x = g.put(x, y, &format!("{:04X}", w.address), c(DebugColor::FG_DISASM_ADDRESS), bg);
+                x = g.put(
+                    x,
+                    y,
+                    &format!("{:04X}", w.address),
+                    c(DebugColor::FG_DISASM_ADDRESS),
+                    bg,
+                );
                 x = g.put(x, y, ":", c(DebugColor::FG_INFO_OPERATOR), bg);
-                x = g.put(x, y, &format!("{lo:02X}{hi:02X}"), c(DebugColor::FG_INFO_OPCODE), bg);
+                x = g.put(
+                    x,
+                    y,
+                    &format!("{lo:02X}{hi:02X}"),
+                    c(DebugColor::FG_INFO_OPCODE),
+                    bg,
+                );
                 x = g.put(x, y, "(", c(DebugColor::FG_INFO_OPERATOR), bg);
-                x = g.put(x, y, &format!("{:04X}", (hi as u16) << 8 | lo as u16), c(DebugColor::FG_INFO_ADDRESS), bg);
+                x = g.put(
+                    x,
+                    y,
+                    &format!("{:04X}", (hi as u16) << 8 | lo as u16),
+                    c(DebugColor::FG_INFO_ADDRESS),
+                    bg,
+                );
                 g.put(x, y, ")", c(DebugColor::FG_INFO_OPERATOR), bg);
                 let t16 = (hi as u16) << 8 | lo as u16;
                 let mut x = INFO_COL_2;
@@ -527,15 +804,37 @@ impl Debugger {
                     if b & 3 == 0 {
                         x = g.put(x, y + 1, " ", c(DebugColor::FG_INFO_OPCODE), bg);
                     }
-                    let cbg = if b & 1 == 1 { bg } else { c(DebugColor::BG_DATA_2) };
-                    x = g.put(x, y + 1, &hex(m.peek(t16.wrapping_add(b))), c(DebugColor::FG_INFO_OPCODE), cbg);
+                    let cbg = if b & 1 == 1 {
+                        bg
+                    } else {
+                        c(DebugColor::BG_DATA_2)
+                    };
+                    x = g.put(
+                        x,
+                        y + 1,
+                        &hex(m.peek(t16.wrapping_add(b))),
+                        c(DebugColor::FG_INFO_OPCODE),
+                        cbg,
+                    );
                 }
             } else if w.enabled && w.source == Source::Video {
                 let (v, h) = m.video_position();
                 let mut x = g.put(INFO_COL_2, y, "W", c(DebugColor::FG_INFO_TITLE), bg);
                 x = g.put(x, y, &format!("{i:X} "), c(DebugColor::FG_INFO_BULLET), bg);
-                x = g.put(x, y, &format!("{v:04X}"), c(DebugColor::FG_DISASM_ADDRESS), bg);
-                g.put(x, y, &format!(":{h:02X}"), c(DebugColor::FG_INFO_OPERATOR), bg);
+                x = g.put(
+                    x,
+                    y,
+                    &format!("{v:04X}"),
+                    c(DebugColor::FG_DISASM_ADDRESS),
+                    bg,
+                );
+                g.put(
+                    x,
+                    y,
+                    &format!(":{h:02X}"),
+                    c(DebugColor::FG_INFO_OPERATOR),
+                    bg,
+                );
             }
         }
     }
@@ -561,23 +860,55 @@ impl Debugger {
             let px = d.prefix.text();
             x = g.put(x, y, &px, c(DebugColor::FG_INFO_MEM_BANK), bg);
         }
-        g.put(x, y, &format!("{:04X}", d.addr), c(DebugColor::FG_INFO_ADDRESS), bg);
+        g.put(
+            x,
+            y,
+            &format!("{:04X}", d.addr),
+            c(DebugColor::FG_INFO_ADDRESS),
+            bg,
+        );
         let mut a = d.addr;
         for line in 0..4 {
             let row = y + 1 + line;
             let mut x = INFO_COL_3;
             if d.view == MemView::Hex {
-                x = g.put(x, row, &format!("{a:04X}"), c(DebugColor::FG_INFO_ADDRESS), bg);
+                x = g.put(
+                    x,
+                    row,
+                    &format!("{a:04X}"),
+                    c(DebugColor::FG_INFO_ADDRESS),
+                    bg,
+                );
                 x = g.put(x, row, ":", c(DebugColor::FG_INFO_OPERATOR), bg);
             }
             for _ in 0..ncols {
                 let b = crate::cmd_mem::read_prefixed(m, a, &d.prefix);
                 let io = (0xC000..=0xC0FF).contains(&a);
                 if d.view == MemView::Hex {
-                    x = g.put(x, row, &format!("{b:02X} "), if io { c(DebugColor::FG_INFO_IO_BYTE) } else { c(DebugColor::FG_INFO_OPCODE) }, bg);
+                    x = g.put(
+                        x,
+                        row,
+                        &format!("{b:02X} "),
+                        if io {
+                            c(DebugColor::FG_INFO_IO_BYTE)
+                        } else {
+                            c(DebugColor::FG_INFO_OPCODE)
+                        },
+                        bg,
+                    );
                 } else {
                     let ch = printable(b);
-                    x = g.put(x, row, &ch.to_string(), c(DebugColor::FG_INFO_OPCODE), if io { c(DebugColor::BG_INFO_IO_BYTE) } else { bg });
+                    x = g.put(
+                        x,
+                        row,
+                        &ch.to_string(),
+                        c(DebugColor::FG_INFO_OPCODE),
+                        if io {
+                            c(DebugColor::BG_INFO_IO_BYTE)
+                        } else {
+                            bg
+                        },
+                    );
                 }
                 a = a.wrapping_add(1);
             }
@@ -621,7 +952,11 @@ impl Debugger {
     fn draw_console_line(&self, g: &mut Grid, y: usize, l: &[ConCell]) {
         let bg = self.colors.get(DebugColor::BG_CONSOLE_OUTPUT);
         for (x, cell) in l.iter().enumerate().take(GRID_W) {
-            let rgb = if cell.color == 0 { self.colors.get(DebugColor::FG_CONSOLE_OUTPUT) } else { CONSOLE_PALETTE[(cell.color as usize).min(10)] };
+            let rgb = if cell.color == 0 {
+                self.colors.get(DebugColor::FG_CONSOLE_OUTPUT)
+            } else {
+                CONSOLE_PALETTE[(cell.color as usize).min(10)]
+            };
             g.put(x, y, &cell.ch.to_string(), rgb, bg);
         }
     }

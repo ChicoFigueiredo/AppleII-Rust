@@ -47,7 +47,14 @@ const fn bit(v: i32, n: i32) -> i32 {
 
 /// `Video::VideoGetScannerAddress` (Video.cpp:338-462) for the cycle `cycle` of the frame.
 /// `ii` is `IS_APPLE2` (adds `$1000` in HBL in text modes); `mixed` is the SW_MIXED switch.
-pub const fn scanner_address(cycle: u32, pal: bool, sw: Switches, store80: bool, ii: bool, part: Part) -> u16 {
+pub const fn scanner_address(
+    cycle: u32,
+    pal: bool,
+    sw: Switches,
+    store80: bool,
+    ii: bool,
+    part: Part,
+) -> u16 {
     const H_CLOCK0_STATE: i32 = 0x18;
     const H_PE_CLOCK: i32 = 40;
     const H_PRESET_CLOCK: i32 = 41;
@@ -64,8 +71,14 @@ pub const fn scanner_address(cycle: u32, pal: bool, sw: Switches, store80: bool,
     if h_clock >= H_PRESET_CLOCK {
         h_state -= 1;
     }
-    let (h_0, h_1, h_2, h_3, h_4, h_5) =
-        (bit(h_state, 0), bit(h_state, 1), bit(h_state, 2), bit(h_state, 3), bit(h_state, 4), bit(h_state, 5));
+    let (h_0, h_1, h_2, h_3, h_4, h_5) = (
+        bit(h_state, 0),
+        bit(h_state, 1),
+        bit(h_state, 2),
+        bit(h_state, 3),
+        bit(h_state, 4),
+        bit(h_state, 5),
+    );
 
     // Vertical state (UTAIIe:3-15,T3.2).
     let v_line = cycle / CYCLES_PER_LINE as i32;
@@ -74,7 +87,13 @@ pub const fn scanner_address(cycle: u32, pal: bool, sw: Switches, store80: bool,
         v_state -= scan_lines;
     }
     let (v_a, v_b, v_c) = (bit(v_state, 0), bit(v_state, 1), bit(v_state, 2));
-    let (v_0, v_1, v_2, v_3, v_4) = (bit(v_state, 3), bit(v_state, 4), bit(v_state, 5), bit(v_state, 6), bit(v_state, 7));
+    let (v_0, v_1, v_2, v_3, v_4) = (
+        bit(v_state, 3),
+        bit(v_state, 4),
+        bit(v_state, 5),
+        bit(v_state, 6),
+        bit(v_state, 7),
+    );
 
     if hires && sw.mixed && v_4 != 0 && v_2 != 0 {
         hires = false; // HIRES TIME (UTAIIe:5-7,P3): text memory for mixed hires
@@ -120,9 +139,18 @@ pub struct Tables {
 impl Tables {
     /// `GenerateVideoTables` (NTSC.cpp:2607-2690), page 1.
     const fn new(pal: bool) -> Self {
-        let sw_h = Switches { text: false, mixed: false, hires: true, page2: false };
+        let sw_h = Switches {
+            text: false,
+            mixed: false,
+            hires: true,
+            page2: false,
+        };
         let sw_t = Switches { text: true, ..sw_h };
-        let mut t = Tables { vert_hgr: [0; MAX_LINES], vert_txt: [0; MAX_LINES / 8], horz: [[[0; H_CLOCKS]; 5]; 2] };
+        let mut t = Tables {
+            vert_hgr: [0; MAX_LINES],
+            vert_txt: [0; MAX_LINES / 8],
+            horz: [[[0; H_CLOCKS]; 5]; 2],
+        };
         let mut i = 0;
         while i < MAX_LINES {
             let cycle = HORZ_START + CYCLES_PER_LINE * i as u32;
@@ -169,8 +197,16 @@ impl VideoScanner {
     /// `ii`: model value & 0xFFFE == 0, i.e. only the ][ and ][+ (NTSC.cpp:2446).
     pub fn new(standard: VideoStandard, ii: bool) -> Self {
         match standard {
-            VideoStandard::Ntsc => VideoScanner { tables: &NTSC, lines: 262, ii },
-            VideoStandard::Pal => VideoScanner { tables: &PAL, lines: 312, ii },
+            VideoStandard::Ntsc => VideoScanner {
+                tables: &NTSC,
+                lines: 262,
+                ii,
+            },
+            VideoStandard::Pal => VideoScanner {
+                tables: &PAL,
+                lines: 312,
+                ii,
+            },
         }
     }
 
@@ -180,7 +216,10 @@ impl VideoScanner {
 
     /// `(vert, horz)` at `cycle` of the frame (`NTSC_VideoClockResync`, NTSC.cpp:1925).
     pub fn position(&self, cycle: u32) -> (u32, u32) {
-        ((cycle / CYCLES_PER_LINE) % self.lines, cycle % CYCLES_PER_LINE)
+        (
+            (cycle / CYCLES_PER_LINE) % self.lines,
+            cycle % CYCLES_PER_LINE,
+        )
     }
 
     /// `NTSC_GetVblBar` (NTSC.cpp:2776): true on the visible lines, false in the vertical blank.
@@ -193,7 +232,9 @@ impl VideoScanner {
         let (vert, horz) = (vert as usize, horz as usize);
         let page = if sw.page2 { 2 } else { 1 };
         if (sw.mixed && vert >= MIXED_LINE as usize) || sw.text || !sw.hires {
-            self.tables.vert_txt[vert / 8] + self.tables.horz[self.ii as usize][vert / 64][horz] + page * 0x400
+            self.tables.vert_txt[vert / 8]
+                + self.tables.horz[self.ii as usize][vert / 64][horz]
+                + page * 0x400
         } else {
             // Both the ][ and the //e use the //e horizontal table in HGR (NTSC.cpp:883).
             self.tables.vert_hgr[vert] + self.tables.horz[0][vert / 64][horz] + page * 0x2000
@@ -204,7 +245,11 @@ impl VideoScanner {
     /// stepping back one horizontal clock (the "2-cycle adjust" for ANSI STORY: the fetch seen
     /// by a CPU access is the previous cycle's).
     pub fn address(&self, cycle: u32, sw: Switches) -> u16 {
-        let cycle = if cycle == 0 { self.cycles_per_frame() - 1 } else { cycle - 1 };
+        let cycle = if cycle == 0 {
+            self.cycles_per_frame() - 1
+        } else {
+            cycle - 1
+        };
         let (vert, horz) = self.position(cycle);
         self.address_at(vert, horz, sw)
     }
@@ -215,7 +260,12 @@ mod tests {
     use super::*;
 
     const fn sw(text: bool, mixed: bool, hires: bool, page2: bool) -> Switches {
-        Switches { text, mixed, hires, page2 }
+        Switches {
+            text,
+            mixed,
+            hires,
+            page2,
+        }
     }
 
     #[test]
@@ -226,15 +276,29 @@ mod tests {
             for ii in [false, true] {
                 let s = VideoScanner::new(std, ii);
                 for flags in 0..16u32 {
-                    let w = sw(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, flags & 8 != 0);
+                    let w = sw(
+                        flags & 1 != 0,
+                        flags & 2 != 0,
+                        flags & 4 != 0,
+                        flags & 8 != 0,
+                    );
                     for cycle in (0..s.cycles_per_frame()).step_by(3) {
                         let (v, h) = s.position(cycle);
                         // Reference: with the text/hires decision made as NTSC.cpp does, the
                         // formula's own HIRES TIME handling must give the same address.
                         let text_addr = (w.mixed && v >= MIXED_LINE) || w.text || !w.hires;
-                        let rw = Switches { text: text_addr, hires: !text_addr, ..w };
-                        let want = scanner_address(cycle, pal, rw, false, ii && text_addr, Part::Full);
-                        assert_eq!(s.address_at(v, h, w), want, "pal={pal} ii={ii} {w:?} v={v} h={h}");
+                        let rw = Switches {
+                            text: text_addr,
+                            hires: !text_addr,
+                            ..w
+                        };
+                        let want =
+                            scanner_address(cycle, pal, rw, false, ii && text_addr, Part::Full);
+                        assert_eq!(
+                            s.address_at(v, h, w),
+                            want,
+                            "pal={pal} ii={ii} {w:?} v={v} h={h}"
+                        );
                     }
                 }
             }

@@ -25,15 +25,28 @@ impl Gfx {
         let backends = wgpu::Backends::from_env().unwrap_or(wgpu::Backends::PRIMARY);
         let (instance, surface, adapter) = match Self::pick(&window, backends) {
             Some(x) => x,
-            None if backends != wgpu::Backends::GL => Self::pick(&window, wgpu::Backends::GL).ok_or("no suitable GPU adapter")?,
+            None if backends != wgpu::Backends::GL => {
+                Self::pick(&window, wgpu::Backends::GL).ok_or("no suitable GPU adapter")?
+            }
             None => return Err("no suitable GPU adapter".into()),
         };
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).map_err(|e| e.to_string())?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None))
+                .map_err(|e| e.to_string())?;
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
         // egui wants a non-sRGB target
-        let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
-        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) { wgpu::PresentMode::Fifo } else { caps.present_modes[0] };
+        let format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| !f.is_srgb())
+            .unwrap_or(caps.formats[0]);
+        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+            wgpu::PresentMode::Fifo
+        } else {
+            caps.present_modes[0]
+        };
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             format,
@@ -46,11 +59,26 @@ impl Gfx {
         };
         surface.configure(&device, &config);
         let renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
-        Ok(Gfx { surface, device, queue, config, renderer, capture: None, captured: false, _instance: instance })
+        Ok(Gfx {
+            surface,
+            device,
+            queue,
+            config,
+            renderer,
+            capture: None,
+            captured: false,
+            _instance: instance,
+        })
     }
 
-    fn pick(window: &Arc<Window>, backends: wgpu::Backends) -> Option<(wgpu::Instance, wgpu::Surface<'static>, wgpu::Adapter)> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor { backends, ..Default::default() });
+    fn pick(
+        window: &Arc<Window>,
+        backends: wgpu::Backends,
+    ) -> Option<(wgpu::Instance, wgpu::Surface<'static>, wgpu::Adapter)> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends,
+            ..Default::default()
+        });
         let surface = instance.create_surface(window.clone()).ok()?;
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -64,7 +92,11 @@ impl Gfx {
                 ..Default::default()
             }))
         })?;
-        eprintln!("graphics: using {:?} ({})", adapter.get_info().backend, adapter.get_info().name);
+        eprintln!(
+            "graphics: using {:?} ({})",
+            adapter.get_info().backend,
+            adapter.get_info().name
+        );
         Some((instance, surface, adapter))
     }
 
@@ -73,7 +105,11 @@ impl Gfx {
         self.capture = Some(path);
     }
 
-    fn capture_texture(&self, encoder: &mut wgpu::CommandEncoder, texture: &wgpu::Texture) -> wgpu::Buffer {
+    fn capture_texture(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        texture: &wgpu::Texture,
+    ) -> wgpu::Buffer {
         let (w, h) = (self.config.width, self.config.height);
         let row = (w * 4).div_ceil(256) * 256;
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -84,8 +120,19 @@ impl Gfx {
         });
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
-            wgpu::TexelCopyBufferInfo { buffer: &buffer, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row), rows_per_image: Some(h) } },
-            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(row),
+                    rows_per_image: Some(h),
+                },
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
         );
         buffer
     }
@@ -97,9 +144,14 @@ impl Gfx {
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |r| drop(tx.send(r)));
         self.device.poll(wgpu::Maintain::Wait);
-        rx.recv().map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+        rx.recv()
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
         let data = slice.get_mapped_range();
-        let bgra = matches!(self.config.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
+        let bgra = matches!(
+            self.config.format,
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+        );
         let mut rgba = Vec::with_capacity(w * h * 4);
         for y in 0..h {
             for x in 0..w {
@@ -114,7 +166,8 @@ impl Gfx {
         }
         drop(data);
         buffer.unmap();
-        image::save_buffer(path, &rgba, w as u32, h as u32, image::ColorType::Rgba8).map_err(|e| e.to_string())
+        image::save_buffer(path, &rgba, w as u32, h as u32, image::ColorType::Rgba8)
+            .map_err(|e| e.to_string())
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -127,10 +180,14 @@ impl Gfx {
 
     pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
         for (id, delta) in &output.textures_delta.set {
-            self.renderer.update_texture(&self.device, &self.queue, *id, delta);
+            self.renderer
+                .update_texture(&self.device, &self.queue, *id, delta);
         }
         let jobs = ctx.tessellate(output.shapes, output.pixels_per_point);
-        let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [self.config.width, self.config.height], pixels_per_point: output.pixels_per_point };
+        let screen = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: output.pixels_per_point,
+        };
         let frame = match self.surface.get_current_texture() {
             Ok(f) => f,
             Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => {
@@ -139,24 +196,38 @@ impl Gfx {
             }
             Err(_) => return,
         };
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("egui") });
-        self.renderer.update_buffers(&self.device, &self.queue, &mut encoder, &jobs, &screen);
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("egui"),
+            });
+        self.renderer
+            .update_buffers(&self.device, &self.queue, &mut encoder, &jobs, &screen);
         {
             let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("egui"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            self.renderer.render(&mut pass.forget_lifetime(), &jobs, &screen);
+            self.renderer
+                .render(&mut pass.forget_lifetime(), &jobs, &screen);
         }
-        let capture = self.capture.take().map(|p| (self.capture_texture(&mut encoder, &frame.texture), p));
+        let capture = self
+            .capture
+            .take()
+            .map(|p| (self.capture_texture(&mut encoder, &frame.texture), p));
         self.queue.submit(Some(encoder.finish()));
         if let Some((buffer, path)) = capture {
             match self.save_capture(&buffer, &path) {

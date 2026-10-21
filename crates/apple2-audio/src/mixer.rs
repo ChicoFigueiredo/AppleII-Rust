@@ -68,15 +68,26 @@ impl Mixer {
         }
         self.last_cycles = cycles;
 
-        self.events.extend(toggles.into_iter().map(|c| (c, SpeakerEvent::Toggle)));
-        self.events.extend(self.bus.take_dac().into_iter().map(|(c, d)| (c, SpeakerEvent::Dac(d))));
+        self.events
+            .extend(toggles.into_iter().map(|c| (c, SpeakerEvent::Toggle)));
+        self.events.extend(
+            self.bus
+                .take_dac()
+                .into_iter()
+                .map(|(c, d)| (c, SpeakerEvent::Dac(d))),
+        );
         self.events.sort_by_key(|e| e.0); // stable: toggle before DAC at the same cycle
 
         let start = self.speaker.frames_done();
         let mut mono = Vec::new();
-        self.speaker.render(&clock, &mut self.events, cycles, &mut mono);
+        self.speaker
+            .render(&clock, &mut self.events, cycles, &mut mono);
         let n = mono.len();
-        let g = if self.speaker_mute { 0.0 } else { self.speaker_gain };
+        let g = if self.speaker_mute {
+            0.0
+        } else {
+            self.speaker_gain
+        };
         let mut out: Vec<f32> = mono.iter().flat_map(|&s| [s * g, s * g]).collect();
 
         for src in self.bus.sources() {

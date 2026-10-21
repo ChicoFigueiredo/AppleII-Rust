@@ -56,7 +56,10 @@ impl Default for Keyboard {
 }
 
 fn is_pravets(model: Model) -> bool {
-    matches!(model, Model::Pravets8M | Model::Pravets82 | Model::Pravets8A)
+    matches!(
+        model,
+        Model::Pravets8M | Model::Pravets82 | Model::Pravets8A
+    )
 }
 
 impl Keyboard {
@@ -97,7 +100,11 @@ impl Keyboard {
             if !clone && key > 0x7F {
                 return false; // accented chars, eg. AltGr+A
             }
-            self.keycode = if self.caps_lock && key.is_ascii_lowercase() { key - 32 } else { key };
+            self.keycode = if self.caps_lock && key.is_ascii_lowercase() {
+                key - 32
+            } else {
+                key
+            };
         } else {
             if !clone && (key == b'`' || key >= b'{') {
                 return false;
@@ -140,7 +147,11 @@ impl Keyboard {
         if key > 0x7F {
             return false;
         }
-        self.keycode = if key.is_ascii_lowercase() && self.caps_lock { key - 32 } else { key };
+        self.keycode = if key.is_ascii_lowercase() && self.caps_lock {
+            key - 32
+        } else {
+            key
+        };
         true
     }
 
@@ -260,7 +271,11 @@ impl Keyboard {
         if !self.paste.is_empty() {
             return false;
         }
-        let mut bytes = text.bytes().take_while(|&b| b != 0).filter(u8::is_ascii).peekable();
+        let mut bytes = text
+            .bytes()
+            .take_while(|&b| b != 0)
+            .filter(u8::is_ascii)
+            .peekable();
         while let Some(b) = bytes.next() {
             if b == b'\r' && bytes.peek() == Some(&b'\n') {
                 bytes.next();

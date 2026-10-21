@@ -26,7 +26,14 @@ fn wait_for(mut f: impl FnMut() -> bool, secs: u64) -> bool {
 
 #[test]
 fn real_time_pacing_runs_at_about_one_megahertz() {
-    let mut h = spawn(settings(), Box::new(|| Box::new(DefaultBackend)), None, 48_000, Box::new(|| {})).unwrap();
+    let mut h = spawn(
+        settings(),
+        Box::new(|| Box::new(DefaultBackend)),
+        None,
+        48_000,
+        Box::new(|| {}),
+    )
+    .unwrap();
     // Wall-clock measurement: a loaded machine can starve the thread, so take the best of many
     // half-second windows (the timer pacer never runs ahead of 1.0x, which is the real check).
     let (mut best, mut worst_high) = (0.0f32, 0.0f32);
@@ -44,9 +51,20 @@ fn real_time_pacing_runs_at_about_one_megahertz() {
 
 #[test]
 fn max_speed_is_much_faster_and_pause_stops_time() {
-    let mut h = spawn(settings(), Box::new(|| Box::new(DefaultBackend)), None, 48_000, Box::new(|| {})).unwrap();
+    let mut h = spawn(
+        settings(),
+        Box::new(|| Box::new(DefaultBackend)),
+        None,
+        48_000,
+        Box::new(|| {}),
+    )
+    .unwrap();
     h.send(Command::ToggleFullSpeed);
-    assert!(wait_for(|| h.shared.status().mhz > 2.0, 30), "mhz {}", h.shared.status().mhz);
+    assert!(
+        wait_for(|| h.shared.status().mhz > 2.0, 30),
+        "mhz {}",
+        h.shared.status().mhz
+    );
     h.send(Command::SetPaused(true));
     std::thread::sleep(Duration::from_millis(200));
     let a = h.shared.status().cycles;
@@ -58,7 +76,14 @@ fn max_speed_is_much_faster_and_pause_stops_time() {
 
 #[test]
 fn keys_reach_the_machine_and_the_frame_shows_them() {
-    let mut h = spawn(settings(), Box::new(|| Box::new(DefaultBackend)), None, 48_000, Box::new(|| {})).unwrap();
+    let mut h = spawn(
+        settings(),
+        Box::new(|| Box::new(DefaultBackend)),
+        None,
+        48_000,
+        Box::new(|| {}),
+    )
+    .unwrap();
     h.send(Command::SetSpeed(Speed::Max));
     assert!(wait_for(|| h.shared.status().frames > 200, 10));
     for c in b"PRINT 1+1\r" {
@@ -76,10 +101,25 @@ fn keys_reach_the_machine_and_the_frame_shows_them() {
 #[test]
 fn audio_ring_pacing_keeps_the_ring_filled() {
     let ring = AudioRing::new(48_000 * 3 / 10);
-    let mut h = spawn(settings(), Box::new(|| Box::new(DefaultBackend)), Some(ring.clone()), 48_000, Box::new(|| {})).unwrap();
-    assert!(wait_for(|| ring.fill_frames() > 2000, 5), "ring fill {}", ring.fill_frames());
+    let mut h = spawn(
+        settings(),
+        Box::new(|| Box::new(DefaultBackend)),
+        Some(ring.clone()),
+        48_000,
+        Box::new(|| {}),
+    )
+    .unwrap();
+    assert!(
+        wait_for(|| ring.fill_frames() > 2000, 5),
+        "ring fill {}",
+        ring.fill_frames()
+    );
     // nobody drains it, so the emulation stops near the target (about 80 ms) instead of running away
     std::thread::sleep(Duration::from_millis(300));
-    assert!(ring.fill_frames() < 48_000 / 4, "fill {}", ring.fill_frames());
+    assert!(
+        ring.fill_frames() < 48_000 / 4,
+        "fill {}",
+        ring.fill_frames()
+    );
     h.shutdown();
 }

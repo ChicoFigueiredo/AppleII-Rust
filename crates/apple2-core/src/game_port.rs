@@ -46,7 +46,11 @@ impl GamePort {
     pub fn button(&self, n: usize, ii_family: bool) -> bool {
         match n {
             0 | 1 => {
-                let apple = if n == 0 { self.open_apple } else { self.closed_apple };
+                let apple = if n == 0 {
+                    self.open_apple
+                } else {
+                    self.closed_apple
+                };
                 (ii_family && !self.attached[0]) || self.buttons[n] || apple
             }
             _ => !self.attached[1] || self.buttons[2], // PB2 floats high with no joystick 1

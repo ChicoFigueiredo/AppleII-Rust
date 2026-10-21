@@ -10,7 +10,11 @@ use winit::keyboard::{Key, KeyCode, KeyLocation, ModifiersState, NamedKey, Physi
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 
 pub fn mods(m: ModifiersState) -> Mods {
-    Mods { shift: m.shift_key(), ctrl: m.control_key(), alt: m.alt_key() }
+    Mods {
+        shift: m.shift_key(),
+        ctrl: m.control_key(),
+        alt: m.alt_key(),
+    }
 }
 
 /// Stable id of the physical key (0 for unidentified keys).
@@ -36,16 +40,29 @@ pub fn key_input(ev: &KeyEvent, m: ModifiersState) -> KeyInput {
             _ => None,
         };
         if let Some(key) = modifier {
-            return KeyInput { key, numpad: false, phys };
+            return KeyInput {
+                key,
+                numpad: false,
+                phys,
+            };
         }
     }
     // With Ctrl held some platforms report the control character; ask for the plain key.
-    let logical = if m.control_key() { ev.key_without_modifiers() } else { ev.logical_key.clone() };
+    let logical = if m.control_key() {
+        ev.key_without_modifiers()
+    } else {
+        ev.logical_key.clone()
+    };
     let mut key = host_key(&logical);
     // Text wins when there is any: it already includes layout, Shift, Caps Lock, dead keys and
     // AltGr. Control characters (Enter, Tab...) keep their named keys.
     if !m.control_key() && !matches!(ev.logical_key, Key::Named(_)) {
-        if let Some(c) = ev.text.as_ref().and_then(|t| t.chars().next()).filter(|c| !c.is_control()) {
+        if let Some(c) = ev
+            .text
+            .as_ref()
+            .and_then(|t| t.chars().next())
+            .filter(|c| !c.is_control())
+        {
             key = HostKey::Char(c);
         }
     }

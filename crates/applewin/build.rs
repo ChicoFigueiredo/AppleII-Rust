@@ -18,7 +18,10 @@ fn embed() {
     res.set_icon("../../packaging/icons/applewin.ico")
         .set_manifest_file("../../packaging/windows/applewin.manifest")
         .set("ProductName", "AppleII-Rust")
-        .set("FileDescription", "AppleII-Rust - Apple II emulator (AppleWin port)")
+        .set(
+            "FileDescription",
+            "AppleII-Rust - Apple II emulator (AppleWin port)",
+        )
         .set("InternalName", "applewin")
         .set("OriginalFilename", "applewin.exe")
         .set("LegalCopyright", "GPL-2.0-or-later. Based on AppleWin.")

@@ -20,7 +20,11 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(width: u32, height: u32) -> Self {
-        Frame { width, height, rgba: vec![0; (width * height * 4) as usize] }
+        Frame {
+            width,
+            height,
+            rgba: vec![0; (width * height * 4) as usize],
+        }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -69,7 +73,9 @@ pub struct VideoRenderer {
 
 impl VideoRenderer {
     pub fn new(cfg: apple2_video::RenderConfig) -> Self {
-        VideoRenderer { renderer: apple2_video::Renderer::new(cfg) }
+        VideoRenderer {
+            renderer: apple2_video::Renderer::new(cfg),
+        }
     }
 
     pub fn from_settings(s: &apple2_config::Settings) -> Self {
@@ -120,7 +126,14 @@ impl apple2_video::VidHdView for HdView<'_> {
     fn is_shr(&self) -> bool {
         self.0.is_shr()
     }
-    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+    fn shr_cell(
+        &self,
+        is_640: bool,
+        color_fill: bool,
+        palette: &[u16; 16],
+        a: u32,
+        prev: [u8; 3],
+    ) -> [[u8; 3]; 16] {
         apple2_cards::vidhd::shr_cell(is_640, color_fill, palette, a, prev)
     }
 }
@@ -136,7 +149,13 @@ impl VideoRenderer {
         match slot.and_then(|s| m.card::<apple2_cards::VidHd>(s)) {
             Some(hd) => {
                 let view = HdView(hd);
-                self.renderer.update(&apple2_video::WithVidHd { source: m, vidhd: &view }, cycles);
+                self.renderer.update(
+                    &apple2_video::WithVidHd {
+                        source: m,
+                        vidhd: &view,
+                    },
+                    cycles,
+                );
             }
             None => self.renderer.update(m, cycles),
         }
@@ -172,7 +191,10 @@ impl FrameSource for VideoRenderer {
         match vidhd_slot(m).and_then(|s| m.card::<apple2_cards::VidHd>(s)) {
             Some(hd) => {
                 let view = HdView(hd);
-                self.renderer.redraw(&apple2_video::WithVidHd { source: m, vidhd: &view });
+                self.renderer.redraw(&apple2_video::WithVidHd {
+                    source: m,
+                    vidhd: &view,
+                });
             }
             None => self.renderer.redraw(m),
         }
@@ -184,7 +206,13 @@ impl FrameSource for VideoRenderer {
         frame.rgba = self.renderer.rgba8();
     }
     fn cycle_video_mode(&mut self, delta: i32) {
-        self.edit(|c| c.video_type = if delta >= 0 { c.video_type.next() } else { c.video_type.prev() });
+        self.edit(|c| {
+            c.video_type = if delta >= 0 {
+                c.video_type.next()
+            } else {
+                c.video_type.prev()
+            }
+        });
     }
     fn toggle_scanlines(&mut self) {
         self.edit(|c| c.half_scanlines = !c.half_scanlines);
@@ -214,7 +242,11 @@ impl TextPlaceholder {
             Model::Base64A => apple2_roms::BASE64A_GERMAN_VIDEO,
             _ => apple2_roms::APPLE2E_ENHANCED_VIDEO,
         };
-        TextPlaceholder { charset, is_e, fg: [0xE8, 0xE8, 0xE8] }
+        TextPlaceholder {
+            charset,
+            is_e,
+            fg: [0xE8, 0xE8, 0xE8],
+        }
     }
 
     /// 7 pixel columns (bit 0 = leftmost); true = lit. `flash_on`: phase of FLASH characters.
@@ -284,7 +316,11 @@ impl FrameSource for TextPlaceholder {
                         if bits >> gx & 1 == 0 {
                             continue;
                         }
-                        let (x0, nx) = if col80 { (col * 7 + gx, 1) } else { (col * cell_w + gx * 2, 2) };
+                        let (x0, nx) = if col80 {
+                            (col * 7 + gx, 1)
+                        } else {
+                            (col * cell_w + gx * 2, 2)
+                        };
                         for dy in 0..2 {
                             let y = row * 16 + gy * 2 + dy;
                             for dx in 0..nx {

@@ -116,8 +116,11 @@ pub struct Disk2Sink {
 
 impl DiskSink for Disk2Sink {
     fn insert(&mut self, m: &mut Machine, drive: usize, path: &Path) -> Result<(), String> {
-        let card = m.card_mut::<Disk2Card>(self.slot).ok_or("no Disk II card in this slot")?;
-        card.insert_path(drive, path, false).map_err(|e| format!("{}: {e:?}", path.display()))
+        let card = m
+            .card_mut::<Disk2Card>(self.slot)
+            .ok_or("no Disk II card in this slot")?;
+        card.insert_path(drive, path, false)
+            .map_err(|e| format!("{}: {e:?}", path.display()))
     }
     fn eject(&mut self, m: &mut Machine, drive: usize) {
         if let Some(c) = m.card_mut::<Disk2Card>(self.slot) {
@@ -135,7 +138,9 @@ impl DiskSink for Disk2Sink {
         }
     }
     fn status(&self, m: &Machine) -> [DriveStatus; 2] {
-        let Some(c) = m.card::<Disk2Card>(self.slot) else { return Default::default() };
+        let Some(c) = m.card::<Disk2Card>(self.slot) else {
+            return Default::default();
+        };
         std::array::from_fn(|d| DriveStatus {
             present: c.is_drive_connected(d),
             image: (!c.is_drive_empty(d)).then(|| c.base_name(d).to_string()),
@@ -174,14 +179,24 @@ impl Backend for DefaultBackend {
     }
 
     fn disks(&mut self, settings: &Settings) -> Box<dyn DiskSink> {
-        match settings.slots.0.iter().position(|s| matches!(s, SlotCardSpec::Disk2 { .. })) {
+        match settings
+            .slots
+            .0
+            .iter()
+            .position(|s| matches!(s, SlotCardSpec::Disk2 { .. }))
+        {
             Some(slot) => Box::new(Disk2Sink { slot: slot as u8 }),
             None => Box::new(NullDisks),
         }
     }
 
     fn mouse(&mut self, settings: &Settings) -> Box<dyn MouseSink> {
-        match settings.slots.0.iter().position(|s| matches!(s, SlotCardSpec::MouseInterface { .. })) {
+        match settings
+            .slots
+            .0
+            .iter()
+            .position(|s| matches!(s, SlotCardSpec::MouseInterface { .. }))
+        {
             Some(slot) => Box::new(CardMouse { slot: slot as u8 }),
             None => Box::new(NullMouse),
         }

@@ -14,16 +14,32 @@ use apple2_core::Card;
 /// Unit version (MouseInterface.cpp:668, `Slot(..., 1)`).
 const VERSION: u32 = 1;
 
-pub const MAP: Mapping = Mapping { aw_names: &["Mouse Card"], our_name: "Mouse Card", save, load };
+pub const MAP: Mapping = Mapping {
+    aw_names: &["Mouse Card"],
+    our_name: "Mouse Card",
+    save,
+    load,
+};
 
 fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<MouseCard>()) else { return false };
+    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<MouseCard>()) else {
+        return false;
+    };
     let s = c.snapshot();
     w.slot(slot, "Mouse Card", VERSION, |w| {
         // SaveSnapshotMC6821: decimal `SaveUint`.
         w.map("MC6821", |w| {
             let p = &s.pia;
-            for (k, v) in [("PRA", p.pra), ("DDRA", p.ddra), ("CRA", p.cra), ("PRB", p.prb), ("DDRB", p.ddrb), ("CRB", p.crb), ("IA", p.ia), ("IB", p.ib)] {
+            for (k, v) in [
+                ("PRA", p.pra),
+                ("DDRA", p.ddra),
+                ("CRA", p.cra),
+                ("PRB", p.prb),
+                ("DDRB", p.ddrb),
+                ("CRB", p.crb),
+                ("IA", p.ia),
+                ("IB", p.ib),
+            ] {
                 w.uint(k, v as u64);
             }
         });
@@ -41,7 +57,14 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
         w.bool("Btn0", s.btn0);
         w.bool("Btn1", s.btn1);
         w.bool("VBL", false);
-        for (k, v) in [("iX", s.i_x), ("iMinX", s.min_x), ("iMaxX", s.max_x), ("iY", s.i_y), ("iMinY", s.min_y), ("iMaxY", s.max_y)] {
+        for (k, v) in [
+            ("iX", s.i_x),
+            ("iMinX", s.min_x),
+            ("iMaxX", s.max_x),
+            ("iY", s.i_y),
+            ("iMinY", s.min_y),
+            ("iMaxY", s.max_y),
+        ] {
             w.uint(k, v as u32 as u64);
         }
         w.bool("Button0", s.buttons[0]);
@@ -51,11 +74,20 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
     true
 }
 
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if version != VERSION {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Mouse Card'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Mouse Card'."
+        )));
     }
-    let pia = st.sub("MC6821").ok_or_else(|| Error::Format("Card: Expected key: MC6821".into()))?;
+    let pia = st
+        .sub("MC6821")
+        .ok_or_else(|| Error::Format("Card: Expected key: MC6821".into()))?;
     let b = |m: &Map, k: &str| -> Result<u8, Error> { Ok(m.u32(k)? as u8) };
     let mut s = MouseSnapshot {
         pia: Pia6821 {
@@ -87,7 +119,9 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
         btn1: false,
         buttons: [false; 2],
     };
-    let buf = st.sub("Buffer").ok_or_else(|| Error::Format("Card: Expected key: Buffer".into()))?;
+    let buf = st
+        .sub("Buffer")
+        .ok_or_else(|| Error::Format("Card: Expected key: Buffer".into()))?;
     buf.load_memory(&mut s.buff)?;
     s.buf_pos = st.u32("Buffer Position")? as usize;
     s.state = b(&st, "State")?;
@@ -105,9 +139,16 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
     s.buttons = [st.bool("Button0")?, st.bool("Button1")?];
     st.bool("Enabled")?;
 
-    let Some(mut card) = make(ctx, "Mouse Card", slot) else { return Ok(None) };
-    let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<MouseCard>()) else {
-        return Err(Error::Unsupported("host returned a card that is not a mouse card".into()));
+    let Some(mut card) = make(ctx, "Mouse Card", slot) else {
+        return Ok(None);
+    };
+    let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<MouseCard>())
+    else {
+        return Err(Error::Unsupported(
+            "host returned a card that is not a mouse card".into(),
+        ));
     };
     c.apply_snapshot(&s);
     Ok(Some(card))

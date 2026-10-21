@@ -6,7 +6,9 @@
 //! (`g_aOpcodes = ...`); here that is the `cmos` flag of the context.
 use apple2_debugger::disasm::{get_targets, DataBlocks, DisasmConfig, DisasmCtx, NO_TARGET};
 use apple2_debugger::mem::{DebugMem, Ram, Regs};
-use apple2_debugger::opcodes::{OPCODE_BRK, OPCODE_JMP_A, OPCODE_JMP_IAX, OPCODE_JMP_NA, OPCODE_JSR, OPCODE_RTI, OPCODE_RTS};
+use apple2_debugger::opcodes::{
+    OPCODE_BRK, OPCODE_JMP_A, OPCODE_JMP_IAX, OPCODE_JMP_NA, OPCODE_JSR, OPCODE_RTI, OPCODE_RTS,
+};
 use apple2_debugger::symbols::Symbols;
 
 const OPCODE_LDA_A: u8 = 0xAD;
@@ -22,7 +24,14 @@ impl T {
         let mut ram = Ram::default();
         ram.write(0x200, 0xDD); // bad data if SP wrap does not work
         ram.write(0x201, 0xDD);
-        T { ram, regs: Regs { pc: 0x300, ..Regs::default() }, cmos }
+        T {
+            ram,
+            regs: Regs {
+                pc: 0x300,
+                ..Regs::default()
+            },
+            cmos,
+        }
     }
 
     /// `regs.sp = 0x1xx` as in the C++ test (only the low byte is kept by the CPU).
@@ -39,7 +48,14 @@ impl T {
         let syms = Symbols::default();
         let data = DataBlocks::default();
         let cfg = DisasmConfig::default();
-        let ctx = DisasmCtx { mem: &self.ram, regs: self.regs, cmos: self.cmos, symbols: &syms, data: &data, cfg: &cfg };
+        let ctx = DisasmCtx {
+            mem: &self.ram,
+            regs: self.regs,
+            cmos: self.cmos,
+            symbols: &syms,
+            data: &data,
+            cfg: &cfg,
+        };
         get_targets(&ctx, self.regs.pc, ignore_branch, include_next)
     }
 
@@ -88,7 +104,11 @@ fn gh445_jsr(t: &mut T) {
     for (sp, second) in [(0x1FF, 0x1FE), (0x100, 0x1FF), (0x101, 0x100)] {
         t.sp(sp);
         let (a, b, c, _) = t.get(true, true);
-        assert_eq!((a, b, c), (sp as i32, second, target2 as i32), "JSR sp={sp:03X}");
+        assert_eq!(
+            (a, b, c),
+            (sp as i32, second, target2 as i32),
+            "JSR sp={sp:03X}"
+        );
     }
 }
 
@@ -128,7 +148,12 @@ fn rti_rts_setup(t: &mut T, sp: u16, is_rti: bool) -> (i32, i32, i32) {
 fn gh445_rti_rts(t: &mut T, sp: u16, is_rti: bool) {
     let (lo, hi, ret) = rti_rts_setup(t, sp, is_rti);
     let got = t.get(true, true);
-    assert_eq!((got.0, got.1, got.2), (lo, hi, ret), "{} sp={sp:03X}", if is_rti { "RTI" } else { "RTS" });
+    assert_eq!(
+        (got.0, got.1, got.2),
+        (lo, hi, ret),
+        "{} sp={sp:03X}",
+        if is_rti { "RTI" } else { "RTS" }
+    );
 }
 
 fn gh445_jmp(t: &mut T, op: u8) {
@@ -261,7 +286,11 @@ fn gh451_sub(cmos: bool) {
         for sp in [0x1FE, 0x1FF, 0x100] {
             let (lo, hi, _) = rti_rts_setup(&mut t, sp, is_rti);
             let got = t.get(true, false);
-            assert_eq!((got.0, got.1, got.2), (lo, hi, NO_TARGET), "rti={is_rti} sp={sp:03X}");
+            assert_eq!(
+                (got.0, got.1, got.2),
+                (lo, hi, NO_TARGET),
+                "rti={is_rti} sp={sp:03X}"
+            );
         }
     }
 
@@ -277,7 +306,10 @@ fn gh451_sub(cmos: bool) {
         let (t0, t1) = match op {
             OPCODE_JMP_A => (NO_TARGET, NO_TARGET),
             OPCODE_JMP_NA => (target16 as i32, target16 as i32 + 1),
-            _ => ((target16 as i32 + t.regs.x as i32) & 0xFFFF, (target16 as i32 + t.regs.x as i32 + 1) & 0xFFFF),
+            _ => (
+                (target16 as i32 + t.regs.x as i32) & 0xFFFF,
+                (target16 as i32 + t.regs.x as i32 + 1) & 0xFFFF,
+            ),
         };
         t.put_opcode(op);
         t.put_operand16(target16);

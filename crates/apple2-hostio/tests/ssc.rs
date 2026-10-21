@@ -2,10 +2,10 @@
 
 use apple2_core::text_screen::text_screen;
 use apple2_core::{Machine, MachineConfig, Model};
+use apple2_cpu::Bus;
 use apple2_hostio::serial::{LoopbackHandle, LoopbackSerial, ModemStatus};
 use apple2_hostio::ssc::{ST_DCD, ST_DSR, ST_IRQ, ST_RX_FULL, ST_TX_EMPTY};
 use apple2_hostio::SuperSerialCard;
-use apple2_cpu::Bus;
 
 const SLOT: u16 = 0xC080 + 2 * 16; // slot 2
 const DATA: u16 = SLOT + 8;
@@ -15,7 +15,11 @@ const CONTROL: u16 = SLOT + 0xB;
 
 fn machine_with_ssc(echo: bool) -> (Machine, LoopbackHandle) {
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
-    let (b, h) = if echo { LoopbackSerial::echo() } else { LoopbackSerial::new() };
+    let (b, h) = if echo {
+        LoopbackSerial::echo()
+    } else {
+        LoopbackSerial::new()
+    };
     assert!(m.insert_card(2, Box::new(SuperSerialCard::new(Box::new(b)))));
     (m, h)
 }
@@ -32,7 +36,7 @@ fn wr(m: &mut Machine, a: u16, v: u8) {
 fn dip_switches_read_as_9600_8n1_comms_mode() {
     let (mut m, _) = machine_with_ssc(false);
     assert_eq!(rd(&mut m, SLOT + 1), 0xE0); // baud index $0E, firmware mode CIC
-    // SW2: 1 stop(0), 8 bits(0), no parity(0), no LF(1), CTS asserted(0)
+                                            // SW2: 1 stop(0), 8 bits(0), no parity(0), no LF(1), CTS asserted(0)
     assert_eq!(rd(&mut m, SLOT + 2), 0b0000_0010);
 }
 
@@ -78,13 +82,22 @@ fn receive_interrupt_is_raised_and_cleared_by_status_read() {
     assert!(!m.board().interrupts.irq_line());
     h.push_rx(b"hi");
     m.run_cycles(2 * 1000 + 10);
-    assert!(m.board().interrupts.irq_line(), "IRQ asserted by the poll event");
+    assert!(
+        m.board().interrupts.irq_line(),
+        "IRQ asserted by the poll event"
+    );
     let st = rd(&mut m, STATUS);
     assert_eq!(st & (ST_IRQ | ST_RX_FULL), ST_IRQ | ST_RX_FULL);
-    assert!(!m.board().interrupts.irq_line(), "status read clears the line");
+    assert!(
+        !m.board().interrupts.irq_line(),
+        "status read clears the line"
+    );
     assert_eq!(rd(&mut m, STATUS) & ST_IRQ, 0, "IRQ bit reported once");
     assert_eq!(rd(&mut m, DATA), b'h');
-    assert!(m.board().interrupts.irq_line(), "more data waiting: IRQ again");
+    assert!(
+        m.board().interrupts.irq_line(),
+        "more data waiting: IRQ again"
+    );
     assert_eq!(rd(&mut m, DATA), b'i');
     assert_eq!(rd(&mut m, STATUS) & ST_RX_FULL, 0);
 }

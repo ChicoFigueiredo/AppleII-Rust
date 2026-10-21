@@ -37,7 +37,10 @@ fn f7_halts_the_machine_and_shows_the_debugger_screen() {
 
     let frame = e.render().clone();
     assert_eq!((frame.width, frame.height), (560, 384));
-    assert!(frame.rgba.chunks(4).any(|p| p[0] > 100), "debugger screen is blank");
+    assert!(
+        frame.rgba.chunks(4).any(|p| p[0] > 100),
+        "debugger screen is blank"
+    );
 
     if let Some(p) = std::env::var_os("APPLEWIN_TEST_DUMP") {
         applewin_shell::screenshot::save_png(std::path::Path::new(&p), &frame).unwrap();

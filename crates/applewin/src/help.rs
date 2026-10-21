@@ -30,9 +30,15 @@ pub const MANUAL: &[&str] = &[
 /// A block of the Markdown subset.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Block {
-    Heading { level: u8, text: String },
+    Heading {
+        level: u8,
+        text: String,
+    },
     Paragraph(String),
-    List { ordered: bool, items: Vec<String> },
+    List {
+        ordered: bool,
+        items: Vec<String>,
+    },
     /// Fenced code, verbatim.
     Code(String),
     /// Table rows already aligned into monospace lines (header, rule, rows).
@@ -62,7 +68,11 @@ pub fn parse_inline(s: &str) -> Vec<Span> {
     let mut i = 0;
     let flush = |cur: &mut String, spans: &mut Vec<Span>| {
         if !cur.is_empty() {
-            spans.push(Span { text: std::mem::take(cur), bold: false, code: false });
+            spans.push(Span {
+                text: std::mem::take(cur),
+                bold: false,
+                code: false,
+            });
         }
     };
     while i < chars.len() {
@@ -70,14 +80,24 @@ pub fn parse_inline(s: &str) -> Vec<Span> {
         if c == '`' {
             if let Some(end) = (i + 1..chars.len()).find(|&j| chars[j] == '`') {
                 flush(&mut cur, &mut spans);
-                spans.push(Span { text: chars[i + 1..end].iter().collect(), bold: false, code: true });
+                spans.push(Span {
+                    text: chars[i + 1..end].iter().collect(),
+                    bold: false,
+                    code: true,
+                });
                 i = end + 1;
                 continue;
             }
         } else if c == '*' && chars.get(i + 1) == Some(&'*') {
-            if let Some(end) = (i + 2..chars.len().saturating_sub(1)).find(|&j| chars[j] == '*' && chars[j + 1] == '*') {
+            if let Some(end) = (i + 2..chars.len().saturating_sub(1))
+                .find(|&j| chars[j] == '*' && chars[j + 1] == '*')
+            {
                 flush(&mut cur, &mut spans);
-                spans.push(Span { text: chars[i + 2..end].iter().collect(), bold: true, code: false });
+                spans.push(Span {
+                    text: chars[i + 2..end].iter().collect(),
+                    bold: true,
+                    code: false,
+                });
                 i = end + 2;
                 continue;
             }
@@ -135,7 +155,10 @@ fn split_row(line: &str) -> Vec<String> {
 }
 
 fn is_rule_row(cells: &[String]) -> bool {
-    !cells.is_empty() && cells.iter().all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':' | ' ')))
+    !cells.is_empty()
+        && cells
+            .iter()
+            .all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':' | ' ')))
 }
 
 fn render_table(rows: &[String]) -> Vec<String> {
@@ -186,7 +209,10 @@ pub fn parse(md: &str) -> Doc {
     }
     fn end_list(items: &mut Vec<String>, ordered: bool, blocks: &mut Vec<Block>) {
         if !items.is_empty() {
-            blocks.push(Block::List { ordered, items: std::mem::take(items) });
+            blocks.push(Block::List {
+                ordered,
+                items: std::mem::take(items),
+            });
         }
     }
     fn end_table(table: &mut Vec<String>, blocks: &mut Vec<Block>) {
@@ -225,7 +251,10 @@ pub fn parse(md: &str) -> Doc {
             end_para(&mut para, &mut blocks);
             end_list(&mut items, list_ordered, &mut blocks);
             end_table(&mut table, &mut blocks);
-            blocks.push(Block::Heading { level, text: plain(text) });
+            blocks.push(Block::Heading {
+                level,
+                text: plain(text),
+            });
             continue;
         }
         if trimmed.starts_with('|') {
@@ -308,7 +337,11 @@ fn block_text(b: &Block) -> String {
     match b {
         Block::Heading { text, .. } => text.clone(),
         Block::Paragraph(t) => plain(t),
-        Block::List { items, .. } => items.iter().map(|i| plain(i)).collect::<Vec<_>>().join("\n"),
+        Block::List { items, .. } => items
+            .iter()
+            .map(|i| plain(i))
+            .collect::<Vec<_>>()
+            .join("\n"),
         Block::Code(t) => t.clone(),
         Block::Table(rows) => rows.join("\n"),
     }
@@ -342,14 +375,21 @@ pub fn search(docs: &[Doc], query: &str, limit: usize) -> Vec<Hit> {
             let chars: Vec<char> = text.chars().collect();
             let start = at.saturating_sub(30);
             let end = (at + 60).min(chars.len());
-            let mut snippet: String = chars[start..end].iter().map(|&c| if c == '\n' { ' ' } else { c }).collect();
+            let mut snippet: String = chars[start..end]
+                .iter()
+                .map(|&c| if c == '\n' { ' ' } else { c })
+                .collect();
             if start > 0 {
                 snippet.insert(0, '…');
             }
             if end < chars.len() {
                 snippet.push('…');
             }
-            hits.push(Hit { page, block, snippet });
+            hits.push(Hit {
+                page,
+                block,
+                snippet,
+            });
             if hits.len() >= limit {
                 return hits;
             }
@@ -375,7 +415,13 @@ impl Default for HelpViewer {
 
 impl HelpViewer {
     pub fn new() -> Self {
-        HelpViewer { open: false, docs: MANUAL.iter().map(|m| parse(m)).collect(), page: 0, query: String::new(), scroll_to: None }
+        HelpViewer {
+            open: false,
+            docs: MANUAL.iter().map(|m| parse(m)).collect(),
+            page: 0,
+            query: String::new(),
+            scroll_to: None,
+        }
     }
 
     /// F1: opens the manual, or closes it when it is already open.
@@ -401,107 +447,141 @@ impl HelpViewer {
             return;
         }
         let mut open = true;
-        egui::Window::new("Ajuda - Manual do AppleII-Rust").open(&mut open).default_size([860.0, 560.0]).show(ctx, |ui| {
-            let height = ui.available_height().max(200.0);
-            ui.horizontal_top(|ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(230.0);
-                    self.left_column(ui, height);
-                });
-                ui.separator();
-                ui.vertical(|ui| {
-                    self.content(ui, height);
+        egui::Window::new("Ajuda - Manual do AppleII-Rust")
+            .open(&mut open)
+            .default_size([860.0, 560.0])
+            .show(ctx, |ui| {
+                let height = ui.available_height().max(200.0);
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(230.0);
+                        self.left_column(ui, height);
+                    });
+                    ui.separator();
+                    ui.vertical(|ui| {
+                        self.content(ui, height);
+                    });
                 });
             });
-        });
         if !open {
             self.open = false;
         }
     }
 
     fn left_column(&mut self, ui: &mut Ui, height: f32) {
-        ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("Buscar no manual...").desired_width(f32::INFINITY));
+        ui.add(
+            egui::TextEdit::singleline(&mut self.query)
+                .hint_text("Buscar no manual...")
+                .desired_width(f32::INFINITY),
+        );
         let mut jump: Option<(usize, Option<usize>)> = None;
-        ScrollArea::vertical().id_salt("help_toc").max_height(height - 30.0).auto_shrink(false).show(ui, |ui| {
-            if self.query.trim().is_empty() {
-                for (p, doc) in self.docs.iter().enumerate() {
-                    if ui.selectable_label(p == self.page, &doc.title).clicked() {
-                        jump = Some((p, Some(0)));
-                    }
-                    if p == self.page {
-                        for (i, level, text) in toc(doc).into_iter().filter(|(_, l, _)| *l >= 2) {
-                            let indent = f32::from(level - 1) * 10.0;
-                            ui.horizontal(|ui| {
-                                ui.add_space(indent);
-                                if ui.small_button(text).clicked() {
-                                    jump = Some((p, Some(i)));
-                                }
-                            });
+        ScrollArea::vertical()
+            .id_salt("help_toc")
+            .max_height(height - 30.0)
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                if self.query.trim().is_empty() {
+                    for (p, doc) in self.docs.iter().enumerate() {
+                        if ui.selectable_label(p == self.page, &doc.title).clicked() {
+                            jump = Some((p, Some(0)));
+                        }
+                        if p == self.page {
+                            for (i, level, text) in toc(doc).into_iter().filter(|(_, l, _)| *l >= 2)
+                            {
+                                let indent = f32::from(level - 1) * 10.0;
+                                ui.horizontal(|ui| {
+                                    ui.add_space(indent);
+                                    if ui.small_button(text).clicked() {
+                                        jump = Some((p, Some(i)));
+                                    }
+                                });
+                            }
                         }
                     }
-                }
-            } else {
-                let hits = search(&self.docs, &self.query, 60);
-                ui.label(format!("{} resultado(s)", hits.len()));
-                for h in hits {
-                    ui.label(RichText::new(&self.docs[h.page].title).strong());
-                    if ui.link(&h.snippet).clicked() {
-                        jump = Some((h.page, Some(h.block)));
+                } else {
+                    let hits = search(&self.docs, &self.query, 60);
+                    ui.label(format!("{} resultado(s)", hits.len()));
+                    for h in hits {
+                        ui.label(RichText::new(&self.docs[h.page].title).strong());
+                        if ui.link(&h.snippet).clicked() {
+                            jump = Some((h.page, Some(h.block)));
+                        }
+                        ui.add_space(4.0);
                     }
-                    ui.add_space(4.0);
                 }
-            }
-        });
+            });
         if let Some((p, b)) = jump {
             self.go(p, b);
         }
     }
 
     fn content(&mut self, ui: &mut Ui, height: f32) {
-        let Some(doc) = self.docs.get(self.page) else { return };
+        let Some(doc) = self.docs.get(self.page) else {
+            return;
+        };
         let target = self.scroll_to.take();
-        let (body_font, mono) = (TextStyle::Body.resolve(ui.style()), TextStyle::Monospace.resolve(ui.style()));
+        let (body_font, mono) = (
+            TextStyle::Body.resolve(ui.style()),
+            TextStyle::Monospace.resolve(ui.style()),
+        );
         let text_color = ui.visuals().text_color();
         let strong = ui.visuals().strong_text_color();
         let code_bg = ui.visuals().code_bg_color;
-        ScrollArea::both().id_salt(("help_body", self.page)).max_height(height).auto_shrink(false).show(ui, |ui| {
-            for (i, block) in doc.blocks.iter().enumerate() {
-                let resp = match block {
-                    Block::Heading { level, text } => {
-                        let size = match level {
-                            1 => 26.0,
-                            2 => 20.0,
-                            _ => 16.0,
-                        };
-                        ui.add_space(if *level == 1 { 0.0 } else { 8.0 });
-                        let r = ui.label(RichText::new(text).size(size).strong());
-                        if *level <= 2 {
-                            ui.separator();
-                        }
-                        r
-                    }
-                    Block::Paragraph(t) => ui.label(layout(t, &body_font, &mono, text_color, strong, code_bg)),
-                    Block::List { ordered, items } => {
-                        ui.vertical(|ui| {
-                            for (n, item) in items.iter().enumerate() {
-                                let marker = if *ordered { format!("{}.", n + 1) } else { "•".to_string() };
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.label(marker);
-                                    ui.label(layout(item.trim_start(), &body_font, &mono, text_color, strong, code_bg));
-                                });
+        ScrollArea::both()
+            .id_salt(("help_body", self.page))
+            .max_height(height)
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                for (i, block) in doc.blocks.iter().enumerate() {
+                    let resp = match block {
+                        Block::Heading { level, text } => {
+                            let size = match level {
+                                1 => 26.0,
+                                2 => 20.0,
+                                _ => 16.0,
+                            };
+                            ui.add_space(if *level == 1 { 0.0 } else { 8.0 });
+                            let r = ui.label(RichText::new(text).size(size).strong());
+                            if *level <= 2 {
+                                ui.separator();
                             }
-                        })
-                        .response
+                            r
+                        }
+                        Block::Paragraph(t) => {
+                            ui.label(layout(t, &body_font, &mono, text_color, strong, code_bg))
+                        }
+                        Block::List { ordered, items } => {
+                            ui.vertical(|ui| {
+                                for (n, item) in items.iter().enumerate() {
+                                    let marker = if *ordered {
+                                        format!("{}.", n + 1)
+                                    } else {
+                                        "•".to_string()
+                                    };
+                                    ui.horizontal_wrapped(|ui| {
+                                        ui.label(marker);
+                                        ui.label(layout(
+                                            item.trim_start(),
+                                            &body_font,
+                                            &mono,
+                                            text_color,
+                                            strong,
+                                            code_bg,
+                                        ));
+                                    });
+                                }
+                            })
+                            .response
+                        }
+                        Block::Code(t) => mono_block(ui, t, code_bg),
+                        Block::Table(rows) => mono_block(ui, &rows.join("\n"), code_bg),
+                    };
+                    if target == Some(i) {
+                        resp.scroll_to_me(Some(Align::TOP));
                     }
-                    Block::Code(t) => mono_block(ui, t, code_bg),
-                    Block::Table(rows) => mono_block(ui, &rows.join("\n"), code_bg),
-                };
-                if target == Some(i) {
-                    resp.scroll_to_me(Some(Align::TOP));
+                    ui.add_space(4.0);
                 }
-                ui.add_space(4.0);
-            }
-        });
+            });
     }
 }
 
@@ -509,19 +589,44 @@ fn mono_block(ui: &mut Ui, text: &str, bg: Color32) -> egui::Response {
     egui::Frame::new()
         .fill(bg)
         .inner_margin(6.0)
-        .show(ui, |ui| ui.add(egui::Label::new(RichText::new(text).monospace()).wrap_mode(egui::TextWrapMode::Extend)))
+        .show(ui, |ui| {
+            ui.add(
+                egui::Label::new(RichText::new(text).monospace())
+                    .wrap_mode(egui::TextWrapMode::Extend),
+            )
+        })
         .response
 }
 
-fn layout(text: &str, body: &FontId, mono: &FontId, color: Color32, strong: Color32, code_bg: Color32) -> LayoutJob {
+fn layout(
+    text: &str,
+    body: &FontId,
+    mono: &FontId,
+    color: Color32,
+    strong: Color32,
+    code_bg: Color32,
+) -> LayoutJob {
     let mut job = LayoutJob::default();
     for s in parse_inline(text) {
         let format = if s.code {
-            TextFormat { font_id: mono.clone(), color, background: code_bg, ..Default::default() }
+            TextFormat {
+                font_id: mono.clone(),
+                color,
+                background: code_bg,
+                ..Default::default()
+            }
         } else if s.bold {
-            TextFormat { font_id: body.clone(), color: strong, ..Default::default() }
+            TextFormat {
+                font_id: body.clone(),
+                color: strong,
+                ..Default::default()
+            }
         } else {
-            TextFormat { font_id: body.clone(), color, ..Default::default() }
+            TextFormat {
+                font_id: body.clone(),
+                color,
+                ..Default::default()
+            }
         };
         job.append(&s.text, 0.0, format);
     }
@@ -539,9 +644,15 @@ mod tests {
         assert_eq!(
             d.blocks,
             vec![
-                Block::Heading { level: 1, text: "Título".into() },
+                Block::Heading {
+                    level: 1,
+                    text: "Título".into()
+                },
                 Block::Paragraph("primeira linha segunda linha".into()),
-                Block::Heading { level: 2, text: "Seção".into() },
+                Block::Heading {
+                    level: 2,
+                    text: "Seção".into()
+                },
                 Block::Paragraph("texto".into()),
             ]
         );
@@ -559,8 +670,14 @@ mod tests {
         assert_eq!(
             d.blocks,
             vec![
-                Block::List { ordered: false, items: vec!["um".into(), "dois continua".into()] },
-                Block::List { ordered: true, items: vec!["a".into(), "b".into()] },
+                Block::List {
+                    ordered: false,
+                    items: vec!["um".into(), "dois continua".into()]
+                },
+                Block::List {
+                    ordered: true,
+                    items: vec!["a".into(), "b".into()]
+                },
             ]
         );
     }
@@ -568,13 +685,22 @@ mod tests {
     #[test]
     fn nested_bullet_is_indented_item() {
         let d = parse("- pai\n  - filho");
-        assert_eq!(d.blocks, vec![Block::List { ordered: false, items: vec!["pai".into(), "  filho".into()] }]);
+        assert_eq!(
+            d.blocks,
+            vec![Block::List {
+                ordered: false,
+                items: vec!["pai".into(), "  filho".into()]
+            }]
+        );
     }
 
     #[test]
     fn code_fence_is_verbatim() {
         let d = parse("```\n# nao e titulo\n- nem lista\n```\ndepois");
-        assert_eq!(d.blocks[0], Block::Code("# nao e titulo\n- nem lista".into()));
+        assert_eq!(
+            d.blocks[0],
+            Block::Code("# nao e titulo\n- nem lista".into())
+        );
         assert_eq!(d.blocks[1], Block::Paragraph("depois".into()));
     }
 
@@ -612,11 +738,31 @@ mod tests {
         assert_eq!(
             s,
             vec![
-                Span { text: "use ".into(), bold: false, code: false },
-                Span { text: "F7".into(), bold: true, code: false },
-                Span { text: " ou ".into(), bold: false, code: false },
-                Span { text: "G".into(), bold: false, code: true },
-                Span { text: " no manual".into(), bold: false, code: false },
+                Span {
+                    text: "use ".into(),
+                    bold: false,
+                    code: false
+                },
+                Span {
+                    text: "F7".into(),
+                    bold: true,
+                    code: false
+                },
+                Span {
+                    text: " ou ".into(),
+                    bold: false,
+                    code: false
+                },
+                Span {
+                    text: "G".into(),
+                    bold: false,
+                    code: true
+                },
+                Span {
+                    text: " no manual".into(),
+                    bold: false,
+                    code: false
+                },
             ]
         );
     }
@@ -635,7 +781,10 @@ mod tests {
 
     #[test]
     fn search_ignores_case_and_accents() {
-        let docs = vec![parse("# Doc\n\nO Depurador entra com F7."), parse("# Outro\n\nnada aqui")];
+        let docs = vec![
+            parse("# Doc\n\nO Depurador entra com F7."),
+            parse("# Outro\n\nnada aqui"),
+        ];
         let hits = search(&docs, "DÉPURADOR", 10);
         assert_eq!(hits.len(), 1);
         assert_eq!((hits[0].page, hits[0].block), (0, 1));
@@ -666,7 +815,9 @@ mod tests {
             assert!(d.blocks.len() > 2);
         }
         let hits = search(&docs, "scroll lock", 50);
-        assert!(hits.iter().any(|h| docs[h.page].title == "Teclado e atalhos"));
+        assert!(hits
+            .iter()
+            .any(|h| docs[h.page].title == "Teclado e atalhos"));
         let cmd = search(&docs, "headless-frames", 5);
         assert!(!cmd.is_empty());
     }

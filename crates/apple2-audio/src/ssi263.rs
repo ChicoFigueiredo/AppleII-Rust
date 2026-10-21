@@ -38,9 +38,12 @@ pub enum SsiType {
 
 /// `m_Votrax2SSI263` (cpp:248): SC-01 phoneme -> nearest SSI263 phoneme.
 const VOTRAX_TO_SSI263: [u8; 64] = [
-    0x02, 0x0A, 0x0B, 0x00, 0x28, 0x08, 0x08, 0x2F, 0x0E, 0x07, 0x07, 0x07, 0x37, 0x38, 0x24, 0x33, //
-    0x32, 0x32, 0x2F, 0x10, 0x39, 0x0F, 0x13, 0x13, 0x20, 0x29, 0x25, 0x2C, 0x26, 0x34, 0x25, 0x30, //
-    0x08, 0x09, 0x03, 0x1B, 0x0E, 0x27, 0x11, 0x07, 0x16, 0x05, 0x28, 0x1D, 0x01, 0x23, 0x0C, 0x0D, //
+    0x02, 0x0A, 0x0B, 0x00, 0x28, 0x08, 0x08, 0x2F, 0x0E, 0x07, 0x07, 0x07, 0x37, 0x38, 0x24,
+    0x33, //
+    0x32, 0x32, 0x2F, 0x10, 0x39, 0x0F, 0x13, 0x13, 0x20, 0x29, 0x25, 0x2C, 0x26, 0x34, 0x25,
+    0x30, //
+    0x08, 0x09, 0x03, 0x1B, 0x0E, 0x27, 0x11, 0x07, 0x16, 0x05, 0x28, 0x1D, 0x01, 0x23, 0x0C,
+    0x0D, //
     0x10, 0x1A, 0x19, 0x18, 0x11, 0x11, 0x14, 0x14, 0x35, 0x36, 0x1C, 0x0A, 0x01, 0x10, 0x00, 0x00,
 ];
 
@@ -55,8 +58,15 @@ fn phonemes() -> &'static PhonemeData {
     D.get_or_init(|| {
         let b = include_bytes!("../data/ssi263_phonemes.bin");
         let u32_at = |i: usize| u32::from_le_bytes(b[i..i + 4].try_into().unwrap()) as usize;
-        let info = (0..62).map(|i| (u32_at(i * 8), u32_at(i * 8 + 4))).collect();
-        let samples = b[62 * 8..].as_chunks::<2>().0.iter().map(|c| i16::from_le_bytes(*c)).collect();
+        let info = (0..62)
+            .map(|i| (u32_at(i * 8), u32_at(i * 8 + 4)))
+            .collect();
+        let samples = b[62 * 8..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| i16::from_le_bytes(*c))
+            .collect();
         PhonemeData { info, samples }
     })
 }
@@ -154,7 +164,11 @@ impl Ssi263 {
         self.dur_phon = MODE_PHONEME_TRANSITIONED_INFLECTION;
         self.inflection = 0;
         self.rate_inflection = 0;
-        self.ctrl_art_amp = if power_cycle || self.ty == SsiType::Ap { CONTROL_MASK } else { 0 };
+        self.ctrl_art_amp = if power_cycle || self.ty == SsiType::Ap {
+            CONTROL_MASK
+        } else {
+            0
+        };
         self.filter_freq = if power_cycle { FILTER_FREQ_SILENCE } else { 0 };
         self.d7 = false;
         self.function = 0;
@@ -258,10 +272,17 @@ impl Ssi263 {
     fn play(&mut self, phoneme: u8, now: u64, clk: &SampleClock) -> Option<i32> {
         self.current_active = phoneme as i32;
         // Frame-timing function plays at the fastest rate (cpp:613).
-        let dur = if self.function == 1 { 3 } else { self.dur_phon >> DURATION_MODE_SHIFT };
+        let dur = if self.function == 1 {
+            3
+        } else {
+            self.dur_phon >> DURATION_MODE_SHIFT
+        };
         self.build_wave(phoneme, dur);
         self.play_start = now;
-        self.end_cycle = now + clk.cycles_for_samples(self.wave.len() as u64, SSI_RATE).max(1);
+        self.end_cycle = now
+            + clk
+                .cycles_for_samples(self.wave.len() as u64, SSI_RATE)
+                .max(1);
         self.phase = Phase::Playing;
         Some((self.end_cycle - now) as i32)
     }
@@ -352,7 +373,11 @@ impl Ssi263 {
             }
             Phase::Idle => return (out, 0),
         }
-        let wait = if self.phase == Phase::Idle { 0 } else { (self.end_cycle.saturating_sub(now)).max(1) as i32 };
+        let wait = if self.phase == Phase::Idle {
+            0
+        } else {
+            (self.end_cycle.saturating_sub(now)).max(1) as i32
+        };
         (out, wait)
     }
 
@@ -447,8 +472,13 @@ impl Ssi263 {
             _ => SsiType::Ap,
         };
         self.has_sc01 = b[1] != 0;
-        (self.dur_phon, self.inflection, self.rate_inflection, self.ctrl_art_amp, self.filter_freq) =
-            (b[2], b[3], b[4], b[5], b[6]);
+        (
+            self.dur_phon,
+            self.inflection,
+            self.rate_inflection,
+            self.ctrl_art_amp,
+            self.filter_freq,
+        ) = (b[2], b[3], b[4], b[5], b[6]);
         (self.d7, self.enable_ints, self.is_votrax) = (b[7] & 1 != 0, b[7] & 2 != 0, b[7] & 4 != 0);
         (self.function, self.votrax_phoneme, self.card_mode) = (b[8], b[9], b[10]);
         self.phase = match b[11] {
@@ -524,7 +554,11 @@ impl Ssi263 {
     /// Returns the cycles until its end event.
     pub fn restart(&mut self, now: u64, clk: &SampleClock) -> Option<i32> {
         if self.is_votrax {
-            self.play(VOTRAX_TO_SSI263[(self.votrax_phoneme & PHONEME_MASK) as usize], now, clk)
+            self.play(
+                VOTRAX_TO_SSI263[(self.votrax_phoneme & PHONEME_MASK) as usize],
+                now,
+                clk,
+            )
         } else {
             self.play(self.dur_phon & PHONEME_MASK, now, clk)
         }
@@ -574,7 +608,10 @@ mod tests {
     fn a_phoneme_makes_non_silent_output_and_ends_with_an_irq() {
         let (mut s, due) = started(0x0A, 3);
         let c = clk();
-        let peak = (0..due as u64).step_by(40).map(|t| s.sample_at(t, &c).abs()).fold(0.0, f32::max);
+        let peak = (0..due as u64)
+            .step_by(40)
+            .map(|t| s.sample_at(t, &c).abs())
+            .fold(0.0, f32::max);
         assert!(peak > 0.05, "{peak}");
         // 0xA4F input samples at 22.05 kHz averaged by 4 (DUR=3) => about 0.03 s.
         assert!((20_000..40_000).contains(&due), "{due}");
@@ -628,7 +665,9 @@ mod tests {
         assert_eq!(o.ifr_clear, crate::via6522::IXR_VOTRAX);
         assert!(o.schedule.is_some());
         let c = clk();
-        assert!((0..30_000u64).step_by(30).any(|t| s.sample_at(t, &c).abs() > 0.05));
+        assert!((0..30_000u64)
+            .step_by(30)
+            .any(|t| s.sample_at(t, &c).abs() > 0.05));
         let (out, _) = s.on_event(o.schedule.unwrap() as u64, 0xB0, &c);
         assert_eq!(out.ifr_set, crate::via6522::IXR_VOTRAX);
     }
@@ -641,10 +680,15 @@ mod tests {
         assert_eq!(buf.len(), Ssi263::SAVED_LEN);
         let mut t = Ssi263::new(SsiType::Empty, true);
         assert!(t.load(&buf));
-        assert_eq!((t.dur_phon, t.ctrl_art_amp, t.ty), (s.dur_phon, s.ctrl_art_amp, s.ty));
+        assert_eq!(
+            (t.dur_phon, t.ctrl_art_amp, t.ty),
+            (s.dur_phon, s.ctrl_art_amp, s.ty)
+        );
         // Same audio from the same Cycle: the wave is rebuilt, not restarted.
         let c = clk();
-        assert!((0..20_000u64).step_by(7).all(|x| t.sample_at(x, &c) == s.sample_at(x, &c)));
+        assert!((0..20_000u64)
+            .step_by(7)
+            .all(|x| t.sample_at(x, &c) == s.sample_at(x, &c)));
         assert!(t.sample_at(5_000, &c) != 0.0);
     }
 }

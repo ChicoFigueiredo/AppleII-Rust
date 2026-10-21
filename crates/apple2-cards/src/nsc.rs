@@ -27,7 +27,11 @@ impl Ring {
 
     fn write_bits(&mut self, mut data: u8, count: u32) {
         for _ in 0..count {
-            self.reg = if data & 1 != 0 { self.reg | self.mask } else { self.reg & !self.mask };
+            self.reg = if data & 1 != 0 {
+                self.reg | self.mask
+            } else {
+                self.reg & !self.mask
+            };
             self.next_bit();
             data >>= 1;
         }
@@ -70,7 +74,13 @@ pub struct NoSlotClock {
 
 impl NoSlotClock {
     pub fn new(clock: Box<dyn HostClock>) -> Self {
-        let mut c = NoSlotClock { clock, clock_reg: Ring::new(0), cmp: Ring::new(INIT_SEQUENCE), reg_enabled: false, write_enabled: true };
+        let mut c = NoSlotClock {
+            clock,
+            clock_reg: Ring::new(0),
+            cmp: Ring::new(INIT_SEQUENCE),
+            reg_enabled: false,
+            write_enabled: true,
+        };
         c.reset();
         c
     }
@@ -89,19 +99,28 @@ impl NoSlotClock {
     /// `CNoSlotClock::LoadSnapshot` (:208). False (nothing changed) if a mask is not a single
     /// bit, which no run of the clock can produce.
     pub fn apply_snapshot(&mut self, s: &NscSnapshot) -> bool {
-        if !s.clock_register_mask.is_power_of_two() || !s.comparison_register_mask.is_power_of_two() {
+        if !s.clock_register_mask.is_power_of_two() || !s.comparison_register_mask.is_power_of_two()
+        {
             return false;
         }
         (self.reg_enabled, self.write_enabled) = (s.clock_register_enabled, s.write_enabled);
-        self.clock_reg = Ring { mask: s.clock_register_mask, reg: s.clock_register };
-        self.cmp = Ring { mask: s.comparison_register_mask, reg: s.comparison_register };
+        self.clock_reg = Ring {
+            mask: s.clock_register_mask,
+            reg: s.clock_register,
+        };
+        self.cmp = Ring {
+            mask: s.comparison_register_mask,
+            reg: s.comparison_register,
+        };
         true
     }
 
     /// Decodes the bytes of [`RomTap::save`] into a snapshot; `None` if they are not a No-Slot
     /// Clock's.
     pub fn snapshot_of_saved(state: &[u8]) -> Option<NscSnapshot> {
-        let mut c = NoSlotClock::new(Box::new(crate::time::FixedClock(crate::time::WallTime::SAMPLE)));
+        let mut c = NoSlotClock::new(Box::new(crate::time::FixedClock(
+            crate::time::WallTime::SAMPLE,
+        )));
         c.load(state).then(|| c.snapshot())
     }
 
@@ -119,7 +138,11 @@ impl NoSlotClock {
             self.write_enabled = true;
             return false;
         }
-        *data = if self.clock_reg.reg & self.clock_reg.mask != 0 { *data | 1 } else { *data & !1 };
+        *data = if self.clock_reg.reg & self.clock_reg.mask != 0 {
+            *data | 1
+        } else {
+            *data & !1
+        };
         if self.clock_reg.next_bit() {
             self.reg_enabled = false;
         }
@@ -150,7 +173,16 @@ impl NoSlotClock {
         let t = self.clock.now();
         self.clock_reg = Ring::new(0);
         let r = &mut self.clock_reg;
-        for v in [t.centisecond, t.second, t.minute, t.hour, t.weekday + 1, t.day, t.month, (t.year % 100) as u8] {
+        for v in [
+            t.centisecond,
+            t.second,
+            t.minute,
+            t.hour,
+            t.weekday + 1,
+            t.day,
+            t.month,
+            (t.year % 100) as u8,
+        ] {
             r.write_bits(v % 10, 4);
             r.write_bits(v / 10, 4);
         }
@@ -179,7 +211,10 @@ impl RomTap for NoSlotClock {
     fn save(&self) -> Vec<u8> {
         let mut e = Enc::default();
         e.bool(self.reg_enabled).bool(self.write_enabled);
-        e.u64(self.clock_reg.mask).u64(self.clock_reg.reg).u64(self.cmp.mask).u64(self.cmp.reg);
+        e.u64(self.clock_reg.mask)
+            .u64(self.clock_reg.reg)
+            .u64(self.cmp.mask)
+            .u64(self.cmp.reg);
         e.0
     }
 
@@ -187,7 +222,9 @@ impl RomTap for NoSlotClock {
         let mut d = Dec::new(state);
         let r = (|| Some((d.bool()?, d.bool()?, d.u64()?, d.u64()?, d.u64()?, d.u64()?)))();
         match r {
-            Some((re, we, cm, cr, pm, pr)) if d.done() && cm.is_power_of_two() && pm.is_power_of_two() => {
+            Some((re, we, cm, cr, pm, pr))
+                if d.done() && cm.is_power_of_two() && pm.is_power_of_two() =>
+            {
                 (self.reg_enabled, self.write_enabled) = (re, we);
                 self.clock_reg = Ring { mask: cm, reg: cr };
                 self.cmp = Ring { mask: pm, reg: pr };
@@ -238,7 +275,10 @@ mod tests {
     fn unlock_pattern_then_64_reads_give_bcd_time() {
         let mut c = nsc();
         unlock(&mut c, 0xC300);
-        assert_eq!(read_register(&mut c, 0xC300), [0x12, 0x27, 0x35, 0x14, 0x02, 0x19, 0x10, 0x26]);
+        assert_eq!(
+            read_register(&mut c, 0xC300),
+            [0x12, 0x27, 0x35, 0x14, 0x02, 0x19, 0x10, 0x26]
+        );
     }
 
     #[test]

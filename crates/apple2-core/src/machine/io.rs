@@ -3,9 +3,9 @@
 //! [`crate::card::Card`], slot cards. The floating bus is the video scanner byte.
 
 use super::Board;
-use crate::slots::{expansion_offset, ExpansionRom};
 use crate::language_card::is_rmw_abs;
 use crate::memory::mf;
+use crate::slots::{expansion_offset, ExpansionRom};
 use crate::video_scanner::Switches;
 use crate::Model;
 
@@ -27,7 +27,8 @@ impl Board {
             hires: m & mf::HIRES != 0,
             page2: m & mf::PAGE2 != 0 && m & mf::STORE80 == 0,
         };
-        self.memory.peek_main(self.scanner.address(self.scan_cycle(), sw))
+        self.memory
+            .peek_main(self.scanner.address(self.scan_cycle(), sw))
     }
 
     // ---- Keyboard, speaker, game port. ----
@@ -57,12 +58,18 @@ impl Board {
             0 => bit7(true),
             n @ 1..=3 => {
                 let n = n as usize - 1;
-                let forced = self.game_io.as_ref().and_then(|d| d.button(n, &self.annunciators));
+                let forced = self
+                    .game_io
+                    .as_ref()
+                    .and_then(|d| d.button(n, &self.annunciators));
                 bit7(forced.unwrap_or_else(|| self.game.button(n, self.model.is_apple2())))
             }
             n => {
                 let n = n as usize - 4;
-                let forced = self.game_io.as_ref().is_some_and(|d| d.paddle(n, &self.annunciators).is_some());
+                let forced = self
+                    .game_io
+                    .as_ref()
+                    .is_some_and(|d| d.paddle(n, &self.annunciators).is_some());
                 bit7(self.game.paddle_active_with(n, self.access_cycle(), forced))
             }
         }
@@ -133,13 +140,18 @@ impl Board {
             let slot = (addr >> 8) as u8 & 7;
             // Peripheral ROM unless the internal one is switched in (UTAIIe:5-28).
             if self.is_e && (intcxrom || (!slotc3rom && slot == 3)) {
-                return self.memory.internal_cx(addr).unwrap_or_else(|| self.floating_bus());
+                return self
+                    .memory
+                    .internal_cx(addr)
+                    .unwrap_or_else(|| self.floating_bus());
             }
             if self.slots.card(slot).is_none() && !self.lc.has_slot(slot) {
                 return self.floating_bus(); // GH#149/GH#164: empty slot
             }
             return match write {
-                None => self.card_call(slot, |c, x| c.slot_rom_read(addr as u8, x)).unwrap_or(0),
+                None => self
+                    .card_call(slot, |c, x| c.slot_rom_read(addr as u8, x))
+                    .unwrap_or(0),
                 Some(v) => {
                     self.card_call(slot, |c, x| c.slot_rom_write(addr as u8, v, x));
                     0
@@ -147,12 +159,18 @@ impl Board {
             };
         }
         if self.is_e && (intcxrom || self.slots.intc8rom()) {
-            return self.memory.internal_cx(addr).unwrap_or_else(|| self.floating_bus());
+            return self
+                .memory
+                .internal_cx(addr)
+                .unwrap_or_else(|| self.floating_bus());
         }
         match self.slots.expansion() {
             ExpansionRom::Slot(slot) => match write {
                 None => self
-                    .card_call(slot, |c, x| c.expansion_rom().map_or(x.floating_bus, |r| r[expansion_offset(addr)]))
+                    .card_call(slot, |c, x| {
+                        c.expansion_rom()
+                            .map_or(x.floating_bus, |r| r[expansion_offset(addr)])
+                    })
                     .unwrap_or_else(|| self.floating_bus()),
                 Some(v) => {
                     self.card_call(slot, |c, x| c.expansion_rom_write(addr - 0xC800, v, x));
@@ -174,7 +192,10 @@ impl Board {
             return None;
         }
         let mut data = write.unwrap_or(0);
-        let replaced = self.rom_tap.as_mut()?.access(addr, write.is_some(), &mut data);
+        let replaced = self
+            .rom_tap
+            .as_mut()?
+            .access(addr, write.is_some(), &mut data);
         (replaced && write.is_none()).then_some(data)
     }
 
@@ -252,14 +273,20 @@ impl Board {
                     // //c: IOUDIS on/off (Memory.cpp:808-818).
                     0xE | 0xF if self.model.is_apple2c() => {
                         let m = self.memory.memmode();
-                        self.memory.set_memmode(if lo & 1 == 0 { m | mf::IOUDIS } else { m & !mf::IOUDIS });
+                        self.memory.set_memmode(if lo & 1 == 0 {
+                            m | mf::IOUDIS
+                        } else {
+                            m & !mf::IOUDIS
+                        });
                     }
                     _ => {}
                 }
             }
             0x8.. => self.slot_io_write(addr, value),
             // $C060 on the Pravets 8A selects 8-bit keyboard mode (Memory.cpp:719).
-            6 if lo == 0x60 && self.model == Model::Pravets8A => self.keyboard.set_pravets_8bit(value),
+            6 if lo == 0x60 && self.model == Model::Pravets8A => {
+                self.keyboard.set_pravets_8bit(value)
+            }
             _ => {} // C02x tape, C04x, other C06x
         }
     }
@@ -316,7 +343,9 @@ impl Board {
             4..=7 => self.memory.set_paging(lo, 0),
             _ => {
                 // IOUDIS gates AN3/DHIRES on the //c (Memory.cpp:786).
-                if self.is_e && (!self.model.is_apple2c() || self.memory.memmode() & mf::IOUDIS != 0) {
+                if self.is_e
+                    && (!self.model.is_apple2c() || self.memory.memmode() & mf::IOUDIS != 0)
+                {
                     self.video.set(lo, true);
                 }
                 if self.model.is_apple2c() {

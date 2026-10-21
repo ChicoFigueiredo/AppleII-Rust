@@ -22,7 +22,11 @@ pub struct SyncEvent {
 
 impl SyncEvent {
     pub fn new(id: EventId, cycles: i32) -> Self {
-        SyncEvent { id, cycles_remaining: cycles, can_assert_irq: true }
+        SyncEvent {
+            id,
+            cycles_remaining: cycles,
+            can_assert_irq: true,
+        }
     }
 }
 
@@ -108,7 +112,9 @@ impl Scheduler {
     /// True if advancing by `cycles` expires the head event.
     #[inline]
     pub fn head_due(&self, cycles: i32) -> bool {
-        self.events.first().is_some_and(|e| e.cycles_remaining - cycles <= 0)
+        self.events
+            .first()
+            .is_some_and(|e| e.cycles_remaining - cycles <= 0)
     }
 
     /// [`Scheduler::update`] for the case where [`Scheduler::head_due`] is false.

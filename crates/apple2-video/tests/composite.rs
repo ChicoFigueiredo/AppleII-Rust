@@ -7,7 +7,11 @@ use apple2_video::{RenderConfig, Renderer, VideoType};
 use common::*;
 
 fn channels(c: u32) -> (i32, i32, i32) {
-    (((c >> 16) & 0xFF) as i32, ((c >> 8) & 0xFF) as i32, (c & 0xFF) as i32)
+    (
+        ((c >> 16) & 0xFF) as i32,
+        ((c >> 8) & 0xFF) as i32,
+        (c & 0xFF) as i32,
+    )
 }
 
 fn hires_line(bytes: &[u8]) -> Fake {
@@ -28,7 +32,10 @@ fn hires_artifact_colors_on_the_composite_monitor() {
         }
         render(&mut r, &s, 1);
         let (red, green, blue) = channels(rgb(&r, 280, 0));
-        assert!(red > green + 40 && blue > green + 40, "{vt:?} violet {red},{green},{blue}");
+        assert!(
+            red > green + 40 && blue > green + 40,
+            "{vt:?} violet {red},{green},{blue}"
+        );
         // Bit 7 set: the 0xD5 0xAA pair is blue then orange.
         for col in 0..40 {
             s.poke(0x2000 + col, &[if col % 2 == 0 { 0xD5 } else { 0xAA }]);
@@ -69,11 +76,19 @@ fn lores_colors_on_the_tv_are_the_base_palette_averaged_over_phases() {
         let c = chroma().base_colors[n as usize];
         // The cell's colour repeats every 4 dots; averaging 4 neighbouring pixels recovers the
         // table's average (what GenerateBaseColors computes).
-        let avg = |sh: u32| (0..4).map(|i| (rgb(&r, 200 + i, 0) >> sh) & 0xFF).sum::<u32>() / 4;
+        let avg = |sh: u32| {
+            (0..4)
+                .map(|i| (rgb(&r, 200 + i, 0) >> sh) & 0xFF)
+                .sum::<u32>()
+                / 4
+        };
         let got = (avg(16), avg(8), avg(0));
         let want = ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
         let d = |a: u32, b: u32| (a as i32 - b as i32).abs();
-        assert!(d(got.0, want.0) < 6 && d(got.1, want.1) < 6 && d(got.2, want.2) < 6, "colour {n}: {got:?} vs {want:?}");
+        assert!(
+            d(got.0, want.0) < 6 && d(got.1, want.1) < 6 && d(got.2, want.2) < 6,
+            "colour {n}: {got:?} vs {want:?}"
+        );
     }
 }
 
@@ -94,7 +109,10 @@ fn dhires_nibbles_give_sixteen_distinct_colors_in_the_idealized_mode() {
         let mut r = renderer(VideoType::ColorIdealized);
         render(&mut r, &s, 1);
         let c = rgb(&r, 300, 0);
-        assert!((300..304).all(|x| rgb(&r, x, 0) == c || n == 0), "nibble {n} is a flat colour");
+        assert!(
+            (300..304).all(|x| rgb(&r, x, 0) == c || n == 0),
+            "nibble {n} is a flat colour"
+        );
         seen.insert(c);
     }
     // 16 palette entries, but the NTSC palette's two grays (colours 5 and 10) are the same RGB.
@@ -113,7 +131,11 @@ fn dhires_solid_white_and_black_on_the_composite_monitor() {
     let mut r = renderer(VideoType::ColorMonitorNtsc);
     render(&mut r, &s, 1);
     assert_eq!(rgb(&r, 300, 0), 0xFFFFFF);
-    assert_eq!(rgb(&r, 300, 1), 0, "50% scan lines: the second row is black on a monitor");
+    assert_eq!(
+        rgb(&r, 300, 1),
+        0,
+        "50% scan lines: the second row is black on a monitor"
+    );
 }
 
 #[test]
@@ -130,7 +152,10 @@ fn mono_types_use_their_phosphor_colors() {
     for (vt, want) in cases {
         let mut r = renderer(vt);
         render(&mut r, &s, 1);
-        let lit_px = (0..14).map(|x| rgb(&r, x, 8)).find(|&c| c != 0).expect("a lit dot");
+        let lit_px = (0..14)
+            .map(|x| rgb(&r, x, 8))
+            .find(|&c| c != 0)
+            .expect("a lit dot");
         assert_eq!(lit_px, want, "{vt:?}");
     }
     // The custom colour is configurable.
@@ -140,14 +165,17 @@ fn mono_types_use_their_phosphor_colors() {
         ..Default::default()
     });
     render(&mut r, &s, 1);
-    assert_eq!((0..14).map(|x| rgb(&r, x, 8)).find(|&c| c != 0), Some(0xFE007F));
+    assert_eq!(
+        (0..14).map(|x| rgb(&r, x, 8)).find(|&c| c != 0),
+        Some(0xFE007F)
+    );
 }
 
 #[test]
 fn tv_scanlines_blend_with_the_line_above() {
     let mut s = Fake::new(Model::Apple2Plus).hires();
     s.poke(0x2000, &[0x7F]); // line 0 white
-    // Line 1 is blank, so on a TV its in-between rows (y=1 above, y=2... ) show a 50% mix.
+                             // Line 1 is blank, so on a TV its in-between rows (y=1 above, y=2... ) show a 50% mix.
     let mut r = renderer(VideoType::MonoTv);
     render(&mut r, &s, 1);
     let line0 = rgb(&r, 5, 0) & 0xFF;
@@ -156,7 +184,11 @@ fn tv_scanlines_blend_with_the_line_above() {
     assert!(line0 > 200);
     assert!(between < line0 / 2, "{between} vs {line0}");
     // Double (full) scan lines: the in-between line blends 50%.
-    let mut full = Renderer::new(RenderConfig { video_type: VideoType::MonoTv, half_scanlines: false, ..Default::default() });
+    let mut full = Renderer::new(RenderConfig {
+        video_type: VideoType::MonoTv,
+        half_scanlines: false,
+        ..Default::default()
+    });
     render(&mut full, &s, 1);
     assert!(rgb(&full, 5, 1) & 0xFF > between);
 }
@@ -221,7 +253,10 @@ fn every_video_type_renders_every_mode_without_panicking() {
             s.poke_aux(0x2000, &[0x2A; 40]);
             let mut r = renderer(vt);
             render(&mut r, &s, 2);
-            assert!(r.pixels().iter().all(|p| p >> 24 == 0xFF), "{vt:?} left transparent pixels");
+            assert!(
+                r.pixels().iter().all(|p| p >> 24 == 0xFF),
+                "{vt:?} left transparent pixels"
+            );
         }
     }
 }

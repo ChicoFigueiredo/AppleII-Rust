@@ -29,7 +29,11 @@ fn reset_follows_applewin_cpureset() {
         (c.a, c.x, c.y, c.sp, c.p) = (1, 2, 3, 0xF0, FLAG_N | FLAG_D | FLAG_C);
         c.jammed = true;
         c.reset(&mut r);
-        assert_eq!((c.a, c.x, c.y, c.sp, c.pc), (1, 2, 3, 0xED, 0xFA62), "{v:?}");
+        assert_eq!(
+            (c.a, c.x, c.y, c.sp, c.pc),
+            (1, 2, 3, 0xED, 0xFA62),
+            "{v:?}"
+        );
         assert!(c.p & (FLAG_I | FLAG_N | FLAG_C) == FLAG_I | FLAG_N | FLAG_C);
         assert_eq!(c.p & FLAG_D != 0, v == Variant::Nmos6502);
         assert!(!c.jammed);

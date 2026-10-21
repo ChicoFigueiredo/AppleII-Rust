@@ -76,7 +76,10 @@ fn gray(v: u32) -> f32 {
 }
 
 fn pack(r: f32, g: f32, b: f32) -> u32 {
-    ALPHA | ((((r * 255.0) as u8) as u32) << 16) | ((((g * 255.0) as u8) as u32) << 8) | (((b * 255.0) as u8) as u32)
+    ALPHA
+        | ((((r * 255.0) as u8) as u32) << 16)
+        | ((((g * 255.0) as u8) as u32) << 8)
+        | (((b * 255.0) as u8) as u32)
 }
 
 fn build() -> Chroma {
@@ -84,8 +87,12 @@ fn build() -> Chroma {
     let mut bnw_tv = vec![0; NUM_SEQUENCES];
     let mut hue_monitor: [Vec<u32>; NUM_PHASES] = std::array::from_fn(|_| vec![0; NUM_SEQUENCES]);
     let mut hue_tv: [Vec<u32>; NUM_PHASES] = std::array::from_fn(|_| vec![0; NUM_SEQUENCES]);
-    let (mut f_signal, mut f_chroma, mut f_luma0, mut f_luma1) =
-        (Iir::default(), Iir::default(), Iir::default(), Iir::default());
+    let (mut f_signal, mut f_chroma, mut f_luma0, mut f_luma1) = (
+        Iir::default(),
+        Iir::default(),
+        Iir::default(),
+        Iir::default(),
+    );
 
     let rad_45 = PI * 0.25f32;
     let cycle_start = PI * 45.0f32 / 180.0f32;
@@ -158,7 +165,13 @@ fn build() -> Chroma {
         *out = ALPHA | (avg(16) << 16) | (avg(8) << 8) | avg(0);
     }
 
-    Chroma { bnw_monitor, bnw_tv, hue_monitor, hue_tv, base_colors }
+    Chroma {
+        bnw_monitor,
+        bnw_tv,
+        hue_monitor,
+        hue_tv,
+        base_colors,
+    }
 }
 
 static CHROMA: OnceLock<Chroma> = OnceLock::new();
@@ -176,8 +189,8 @@ mod tests {
         // Index = lo-res colour number. Values are AppleWin's NTSC-generated palette as this port
         // yields them (deep red 930B7C, dark blue 1F35D3, ... white FFFFFF).
         let want = [
-            0x000000, 0x930B7C, 0x1F35D3, 0xBB36FF, 0x00760C, 0x7E7E7E, 0x07A8E0, 0x9DACFF, 0x624C00, 0xF9561D,
-            0x7E7E7E, 0xFF81EC, 0x43C800, 0xDCCD16, 0x5DF784, 0xFFFFFF,
+            0x000000, 0x930B7C, 0x1F35D3, 0xBB36FF, 0x00760C, 0x7E7E7E, 0x07A8E0, 0x9DACFF,
+            0x624C00, 0xF9561D, 0x7E7E7E, 0xFF81EC, 0x43C800, 0xDCCD16, 0x5DF784, 0xFFFFFF,
         ];
         let got: Vec<u32> = chroma().base_colors.iter().map(|c| c & 0xFF_FFFF).collect();
         assert_eq!(got, want);
@@ -200,8 +213,16 @@ mod tests {
         // NTSC_REMOVE_GRAY_CHROMA: alternating dots (0101 / 1010) are flat grays $83 and $78.
         let c = chroma();
         for p in 0..NUM_PHASES {
-            assert_eq!(c.hue_monitor[p][0b0101_0101_0101] & 0xFF_FFFF, 0x838383, "{p}");
-            assert_eq!(c.hue_monitor[p][0b1010_1010_1010] & 0xFF_FFFF, 0x787878, "{p}");
+            assert_eq!(
+                c.hue_monitor[p][0b0101_0101_0101] & 0xFF_FFFF,
+                0x838383,
+                "{p}"
+            );
+            assert_eq!(
+                c.hue_monitor[p][0b1010_1010_1010] & 0xFF_FFFF,
+                0x787878,
+                "{p}"
+            );
         }
     }
 

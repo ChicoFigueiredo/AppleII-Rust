@@ -14,12 +14,16 @@ fn machine() -> Machine {
 
 /// Calls firmware entry `entry` (the offset byte index, $12 SETMOUSE ... $19 INITMOUSE) with A=`a`.
 fn call(m: &mut Machine, entry: u8, a: u8) {
-    let code = [0xA2, 0xC4, 0xA0, 0x40, 0xA9, a, 0x20, 0x20, 0x03, 0x4C, 0x09, 0x03];
+    let code = [
+        0xA2, 0xC4, 0xA0, 0x40, 0xA9, a, 0x20, 0x20, 0x03, 0x4C, 0x09, 0x03,
+    ];
     for (i, b) in code.iter().enumerate() {
         m.poke(0x300 + i as u16, *b);
     }
     // PHA; LDA $C4xx; STA $0329; PLA; JMP $C400 (low byte patched)
-    let sub = [0x48, 0xAD, entry, 0xC4, 0x8D, 0x29, 0x03, 0x68, 0x4C, 0x00, 0xC4];
+    let sub = [
+        0x48, 0xAD, entry, 0xC4, 0x8D, 0x29, 0x03, 0x68, 0x4C, 0x00, 0xC4,
+    ];
     for (i, b) in sub.iter().enumerate() {
         m.poke(0x320 + i as u16, *b);
     }
@@ -48,7 +52,13 @@ fn card(m: &mut Machine) -> (i32, i32, u8, u8) {
 #[test]
 fn firmware_identifies_as_applemouse() {
     let mut m = machine();
-    for (a, v) in [(0xC405, 0x38), (0xC407, 0x18), (0xC40B, 0x01), (0xC40C, 0x20), (0xC4FB, 0xD6)] {
+    for (a, v) in [
+        (0xC405, 0x38),
+        (0xC407, 0x18),
+        (0xC40B, 0x01),
+        (0xC40C, 0x20),
+        (0xC4FB, 0xD6),
+    ] {
         assert_eq!(m.board_mut().read(a), v, "{a:#x}");
     }
 }
@@ -61,7 +71,11 @@ fn init_set_move_read_reports_position_in_screen_holes() {
     assert_eq!(card(&mut m).2, 1);
     assert!(mouse_move(&mut m, SLOT, 300, 5));
     call(&mut m, 0x14, 0); // READMOUSE
-    assert_eq!((hole(&m, 0x478), hole(&m, 0x578)), (300u16 as u8, 1), "X lo/hi");
+    assert_eq!(
+        (hole(&m, 0x478), hole(&m, 0x578)),
+        (300u16 as u8, 1),
+        "X lo/hi"
+    );
     assert_eq!((hole(&m, 0x4F8), hole(&m, 0x5F8)), (5, 0), "Y lo/hi");
     assert_eq!(hole(&m, 0x778) & 0x20, 0x20, "moved since last read");
     call(&mut m, 0x14, 0);

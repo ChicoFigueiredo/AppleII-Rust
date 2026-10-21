@@ -10,7 +10,12 @@ use apple2_hostio::ssc::{DipSwitches, FirmwareMode, SscSnapshot, SuperSerialCard
 /// `kUNIT_VERSION` (SerialComms.cpp:1407).
 const VERSION: u32 = 2;
 
-pub const MAP: Mapping = Mapping { aw_names: &["Super Serial Card"], our_name: "Super Serial Card", save, load };
+pub const MAP: Mapping = Mapping {
+    aw_names: &["Super Serial Card"],
+    our_name: "Super Serial Card",
+    save,
+    load,
+};
 
 /// Win32 `NOPARITY`..`SPACEPARITY`.
 fn parity_code(p: Parity) -> u64 {
@@ -74,7 +79,9 @@ fn save_dip(w: &mut Writer, key: &str, d: &DipSwitches) {
 
 /// `LoadSnapshotDIPSW` (:1464).
 fn load_dip(st: &Map, key: &str) -> Result<DipSwitches, Error> {
-    let m = st.sub(key).ok_or_else(|| Error::Format(format!("Card: Expected key: {key}")))?;
+    let m = st
+        .sub(key)
+        .ok_or_else(|| Error::Format(format!("Card: Expected key: {key}")))?;
     Ok(DipSwitches {
         baud: m.u32("Baud Rate")?,
         firmware_mode: mode_from(m.u32("Firmware mode")?),
@@ -89,7 +96,12 @@ fn load_dip(st: &Map, key: &str) -> Result<DipSwitches, Error> {
 /// `SaveSnapshot` (:1448). `DIPSW Default` is AppleWin's static default (9600-8-N-1), `Support
 /// DCD` is false and the port name is "TCP": those belong to the host's back end.
 fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<SuperSerialCard>()) else { return false };
+    let Some(c) = card
+        .as_any()
+        .and_then(|a| a.downcast_ref::<SuperSerialCard>())
+    else {
+        return false;
+    };
     let s = c.snapshot();
     w.slot(slot, "Super Serial Card", VERSION, |w| {
         save_dip(w, "DIPSW Default", &DipSwitches::default());
@@ -106,15 +118,28 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
 }
 
 /// `LoadSnapshot` (:1487), unit versions 1 and 2. The serial back end comes from the host.
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if !(1..=VERSION).contains(&version) {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Super Serial Card'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Super Serial Card'."
+        )));
     }
     load_dip(&st, "DIPSW Default")?;
     let dip = load_dip(&st, "DIPSW Current")?;
     if version == 1 {
         // Redundant/obsolete keys, consumed (they must exist).
-        for k in ["Parity", "Baud Rate", "Stop Bits", "Byte Size", "Comm Inactivity"] {
+        for k in [
+            "Parity",
+            "Baud Rate",
+            "Stop Bits",
+            "Byte Size",
+            "Comm Inactivity",
+        ] {
             st.u32(k)?;
         }
         st.bool("TX IRQ Enabled")?;
@@ -133,9 +158,16 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
         tx_empty: st.bool("Written TX")?,
     };
     st.string("Serial Port Name")?;
-    let Some(mut card) = make(ctx, "Super Serial Card", slot) else { return Ok(None) };
-    let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<SuperSerialCard>()) else {
-        return Err(Error::Unsupported("host returned a card that is not a Super Serial Card".into()));
+    let Some(mut card) = make(ctx, "Super Serial Card", slot) else {
+        return Ok(None);
+    };
+    let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<SuperSerialCard>())
+    else {
+        return Err(Error::Unsupported(
+            "host returned a card that is not a Super Serial Card".into(),
+        ));
     };
     c.apply_snapshot(&snap);
     Ok(Some(card))

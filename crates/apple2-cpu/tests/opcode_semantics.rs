@@ -28,7 +28,12 @@ const N: Variant = Variant::Nmos6502;
 const C: Variant = Variant::Cmos65C02;
 
 fn ram() -> Ram {
-    Ram { mem: Box::new([0; 65536]), reads: vec![], writes: vec![], ticks: 0 }
+    Ram {
+        mem: Box::new([0; 65536]),
+        reads: vec![],
+        writes: vec![],
+        ticks: 0,
+    }
 }
 
 /// Runs one instruction at $0300 with `code`, after `setup`.
@@ -48,7 +53,12 @@ fn run(v: Variant, code: &[u8], setup: impl FnOnce(&mut Cpu, &mut Ram)) -> (Cpu,
 }
 
 fn flags(c: &Cpu) -> (bool, bool, bool, bool) {
-    (c.p & FLAG_N != 0, c.p & FLAG_V != 0, c.p & FLAG_Z != 0, c.p & FLAG_C != 0)
+    (
+        c.p & FLAG_N != 0,
+        c.p & FLAG_V != 0,
+        c.p & FLAG_Z != 0,
+        c.p & FLAG_C != 0,
+    )
 }
 
 // ---------------------------------------------------------------- NMOS undocumented: RMW + ALU
@@ -165,7 +175,11 @@ fn rmw_is_one_read_and_one_write_even_on_soft_switches() {
         let (_, r, n) = run(v, &[0xEE, 0x30, 0xC0], |_, _| {});
         assert_eq!(n, 6);
         assert_eq!(r.reads.iter().filter(|&&a| a == 0xC030).count(), 1, "{v:?}");
-        assert_eq!(r.writes.iter().filter(|&&(a, _)| a == 0xC030).count(), 1, "{v:?}");
+        assert_eq!(
+            r.writes.iter().filter(|&&(a, _)| a == 0xC030).count(),
+            1,
+            "{v:?}"
+        );
         assert_eq!(r.writes.len(), 1);
     }
 }
@@ -186,7 +200,11 @@ fn indexed_stores_do_not_read_the_target_page() {
             r.mem[0x10] = 0x00;
             r.mem[0x11] = 0xC0;
         });
-        assert!(!r.reads.iter().any(|a| (0xC000..0xC100).contains(a)), "{v:?} {code:02X?}: {:04X?}", r.reads);
+        assert!(
+            !r.reads.iter().any(|a| (0xC000..0xC100).contains(a)),
+            "{v:?} {code:02X?}: {:04X?}",
+            r.reads
+        );
         assert_eq!(r.writes.len(), 1);
     }
 }
@@ -282,7 +300,9 @@ fn axs_stores_a_and_x_without_touching_flags() {
 
 #[test]
 fn hlt_jams_with_pc_left_on_the_opcode() {
-    for op in [0x02u8, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x92, 0xB2, 0xD2, 0xF2] {
+    for op in [
+        0x02u8, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x92, 0xB2, 0xD2, 0xF2,
+    ] {
         let mut r = ram();
         r.mem[0x300] = op;
         let mut c = Cpu::new(N);
@@ -322,7 +342,11 @@ fn nmos_nops_never_touch_their_operand_address() {
         let (c, r, n) = run(N, &code, |_, _| {});
         assert_eq!(n, cycles, "opcode {op:02X}");
         assert_eq!(c.pc, 0x300 + code.len() as u16, "opcode {op:02X}");
-        assert!(r.reads.iter().all(|&a| (0x300..0x303).contains(&a)), "opcode {op:02X}: {:04X?}", r.reads);
+        assert!(
+            r.reads.iter().all(|&a| (0x300..0x303).contains(&a)),
+            "opcode {op:02X}: {:04X?}",
+            r.reads
+        );
         assert!(r.writes.is_empty());
     }
 }
@@ -407,7 +431,13 @@ fn cmos_wai_stp_and_rockwell_ops_are_one_cycle_nops() {
 
 #[test]
 fn cmos_undefined_nops_sizes() {
-    for (op, len, cycles) in [(0x02u8, 2u16, 2u32), (0x44, 2, 3), (0x54, 2, 4), (0x5C, 3, 8), (0xDC, 3, 4)] {
+    for (op, len, cycles) in [
+        (0x02u8, 2u16, 2u32),
+        (0x44, 2, 3),
+        (0x54, 2, 4),
+        (0x5C, 3, 8),
+        (0xDC, 3, 4),
+    ] {
         let (c, _, n) = run(C, &[op, 0, 0], |_, _| {});
         assert_eq!((c.pc, n), (0x300 + len, cycles), "opcode {op:02X}");
     }
@@ -427,7 +457,11 @@ fn brk_pushes_pc_plus_two_and_status_with_b() {
         assert_eq!((r.mem[0x1FF], r.mem[0x1FE]), (0x03, 0x02));
         assert_eq!(r.mem[0x1FD], FLAG_D | FLAG_B | FLAG_U);
         assert!(c.p & FLAG_I != 0);
-        assert_eq!(c.p & FLAG_D != 0, v == N, "65C02 clears D on BRK, NMOS keeps it");
+        assert_eq!(
+            c.p & FLAG_D != 0,
+            v == N,
+            "65C02 clears D on BRK, NMOS keeps it"
+        );
     }
 }
 

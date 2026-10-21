@@ -22,7 +22,12 @@ pub struct FileStore {
 impl FileStore {
     /// Opens `path` read-write; fails if it is read-only.
     pub fn open(path: &std::path::Path) -> io::Result<Self> {
-        Ok(FileStore { file: std::fs::OpenOptions::new().read(true).write(true).open(path)? })
+        Ok(FileStore {
+            file: std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(path)?,
+        })
     }
 }
 

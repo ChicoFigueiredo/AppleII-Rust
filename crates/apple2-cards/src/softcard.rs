@@ -76,7 +76,13 @@ impl Default for SoftCard {
 
 impl SoftCard {
     pub fn new() -> Self {
-        SoftCard { cpu: Some(Box::new(Z80Cpu { z80: Z80::default(), carry: 0 })), active: false }
+        SoftCard {
+            cpu: Some(Box::new(Z80Cpu {
+                z80: Z80::default(),
+                carry: 0,
+            })),
+            active: false,
+        }
     }
 
     /// The Z80 registers (None only while the machine is executing a Z80 step).

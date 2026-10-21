@@ -38,7 +38,9 @@ pub fn strtoul(s: &str) -> u64 {
     } else {
         (10, s)
     };
-    let end = digits.find(|c: char| !c.is_digit(radix)).unwrap_or(digits.len());
+    let end = digits
+        .find(|c: char| !c.is_digit(radix))
+        .unwrap_or(digits.len());
     let v = u64::from_str_radix(&digits[..end], radix).unwrap_or(0);
     if neg {
         v.wrapping_neg()
@@ -67,7 +69,10 @@ impl<'a> Map<'a> {
     /// Sub-map `key`; `None` when absent or a scalar.
     pub fn sub(&self, key: &str) -> Option<Map<'a>> {
         match self.entries.iter().find(|(k, _)| k == key) {
-            Some((k, Node::Map(m))) => Some(Map { name: k, entries: m }),
+            Some((k, Node::Map(m))) => Some(Map {
+                name: k,
+                entries: m,
+            }),
             _ => None,
         }
     }
@@ -76,9 +81,18 @@ impl<'a> Map<'a> {
     /// counts as an empty map.
     pub fn need_sub(&self, key: &str) -> Result<Map<'a>, Error> {
         match self.entries.iter().find(|(k, _)| k == key) {
-            Some((k, Node::Map(m))) => Ok(Map { name: k, entries: m }),
-            Some((k, Node::Scalar(s))) if s.is_empty() => Ok(Map { name: k, entries: &[] }),
-            _ => Err(Error::Format(format!("{}: Expected sub-map name: {key}", self.name))),
+            Some((k, Node::Map(m))) => Ok(Map {
+                name: k,
+                entries: m,
+            }),
+            Some((k, Node::Scalar(s))) if s.is_empty() => Ok(Map {
+                name: k,
+                entries: &[],
+            }),
+            _ => Err(Error::Format(format!(
+                "{}: Expected sub-map name: {key}",
+                self.name
+            ))),
         }
     }
 
@@ -91,7 +105,9 @@ impl<'a> Map<'a> {
 
     pub fn string(&self, key: &str) -> Result<String, Error> {
         // GH#1510: undo backslash doubling.
-        self.str_opt(key).map(|s| s.replace("\\\\", "\\")).ok_or_else(|| self.missing(key))
+        self.str_opt(key)
+            .map(|s| s.replace("\\\\", "\\"))
+            .ok_or_else(|| self.missing(key))
     }
 
     fn nonempty(&self, key: &str) -> Result<&'a str, Error> {
@@ -134,17 +150,25 @@ impl<'a> Map<'a> {
             if addr >= dst.len() {
                 return Err(Error::Format(format!("Memory: line address too big: {k}")));
             }
-            let Node::Scalar(v) = n else { return Err(Error::Format("Memory: unexpected sub-map".into())) };
+            let Node::Scalar(v) = n else {
+                return Err(Error::Format("Memory: unexpected sub-map".into()));
+            };
             if v.len() % 2 != 0 {
-                return Err(Error::Format(format!("Memory: hex data must be an even number of nibbles on line address: {k}")));
+                return Err(Error::Format(format!(
+                    "Memory: hex data must be an even number of nibbles on line address: {k}"
+                )));
             }
             for (p, pair) in (addr..).zip(v.as_bytes().chunks(2)) {
                 let hex = |c: u8| (c as char).to_digit(16);
                 let (Some(h), Some(l)) = (hex(pair[0]), hex(pair[1])) else {
-                    return Err(Error::Format(format!("Memory: hex data contains illegal character on line address: {k}")));
+                    return Err(Error::Format(format!(
+                        "Memory: hex data contains illegal character on line address: {k}"
+                    )));
                 };
                 if p >= dst.len() {
-                    return Err(Error::Format(format!("Memory: hex data overflowed address space on line address: {k}")));
+                    return Err(Error::Format(format!(
+                        "Memory: hex data overflowed address space on line address: {k}"
+                    )));
                 }
                 dst[p] = (h * 16 + l) as u8;
                 bytes += 1;
@@ -159,10 +183,14 @@ fn strip_comment(line: &str) -> &str {
     let mut quote = 0u8;
     for i in 0..b.len() {
         match b[i] {
-            b'"' | b'\'' if quote == 0 && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b':') => quote = b[i],
+            b'"' | b'\'' if quote == 0 && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b':') => {
+                quote = b[i]
+            }
             q if q == quote => quote = 0,
             b'\\' if quote == b'"' => {}
-            b'#' if quote == 0 && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b'\t') => return &line[..i],
+            b'#' if quote == 0 && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b'\t') => {
+                return &line[..i]
+            }
             _ => {}
         }
     }
@@ -212,7 +240,11 @@ pub fn parse(text: &str) -> Result<Vec<(String, Node)>, Error> {
         .filter_map(|(n, raw)| {
             let line = strip_comment(raw.trim_end_matches('\r')).trim_end();
             let content = line.trim_start();
-            (!content.is_empty() && content != "---" && content != "...").then_some((n + 1, line.len() - content.len(), content))
+            (!content.is_empty() && content != "---" && content != "...").then_some((
+                n + 1,
+                line.len() - content.len(),
+                content,
+            ))
         })
         .collect();
     // Stack of (indent of the keys in this map, entries); `keys` holds the pending key per level.
@@ -242,13 +274,21 @@ pub fn parse(text: &str) -> Result<Vec<(String, Node)>, Error> {
                     keys.push(key);
                     stack.push((deeper, Vec::new()));
                 }
-                _ => stack.last_mut().unwrap().1.push((key, Node::Scalar(String::new()))),
+                _ => stack
+                    .last_mut()
+                    .unwrap()
+                    .1
+                    .push((key, Node::Scalar(String::new()))),
             }
         } else {
             if rest.starts_with('[') || rest.starts_with('{') {
                 return Err(Error::Format("ParseMap: Sequence event unsupported".into()));
             }
-            stack.last_mut().unwrap().1.push((key, Node::Scalar(unquote(rest))));
+            stack
+                .last_mut()
+                .unwrap()
+                .1
+                .push((key, Node::Scalar(unquote(rest))));
         }
     }
     while stack.len() > 1 {
@@ -267,7 +307,9 @@ fn split_key(content: &str) -> Option<(String, &str)> {
         let rest = content[end + 1..].strip_prefix(':')?;
         return Some((content[1..end].to_string(), rest));
     }
-    (0..b.len()).find(|&i| b[i] == b':' && (i + 1 == b.len() || b[i + 1] == b' ')).map(|i| (content[..i].to_string(), &content[i + 1..]))
+    (0..b.len())
+        .find(|&i| b[i] == b':' && (i + 1 == b.len() || b[i + 1] == b' '))
+        .map(|i| (content[..i].to_string(), &content[i + 1..]))
 }
 
 /// `YamlSaveHelper`: indentation-tracking writer. Output uses `\n`.
@@ -343,7 +385,11 @@ impl Writer {
     /// `SaveString`: empty becomes `""`, backslashes are doubled (GH#1499) and a string with `#`
     /// is quoted (GH#1066).
     pub fn string(&mut self, key: &str, v: &str) {
-        let mut s = if v.is_empty() { "\"\"".to_string() } else { v.to_string() };
+        let mut s = if v.is_empty() {
+            "\"\"".to_string()
+        } else {
+            v.to_string()
+        };
         if s.contains('\\') && !s.contains("\\\\") {
             s = s.replace('\\', "\\\\");
         }
@@ -441,7 +487,9 @@ mod tests {
             w.string("Empty", "");
             w.string("Path", "C:\\x#y");
             w.float("Extra Cycles", 0.5);
-            w.map("Mem", |w| w.memory(&[0, 1, 2, 3, 4, 5, 6, 7, 0xAB, 0xCD, 0xEF, 0x10, 0, 0, 0, 0]));
+            w.map("Mem", |w| {
+                w.memory(&[0, 1, 2, 3, 4, 5, 6, 7, 0xAB, 0xCD, 0xEF, 0x10, 0, 0, 0, 0])
+            });
         });
         let s = w.finish();
         let expect = "# Date-stamp: d\n# v\n\n---\nFile_hdr:\n  Tag: AppleWin Save State\n  Version: 2\n\nUnit:\n  Type: Apple2\n  Version: 9\n  State:\n    A: 0x05\n    PC: 0xFA62\n    Cumulative Cycles: 0x0000000000001234\n    Empty: \"\"\n    Path: \"C:\\\\x#y\"\n    Extra Cycles: 0.500000\n    Mem:\n      0000: 0001020304050607ABCDEF1000000000\n";
@@ -456,16 +504,26 @@ mod tests {
         assert_eq!(top[1].0, "Unit");
         assert_eq!(top[2].0, "Unit");
         let Node::Map(u) = &top[1].1 else { panic!() };
-        let m = Map { name: "Unit", entries: u };
+        let m = Map {
+            name: "Unit",
+            entries: u,
+        };
         assert_eq!(m.string("Type").unwrap(), "A");
         let st = m.need_sub("State").unwrap();
         assert_eq!(st.u32("X").unwrap(), 8);
         assert_eq!(st.string("P").unwrap(), "C:\\a#b");
         assert_eq!(st.string("E").unwrap(), "");
         let mut buf = [0u8; 8];
-        assert_eq!(st.need_sub("Sub").unwrap().load_memory(&mut buf).unwrap(), 2);
+        assert_eq!(
+            st.need_sub("Sub").unwrap().load_memory(&mut buf).unwrap(),
+            2
+        );
         assert_eq!(&buf[..3], &[1, 2, 0]);
-        assert!(st.u32("Nope").unwrap_err().to_string().contains("State: Missing: Nope"));
+        assert!(st
+            .u32("Nope")
+            .unwrap_err()
+            .to_string()
+            .contains("State: Missing: Nope"));
     }
 
     #[test]
@@ -473,14 +531,22 @@ mod tests {
         assert!(parse("a:\n  - 1\n").is_err());
         let top = parse("M:\n  0000: 123\n").unwrap();
         let Node::Map(e) = &top[0].1 else { panic!() };
-        assert!(Map { name: "M", entries: e }.load_memory(&mut [0; 8]).is_err());
+        assert!(Map {
+            name: "M",
+            entries: e
+        }
+        .load_memory(&mut [0; 8])
+        .is_err());
     }
 
     #[test]
     fn empty_state_value_is_an_empty_map() {
         let top = parse("Unit:\n  State:\n  Other: 1\n").unwrap();
         let Node::Map(u) = &top[0].1 else { panic!() };
-        let m = Map { name: "Unit", entries: u };
+        let m = Map {
+            name: "Unit",
+            entries: u,
+        };
         assert!(m.need_sub("State").unwrap().entries.is_empty());
         assert_eq!(m.u32("Other").unwrap(), 1);
     }

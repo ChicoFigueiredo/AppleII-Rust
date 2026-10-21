@@ -7,7 +7,14 @@ pub fn save_png(path: &Path, frame: &Frame) -> Result<(), String> {
     if frame.width == 0 || frame.height == 0 {
         return Err("no frame to save".into());
     }
-    image::save_buffer(path, &frame.rgba, frame.width, frame.height, image::ColorType::Rgba8).map_err(|e| e.to_string())
+    image::save_buffer(
+        path,
+        &frame.rgba,
+        frame.width,
+        frame.height,
+        image::ColorType::Rgba8,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// First free `AppleWin_NNNN.png` in `dir` (AppleWin numbers its screenshots the same way).
@@ -33,7 +40,10 @@ mod tests {
         save_png(&p, &f).unwrap();
         let img = image::open(&p).unwrap().to_rgba8();
         assert_eq!(img.get_pixel(0, 0).0, [1, 2, 3, 255]);
-        assert_eq!(next_screenshot_path(&dir).file_name().unwrap(), "AppleWin_0001.png");
+        assert_eq!(
+            next_screenshot_path(&dir).file_name().unwrap(),
+            "AppleWin_0001.png"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -12,7 +12,9 @@ pub enum AuxCardKind {
     /// Extended 80-column card, 64K.
     Extended80Col,
     /// RamWorks III, up to 256 banks of 64K.
-    RamWorksIII { banks: u16 },
+    RamWorksIII {
+        banks: u16,
+    },
 }
 
 /// Peripheral kinds that can be placed in a slot. Only the RAM cards exist so far.
@@ -55,7 +57,9 @@ pub enum ConfigError {
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::BadRomSize(n) => write!(f, "custom ROM of {n} bytes: expected 16K or 12K x 1-4"),
+            ConfigError::BadRomSize(n) => {
+                write!(f, "custom ROM of {n} bytes: expected 16K or 12K x 1-4")
+            }
             ConfigError::BadF8RomSize(n) => write!(f, "custom F8 ROM of {n} bytes: expected 2K"),
         }
     }
@@ -67,8 +71,14 @@ impl MachineConfig {
     /// Checks what `Machine::new` cannot handle (currently the custom ROM size).
     pub fn validate(&self) -> Result<(), ConfigError> {
         match &self.custom_rom {
-            _ if matches!(&self.custom_f8_rom, Some(r) if r.len() != 0x800) => Err(ConfigError::BadF8RomSize(self.custom_f8_rom.as_ref().map_or(0, Vec::len))),
-            Some(r) if r.len() != 0x4000 && !(r.len().is_multiple_of(0x3000) && (1..=4).contains(&(r.len() / 0x3000))) => {
+            _ if matches!(&self.custom_f8_rom, Some(r) if r.len() != 0x800) => Err(
+                ConfigError::BadF8RomSize(self.custom_f8_rom.as_ref().map_or(0, Vec::len)),
+            ),
+            Some(r)
+                if r.len() != 0x4000
+                    && !(r.len().is_multiple_of(0x3000)
+                        && (1..=4).contains(&(r.len() / 0x3000))) =>
+            {
                 Err(ConfigError::BadRomSize(r.len()))
             }
             _ => Ok(()),
@@ -101,7 +111,8 @@ impl MachineConfig {
 
     /// Whether the main CPU is a 65C02 (the override, else the model's).
     pub fn is_cmos(&self) -> bool {
-        self.cpu_cmos.unwrap_or(self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02)
+        self.cpu_cmos
+            .unwrap_or(self.model.cpu_variant() == apple2_cpu::Variant::Cmos65C02)
     }
 }
 

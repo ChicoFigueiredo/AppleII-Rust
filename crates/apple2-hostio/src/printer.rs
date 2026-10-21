@@ -32,13 +32,21 @@ pub struct FileSink {
 
 impl FileSink {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        FileSink { path: path.into(), file: None }
+        FileSink {
+            path: path.into(),
+            file: None,
+        }
     }
 }
 
 impl PrinterSink for FileSink {
     fn open(&mut self, append: bool) -> io::Result<()> {
-        let f = std::fs::OpenOptions::new().create(true).write(true).append(append).truncate(!append).open(&self.path)?;
+        let f = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(append)
+            .truncate(!append)
+            .open(&self.path)?;
         self.file = Some(io::BufWriter::new(f));
         Ok(())
     }
@@ -58,7 +66,12 @@ impl PrinterSink for FileSink {
             drop(f);
             #[cfg(windows)]
             if dump_to_printer {
-                let _ = std::process::Command::new("cmd").arg("/C").arg("copy").arg(&self.path).arg("prn").status();
+                let _ = std::process::Command::new("cmd")
+                    .arg("/C")
+                    .arg("copy")
+                    .arg(&self.path)
+                    .arg("prn")
+                    .status();
             }
             #[cfg(not(windows))]
             let _ = dump_to_printer;
@@ -136,8 +149,9 @@ impl PrinterEncoding {
         const LAT_82: &[u8] = b"abwgdevzijklmnoprstufhc^[]yx@q{}~`";
         // CP-1251 À..ß minus the letters the Pravets 82 does not use, then its four symbols.
         const KIR_82: &[u8] = &[
-            0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1,
-            0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDC, 0xDE, 0xDF, b'[', b']', b'^', b'@',
+            0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD,
+            0xCE, 0xCF, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDC,
+            0xDE, 0xDF, b'[', b']', b'^', b'@',
         ];
         let map = |lat: &[u8], kir: &dyn Fn(usize) -> u8, n: usize, c: u8| {
             lat.iter().take(n).position(|&l| l == c).map_or(c, kir)
@@ -177,7 +191,13 @@ pub struct PrinterOptions {
 
 impl Default for PrinterOptions {
     fn default() -> Self {
-        PrinterOptions { idle_limit: 10, dump_to_printer: false, convert_encoding: None, filter_unprintable: false, append: false }
+        PrinterOptions {
+            idle_limit: 10,
+            dump_to_printer: false,
+            convert_encoding: None,
+            filter_unprintable: false,
+            append: false,
+        }
     }
 }
 
@@ -201,7 +221,12 @@ pub struct ParallelPrinterCard {
 
 impl ParallelPrinterCard {
     pub fn new(sink: Box<dyn PrinterSink>, options: PrinterOptions) -> Self {
-        ParallelPrinterCard { sink, options, is_open: false, inactivity: 0 }
+        ParallelPrinterCard {
+            sink,
+            options,
+            is_open: false,
+            inactivity: 0,
+        }
     }
 
     pub fn options(&self) -> &PrinterOptions {
@@ -213,7 +238,11 @@ impl ParallelPrinterCard {
     }
 
     pub fn snapshot(&self) -> PrinterSnapshot {
-        PrinterSnapshot { inactivity: self.inactivity, options: self.options, is_open: self.is_open }
+        PrinterSnapshot {
+            inactivity: self.inactivity,
+            options: self.options,
+            is_open: self.is_open,
+        }
     }
 
     /// `LoadSnapshot` (:256). The options come from the snapshot except the Pravets encoding
@@ -221,7 +250,10 @@ impl ParallelPrinterCard {
     /// or `Pravets82` if it had none. A job that was open is resumed in append mode through
     /// `CheckPrint`, which also restarts the idle counter.
     pub fn apply_snapshot(&mut self, s: &PrinterSnapshot) {
-        let encoding = self.options.convert_encoding.unwrap_or(PrinterEncoding::Pravets82);
+        let encoding = self
+            .options
+            .convert_encoding
+            .unwrap_or(PrinterEncoding::Pravets82);
         self.options = s.options;
         self.options.convert_encoding = s.options.convert_encoding.map(|_| encoding);
         self.inactivity = s.inactivity;
@@ -336,7 +368,8 @@ mod tests {
 
     #[test]
     fn file_sink_appends_or_truncates() {
-        let dir = std::env::temp_dir().join(format!("apple2_hostio_printer_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("apple2_hostio_printer_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("Printer.txt");
         let mut s = FileSink::new(&path);

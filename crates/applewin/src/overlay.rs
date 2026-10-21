@@ -76,7 +76,10 @@ impl Overlay {
                 .iter()
                 .enumerate()
                 .filter(|(_, d)| d.present)
-                .map(|(i, d)| DriveLine { led: led(d), text: format!("{} {}", i + 1, track_text(d)) })
+                .map(|(i, d)| DriveLine {
+                    led: led(d),
+                    text: format!("{} {}", i + 1, track_text(d)),
+                })
                 .collect()
         };
         let mouse_hint = match (mouse.usable, mouse.captured, mouse.over_screen) {
@@ -84,7 +87,13 @@ impl Overlay {
             (true, false, true) => Some("Click to capture the mouse"),
             _ => None,
         };
-        Overlay { banner, speed_badge, caps: caps_indicator(s), drives, mouse_hint }
+        Overlay {
+            banner,
+            speed_badge,
+            caps: caps_indicator(s),
+            drives,
+            mouse_hint,
+        }
     }
 }
 
@@ -98,7 +107,10 @@ fn led_color(l: Led) -> Color32 {
 
 /// Draws `o` over the Apple screen `rect`.
 pub fn paint(ctx: &Context, rect: Rect, o: &Overlay) {
-    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("apple-overlay")));
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("apple-overlay"),
+    ));
     let small = FontId::monospace(13.0);
     let shade = Color32::from_black_alpha(160);
     let text = |anchor: Align2, pos: egui::Pos2, s: &str, color: Color32, font: FontId| {
@@ -108,23 +120,53 @@ pub fn paint(ctx: &Context, rect: Rect, o: &Overlay) {
         painter.text(pos, anchor, s, font, color);
     };
     if let Some(b) = o.banner {
-        text(Align2::CENTER_CENTER, rect.center(), b, Color32::WHITE, FontId::proportional(28.0));
+        text(
+            Align2::CENTER_CENTER,
+            rect.center(),
+            b,
+            Color32::WHITE,
+            FontId::proportional(28.0),
+        );
     }
     if let Some(s) = &o.speed_badge {
-        text(Align2::RIGHT_TOP, rect.right_top() + egui::vec2(-8.0, 8.0), s, Color32::from_rgb(255, 210, 80), small.clone());
+        text(
+            Align2::RIGHT_TOP,
+            rect.right_top() + egui::vec2(-8.0, 8.0),
+            s,
+            Color32::from_rgb(255, 210, 80),
+            small.clone(),
+        );
     }
     let mut y = 8.0;
     for d in &o.drives {
-        text(Align2::LEFT_TOP, rect.left_top() + egui::vec2(8.0, y), &d.text, led_color(d.led), small.clone());
+        text(
+            Align2::LEFT_TOP,
+            rect.left_top() + egui::vec2(8.0, y),
+            &d.text,
+            led_color(d.led),
+            small.clone(),
+        );
         y += 20.0;
     }
     if let Some(c) = o.caps {
         if !o.drives.is_empty() {
-            text(Align2::LEFT_TOP, rect.left_top() + egui::vec2(8.0, y), &c.to_string(), Color32::from_gray(200), small.clone());
+            text(
+                Align2::LEFT_TOP,
+                rect.left_top() + egui::vec2(8.0, y),
+                &c.to_string(),
+                Color32::from_gray(200),
+                small.clone(),
+            );
         }
     }
     if let Some(h) = o.mouse_hint {
-        text(Align2::CENTER_BOTTOM, rect.center_bottom() + egui::vec2(0.0, -8.0), h, Color32::WHITE, small);
+        text(
+            Align2::CENTER_BOTTOM,
+            rect.center_bottom() + egui::vec2(0.0, -8.0),
+            h,
+            Color32::WHITE,
+            small,
+        );
     }
 }
 
@@ -134,7 +176,12 @@ mod tests {
     use crate::backend::DriveActivity;
 
     fn status() -> EmuStatus {
-        EmuStatus { model: "Apple2eEnhanced".into(), speed_label: "1.0x".into(), caps_lock: true, ..Default::default() }
+        EmuStatus {
+            model: "Apple2eEnhanced".into(),
+            speed_label: "1.0x".into(),
+            caps_lock: true,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -152,10 +199,16 @@ mod tests {
     fn paused_and_debugger_banners() {
         let mut s = status();
         s.paused = true;
-        assert_eq!(Overlay::new(&s, true, MouseState::default()).banner, Some("PAUSED"));
+        assert_eq!(
+            Overlay::new(&s, true, MouseState::default()).banner,
+            Some("PAUSED")
+        );
         s.paused = false;
         s.debugger_active = true;
-        assert_eq!(Overlay::new(&s, true, MouseState::default()).banner, Some("DEBUGGER"));
+        assert_eq!(
+            Overlay::new(&s, true, MouseState::default()).banner,
+            Some("DEBUGGER")
+        );
     }
 
     #[test]
@@ -163,10 +216,20 @@ mod tests {
         let mut s = status();
         s.full_speed = true;
         s.speed_label = "max".into();
-        assert_eq!(Overlay::new(&s, true, MouseState::default()).speed_badge.as_deref(), Some("MAX SPEED"));
+        assert_eq!(
+            Overlay::new(&s, true, MouseState::default())
+                .speed_badge
+                .as_deref(),
+            Some("MAX SPEED")
+        );
         s.full_speed = false;
         s.speed_label = "2.5x".into();
-        assert_eq!(Overlay::new(&s, true, MouseState::default()).speed_badge.as_deref(), Some("2.5x"));
+        assert_eq!(
+            Overlay::new(&s, true, MouseState::default())
+                .speed_badge
+                .as_deref(),
+            Some("2.5x")
+        );
     }
 
     #[test]
@@ -186,22 +249,65 @@ mod tests {
     #[test]
     fn drive_leds_with_track_appear_without_the_toolbar() {
         let mut s = status();
-        s.drives[0] = DriveStatus { present: true, image: Some("a.dsk".into()), track: 17, activity: DriveActivity::Read, write_protected: false };
-        s.drives[1] = DriveStatus { present: true, image: None, track: 3, activity: DriveActivity::Write, write_protected: false };
-        assert!(Overlay::new(&s, true, MouseState::default()).drives.is_empty());
+        s.drives[0] = DriveStatus {
+            present: true,
+            image: Some("a.dsk".into()),
+            track: 17,
+            activity: DriveActivity::Read,
+            write_protected: false,
+        };
+        s.drives[1] = DriveStatus {
+            present: true,
+            image: None,
+            track: 3,
+            activity: DriveActivity::Write,
+            write_protected: false,
+        };
+        assert!(Overlay::new(&s, true, MouseState::default())
+            .drives
+            .is_empty());
         let o = Overlay::new(&s, false, MouseState::default());
-        assert_eq!(o.drives, vec![DriveLine { led: Led::Green, text: "1 T17".into() }, DriveLine { led: Led::Red, text: "2 T 3".into() }]);
+        assert_eq!(
+            o.drives,
+            vec![
+                DriveLine {
+                    led: Led::Green,
+                    text: "1 T17".into()
+                },
+                DriveLine {
+                    led: Led::Red,
+                    text: "2 T 3".into()
+                }
+            ]
+        );
         s.drives[1].present = false;
-        assert_eq!(Overlay::new(&s, false, MouseState::default()).drives.len(), 1);
+        assert_eq!(
+            Overlay::new(&s, false, MouseState::default()).drives.len(),
+            1
+        );
     }
 
     #[test]
     fn mouse_hint_follows_capture_state() {
         let s = status();
-        let m = |usable, captured, over_screen| Overlay::new(&s, true, MouseState { usable, captured, over_screen }).mouse_hint;
+        let m = |usable, captured, over_screen| {
+            Overlay::new(
+                &s,
+                true,
+                MouseState {
+                    usable,
+                    captured,
+                    over_screen,
+                },
+            )
+            .mouse_hint
+        };
         assert_eq!(m(false, false, true), None, "nothing uses the mouse");
         assert_eq!(m(true, false, false), None, "not over the screen");
         assert_eq!(m(true, false, true), Some("Click to capture the mouse"));
-        assert_eq!(m(true, true, false), Some("Ctrl+click to release the mouse"));
+        assert_eq!(
+            m(true, true, false),
+            Some("Ctrl+click to release the mouse")
+        );
     }
 }

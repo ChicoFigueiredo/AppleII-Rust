@@ -11,7 +11,8 @@ impl Settings {
     /// [`Settings::to_machine_config`] plus the ROM files named by `-rom` and `-f8rom`.
     pub fn to_machine_config_with_roms(&self) -> Result<MachineConfig, String> {
         let mut c = self.to_machine_config();
-        let read = |p: &std::path::Path| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()));
+        let read =
+            |p: &std::path::Path| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()));
         if let Some(p) = &self.machine.custom_rom {
             c.custom_rom = Some(read(p)?);
         }
@@ -23,7 +24,11 @@ impl Settings {
 
     /// The `-videorom` file (for the renderer), if one was given.
     pub fn read_video_rom(&self) -> Result<Option<Vec<u8>>, String> {
-        self.machine.video_rom.as_ref().map(|p| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))).transpose()
+        self.machine
+            .video_rom
+            .as_ref()
+            .map(|p| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display())))
+            .transpose()
     }
 
     pub fn to_machine_config(&self) -> MachineConfig {
@@ -43,7 +48,9 @@ impl Settings {
             match &self.aux.card {
                 SlotCardSpec::Empty => AuxCardKind::Empty,
                 SlotCardSpec::Col80 => AuxCardKind::Col80_1K,
-                SlotCardSpec::RamWorksIII { banks } => AuxCardKind::RamWorksIII { banks: (*banks).clamp(1, 256) },
+                SlotCardSpec::RamWorksIII { banks } => AuxCardKind::RamWorksIII {
+                    banks: (*banks).clamp(1, 256),
+                },
                 _ => AuxCardKind::Extended80Col,
             }
         } else {
@@ -69,7 +76,10 @@ mod tests {
 
     #[test]
     fn default_equals_core_default() {
-        assert_eq!(Settings::default().to_machine_config(), MachineConfig::default());
+        assert_eq!(
+            Settings::default().to_machine_config(),
+            MachineConfig::default()
+        );
     }
 
     #[test]
@@ -100,7 +110,11 @@ mod tests {
         s.reset_slot0_for_model();
         s.machine.refresh_rate = RefreshRate::Hz50;
         let c = s.to_machine_config();
-        assert_eq!(c, { let mut x = MachineConfig::for_model(Model::Apple2Plus); x.video_standard = VideoStandard::Pal; x });
+        assert_eq!(c, {
+            let mut x = MachineConfig::for_model(Model::Apple2Plus);
+            x.video_standard = VideoStandard::Pal;
+            x
+        });
         let mut e = Settings::default();
         e.aux.card = SlotCardSpec::RamWorksIII { banks: 300 };
         *e.slot_mut(3) = SlotCardSpec::Saturn128K { banks: 8 };

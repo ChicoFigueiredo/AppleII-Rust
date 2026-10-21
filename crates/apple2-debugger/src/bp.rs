@@ -125,7 +125,11 @@ impl Prefix {
             s += &format!("s{sl}/");
         }
         if let Some(b) = self.bank {
-            s += &if b < 0x100 { format!("{b:02X}/") } else { format!("{b:03X}/") };
+            s += &if b < 0x100 {
+                format!("{b:02X}/")
+            } else {
+                format!("{b:03X}/")
+            };
         }
         if let Some(l) = self.lang_card {
             s += &format!("l{l}/");
@@ -200,7 +204,8 @@ impl Breakpoint {
         if v <= 0x1FF {
             sel(m & mf::ALTZP != 0)
         } else if ((0x400..=0x7FF).contains(&v) && m & mf::STORE80 != 0)
-            || ((0x2000..=0x3FFF).contains(&v) && m & (mf::STORE80 | mf::HIRES) == (mf::STORE80 | mf::HIRES))
+            || ((0x2000..=0x3FFF).contains(&v)
+                && m & (mf::STORE80 | mf::HIRES) == (mf::STORE80 | mf::HIRES))
         {
             sel(m & mf::PAGE2 != 0)
         } else if v <= 0xBFFF {
@@ -217,7 +222,9 @@ impl Breakpoint {
                     Some(2) => m & mf::BANK2 != 0,
                     _ => false,
                 } || v >= 0xE000;
-                ok && lc_ok && !self.prefix.is_rom && (is_read || (is_write && m & mf::WRITERAM != 0))
+                ok && lc_ok
+                    && !self.prefix.is_rom
+                    && (is_read || (is_write && m & mf::WRITERAM != 0))
             } else if is_write && m & mf::WRITERAM != 0 {
                 true
             } else {
@@ -251,7 +258,10 @@ pub struct BpTable {
 
 impl BpTable {
     pub fn new(n: usize) -> Self {
-        BpTable { slots: vec![Breakpoint::default(); n], count: 0 }
+        BpTable {
+            slots: vec![Breakpoint::default(); n],
+            count: 0,
+        }
     }
 
     pub fn first_free(&self) -> Option<usize> {
@@ -284,12 +294,33 @@ impl BpTable {
 
     /// Fills slot `i` (`_CmdBreakpointAddReg`).
     #[allow(clippy::too_many_arguments)]
-    pub fn add(&mut self, i: usize, source: Source, op: Op, address: u16, length: u32, temp: bool, prefix: Prefix) {
+    pub fn add(
+        &mut self,
+        i: usize,
+        source: Source,
+        op: Op,
+        address: u16,
+        length: u32,
+        temp: bool,
+        prefix: Prefix,
+    ) {
         let b = &mut self.slots[i];
         if !b.set {
             self.count += 1;
         }
-        *b = Breakpoint { address, length, source, op, set: true, enabled: true, temp, hit: false, stop: true, hit_count: 0, prefix };
+        *b = Breakpoint {
+            address,
+            length,
+            source,
+            op,
+            set: true,
+            enabled: true,
+            temp,
+            hit: false,
+            stop: true,
+            hit_count: 0,
+            prefix,
+        };
     }
 
     /// `ClearTempBreakpoints`: temporaries that were hit go away; hit flags reset.
@@ -315,26 +346,47 @@ mod tests {
     use super::*;
 
     fn bp(op: Op, addr: u16, len: u32) -> Breakpoint {
-        Breakpoint { address: addr, length: len, op, set: true, enabled: true, stop: true, ..Default::default() }
+        Breakpoint {
+            address: addr,
+            length: len,
+            op,
+            set: true,
+            enabled: true,
+            stop: true,
+            ..Default::default()
+        }
     }
 
     #[test]
     fn comparison_operators_follow_applewin() {
         let pg = PagingView::default();
         let b = bp(Op::Eq, 0x300, 0x10);
-        assert!(b.check_value(0x300, &pg) && b.check_value(0x30F, &pg) && !b.check_value(0x310, &pg));
+        assert!(
+            b.check_value(0x300, &pg) && b.check_value(0x30F, &pg) && !b.check_value(0x310, &pg)
+        );
         assert!(bp(Op::NotEq, 0x300, 1).check_value(0x301, &pg));
-        assert!(!bp(Op::Less, 5, 1).check_value(5, &pg) && bp(Op::LessEq, 5, 1).check_value(5, &pg));
-        assert!(bp(Op::Greater, 5, 1).check_value(6, &pg) && bp(Op::GreaterEq, 5, 1).check_value(5, &pg));
+        assert!(
+            !bp(Op::Less, 5, 1).check_value(5, &pg) && bp(Op::LessEq, 5, 1).check_value(5, &pg)
+        );
+        assert!(
+            bp(Op::Greater, 5, 1).check_value(6, &pg)
+                && bp(Op::GreaterEq, 5, 1).check_value(5, &pg)
+        );
     }
 
     #[test]
     fn rom_and_bank_prefixes_filter_by_paging() {
         let mut b = bp(Op::Eq, 0xD000, 1);
         b.prefix.bank = Some(0);
-        let ram = PagingView { memmode: mf::HIGHRAM | mf::WRITERAM, aux_bank_plus1: 1 };
+        let ram = PagingView {
+            memmode: mf::HIGHRAM | mf::WRITERAM,
+            aux_bank_plus1: 1,
+        };
         assert!(b.check_value(0xD000, &ram));
-        let rom = PagingView { memmode: 0, aux_bank_plus1: 1 };
+        let rom = PagingView {
+            memmode: 0,
+            aux_bank_plus1: 1,
+        };
         assert!(!b.check_value(0xD000, &rom));
     }
 
@@ -342,13 +394,29 @@ mod tests {
     fn table_bookkeeping() {
         let mut t = BpTable::new(MAX_BREAKPOINTS);
         t.add(0, Source::RegPc, Op::Eq, 0x300, 1, true, Prefix::default());
-        t.add(1, Source::MemWrite, Op::Eq, 0x400, 0x400, false, Prefix::default());
+        t.add(
+            1,
+            Source::MemWrite,
+            Op::Eq,
+            0x400,
+            0x400,
+            false,
+            Prefix::default(),
+        );
         assert_eq!((t.count, t.first_free()), (2, Some(2)));
         t.slots[0].hit = true;
         t.clear_temp();
         assert_eq!(t.count, 1);
         t.remove_all();
         assert_eq!(t.count, 0);
-        assert_eq!(Prefix { bank: Some(1), lang_card: Some(2), ..Default::default() }.text(), "01/l2/");
+        assert_eq!(
+            Prefix {
+                bank: Some(1),
+                lang_card: Some(2),
+                ..Default::default()
+            }
+            .text(),
+            "01/l2/"
+        );
     }
 }

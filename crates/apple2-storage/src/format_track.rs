@@ -67,7 +67,13 @@ impl FormatTrack {
         self.address_prologue_is_dos32 = false;
     }
 
-    fn update_on_write_latch(&mut self, spin_nibbles: u32, write_protected: bool, byte: usize, nibbles: usize) {
+    fn update_on_write_latch(
+        &mut self,
+        spin_nibbles: u32,
+        write_protected: bool,
+        byte: usize,
+        nibbles: usize,
+    ) {
         if write_protected {
             return;
         }
@@ -106,7 +112,9 @@ impl FormatTrack {
             if self.written_sector_addr_fields != 0x1FFF {
                 return;
             }
-        } else if self.written_sector_addr_fields != 0xFFFF || self.write_data_field_prologue_count != 16 {
+        } else if self.written_sector_addr_fields != 0xFFFF
+            || self.write_data_field_prologue_count != 16
+        {
             return;
         }
         const SHORT_TRACK_LEN: usize = 0x18B0;
@@ -116,8 +124,16 @@ impl FormatTrack {
         }
         let start = self.write_track_start_index.unwrap_or(0);
         let end = byte;
-        let mut written = if self.write_track_has_wrapped { long_len } else { 0 };
-        written += if start <= end { end - start } else { (long_len - start) + end };
+        let mut written = if self.write_track_has_wrapped {
+            long_len
+        } else {
+            0
+        };
+        written += if start <= end {
+            end - start
+        } else {
+            (long_len - start) + end
+        };
         written = written.min(SHORT_TRACK_LEN);
         let mut src = end as i64 - written as i64;
         if src < 0 {
@@ -135,7 +151,11 @@ impl FormatTrack {
 
     pub fn drive_switched_to_write_mode(&mut self) {
         if self.state != TrackState::Gap2Start {
-            self.state = if self.written_sector_addr_fields == 0 { TrackState::Gap1 } else { TrackState::Gap3 };
+            self.state = if self.written_sector_addr_fields == 0 {
+                TrackState::Gap1
+            } else {
+                TrackState::Gap3
+            };
         }
         self.last3 = 0;
         self.idx_4and4 = 0;
@@ -148,7 +168,14 @@ impl FormatTrack {
         self.decode_latch_nibble(latch, false);
     }
 
-    pub fn decode_latch_nibble_write(&mut self, latch: u8, spin_nibbles: u32, write_protected: bool, byte: usize, nibbles: usize) {
+    pub fn decode_latch_nibble_write(
+        &mut self,
+        latch: u8,
+        spin_nibbles: u32,
+        write_protected: bool,
+        byte: usize,
+        nibbles: usize,
+    ) {
         self.decode_latch_nibble(latch, true);
         self.update_on_write_latch(spin_nibbles, write_protected, byte, nibbles);
     }
@@ -173,7 +200,8 @@ impl FormatTrack {
             self.idx_4and4 += 1;
             if self.idx_4and4 == 8 {
                 for i in 0..4 {
-                    self.vol_trk_sec_chk[i] = ((self.vol_trk_sec_chk_4and4[i * 2] & 0x55) << 1) | (self.vol_trk_sec_chk_4and4[i * 2 + 1] & 0x55);
+                    self.vol_trk_sec_chk[i] = ((self.vol_trk_sec_chk_4and4[i * 2] & 0x55) << 1)
+                        | (self.vol_trk_sec_chk_4and4[i * 2 + 1] & 0x55);
                 }
                 if is_write {
                     let sector = self.vol_trk_sec_chk[2];
@@ -186,7 +214,11 @@ impl FormatTrack {
             return;
         }
         if self.last3 == 0xDEAAEB && is_write {
-            self.state = if self.state == TrackState::AddrField { TrackState::Gap2Start } else { TrackState::Gap3 };
+            self.state = if self.state == TrackState::AddrField {
+                TrackState::Gap2Start
+            } else {
+                TrackState::Gap3
+            };
             return;
         }
         if self.last3 == 0xD5AAAD {
@@ -218,7 +250,22 @@ mod tests {
             put(&mut f, 0xFF, &mut byte, &mut track);
         }
         for s in 0..16u8 {
-            for v in [0xD5, 0xAA, 0x96, 0xFF, 0xFE, 0xAA, 0xAA, 0xAA | (s >> 1 & 0x55), 0xAA | (s & 0x55), 0xFF, 0xFE, 0xDE, 0xAA, 0xEB] {
+            for v in [
+                0xD5,
+                0xAA,
+                0x96,
+                0xFF,
+                0xFE,
+                0xAA,
+                0xAA,
+                0xAA | (s >> 1 & 0x55),
+                0xAA | (s & 0x55),
+                0xFF,
+                0xFE,
+                0xDE,
+                0xAA,
+                0xEB,
+            ] {
                 put(&mut f, v, &mut byte, &mut track);
             }
             for v in [0xD5, 0xAA, 0xAD] {
@@ -229,7 +276,10 @@ mod tests {
             }
         }
         f.drive_switched_to_read_mode(&mut track, byte, 0x1A00);
-        assert_eq!(track[byte], 0, "the part after the formatted data is cleared");
+        assert_eq!(
+            track[byte], 0,
+            "the part after the formatted data is cleared"
+        );
         assert_eq!(track[0], 0xFF, "the formatted part is kept");
     }
 

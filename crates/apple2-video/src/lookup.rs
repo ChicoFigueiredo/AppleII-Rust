@@ -53,18 +53,20 @@ pub const PALETTE_SIZE: usize = 28;
 
 /// Lo-res colour number to palette index (`LoresResColors`).
 pub const LORES_RES_COLORS: [u8; 16] = [
-    BLACK, DEEP_RED, DARK_BLUE, MAGENTA, DARK_GREEN, DARK_GRAY, BLUE, LIGHT_BLUE, BROWN, ORANGE, LIGHT_GRAY, PINK,
-    GREEN, YELLOW, AQUA, WHITE,
+    BLACK, DEEP_RED, DARK_BLUE, MAGENTA, DARK_GREEN, DARK_GRAY, BLUE, LIGHT_BLUE, BROWN, ORANGE,
+    LIGHT_GRAY, PINK, GREEN, YELLOW, AQUA, WHITE,
 ];
 
 /// Double hi-res 4-bit pixel (as the bits sit in memory) to palette index (`DoubleHiresPalIndex`).
 pub const DOUBLE_HIRES_PAL_INDEX: [u8; 16] = [
-    BLACK, DARK_BLUE, DARK_GREEN, BLUE, BROWN, LIGHT_GRAY, GREEN, AQUA, DEEP_RED, MAGENTA, DARK_GRAY, LIGHT_BLUE,
-    ORANGE, PINK, YELLOW, WHITE,
+    BLACK, DARK_BLUE, DARK_GREEN, BLUE, BROWN, LIGHT_GRAY, GREEN, AQUA, DEEP_RED, MAGENTA,
+    DARK_GRAY, LIGHT_BLUE, ORANGE, PINK, YELLOW, WHITE,
 ];
 
 /// `HiresToPalIndex` indexed by `ColorMapping` (violet, blue, green, orange, black, white).
-const HIRES_TO_PAL: [u8; 6] = [HGR_VIOLET, HGR_BLUE, HGR_GREEN, HGR_ORANGE, HGR_BLACK, HGR_WHITE];
+const HIRES_TO_PAL: [u8; 6] = [
+    HGR_VIOLET, HGR_BLUE, HGR_GREEN, HGR_ORANGE, HGR_BLACK, HGR_WHITE,
+];
 const CM_VIOLET: usize = 0;
 const CM_BLACK: usize = 4;
 const CM_WHITE: usize = 5;
@@ -151,24 +153,40 @@ fn create_double_hires(l: &mut Lookup) {
                     continue;
                 }
                 let pixelcolor = 1usize << ((pixel - OFFSET) & 3);
-                if pixel >= OFFSET + 2 && pixel < SIZE + OFFSET + 2 && pattern & (0x7 << (pixel - 4)) != 0 {
+                if pixel >= OFFSET + 2
+                    && pixel < SIZE + OFFSET + 2
+                    && pattern & (0x7 << (pixel - 4)) != 0
+                {
                     color[(pixel - (OFFSET + 2)) as usize] |= pixelcolor;
                 }
-                if pixel >= OFFSET + 1 && pixel < SIZE + OFFSET + 1 && pattern & (0xF << (pixel - 4)) != 0 {
+                if pixel >= OFFSET + 1
+                    && pixel < SIZE + OFFSET + 1
+                    && pattern & (0xF << (pixel - 4)) != 0
+                {
                     color[(pixel - (OFFSET + 1)) as usize] |= pixelcolor;
                 }
                 if pixel >= OFFSET && pixel < SIZE + OFFSET {
                     color[(pixel - OFFSET) as usize] |= pixelcolor;
                 }
-                if pixel >= OFFSET - 1 && pixel < SIZE + OFFSET - 1 && pattern & (0xF << (pixel + 1)) != 0 {
+                if pixel >= OFFSET - 1
+                    && pixel < SIZE + OFFSET - 1
+                    && pattern & (0xF << (pixel + 1)) != 0
+                {
                     color[(pixel - (OFFSET - 1)) as usize] |= pixelcolor;
                 }
-                if pixel >= OFFSET - 2 && pixel < SIZE + OFFSET - 2 && pattern & (0x7 << (pixel + 2)) != 0 {
+                if pixel >= OFFSET - 2
+                    && pixel < SIZE + OFFSET - 2
+                    && pattern & (0x7 << (pixel + 2)) != 0
+                {
                     color[(pixel - (OFFSET - 2)) as usize] |= pixelcolor;
                 }
             }
             for (x, &c) in color.iter().enumerate() {
-                l.set(SRCOFFS_DHIRES + coloffs + x, byteval, DOUBLE_HIRES_PAL_INDEX[c]);
+                l.set(
+                    SRCOFFS_DHIRES + coloffs + x,
+                    byteval,
+                    DOUBLE_HIRES_PAL_INDEX[c],
+                );
             }
         }
     }
@@ -206,15 +224,35 @@ fn create_hires(l: &mut Lookup) {
                 if p[1] {
                     if p[2] || p[0] {
                         l.set(SRCOFFS_HIRES + offsetx, y, HGR_WHITE);
-                        l.set(SRCOFFS_HIRES + offsetx + HIRES_COLUMN_SUBUNIT_SIZE, y, HGR_WHITE);
+                        l.set(
+                            SRCOFFS_HIRES + offsetx + HIRES_COLUMN_SUBUNIT_SIZE,
+                            y,
+                            HGR_WHITE,
+                        );
                     } else {
-                        l.set(SRCOFFS_HIRES + offsetx, y, if !prev_high_bit { HGR_BLACK } else { HGR_ORANGE });
-                        l.set(SRCOFFS_HIRES + offsetx + HIRES_COLUMN_SUBUNIT_SIZE, y, HGR_BLUE);
+                        l.set(
+                            SRCOFFS_HIRES + offsetx,
+                            y,
+                            if !prev_high_bit {
+                                HGR_BLACK
+                            } else {
+                                HGR_ORANGE
+                            },
+                        );
+                        l.set(
+                            SRCOFFS_HIRES + offsetx + HIRES_COLUMN_SUBUNIT_SIZE,
+                            y,
+                            HGR_BLUE,
+                        );
                     }
                 } else if p[0] && p[2] {
                     // VT_COLOR_IDEALIZED: always.
                     l.set(SRCOFFS_HIRES + offsetx, y, HGR_BLUE);
-                    l.set(SRCOFFS_HIRES + offsetx + HIRES_COLUMN_SUBUNIT_SIZE, y, HGR_ORANGE);
+                    l.set(
+                        SRCOFFS_HIRES + offsetx + HIRES_COLUMN_SUBUNIT_SIZE,
+                        y,
+                        HGR_ORANGE,
+                    );
                 }
             }
             let mut x = high;
@@ -280,8 +318,16 @@ fn create_color_mix_map() -> [[[u16; 6]; 6]; 6] {
                     mix_top = c_mid as u16;
                     mix_bot = c_mid as u16;
                 } else {
-                    mix_top = if c_top < MIX_THRESHOLD { FROM_NEIGHBOUR } else { mix_colors(c_mid, c_top) as u16 };
-                    mix_bot = if c_bot < MIX_THRESHOLD { FROM_NEIGHBOUR } else { mix_colors(c_mid, c_bot) as u16 };
+                    mix_top = if c_top < MIX_THRESHOLD {
+                        FROM_NEIGHBOUR
+                    } else {
+                        mix_colors(c_mid, c_top) as u16
+                    };
+                    mix_bot = if c_bot < MIX_THRESHOLD {
+                        FROM_NEIGHBOUR
+                    } else {
+                        mix_colors(c_mid, c_bot) as u16
+                    };
                     if mix_top == FROM_NEIGHBOUR && mix_bot != FROM_NEIGHBOUR {
                         mix_top = mix_bot;
                     } else if mix_bot == FROM_NEIGHBOUR && mix_top != FROM_NEIGHBOUR {
@@ -311,7 +357,11 @@ fn build() -> Lookup {
     palette[HGR_GREEN as usize] = palette[GREEN as usize];
     palette[HGR_VIOLET as usize] = palette[MAGENTA as usize];
 
-    let mut l = Lookup { src: vec![0; SRCOFFS_TOTAL * MAX_SOURCE_Y], colormix: create_color_mix_map(), palette_ntsc: palette };
+    let mut l = Lookup {
+        src: vec![0; SRCOFFS_TOTAL * MAX_SOURCE_Y],
+        colormix: create_color_mix_map(),
+        palette_ntsc: palette,
+    };
     create_lores(&mut l);
     create_hires(&mut l);
     create_double_hires(&mut l);
@@ -333,8 +383,8 @@ mod tests {
         // DoubleHiresPalIndex: memory nibble (aux bit0 first) -> colour. Spot checks of the table
         // in RGBMonitor.cpp:110, with the standard DHGR colour names.
         let names = [
-            BLACK, DARK_BLUE, DARK_GREEN, BLUE, BROWN, LIGHT_GRAY, GREEN, AQUA, DEEP_RED, MAGENTA, DARK_GRAY,
-            LIGHT_BLUE, ORANGE, PINK, YELLOW, WHITE,
+            BLACK, DARK_BLUE, DARK_GREEN, BLUE, BROWN, LIGHT_GRAY, GREEN, AQUA, DEEP_RED, MAGENTA,
+            DARK_GRAY, LIGHT_BLUE, ORANGE, PINK, YELLOW, WHITE,
         ];
         assert_eq!(DOUBLE_HIRES_PAL_INDEX, names);
         // A solid line of nibble 0xF is white in the source image; nibble 0 black.
@@ -396,6 +446,9 @@ mod tests {
         assert_eq!((v >> 8) as u8, HGR_GREY1);
         assert_eq!(v as u8, HGR_ORANGE);
         // Black/white pass through unchanged.
-        assert_eq!(m[3][HGR_WHITE as usize][2], ((HGR_WHITE as u16) << 8) | HGR_WHITE as u16);
+        assert_eq!(
+            m[3][HGR_WHITE as usize][2],
+            ((HGR_WHITE as u16) << 8) | HGR_WHITE as u16
+        );
     }
 }

@@ -24,7 +24,19 @@ const MODELS: [Model; 12] = [
 
 /// The glyph's dots as 14 pixel characters per row, from the character-set tables.
 fn glyph_art(g: &[u8; 8]) -> Vec<String> {
-    g.iter().map(|row| (0..7).flat_map(|b| if row >> b & 1 != 0 { ['#', '#'] } else { ['.', '.'] }).collect()).collect()
+    g.iter()
+        .map(|row| {
+            (0..7)
+                .flat_map(|b| {
+                    if row >> b & 1 != 0 {
+                        ['#', '#']
+                    } else {
+                        ['.', '.']
+                    }
+                })
+                .collect()
+        })
+        .collect()
 }
 
 #[test]
@@ -32,7 +44,9 @@ fn every_model_draws_every_screen_code_with_its_own_character_set() {
     for model in MODELS {
         let sets = char_sets(model, false, false);
         // Codes in the normal set: inverse (<$40), flash ($40-7F, mask 0 in the first frame), normal.
-        for code in [0x01u8, 0x1B, 0x2A, 0x41, 0x5F, 0x7F, 0x80, 0xA0, 0xC1, 0xDD, 0xE1, 0xFF] {
+        for code in [
+            0x01u8, 0x1B, 0x2A, 0x41, 0x5F, 0x7F, 0x80, 0xA0, 0xC1, 0xDD, 0xE1, 0xFF,
+        ] {
             let mut s = Fake::new(model).text();
             s.poke(0x400, &[code]);
             let mut r = renderer(VideoType::MonoWhite);
@@ -40,7 +54,11 @@ fn every_model_draws_every_screen_code_with_its_own_character_set() {
             let want = glyph_art(&sets[0][code as usize]);
             for (y, w) in want.iter().enumerate() {
                 // Pravets/][ fonts have 8 rows; the second pixel row of each line is black.
-                assert_eq!(&art(&r, 0, 2 * y, 14), w, "{model:?} code {code:02x} row {y}");
+                assert_eq!(
+                    &art(&r, 0, 2 * y, 14),
+                    w,
+                    "{model:?} code {code:02x} row {y}"
+                );
             }
         }
     }
@@ -59,7 +77,10 @@ fn alt_charset_shows_mousetext_on_the_enhanced_but_not_the_original_iie() {
     let enh_alt = draw(Model::Apple2eEnhanced, true);
     let enh = draw(Model::Apple2eEnhanced, false);
     assert_ne!(enh_alt, enh);
-    assert_eq!(enh_alt, glyph_art(&char_sets(Model::Apple2eEnhanced, false, false)[1][0x4F]));
+    assert_eq!(
+        enh_alt,
+        glyph_art(&char_sets(Model::Apple2eEnhanced, false, false)[1][0x4F])
+    );
     // The original //e has no MouseText: ALTCHARSET shows the same glyph as the normal set.
     assert_eq!(draw(Model::Apple2e, true), draw(Model::Apple2e, false));
     // MouseText does not flash.
@@ -68,7 +89,10 @@ fn alt_charset_shows_mousetext_on_the_enhanced_but_not_the_original_iie() {
     s.poke(0x400, &[0x4F]);
     let mut r = renderer(VideoType::MonoWhite);
     render(&mut r, &s, 40);
-    assert_eq!((0..8).map(|y| art(&r, 0, 2 * y, 14)).collect::<Vec<_>>(), enh_alt);
+    assert_eq!(
+        (0..8).map(|y| art(&r, 0, 2 * y, 14)).collect::<Vec<_>>(),
+        enh_alt
+    );
 }
 
 #[test]
@@ -82,7 +106,10 @@ fn jplus_an2_switches_between_katakana_and_ascii_inverse_halves() {
         (0..8).map(|y| art(&r, 0, 2 * y, 14)).collect::<Vec<_>>()
     };
     assert_ne!(draw(true), draw(false));
-    assert_eq!(draw(true), glyph_art(&char_sets(Model::Apple2JPlus, true, false)[0][1]));
+    assert_eq!(
+        draw(true),
+        glyph_art(&char_sets(Model::Apple2JPlus, true, false)[0][1])
+    );
 }
 
 #[test]
@@ -121,7 +148,7 @@ fn text_to_graphics_switch_is_delayed_by_one_cycle() {
     s.mode.text = false;
     r.update(&s, 3); // cycles 40, 41, 42
     r.update(&s, 65 - 43); // the rest of the line
-    // Cell for horz 40 is index 15 (x = 15*14 ..). Still text: not a flat lo-res white block.
+                           // Cell for horz 40 is index 15 (x = 15*14 ..). Still text: not a flat lo-res white block.
     let text_cell: Vec<u32> = (0..14).map(|x| rgb(&r, 15 * 14 + x, 0)).collect();
     let lores_cell: Vec<u32> = (0..14).map(|x| rgb(&r, 16 * 14 + x, 0)).collect();
     assert!(lores_cell.iter().all(|&c| c == 0xFFFFFF), "{lores_cell:x?}");

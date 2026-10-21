@@ -19,7 +19,14 @@ pub struct VideoMode {
 impl Default for VideoMode {
     /// `VideoResetState`: text mode, everything else off.
     fn default() -> Self {
-        VideoMode { text: true, mixed: false, col80: false, altcharset: false, dhires: false, jplus_ascii: false }
+        VideoMode {
+            text: true,
+            mixed: false,
+            col80: false,
+            altcharset: false,
+            dhires: false,
+            jplus_ascii: false,
+        }
     }
 }
 

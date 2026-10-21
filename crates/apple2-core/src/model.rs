@@ -113,15 +113,28 @@ mod tests {
     use super::*;
 
     const ALL: [Model; 13] = [
-        Model::Apple2, Model::Apple2Plus, Model::Apple2JPlus, Model::Apple2e,
-        Model::Apple2eEnhanced, Model::Apple2c, Model::Pravets8M, Model::Pravets82,
-        Model::Base64A, Model::BadPravets82, Model::BadPravets8M, Model::Pravets8A, Model::Tk3000e,
+        Model::Apple2,
+        Model::Apple2Plus,
+        Model::Apple2JPlus,
+        Model::Apple2e,
+        Model::Apple2eEnhanced,
+        Model::Apple2c,
+        Model::Pravets8M,
+        Model::Pravets82,
+        Model::Base64A,
+        Model::BadPravets82,
+        Model::BadPravets8M,
+        Model::Pravets8A,
+        Model::Tk3000e,
     ];
 
     #[test]
     fn numeric_values_match_applewin() {
         let v: Vec<u16> = ALL.iter().map(|m| m.value()).collect();
-        assert_eq!(v, [0, 1, 2, 0x10, 0x11, 0x20, 0x101, 0x102, 0x103, 0x110, 0x111, 0x112, 0x113]);
+        assert_eq!(
+            v,
+            [0, 1, 2, 0x10, 0x11, 0x20, 0x101, 0x102, 0x103, 0x110, 0x111, 0x112, 0x113]
+        );
     }
 
     #[test]
@@ -144,8 +157,15 @@ mod tests {
 
     #[test]
     fn cmos_only_on_enhanced_tk3000_and_iic() {
-        let cmos: Vec<Model> = ALL.iter().copied().filter(|m| m.cpu_variant() == Variant::Cmos65C02).collect();
-        assert_eq!(cmos, [Model::Apple2eEnhanced, Model::Apple2c, Model::Tk3000e]);
+        let cmos: Vec<Model> = ALL
+            .iter()
+            .copied()
+            .filter(|m| m.cpu_variant() == Variant::Cmos65C02)
+            .collect();
+        assert_eq!(
+            cmos,
+            [Model::Apple2eEnhanced, Model::Apple2c, Model::Tk3000e]
+        );
     }
 
     #[test]

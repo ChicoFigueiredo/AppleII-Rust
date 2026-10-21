@@ -24,7 +24,11 @@ pub struct Pia6821 {
 impl Pia6821 {
     /// `mc6821_reset_internal` (6821.cpp:221): the input lines are untouched.
     pub fn reset(&mut self) {
-        *self = Pia6821 { ia: self.ia, ib: self.ib, ..Default::default() };
+        *self = Pia6821 {
+            ia: self.ia,
+            ib: self.ib,
+            ..Default::default()
+        };
     }
 
     /// `mc6821_read_internal` (6821.cpp:188), register select `rs & 3`.
@@ -95,14 +99,22 @@ mod tests {
         p.write(1, 4); // CRA: select the port register
         assert_eq!(p.write(0, 0xFF).a, Some(0x0F));
         p.ia = 0xA0;
-        assert_eq!(p.read(0), 0xAF, "output bits from pra, input bits from the line");
+        assert_eq!(
+            p.read(0),
+            0xAF,
+            "output bits from pra, input bits from the line"
+        );
         p.write(1, 0);
         assert_eq!(p.read(0), 0x0F, "CRA bit 2 clear reads DDRA");
     }
 
     #[test]
     fn port_read_clears_interrupt_flags() {
-        let mut p = Pia6821 { cra: 0xC4, crb: 0xC4, ..Default::default() };
+        let mut p = Pia6821 {
+            cra: 0xC4,
+            crb: 0xC4,
+            ..Default::default()
+        };
         p.read(0);
         p.read(2);
         assert_eq!((p.cra, p.crb), (0x04, 0x04));

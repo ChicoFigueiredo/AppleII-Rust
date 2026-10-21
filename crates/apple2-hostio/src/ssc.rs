@@ -358,7 +358,11 @@ impl SuperSerialCard {
                     _ => (0, 0),
                 };
                 let sw2_5 = !self.dip.linefeed as u8;
-                let cts = if self.check_comm() && self.backend.modem_status().cts { 0 } else { 1 };
+                let cts = if self.check_comm() && self.backend.modem_status().cts {
+                    0
+                } else {
+                    1
+                };
                 sw2_1 << 7 | sw2_2 << 5 | sw2_3 << 3 | sw2_4 << 2 | sw2_5 << 1 | cts
             }
         }
@@ -506,7 +510,9 @@ impl Card for SuperSerialCard {
     }
 
     fn load(&mut self, state: &[u8]) -> bool {
-        let [command, control, tx_empty] = state else { return false };
+        let [command, control, tx_empty] = state else {
+            return false;
+        };
         self.update_command_reg(*command);
         self.update_control_reg(*control);
         self.tx_empty = *tx_empty != 0;

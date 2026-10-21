@@ -5,7 +5,9 @@
 use apple2_core::{Machine, MachineConfig, Model};
 use apple2_cpu::Bus;
 use apple2_hostio::network::{create_eth2_frame, MockNetwork, MockNetworkHandle, NullNetwork};
-use apple2_hostio::uthernet2::{SR_CLOSED, SR_ESTABLISHED, SR_INIT, SR_IPRAW, SR_LISTEN, SR_MACRAW, SR_UDP};
+use apple2_hostio::uthernet2::{
+    SR_CLOSED, SR_ESTABLISHED, SR_INIT, SR_IPRAW, SR_LISTEN, SR_MACRAW, SR_UDP,
+};
 use apple2_hostio::Uthernet2;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
@@ -128,7 +130,9 @@ impl Chip {
     fn recv(&mut self, s: u16, n: usize) -> Vec<u8> {
         let rd = self.rd16(Self::sock(s) + 0x28);
         let base = RX0 + s * 0x800;
-        let out = (0..n).map(|k| self.rd(base + ((rd + k as u16) & 0x7FF))).collect();
+        let out = (0..n)
+            .map(|k| self.rd(base + ((rd + k as u16) & 0x7FF)))
+            .collect();
         self.wr16(Self::sock(s) + 0x28, rd + n as u16);
         self.command(s, 0x40);
         out
@@ -191,7 +195,11 @@ fn memory_size_registers_resize_the_buffers() {
     let mut c = Chip::with_null();
     c.wr(0x001B, 0x03); // socket 0 TX = 8K, the rest 1K
     assert_eq!(c.rd16(S0 + 0x20), 0x2000);
-    assert_eq!(c.rd16(Chip::sock(1) + 0x20), 0x0000, "no memory left for the others");
+    assert_eq!(
+        c.rd16(Chip::sock(1) + 0x20),
+        0x0000,
+        "no memory left for the others"
+    );
 }
 
 #[test]
@@ -201,7 +209,10 @@ fn mode_register_reset_bit_clears_the_chip_but_keeps_the_data_address() {
     c.set_addr(0x1234);
     c.m.board_mut().write(MODE, 0x80);
     assert_eq!(c.m.board_mut().read(MODE), 0);
-    assert_eq!((c.m.board_mut().read(ADDR_HI), c.m.board_mut().read(ADDR_LO)), (0x12, 0x34));
+    assert_eq!(
+        (c.m.board_mut().read(ADDR_HI), c.m.board_mut().read(ADDR_LO)),
+        (0x12, 0x34)
+    );
     c.m.board_mut().write(MODE, 0x02);
     assert_eq!(c.rd(0x0001), 0);
 }
@@ -254,7 +265,11 @@ fn tcp_remote_close_closes_the_socket() {
 
 #[test]
 fn tcp_connect_failure_closes_the_socket() {
-    let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port(); // now closed
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port(); // now closed
     let mut c = Chip::with_null();
     c.open(0, 0x01);
     c.set_dest(0, [127, 0, 0, 1], port);
@@ -266,7 +281,11 @@ fn tcp_connect_failure_closes_the_socket() {
 fn tcp_listen_accepts_a_host_client() {
     let mut c = Chip::with_null();
     // Pick a free port first, then ask the chip to listen on it.
-    let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
     c.wr16(S0 + 4, port);
     c.open(0, 0x01);
     c.command(0, 0x02); // LISTEN
@@ -317,7 +336,11 @@ fn virtual_dns_resolves_names_into_the_destination_ip() {
     c.wr(Chip::sock(1) + 0x2A, bad.len() as u8);
     c.write_block(Chip::sock(1) + 0x2B, bad);
     c.open(1, 0x0A); // UDP + virtual DNS
-    assert_eq!(c.read_block(Chip::sock(1) + 0x0C, 4), [0, 0, 0, 0], "0.0.0.0 means failure");
+    assert_eq!(
+        c.read_block(Chip::sock(1) + 0x0C, 4),
+        [0, 0, 0, 0],
+        "0.0.0.0 means failure"
+    );
 }
 
 #[test]
@@ -340,7 +363,11 @@ fn mac_raw_socket_receives_frames_with_a_length_prefix_and_sends_raw() {
     h.push_rx(&frame);
     assert_eq!(c.wait_rx(0, 62), 62);
     let got = c.recv(0, 62);
-    assert_eq!(u16::from_be_bytes([got[0], got[1]]), 62, "length includes the 2-byte header");
+    assert_eq!(
+        u16::from_be_bytes([got[0], got[1]]),
+        62,
+        "length includes the 2-byte header"
+    );
     assert_eq!(&got[2..], &frame[..]);
 
     c.send(0, &frame);
@@ -375,7 +402,16 @@ fn ip_raw_socket_exchanges_payloads_by_protocol() {
 
     // Incoming ICMP to our MAC.
     let icmp = [8, 0, 0xF7, 0xFF, 0, 0, 0, 0];
-    let f = create_eth2_frame(&icmp, [2, 0, 0, 0, 0, 9], my_mac, 64, 0, 1, [10, 0, 0, 1], [10, 0, 0, 2]);
+    let f = create_eth2_frame(
+        &icmp,
+        [2, 0, 0, 0, 0, 9],
+        my_mac,
+        64,
+        0,
+        1,
+        [10, 0, 0, 1],
+        [10, 0, 0, 2],
+    );
     h.push_rx(&f);
     assert_eq!(c.wait_rx(1, 14), 14);
     let got = c.recv(1, 14);
@@ -389,7 +425,19 @@ fn ip_raw_socket_exchanges_payloads_by_protocol() {
     c.send(1, &icmp);
     let tx = h.take_tx();
     assert_eq!(tx.len(), 1);
-    assert_eq!(tx[0], create_eth2_frame(&icmp, my_mac, [2, 0, 0, 0, 0, 9], 0x80, 0, 1, [10, 0, 0, 2], [10, 0, 0, 1]));
+    assert_eq!(
+        tx[0],
+        create_eth2_frame(
+            &icmp,
+            my_mac,
+            [2, 0, 0, 0, 0, 9],
+            0x80,
+            0,
+            1,
+            [10, 0, 0, 2],
+            [10, 0, 0, 1]
+        )
+    );
 }
 
 #[test]

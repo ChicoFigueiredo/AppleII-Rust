@@ -39,7 +39,14 @@ fn nsc() -> NoSlotClock {
 }
 
 fn text(m: &Machine, extension: bool) -> String {
-    let saved = save_aws_yaml(m, &SaveOptions { extension, ..Default::default() }).unwrap();
+    let saved = save_aws_yaml(
+        m,
+        &SaveOptions {
+            extension,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     assert!(saved.warnings.is_empty(), "{:?}", saved.warnings);
     saved.text
 }
@@ -50,7 +57,10 @@ fn load(t: &str) -> (Machine, Vec<String>) {
 }
 
 fn nsc_snapshot(m: &mut Machine) -> Option<NscSnapshot> {
-    m.rom_tap_mut()?.as_any_mut()?.downcast_ref::<NoSlotClock>().map(|n| n.snapshot())
+    m.rom_tap_mut()?
+        .as_any_mut()?
+        .downcast_ref::<NoSlotClock>()
+        .map(|n| n.snapshot())
 }
 
 /// The state of an NSC left half-way through a read.
@@ -60,7 +70,11 @@ fn busy_nsc() -> NoSlotClock {
     let mut d = 0;
     c.access(0xC304, false, &mut d);
     for i in 0..64u64 {
-        c.access(0xC300 | ((0x5CA3_3AC5_5CA3_3AC5u64 >> i) & 1) as u16, false, &mut d);
+        c.access(
+            0xC300 | ((0x5CA3_3AC5_5CA3_3AC5u64 >> i) & 1) as u16,
+            false,
+            &mut d,
+        );
     }
     for _ in 0..20 {
         c.access(0xC304, false, &mut d);
@@ -123,11 +137,26 @@ mod game_io {
 
     const KINDS: [(DongleKind, &str); 6] = [
         (DongleKind::SdsSpeedStar, "SDS SpeedStar dongle"),
-        (DongleKind::CodeWriter, "Cortechs Corp - CodeWriter protection key"),
-        (DongleKind::Robocom500, "Robocom Ltd - Robo 500 Interface Module"),
-        (DongleKind::Robocom1000, "Robocom Ltd - Robo 1000 Interface Module"),
-        (DongleKind::Robocom1500, "Robocom Ltd - Robo 1500 Interface Module"),
-        (DongleKind::HaydenCompiler, "Hayden - Applesoft Compiler protection key"),
+        (
+            DongleKind::CodeWriter,
+            "Cortechs Corp - CodeWriter protection key",
+        ),
+        (
+            DongleKind::Robocom500,
+            "Robocom Ltd - Robo 500 Interface Module",
+        ),
+        (
+            DongleKind::Robocom1000,
+            "Robocom Ltd - Robo 1000 Interface Module",
+        ),
+        (
+            DongleKind::Robocom1500,
+            "Robocom Ltd - Robo 1500 Interface Module",
+        ),
+        (
+            DongleKind::HaydenCompiler,
+            "Hayden - Applesoft Compiler protection key",
+        ),
     ];
 
     fn with_dongle(kind: DongleKind, lfsr: u8) -> Machine {
@@ -139,7 +168,10 @@ mod game_io {
     }
 
     fn dongle(m: &Machine) -> Option<(DongleKind, u8)> {
-        m.game_io()?.as_any()?.downcast_ref::<Dongle>().map(|d| (d.kind(), d.lfsr()))
+        m.game_io()?
+            .as_any()?
+            .downcast_ref::<Dongle>()
+            .map(|d| (d.kind(), d.lfsr()))
     }
 
     fn game_io_unit(t: &str) -> &str {
@@ -151,7 +183,11 @@ mod game_io {
     fn writes_the_device_name_and_the_codewriter_lfsr() {
         for (kind, name) in KINDS {
             let t = text(&with_dongle(kind, 0x2A), false);
-            let lfsr = if kind == DongleKind::CodeWriter { "    LFSR: 0x2A\n" } else { "" };
+            let lfsr = if kind == DongleKind::CodeWriter {
+                "    LFSR: 0x2A\n"
+            } else {
+                ""
+            };
             let expect = format!("\nUnit:\n  Type: Game I/O Connector\n  Version: 4\n  State:\n    Shift Key Mod: false\n    Device: {name}\n{lfsr}");
             assert_eq!(game_io_unit(&t), expect, "{name}");
         }
@@ -166,18 +202,27 @@ mod game_io {
     #[test]
     fn golden_loads_each_device() {
         for (kind, name) in KINDS {
-            let t = text(&plain_machine(), false).replace("    Shift Key Mod: false\n", &format!("    Shift Key Mod: true\n    Device: {name}\n    LFSR: 0x35\n"));
+            let t = text(&plain_machine(), false).replace(
+                "    Shift Key Mod: false\n",
+                &format!("    Shift Key Mod: true\n    Device: {name}\n    LFSR: 0x35\n"),
+            );
             let (m, w) = load(&t);
             assert!(w.is_empty(), "{w:?}");
-            let expect_lfsr = if kind == DongleKind::CodeWriter { 0x35 } else { 0x6B };
+            let expect_lfsr = if kind == DongleKind::CodeWriter {
+                0x35
+            } else {
+                0x6B
+            };
             assert_eq!(dongle(&m), Some((kind, expect_lfsr)), "{name}");
         }
     }
 
     #[test]
     fn old_unit_versions_have_no_shift_key_mod() {
-        let t = text(&plain_machine(), false)
-            .replace("  Version: 4\n  State:\n    Shift Key Mod: false\n", "  Version: 3\n  State:\n    Device: Hayden - Applesoft Compiler protection key\n");
+        let t = text(&plain_machine(), false).replace(
+            "  Version: 4\n  State:\n    Shift Key Mod: false\n",
+            "  Version: 3\n  State:\n    Device: Hayden - Applesoft Compiler protection key\n",
+        );
         let (m, w) = load(&t);
         assert!(w.is_empty(), "{w:?}");
         assert_eq!(dongle(&m).map(|d| d.0), Some(DongleKind::HaydenCompiler));
@@ -185,13 +230,19 @@ mod game_io {
 
     #[test]
     fn future_unit_version_is_refused() {
-        let t = text(&plain_machine(), false).replace("  Type: Game I/O Connector\n  Version: 4", "  Type: Game I/O Connector\n  Version: 5");
+        let t = text(&plain_machine(), false).replace(
+            "  Type: Game I/O Connector\n  Version: 4",
+            "  Type: Game I/O Connector\n  Version: 5",
+        );
         assert!(load_aws_yaml(&t, &mut TestHost::default()).is_err());
     }
 
     #[test]
     fn unknown_device_is_a_warning() {
-        let t = text(&plain_machine(), false).replace("    Shift Key Mod: false\n", "    Shift Key Mod: false\n    Device: Mystery key\n");
+        let t = text(&plain_machine(), false).replace(
+            "    Shift Key Mod: false\n",
+            "    Shift Key Mod: false\n    Device: Mystery key\n",
+        );
         let (m, w) = load(&t);
         assert!(w.iter().any(|w| w.contains("Mystery key")), "{w:?}");
         assert!(dongle(&m).is_none());
@@ -205,7 +256,11 @@ mod game_io {
             assert_eq!(m.save_state(), exact.save_state(), "{kind:?}");
             let plain = load(&text(&m, false)).0;
             // AppleWin keeps the LFSR of the CodeWriter key only; the others are stateless.
-            let lfsr = if kind == DongleKind::CodeWriter { 0x2A } else { 0x6B };
+            let lfsr = if kind == DongleKind::CodeWriter {
+                0x2A
+            } else {
+                0x6B
+            };
             assert_eq!(dongle(&plain), Some((kind, lfsr)), "{kind:?}");
         }
     }

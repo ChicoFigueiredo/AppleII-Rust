@@ -71,7 +71,11 @@ pub struct SaveOptions {
 
 impl Default for SaveOptions {
     fn default() -> Self {
-        SaveOptions { date_stamp: String::new(), app_version: format!("AppleII-Rust {}", env!("CARGO_PKG_VERSION")), extension: true }
+        SaveOptions {
+            date_stamp: String::new(),
+            app_version: format!("AppleII-Rust {}", env!("CARGO_PKG_VERSION")),
+            extension: true,
+        }
     }
 }
 
@@ -99,8 +103,15 @@ pub fn save_aws_yaml(machine: &Machine, opts: &SaveOptions) -> Result<Saved, Err
     w.file_hdr(SS_FILE_VER);
 
     // Every card in a slot (for the extension's manifest).
-    let manifest: Vec<(u8, String)> =
-        (0..8u8).filter_map(|s| machine.board().slots.card(s).map(|c| (s, c.name().to_string()))).collect();
+    let manifest: Vec<(u8, String)> = (0..8u8)
+        .filter_map(|s| {
+            machine
+                .board()
+                .slots
+                .card(s)
+                .map(|c| (s, c.name().to_string()))
+        })
+        .collect();
 
     let mut ext_err = None;
     apple2::save_apple2(&mut w, &st, &lcs, |w| {
@@ -130,14 +141,18 @@ pub fn save_aws_yaml(machine: &Machine, opts: &SaveOptions) -> Result<Saved, Err
             if cards::by_our_name(card.name()).is_some() {
                 entries.push(Entry::Card(slot, card));
             } else {
-                warnings.push(format!("Slot {slot}: '{}' has no AppleWin unit; saved in the extension only", card.name()));
+                warnings.push(format!(
+                    "Slot {slot}: '{}' has no AppleWin unit; saved in the extension only",
+                    card.name()
+                ));
             }
         }
     }
     if !entries.is_empty() {
         let env = cards::SaveEnv {
             model: st.config.model,
-            aux_empty: st.config.model.is_apple2e_family() && st.config.aux_card == apple2_core::AuxCardKind::Empty,
+            aux_empty: st.config.model.is_apple2e_family()
+                && st.config.aux_card == apple2_core::AuxCardKind::Empty,
         };
         cards::with_save_env(env, || {
             w.unit("Slots", UNIT_SLOTS_VER, |w| {
@@ -155,20 +170,33 @@ pub fn save_aws_yaml(machine: &Machine, opts: &SaveOptions) -> Result<Saved, Err
 
     // Unit: Game I/O Connector (CopyProtectionDongles.cpp:307); the shift-key mod is a frontend
     // setting (see `misc`).
-    w.unit("Game I/O Connector", UNIT_GAME_IO_CONNECTOR_VER, |w| misc::save_game_io(w, machine));
+    w.unit("Game I/O Connector", UNIT_GAME_IO_CONNECTOR_VER, |w| {
+        misc::save_game_io(w, machine)
+    });
     // Unit: Miscellaneous (SaveState.cpp:550), only with a No-Slot Clock.
     if let Some(nsc) = misc::nsc_of(&st) {
-        w.unit("Miscellaneous", misc::UNIT_MISC_VER, |w| misc::save_nsc(w, &nsc));
+        w.unit("Miscellaneous", misc::UNIT_MISC_VER, |w| {
+            misc::save_nsc(w, &nsc)
+        });
     } else if st.rom_tap.is_some() {
-        warnings.push("Miscellaneous: the ROM device is not a No-Slot Clock; saved in the extension only".into());
+        warnings.push(
+            "Miscellaneous: the ROM device is not a No-Slot Clock; saved in the extension only"
+                .into(),
+        );
     }
-    Ok(Saved { text: w.finish(), warnings })
+    Ok(Saved {
+        text: w.finish(),
+        warnings,
+    })
 }
 
 fn unit_maps<'a>(top: &'a [(String, Node)]) -> Vec<Map<'a>> {
     top.iter()
         .filter_map(|(k, n)| match (k.as_str(), n) {
-            ("Unit", Node::Map(m)) => Some(Map { name: "Unit", entries: m }),
+            ("Unit", Node::Map(m)) => Some(Map {
+                name: "Unit",
+                entries: m,
+            }),
             _ => None,
         })
         .collect()
@@ -185,7 +213,10 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     let hdr = top
         .iter()
         .find_map(|(k, n)| match (k.as_str(), n) {
-            ("File_hdr", Node::Map(m)) => Some(Map { name: "File_hdr", entries: m }),
+            ("File_hdr", Node::Map(m)) => Some(Map {
+                name: "File_hdr",
+                entries: m,
+            }),
             _ => None,
         })
         .ok_or_else(|| Error::Format("Failed to find file header".into()))?;
@@ -203,11 +234,20 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
 
     let mut warnings = Vec::new();
     let (mut a2, mut aux, mut slots_unit) = (None, None, None);
-    let mut devices = misc::DeviceUnits { apple2_version: u32::MAX, misc_unit: false, nsc: None, game_io: None, ext_rom_tap: false, ext_game_io: false };
+    let mut devices = misc::DeviceUnits {
+        apple2_version: u32::MAX,
+        misc_unit: false,
+        nsc: None,
+        game_io: None,
+        ext_rom_tap: false,
+        ext_game_io: false,
+    };
     for u in unit_maps(&top) {
         let kind = u.string("Type")?;
         let version = u.u32("Version")?;
-        let state = u.need_sub("State").map_err(|_| Error::Format("Unit: Expected sub-map name: State".into()))?;
+        let state = u
+            .need_sub("State")
+            .map_err(|_| Error::Format("Unit: Expected sub-map name: State".into()))?;
         match kind.as_str() {
             "Apple2" => {
                 a2 = Some(apple2::parse_apple2(version, state)?);
@@ -220,7 +260,13 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
                 }
                 slots_unit = Some(state);
             }
-            "Game I/O Connector" => devices.game_io = Some(misc::parse_game_io(version, state, UNIT_GAME_IO_CONNECTOR_VER)?),
+            "Game I/O Connector" => {
+                devices.game_io = Some(misc::parse_game_io(
+                    version,
+                    state,
+                    UNIT_GAME_IO_CONNECTOR_VER,
+                )?)
+            }
             "Miscellaneous" => {
                 devices.misc_unit = true;
                 devices.nsc = misc::parse_nsc(state)?;
@@ -244,11 +290,20 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     if let Some(s) = slots_unit {
         for (key, node) in s.entries {
             let Node::Map(entry) = node else { continue };
-            let m = Map { name: key, entries: entry };
-            let slot: u8 = key.parse().ok().filter(|&n| n < 8).ok_or_else(|| Error::Format(format!("Slots: Invalid slot #: {key}")))?;
+            let m = Map {
+                name: key,
+                entries: entry,
+            };
+            let slot: u8 = key
+                .parse()
+                .ok()
+                .filter(|&n| n < 8)
+                .ok_or_else(|| Error::Format(format!("Slots: Invalid slot #: {key}")))?;
             let card = m.string("Card")?;
             let version = m.u32("Version")?;
-            let state = m.need_sub("State").map_err(|_| Error::Format("Unit: Expected sub-map name: State".into()))?;
+            let state = m
+                .need_sub("State")
+                .map_err(|_| Error::Format("Unit: Expected sub-map name: State".into()))?;
             match card.as_str() {
                 "Language Card" => {
                     cfg.slots[slot as usize] = Some(CardKind::LanguageCard16K);
@@ -265,19 +320,30 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     if let Some(e) = &extension {
         cfg = e.state.config.clone();
     }
-    let mut machine = Machine::try_new(cfg.clone()).map_err(|e| Error::Unsupported(e.to_string()))?;
+    let mut machine =
+        Machine::try_new(cfg.clone()).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut inserted = [false; 8];
 
     // No-Slot Clock and dongle (the extension's state expects the devices the file had).
-    devices.ext_rom_tap = extension.as_ref().is_some_and(|e| e.state.rom_tap.is_some());
-    devices.ext_game_io = extension.as_ref().is_some_and(|e| e.state.game_io.is_some());
+    devices.ext_rom_tap = extension
+        .as_ref()
+        .is_some_and(|e| e.state.rom_tap.is_some());
+    devices.ext_game_io = extension
+        .as_ref()
+        .is_some_and(|e| e.state.game_io.is_some());
     misc::install(&mut machine, host, &devices, &mut warnings);
 
     // Cards (Unit: Slots).
-    let mut ctx = LoadCtx { host, model, warnings: &mut warnings };
+    let mut ctx = LoadCtx {
+        host,
+        model,
+        warnings: &mut warnings,
+    };
     for (slot, card, version, state) in queued {
         let Some(map) = cards::by_aw_name(&card) else {
-            ctx.warnings.push(format!("Slot {slot}: card '{card}' is not supported (skipped)"));
+            ctx.warnings.push(format!(
+                "Slot {slot}: card '{card}' is not supported (skipped)"
+            ));
             continue;
         };
         if let Some(c) = (map.load)(&mut ctx, slot, version, state)? {
@@ -287,7 +353,8 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
                 machine.with_card(slot, |c, _| c.load(&bytes));
                 inserted[slot as usize] = true;
             } else {
-                ctx.warnings.push(format!("Slot {slot}: cannot insert '{card}' there"));
+                ctx.warnings
+                    .push(format!("Slot {slot}: cannot insert '{card}' there"));
             }
         }
     }
@@ -309,10 +376,17 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     // State: AppleWin units first, then (if present) the exact extension state over it.
     let mut st = machine.save_state();
     // The Z80 SoftCard's `Active: 1` (z80.cpp:6575) makes the Z80 the running CPU.
-    st.cpu_owner = (0..8u8).find(|&s| machine.card::<apple2_cards::SoftCard>(s).is_some_and(|c| c.is_active()));
+    st.cpu_owner = (0..8u8).find(|&s| {
+        machine
+            .card::<apple2_cards::SoftCard>(s)
+            .is_some_and(|c| c.is_active())
+    });
     // Mouse card: a pending interrupt status asserts the IRQ line (MouseInterface.cpp:754, GH#677).
     for s in 0..8u8 {
-        if machine.card::<apple2_cards::MouseCard>(s).is_some_and(|c| c.status() & apple2_cards::mouse::STAT_INT_ALL != 0) {
+        if machine
+            .card::<apple2_cards::MouseCard>(s)
+            .is_some_and(|c| c.status() & apple2_cards::mouse::STAT_INT_ALL != 0)
+        {
             st.interrupts.set_irq(apple2_core::IrqSource::Mouse, true);
         }
     }
@@ -324,11 +398,15 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     if let Some(e) = &extension {
         match machine.load_state(&e.state) {
             Ok(()) => exact = true,
-            Err(err) => ctx.warnings.push(format!("AppleII-Rust Extension ignored: {err}")),
+            Err(err) => ctx
+                .warnings
+                .push(format!("AppleII-Rust Extension ignored: {err}")),
         }
     }
     if !exact {
-        machine.load_state(&st).map_err(|e| Error::Unsupported(e.to_string()))?;
+        machine
+            .load_state(&st)
+            .map_err(|e| Error::Unsupported(e.to_string()))?;
         rearm_card_events(&mut machine);
     }
     Ok(Loaded { machine, warnings })
@@ -340,7 +418,10 @@ fn rearm_card_events(m: &mut Machine) {
     for slot in 0..8u8 {
         m.with_card(slot, |c, ctx| {
             cards::mockingboard::rearm(c, ctx);
-            if let Some(d) = c.as_any().and_then(|a| a.downcast_ref::<apple2_storage::disk2::Disk2Card>()) {
+            if let Some(d) = c
+                .as_any()
+                .and_then(|a| a.downcast_ref::<apple2_storage::disk2::Disk2Card>())
+            {
                 d.rearm_deferred_stepper(ctx);
             }
         });

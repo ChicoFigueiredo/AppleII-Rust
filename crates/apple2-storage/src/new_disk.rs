@@ -62,7 +62,9 @@ pub struct ProDosFiles {
 }
 
 /// Map physical <-> logical (`g_aInterleave_DSK`).
-const INTERLEAVE: [usize; 16] = [0x0, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0xF];
+const INTERLEAVE: [usize; 16] = [
+    0x0, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0xF,
+];
 
 /// Swizzles DOS-order sectors to ProDOS order in place (only for DOS-ordered images).
 fn forward_interleave(disk: &mut [u8], order: SectorOrder) {
@@ -251,7 +253,11 @@ fn is_block_sparse(offset: usize, data: &[u8]) -> bool {
     if offset >= data.len() {
         return false;
     }
-    let end = if offset + BLOCK > data.len() { offset + data.len() % BLOCK } else { offset + BLOCK };
+    let end = if offset + BLOCK > data.len() {
+        offset + data.len() % BLOCK
+    } else {
+        offset + BLOCK
+    };
     data[offset..end].iter().all(|&b| b == 0)
 }
 
@@ -259,7 +265,10 @@ fn is_block_sparse(offset: usize, data: &[u8]) -> bool {
 fn format_prodos_fs(disk: &mut [u8], volume_name: &str) {
     disk[BLOCK * 2..].fill(0);
     let root_dir_blocks = 4;
-    let mut vol = Volume { bitmap_block: ROOT_BLOCK + root_dir_blocks, ..Volume::default() };
+    let mut vol = Volume {
+        bitmap_block: ROOT_BLOCK + root_dir_blocks,
+        ..Volume::default()
+    };
     let bitmap_blocks = vol.init_free(disk);
     for b in 0..ROOT_BLOCK {
         vol.set_used(disk, b);
@@ -284,7 +293,12 @@ fn format_prodos_fs(disk: &mut [u8], volume_name: &str) {
     vol.entry_num = (BLOCK / 0x27) as u8;
     vol.file_count = 0;
     vol.kind = KIND_ROOT;
-    vol.name = volume_name.trim_start_matches('/').bytes().take(MAX_FILENAME).map(|c| c.to_ascii_uppercase()).collect();
+    vol.name = volume_name
+        .trim_start_matches('/')
+        .bytes()
+        .take(MAX_FILENAME)
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
     vol.access = ACCESS_D | ACCESS_N | ACCESS_B | ACCESS_W | ACCESS_R;
     vol.write(disk, ROOT_BLOCK);
 }
@@ -358,7 +372,15 @@ fn add_file(disk: &mut [u8], data: &[u8], mut meta: FileEntry, allow_sparse: boo
     true
 }
 
-fn sys_file(name: &'static str, date: (u16, u16, u16), time: (u16, u16), mod_date: (u16, u16, u16), mod_time: (u16, u16), full_access: bool, versions: (u8, u8)) -> FileEntry {
+fn sys_file(
+    name: &'static str,
+    date: (u16, u16, u16),
+    time: (u16, u16),
+    mod_date: (u16, u16, u16),
+    mod_time: (u16, u16),
+    full_access: bool,
+    versions: (u8, u8),
+) -> FileEntry {
     FileEntry {
         kind: 0,
         name,
@@ -370,7 +392,11 @@ fn sys_file(name: &'static str, date: (u16, u16, u16), time: (u16, u16), mod_dat
         time: pack_time(time.0, time.1),
         cur_ver: versions.0,
         min_ver: versions.1,
-        access: if full_access { ACCESS_D | ACCESS_N | ACCESS_B | ACCESS_W | ACCESS_R } else { ACCESS_B | ACCESS_R },
+        access: if full_access {
+            ACCESS_D | ACCESS_N | ACCESS_B | ACCESS_W | ACCESS_R
+        } else {
+            ACCESS_B | ACCESS_R
+        },
         aux: if full_access { 0 } else { 0x2000 },
         mod_date: pack_date(mod_date.0, mod_date.1, mod_date.2),
         mod_time: pack_time(mod_time.0, mod_time.1),
@@ -386,16 +412,68 @@ pub fn new_prodos_disk(size: usize, files: ProDosFiles) -> Vec<u8> {
     format_prodos_fs(&mut disk, name);
     disk[..PRODOS_BOOT.len()].copy_from_slice(PRODOS_BOOT);
     if files.bitsy_boot {
-        add_file(&mut disk, BITSY_BOOT, sys_file("BITSY.BOOT", (18, 1, 13), (9, 9), (16, 9, 15), (9, 49), false, (0x24, 0)), false);
+        add_file(
+            &mut disk,
+            BITSY_BOOT,
+            sys_file(
+                "BITSY.BOOT",
+                (18, 1, 13),
+                (9, 9),
+                (16, 9, 15),
+                (9, 49),
+                false,
+                (0x24, 0),
+            ),
+            false,
+        );
     }
     if files.bitsy_bye {
-        add_file(&mut disk, QUIT_SYSTEM, sys_file("QUIT.SYSTEM", (18, 1, 13), (9, 9), (16, 9, 15), (9, 41), false, (0x24, 0)), false);
+        add_file(
+            &mut disk,
+            QUIT_SYSTEM,
+            sys_file(
+                "QUIT.SYSTEM",
+                (18, 1, 13),
+                (9, 9),
+                (16, 9, 15),
+                (9, 41),
+                false,
+                (0x24, 0),
+            ),
+            false,
+        );
     }
     if files.basic {
-        add_file(&mut disk, BASIC_SYSTEM, sys_file("BASIC.SYSTEM", (18, 1, 13), (9, 9), (16, 8, 30), (7, 56), false, (0x24, 0)), true);
+        add_file(
+            &mut disk,
+            BASIC_SYSTEM,
+            sys_file(
+                "BASIC.SYSTEM",
+                (18, 1, 13),
+                (9, 9),
+                (16, 8, 30),
+                (7, 56),
+                false,
+                (0x24, 0),
+            ),
+            true,
+        );
     }
     if files.prodos {
-        add_file(&mut disk, PRODOS_243, sys_file("PRODOS", (23, 12, 30), (2, 43), (23, 12, 30), (2, 43), true, (0x00, 0x80)), true);
+        add_file(
+            &mut disk,
+            PRODOS_243,
+            sys_file(
+                "PRODOS",
+                (23, 12, 30),
+                (2, 43),
+                (23, 12, 30),
+                (2, 43),
+                true,
+                (0x00, 0x80),
+            ),
+            true,
+        );
     }
     disk
 }
@@ -437,7 +515,11 @@ fn format_dos33_fs(disk: &mut [u8], vtoc_track: usize) {
     let vtoc = &mut disk[v..v + 256];
     for t in 0..tracks {
         // T00 can never be free (DOS 3.3 has a BNE instead of a BPL); nor the VTOC track.
-        let free = if t == 0 || t == vtoc_track { 0x0000 } else { 0xFFFF };
+        let free = if t == 0 || t == vtoc_track {
+            0x0000
+        } else {
+            0xFFFF
+        };
         dos33_set_track_usage(vtoc, t, free);
     }
 }
@@ -504,16 +586,41 @@ mod tests {
         let d = new_prodos_disk(143360, ProDosFiles::default());
         assert_eq!(d.len(), 143360);
         let v = Volume::read(&d, 2);
-        assert_eq!((v.kind, &v.name[..], v.entry_len, v.entry_num, v.file_count, v.bitmap_block, v.total_blocks), (KIND_ROOT, &b"BLANK"[..], 0x27, 13, 0, 6, 280));
+        assert_eq!(
+            (
+                v.kind,
+                &v.name[..],
+                v.entry_len,
+                v.entry_num,
+                v.file_count,
+                v.bitmap_block,
+                v.total_blocks
+            ),
+            (KIND_ROOT, &b"BLANK"[..], 0x27, 13, 0, 6, 280)
+        );
         // Blocks 0-6 are used, then the first free block is 7.
         assert_eq!(v.first_free(&d), 7);
         // Root directory chain 2 -> 3 -> 4 -> 5.
-        assert_eq!([get16(&d, 1024), get16(&d, 1026), get16(&d, 1536 + 2), get16(&d, 2560), get16(&d, 2560 + 2)], [0, 3, 4, 4, 0]);
+        assert_eq!(
+            [
+                get16(&d, 1024),
+                get16(&d, 1026),
+                get16(&d, 1536 + 2),
+                get16(&d, 2560),
+                get16(&d, 2560 + 2)
+            ],
+            [0, 3, 4, 4, 0]
+        );
     }
 
     #[test]
     fn files_are_added_with_index_blocks_and_marked_used() {
-        let all = ProDosFiles { bitsy_boot: true, bitsy_bye: true, basic: true, prodos: true };
+        let all = ProDosFiles {
+            bitsy_boot: true,
+            bitsy_bye: true,
+            basic: true,
+            prodos: true,
+        };
         let d = new_prodos_disk(143360, all);
         let v = Volume::read(&d, 2);
         assert_eq!(v.file_count, 4);
@@ -536,10 +643,23 @@ mod tests {
     fn dos33_disk_has_the_vtoc_and_system_tracks() {
         let d = new_dos33_disk(143360);
         let v = 0x11 * 4096;
-        assert_eq!([d[v + 1], d[v + 2], d[v + 3], d[v + 6], d[v + 0x34], d[v + 0x35]], [0x11, 0x0F, 3, 254, 35, 16]);
+        assert_eq!(
+            [
+                d[v + 1],
+                d[v + 2],
+                d[v + 3],
+                d[v + 6],
+                d[v + 0x34],
+                d[v + 0x35]
+            ],
+            [0x11, 0x0F, 3, 254, 35, 16]
+        );
         assert_eq!(&d[..DOS33_OS.len()], DOS33_OS);
         let free = |t: usize| (d[v + 0x38 + t * 4] as u16) << 8 | d[v + 0x39 + t * 4] as u16;
-        assert_eq!([free(0), free(1), free(2), free(3), free(17), free(34)], [0, 0, 0, 0xFFFF, 0, 0xFFFF]);
+        assert_eq!(
+            [free(0), free(1), free(2), free(3), free(17), free(34)],
+            [0, 0, 0, 0xFFFF, 0, 0xFFFF]
+        );
     }
 
     #[test]
@@ -558,9 +678,18 @@ mod tests {
         let mut po = image.clone();
         forward_interleave(&mut po, SectorOrder::Dos33);
         assert_eq!(Volume::read(&po, 2).name, b"BLANK");
-        assert!(!format_prodos_disk(&mut vec![0u8; HARDDISK_32M_SIZE + 512], SectorOrder::ProDos));
-        assert_eq!(SectorOrder::from_extension("A.DSK"), Some(SectorOrder::Dos33));
-        assert_eq!(SectorOrder::from_extension("a.hdv"), Some(SectorOrder::ProDos));
+        assert!(!format_prodos_disk(
+            &mut vec![0u8; HARDDISK_32M_SIZE + 512],
+            SectorOrder::ProDos
+        ));
+        assert_eq!(
+            SectorOrder::from_extension("A.DSK"),
+            Some(SectorOrder::Dos33)
+        );
+        assert_eq!(
+            SectorOrder::from_extension("a.hdv"),
+            Some(SectorOrder::ProDos)
+        );
         assert_eq!(SectorOrder::from_extension("a.bin"), None);
     }
 }

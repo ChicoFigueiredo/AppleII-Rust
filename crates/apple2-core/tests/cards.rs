@@ -23,7 +23,12 @@ impl TestCard {
     fn new(id: u8, exp: bool) -> Box<Self> {
         let mut slot_rom = [0xA5u8; SLOT_ROM_SIZE];
         slot_rom[..3].copy_from_slice(&[0xA9, id, 0x60]);
-        Box::new(TestCard { regs: [0; 16], slot_rom, exp: exp.then(|| Box::new([0xE0 | id; EXPANSION_ROM_SIZE])), updated: 0 })
+        Box::new(TestCard {
+            regs: [0; 16],
+            slot_rom,
+            exp: exp.then(|| Box::new([0xE0 | id; EXPANSION_ROM_SIZE])),
+            updated: 0,
+        })
     }
 }
 
@@ -139,7 +144,11 @@ fn io_registers_reach_only_the_card_in_that_slot() {
     assert_eq!(rd(&mut m, 0xC0D2), 0x77);
     let fb = m.board().floating_bus();
     assert_eq!(rd(&mut m, 0xC0E2), fb, "slot 6 is empty");
-    assert_eq!(rd(&mut m, 0xC0DF), fb, "unclaimed register of the card reads the floating bus");
+    assert_eq!(
+        rd(&mut m, 0xC0DF),
+        fb,
+        "unclaimed register of the card reads the floating bus"
+    );
 }
 
 #[test]
@@ -155,7 +164,11 @@ fn language_card_keeps_working_beside_other_cards() {
 #[test]
 fn slot_rom_runs_from_the_cpu_and_empty_slot_is_floating() {
     let mut m = plus(&[(5, 0x42, false)]);
-    load(&mut m, 0x300, &[0x20, 0x00, 0xC5, 0x85, 0x10, 0x4C, 0x05, 0x03]); // JSR $C500; STA $10; JMP *
+    load(
+        &mut m,
+        0x300,
+        &[0x20, 0x00, 0xC5, 0x85, 0x10, 0x4C, 0x05, 0x03],
+    ); // JSR $C500; STA $10; JMP *
     m.run_cycles(30);
     assert_eq!(m.peek(0x10), 0x42);
     assert_eq!(rd(&mut m, 0xC600), m.board().floating_bus());
@@ -175,7 +188,11 @@ fn expansion_rom_needs_a_slot_select_and_is_released_by_cfff() {
     assert_eq!(rd(&mut m, 0xC900), 0xE5);
     wr(&mut m, 0xC900, 0x3C); // expansion writes reach the selected card
     assert_eq!(rd(&mut m, 0xC0DA), 0x3C);
-    assert_eq!(rd(&mut m, 0xCFFF), fb, "$CFFF releases the space, even for its own read");
+    assert_eq!(
+        rd(&mut m, 0xCFFF),
+        fb,
+        "$CFFF releases the space, even for its own read"
+    );
     assert_eq!(rd(&mut m, 0xC800), fb);
     rd(&mut m, 0xC600); // a new select brings in slot 6
     assert_eq!(rd(&mut m, 0xC800), 0xE6);
@@ -185,7 +202,11 @@ fn expansion_rom_needs_a_slot_select_and_is_released_by_cfff() {
 fn code_in_slot_rom_can_read_its_expansion_rom() {
     // JSR $C600; LDA $C800; STA $10
     let mut m = plus(&[(6, 6, true)]);
-    load(&mut m, 0x300, &[0x20, 0x00, 0xC6, 0xAD, 0x00, 0xC8, 0x85, 0x10]);
+    load(
+        &mut m,
+        0x300,
+        &[0x20, 0x00, 0xC6, 0xAD, 0x00, 0xC8, 0x85, 0x10],
+    );
     m.run_cycles(30);
     assert_eq!(m.peek(0x10), 0xE6);
 }
@@ -195,7 +216,11 @@ fn ii_family_has_no_internal_rom_switches() {
     let mut m = plus(&[(5, 5, false)]);
     wr(&mut m, 0xC007, 0); // INTCXROM on: ignored on the ][
     assert_eq!(rd(&mut m, 0xC500), 0xA9);
-    assert_eq!(rd(&mut m, 0xC300), m.board().floating_bus(), "slot 3 empty, no internal ROM");
+    assert_eq!(
+        rd(&mut m, 0xC300),
+        m.board().floating_bus(),
+        "slot 3 empty, no internal ROM"
+    );
 }
 
 #[test]
@@ -204,7 +229,11 @@ fn iie_internal_rom_and_peripheral_rom_follow_intcxrom() {
     assert_eq!(rd(&mut m, 0xC500), 0xA9, "peripheral ROM by default");
     assert_eq!(rd(&mut m, 0xC600), m.board().floating_bus(), "empty slot");
     wr(&mut m, 0xC007, 0);
-    assert_eq!(rd(&mut m, 0xC500), 0xCC, "INTCXROM: internal ROM everywhere");
+    assert_eq!(
+        rd(&mut m, 0xC500),
+        0xCC,
+        "INTCXROM: internal ROM everywhere"
+    );
     assert_eq!(rd(&mut m, 0xC600), 0xCC);
     assert_eq!(rd(&mut m, 0xC800), 0xCC);
     wr(&mut m, 0xC006, 0);
@@ -215,11 +244,19 @@ fn iie_internal_rom_and_peripheral_rom_follow_intcxrom() {
 fn iie_slot3_shows_internal_rom_until_slotc3rom_and_claims_c800_until_cfff() {
     let mut m = machine(Model::Apple2e, &[(3, 3, true), (5, 5, true)]);
     assert_eq!(rd(&mut m, 0xC300), 0xCC, "SLOTC3ROM off: internal $C3xx");
-    assert_eq!(rd(&mut m, 0xC800), 0xCC, "...and INTC8ROM keeps internal ROM at $C800");
+    assert_eq!(
+        rd(&mut m, 0xC800),
+        0xCC,
+        "...and INTC8ROM keeps internal ROM at $C800"
+    );
     rd(&mut m, 0xC500); // selecting slot 5 cannot override INTC8ROM
     assert_eq!(rd(&mut m, 0xC800), 0xCC);
     rd(&mut m, 0xCFFF);
-    assert_eq!(rd(&mut m, 0xC800), m.board().floating_bus(), "released, and the old selection is gone");
+    assert_eq!(
+        rd(&mut m, 0xC800),
+        m.board().floating_bus(),
+        "released, and the old selection is gone"
+    );
     rd(&mut m, 0xCFFF);
     wr(&mut m, 0xC00B, 0); // SLOTC3ROM on: card ROM at $C300 and its expansion ROM
     assert_eq!(rd(&mut m, 0xC300), 0xA9);
@@ -249,8 +286,16 @@ fn iie_leaving_intcxrom_drops_the_stale_expansion_rom() {
     wr(&mut m, 0xC007, 0);
     assert_eq!(m.board().slots.expansion(), ExpansionRom::Internal);
     wr(&mut m, 0xC006, 0);
-    assert_eq!(m.board().slots.expansion(), ExpansionRom::Null, "Memory.cpp:1838");
-    assert_eq!(rd(&mut m, 0xC800), 0xE5, "IO_SELECT is sticky: the next $C800 access reselects");
+    assert_eq!(
+        m.board().slots.expansion(),
+        ExpansionRom::Null,
+        "Memory.cpp:1838"
+    );
+    assert_eq!(
+        rd(&mut m, 0xC800),
+        0xE5,
+        "IO_SELECT is sticky: the next $C800 access reselects"
+    );
 }
 
 #[test]
@@ -267,12 +312,20 @@ fn power_cycle_clears_the_rom_selection_but_reset_does_not() {
 fn event_raises_irq_delivered_to_the_cpu_vector() {
     let mut m = plus(&[(5, 5, false)]);
     // CLI; LDA #200; STA $C0D1 (arm in 200 cycles); JMP *   -- handler at $0400: INC $10; LDA $C0D8; RTI
-    load(&mut m, 0x300, &[0x58, 0xA9, 200, 0x8D, 0xD1, 0xC0, 0x4C, 0x06, 0x03]);
+    load(
+        &mut m,
+        0x300,
+        &[0x58, 0xA9, 200, 0x8D, 0xD1, 0xC0, 0x4C, 0x06, 0x03],
+    );
     load(&mut m, 0x400, &[0xE6, 0x10, 0xAD, 0xD8, 0xC0, 0x40]);
     m.run_cycles(150);
     assert_eq!(m.peek(0x10), 0, "not yet");
     m.run_cycles(100);
-    assert_eq!(m.peek(0x10), 1, "IRQ taken once; the handler acknowledged it");
+    assert_eq!(
+        m.peek(0x10),
+        1,
+        "IRQ taken once; the handler acknowledged it"
+    );
     m.run_cycles(300);
     assert_eq!(m.peek(0x10), 1);
 }
@@ -324,5 +377,8 @@ fn config_slots_still_build_the_ram_cards() {
     cfg.slots[4] = Some(CardKind::Saturn128K);
     let m = Machine::new(cfg);
     assert!(m.board().lc.flags(4).is_some());
-    assert!(m.board().slots.card(4).is_none(), "RAM cards are managed by LanguageCards");
+    assert!(
+        m.board().slots.card(4).is_none(),
+        "RAM cards are managed by LanguageCards"
+    );
 }

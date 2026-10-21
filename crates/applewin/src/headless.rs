@@ -20,7 +20,11 @@ pub struct HeadlessOptions {
     pub load_state: Option<PathBuf>,
 }
 
-pub fn run(settings: Settings, backend: Box<dyn Backend>, opts: &HeadlessOptions) -> Result<Vec<String>, String> {
+pub fn run(
+    settings: Settings,
+    backend: Box<dyn Backend>,
+    opts: &HeadlessOptions,
+) -> Result<Vec<String>, String> {
     let mut emu = Emulator::new(settings, backend, 48_000)?;
     if let Some(p) = &opts.load_state {
         emu.apply(Command::LoadState(p.clone()));

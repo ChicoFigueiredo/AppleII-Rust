@@ -34,7 +34,16 @@ impl HostClock for FixedClock {
 
 impl WallTime {
     /// 2026-10-19 (a Monday) 14:35:27.12, handy for tests.
-    pub const SAMPLE: WallTime = WallTime { year: 2026, month: 10, day: 19, weekday: 1, hour: 14, minute: 35, second: 27, centisecond: 12 };
+    pub const SAMPLE: WallTime = WallTime {
+        year: 2026,
+        month: 10,
+        day: 19,
+        weekday: 1,
+        hour: 14,
+        minute: 35,
+        second: 27,
+        centisecond: 12,
+    };
 }
 
 /// `Clock_Util_ConvertTimeToProdos` (Peripheral_Clock_Generic.cpp:96): the four ProDOS

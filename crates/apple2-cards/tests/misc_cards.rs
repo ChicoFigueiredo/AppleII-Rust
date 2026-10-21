@@ -19,8 +19,15 @@ fn wr(m: &mut Machine, a: u16, v: u8) {
     m.board_mut().write(a, v)
 }
 
-fn with<T: 'static, R>(m: &mut Machine, slot: u8, f: impl FnOnce(&mut T, &mut apple2_core::CardCtx) -> R) -> R {
-    m.with_card(slot, |c, ctx| f(c.as_any_mut().unwrap().downcast_mut::<T>().unwrap(), ctx)).unwrap()
+fn with<T: 'static, R>(
+    m: &mut Machine,
+    slot: u8,
+    f: impl FnOnce(&mut T, &mut apple2_core::CardCtx) -> R,
+) -> R {
+    m.with_card(slot, |c, ctx| {
+        f(c.as_any_mut().unwrap().downcast_mut::<T>().unwrap(), ctx)
+    })
+    .unwrap()
 }
 
 // ---- 4Play ----
@@ -30,13 +37,30 @@ fn fourplay_ports_read_each_stick() {
     let mut m = plus();
     assert!(m.insert_card(5, Box::new(FourPlay::new())));
     with::<FourPlay, _>(&mut m, 5, |c, _| {
-        c.set_stick(0, Stick { up: true, trigger1: true, ..Default::default() });
-        c.set_stick(3, Stick { right: true, ..Default::default() });
+        c.set_stick(
+            0,
+            Stick {
+                up: true,
+                trigger1: true,
+                ..Default::default()
+            },
+        );
+        c.set_stick(
+            3,
+            Stick {
+                right: true,
+                ..Default::default()
+            },
+        );
     });
     assert_eq!(rd(&mut m, 0xC0D0), 0x81 | 0x20);
     assert_eq!(rd(&mut m, 0xC0D1), 0x20);
     assert_eq!(rd(&mut m, 0xC0D3), 0x08 | 0x20);
-    assert_eq!(rd(&mut m, 0xC0D4), m.board().floating_bus(), "ports 4+ float");
+    assert_eq!(
+        rd(&mut m, 0xC0D4),
+        m.board().floating_bus(),
+        "ports 4+ float"
+    );
 }
 
 // ---- SNES MAX ----
@@ -90,19 +114,30 @@ fn snesmax_unplugged_controller_reads_all_ones() {
 fn vidhd_slot_rom_has_the_detection_bytes_and_tracks_iigs_registers() {
     let mut m = plus();
     assert!(m.insert_card(2, Box::new(VidHd::new())));
-    assert_eq!([rd(&mut m, 0xC200), rd(&mut m, 0xC201), rd(&mut m, 0xC202)], [0x24, 0xEA, 0x4C]);
+    assert_eq!(
+        [rd(&mut m, 0xC200), rd(&mut m, 0xC201), rd(&mut m, 0xC202)],
+        [0x24, 0xEA, 0x4C]
+    );
     assert!(!with::<VidHd, _>(&mut m, 2, |c, _| c.is_shr()));
     wr(&mut m, 0xC029, 0xC1); // NEWVIDEO: SHR + linear
     wr(&mut m, 0xC034, 0x35);
     wr(&mut m, 0xC035, 0x08);
     wr(&mut m, 0xC022, 0xF0);
-    let (shr, border, shadow, screen) = with::<VidHd, _>(&mut m, 2, |c, _| (c.is_shr(), c.border_color(), c.shadow(), c.screen_color()));
+    let (shr, border, shadow, screen) = with::<VidHd, _>(&mut m, 2, |c, _| {
+        (c.is_shr(), c.border_color(), c.shadow(), c.screen_color())
+    });
     assert_eq!((shr, border, shadow, screen), (true, 5, 8, 0xF0));
     wr(&mut m, 0xC029, 0x41);
-    assert!(!with::<VidHd, _>(&mut m, 2, |c, _| c.is_shr()), "both NEWVIDEO b7 and b6 are needed");
+    assert!(
+        !with::<VidHd, _>(&mut m, 2, |c, _| c.is_shr()),
+        "both NEWVIDEO b7 and b6 are needed"
+    );
     wr(&mut m, 0xC029, 0xC1);
     m.reset();
-    assert!(!with::<VidHd, _>(&mut m, 2, |c, _| c.is_shr()), "reset leaves SHR");
+    assert!(
+        !with::<VidHd, _>(&mut m, 2, |c, _| c.is_shr()),
+        "reset leaves SHR"
+    );
 }
 
 #[test]
@@ -149,7 +184,17 @@ fn breakpoint_card_matches_reported_hits_against_the_fifo() {
     assert!(with::<BreakpointCard, _>(&mut m, 7, |c, _| c.intercepting()));
     push_bp(&mut m, 0xC0F4, [BPTYPE_PC, 0x34, 0x12, 0, 0, 0]); // PC bp at $1234, read
     assert_eq!(rd(&mut m, 0xC0F0), 0, "not empty");
-    with::<BreakpointCard, _>(&mut m, 7, |c, ctx| c.report(Breakpoint { kind: BPTYPE_PC, addr_start: 0x1234, addr_end: 0, access: 0 }, ctx));
+    with::<BreakpointCard, _>(&mut m, 7, |c, ctx| {
+        c.report(
+            Breakpoint {
+                kind: BPTYPE_PC,
+                addr_start: 0x1234,
+                addr_end: 0,
+                access: 0,
+            },
+            ctx,
+        )
+    });
     assert!(!m.board().interrupts.irq_line(), "deferred by a cycle");
     m.run_cycles(10);
     assert!(m.board().interrupts.irq_line());
@@ -162,11 +207,31 @@ fn breakpoint_card_flags_mismatch_and_unexpected_hits() {
     let mut m = plus();
     assert!(m.insert_card(7, Box::new(BreakpointCard::new())));
     push_bp(&mut m, 0xC0F4, [BPTYPE_MEM, 0x00, 0x03, 0, 0, 1]);
-    with::<BreakpointCard, _>(&mut m, 7, |c, ctx| c.report(Breakpoint { kind: BPTYPE_MEM, addr_start: 0x0300, addr_end: 0, access: 0 }, ctx));
+    with::<BreakpointCard, _>(&mut m, 7, |c, ctx| {
+        c.report(
+            Breakpoint {
+                kind: BPTYPE_MEM,
+                addr_start: 0x0300,
+                addr_end: 0,
+                access: 0,
+            },
+            ctx,
+        )
+    });
     m.run_cycles(10);
     assert_eq!(rd(&mut m, 0xC0F0) & 0xC0, 0x40, "wrong access: mismatch");
     // FIFO is empty: any further hit is a mismatch.
-    with::<BreakpointCard, _>(&mut m, 7, |c, ctx| c.report(Breakpoint { kind: BPTYPE_PC, addr_start: 1, addr_end: 0, access: 0 }, ctx));
+    with::<BreakpointCard, _>(&mut m, 7, |c, ctx| {
+        c.report(
+            Breakpoint {
+                kind: BPTYPE_PC,
+                addr_start: 1,
+                addr_end: 0,
+                access: 0,
+            },
+            ctx,
+        )
+    });
     m.run_cycles(10);
     assert_eq!(rd(&mut m, 0xC0F0) & 0xC0, 0x40);
     rd(&mut m, 0xC0F1);
@@ -330,13 +395,24 @@ fn vidhd_shr_renders_through_the_video_crate() {
     assert!(m.insert_card(2, Box::new(VidHd::new())));
     wr(&mut m, 0xC005, 0); // AUXWRITE: CPU writes land in aux too
     wr(&mut m, 0x2000, 0x12); // line 0: pixels 1,1,2,2 then index 0
-    for (a, v) in [(0x9E02, 0x00), (0x9E03, 0x0F), (0x9E04, 0xF0), (0x9E05, 0x00)] {
+    for (a, v) in [
+        (0x9E02, 0x00),
+        (0x9E03, 0x0F),
+        (0x9E04, 0xF0),
+        (0x9E05, 0x00),
+    ] {
         wr(&mut m, a, v); // palette 0: entry 1 = $0F00 (red), entry 2 = $00F0 (green)
     }
     wr(&mut m, 0xC029, 0xC1); // NEWVIDEO: SHR
-    let mut r = Renderer::new(RenderConfig { video_type: VideoType::MonoWhite, ..Default::default() });
+    let mut r = Renderer::new(RenderConfig {
+        video_type: VideoType::MonoWhite,
+        ..Default::default()
+    });
     let card = m.card::<VidHd>(2).unwrap();
-    let src = WithVidHd { source: &m, vidhd: card };
+    let src = WithVidHd {
+        source: &m,
+        vidhd: card,
+    };
     r.redraw(&src);
     assert_eq!(r.pixel(0, 0), [0xF0, 0, 0, 255]);
     assert_eq!(r.pixel(2, 1), [0, 0xF0, 0, 255]);

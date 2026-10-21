@@ -31,7 +31,10 @@ pub struct Dongle {
 
 impl Dongle {
     pub fn new(kind: DongleKind) -> Self {
-        Dongle { kind, lfsr: CODEWRITER_INITIAL_LFSR }
+        Dongle {
+            kind,
+            lfsr: CODEWRITER_INITIAL_LFSR,
+        }
     }
 
     pub fn kind(&self) -> DongleKind {
@@ -80,7 +83,10 @@ impl GameIoDevice for Dongle {
             const HAYDEN: [u32; 4] = [0xFF, 0x96, 0x96, 0x50]; // derived from reverse-engineered code
             return Some(HAYDEN[usize::from(ann[2]) << 1 | usize::from(ann[0])]);
         }
-        let robocom = matches!(self.kind, DongleKind::Robocom500 | DongleKind::Robocom1000 | DongleKind::Robocom1500);
+        let robocom = matches!(
+            self.kind,
+            DongleKind::Robocom500 | DongleKind::Robocom1000 | DongleKind::Robocom1500
+        );
         if !robocom || ann[3] || n != 3 {
             return None; // AN3 powers the module down
         }
@@ -130,8 +136,16 @@ mod tests {
     #[test]
     fn speedstar_is_a_nand_gated_by_an0() {
         let d = Dongle::new(DongleKind::SdsSpeedStar);
-        assert_eq!(d.button(2, &[false, true, true, false]), Some(true), "unpowered: high");
-        assert_eq!(d.button(2, &[true, true, true, false]), Some(false), "AN1&AN2 pull it low");
+        assert_eq!(
+            d.button(2, &[false, true, true, false]),
+            Some(true),
+            "unpowered: high"
+        );
+        assert_eq!(
+            d.button(2, &[true, true, true, false]),
+            Some(false),
+            "AN1&AN2 pull it low"
+        );
         assert_eq!(d.button(2, &[true, true, false, false]), Some(true));
         assert_eq!(d.button(1, &[true; 4]), None);
     }
@@ -167,7 +181,11 @@ mod tests {
         let d = Dongle::new(DongleKind::Robocom1000);
         assert_eq!(d.paddle(3, &[false, false, false, false]), Some(34));
         assert_eq!(d.paddle(3, &[true, true, false, false]), Some(64));
-        assert_eq!(d.paddle(3, &[false, false, false, true]), None, "AN3 cuts the power");
+        assert_eq!(
+            d.paddle(3, &[false, false, false, true]),
+            None,
+            "AN3 cuts the power"
+        );
         assert_eq!(d.paddle(0, &[false; 4]), None);
         let d = Dongle::new(DongleKind::Robocom500);
         assert_eq!(d.paddle(3, &[false; 4]), Some((0x3F + 0x6F - 1) / 2));

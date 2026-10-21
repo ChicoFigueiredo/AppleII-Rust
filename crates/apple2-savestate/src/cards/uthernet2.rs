@@ -15,11 +15,18 @@ const SOCKETS: std::ops::Range<usize> = 0x0400..0x07FF + 1;
 const TX: std::ops::Range<usize> = 0x4000..0x6000;
 const RX: std::ops::Range<usize> = 0x6000..0x8000;
 
-pub const MAP: Mapping = Mapping { aw_names: &["Uthernet II"], our_name: "Uthernet II", save, load };
+pub const MAP: Mapping = Mapping {
+    aw_names: &["Uthernet II"],
+    our_name: "Uthernet II",
+    save,
+    load,
+};
 
 /// `SaveSnapshot` (:1538) with `Socket::SaveSnapshot` (:330) per socket.
 fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
-    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<Uthernet2>()) else { return false };
+    let Some(c) = card.as_any().and_then(|a| a.downcast_ref::<Uthernet2>()) else {
+        return false;
+    };
     let s = c.snapshot();
     w.slot(slot, "Uthernet II", VERSION, |w| {
         w.string("Network Interface", &s.interface);
@@ -43,16 +50,32 @@ fn save(w: &mut Writer, slot: u8, card: &dyn Card) -> bool {
 
 /// `LoadSnapshot` (:1566), unit versions 1 and 2. Missing memory sub-maps are skipped as in
 /// AppleWin. The network back end comes from the host.
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if !(1..=VERSION).contains(&version) {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Uthernet II'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Uthernet II'."
+        )));
     }
     let interface = st.string("Network Interface")?;
-    let virtual_dns = if version >= 2 { st.bool("Virtual DNS")? } else { false };
+    let virtual_dns = if version >= 2 {
+        st.bool("Virtual DNS")?
+    } else {
+        false
+    };
     let mode_register = st.u32("Mode Register")? as u8;
     let data_address = st.u32("Data Address")? as u16;
     let mut memory = vec![0u8; 0x8000];
-    for (key, range) in [("Common Registers", COMMON), ("Socket Registers", SOCKETS), ("TX Memory", TX), ("RX Memory", RX)] {
+    for (key, range) in [
+        ("Common Registers", COMMON),
+        ("Socket Registers", SOCKETS),
+        ("TX Memory", TX),
+        ("RX Memory", RX),
+    ] {
         if let Some(m) = st.sub(key) {
             m.load_memory(&mut memory[range])?;
         }
@@ -60,13 +83,31 @@ fn load(ctx: &mut LoadCtx, slot: u8, version: u32, st: Map) -> Result<Option<Box
     let mut sockets = [(0u16, 0u16, 0u8); 4];
     for (i, s) in sockets.iter_mut().enumerate() {
         if let Some(m) = st.sub(&format!("Socket {i}")) {
-            *s = (m.u32("RX Write Register")? as u16, m.u32("RX Size Register")? as u16, m.u32("Socket Register")? as u8);
+            *s = (
+                m.u32("RX Write Register")? as u16,
+                m.u32("RX Size Register")? as u16,
+                m.u32("Socket Register")? as u8,
+            );
         }
     }
-    let Some(mut card) = make(ctx, "Uthernet II", slot) else { return Ok(None) };
-    let Some(c) = card.as_any_mut().and_then(|a| a.downcast_mut::<Uthernet2>()) else {
-        return Err(Error::Unsupported("host returned a card that is not an Uthernet II".into()));
+    let Some(mut card) = make(ctx, "Uthernet II", slot) else {
+        return Ok(None);
     };
-    c.apply_snapshot(&Uthernet2Snapshot { interface, virtual_dns, mode_register, data_address, memory, sockets });
+    let Some(c) = card
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<Uthernet2>())
+    else {
+        return Err(Error::Unsupported(
+            "host returned a card that is not an Uthernet II".into(),
+        ));
+    };
+    c.apply_snapshot(&Uthernet2Snapshot {
+        interface,
+        virtual_dns,
+        mode_register,
+        data_address,
+        memory,
+        sockets,
+    });
     Ok(Some(card))
 }

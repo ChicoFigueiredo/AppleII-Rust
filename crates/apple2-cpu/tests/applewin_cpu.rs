@@ -41,7 +41,12 @@ const C: Variant = Variant::Cmos65C02;
 impl T {
     fn new() -> T {
         let mut t = T {
-            ram: Ram { mem: Box::new([0; 65536]), c000_reads: 0, reads: vec![], writes: vec![] },
+            ram: Ram {
+                mem: Box::new([0; 65536]),
+                c000_reads: 0,
+                reads: vec![],
+                writes: vec![],
+            },
             cpu: Cpu::new(N),
         };
         t.reset();
@@ -91,7 +96,16 @@ fn gh264_jmp_indirect() {
     let pc = t.cpu.pc;
     let abs = pc + 3;
     let dst = abs + 2;
-    t.put(pc, &[0x6C, abs as u8, (abs >> 8) as u8, dst as u8, (dst >> 8) as u8]);
+    t.put(
+        pc,
+        &[
+            0x6C,
+            abs as u8,
+            (abs >> 8) as u8,
+            dst as u8,
+            (dst >> 8) as u8,
+        ],
+    );
     assert_eq!(t.n(), 5);
     assert_eq!(t.cpu.pc, dst);
     t.reset();
@@ -103,7 +117,16 @@ fn gh264_jmp_indirect() {
     t.cpu.pc = 0x3FC;
     let abs = t.cpu.pc + 3;
     let dst = abs + 2;
-    t.put(0x3FC, &[0x6C, abs as u8, (abs >> 8) as u8, dst as u8, (dst >> 8) as u8]);
+    t.put(
+        0x3FC,
+        &[
+            0x6C,
+            abs as u8,
+            (abs >> 8) as u8,
+            dst as u8,
+            (dst >> 8) as u8,
+        ],
+    );
     *t.m(0x300) = (dst >> 8) as u8; // allow for the 6502 bug
     assert_eq!(t.n(), 5);
     assert_eq!(t.cpu.pc, dst);
@@ -438,7 +461,11 @@ fn gh278_opcode_timings_6502_no_page_cross() {
     let mut t = T::new();
     for op in 0..=255u8 {
         setup_op(&mut t, op, false);
-        assert_eq!(t.n(), TIMINGS[op as usize][0] as u32, "NMOS opcode {op:02X}");
+        assert_eq!(
+            t.n(),
+            TIMINGS[op as usize][0] as u32,
+            "NMOS opcode {op:02X}"
+        );
     }
 }
 
@@ -447,7 +474,11 @@ fn gh278_opcode_timings_6502_page_cross() {
     let mut t = T::new();
     for op in 0..=255u8 {
         setup_op(&mut t, op, true);
-        assert_eq!(t.n(), TIMINGS[op as usize][1] as u32, "NMOS opcode {op:02X} (page-cross)");
+        assert_eq!(
+            t.n(),
+            TIMINGS[op as usize][1] as u32,
+            "NMOS opcode {op:02X} (page-cross)"
+        );
     }
 }
 
@@ -456,7 +487,11 @@ fn gh278_opcode_timings_65c02_no_page_cross() {
     let mut t = T::new();
     for op in 0..=255u8 {
         setup_op(&mut t, op, false);
-        assert_eq!(t.c(), TIMINGS[op as usize][2] as u32, "CMOS opcode {op:02X}");
+        assert_eq!(
+            t.c(),
+            TIMINGS[op as usize][2] as u32,
+            "CMOS opcode {op:02X}"
+        );
     }
 }
 
@@ -465,7 +500,11 @@ fn gh278_opcode_timings_65c02_page_cross() {
     let mut t = T::new();
     for op in 0..=255u8 {
         setup_op(&mut t, op, true);
-        assert_eq!(t.c(), TIMINGS[op as usize][3] as u32, "CMOS opcode {op:02X} (page-cross)");
+        assert_eq!(
+            t.c(),
+            TIMINGS[op as usize][3] as u32,
+            "CMOS opcode {op:02X} (page-cross)"
+        );
     }
 }
 
@@ -483,7 +522,11 @@ fn bcc_sub(t: &mut T, op: u8, ps_not_taken: u8, ps_taken: u8, pc: u16) {
         t.reset();
         t.cpu.pc = pc;
         t.cpu.p = ps_taken;
-        assert_eq!(t.run(v), 3 + pagecross as u32, "{v:?} op {op:02X} taken @{pc:04X}");
+        assert_eq!(
+            t.run(v),
+            3 + pagecross as u32,
+            "{v:?} op {op:02X} taken @{pc:04X}"
+        );
         assert_eq!(t.cpu.pc, dst_taken);
     }
 }
@@ -526,7 +569,16 @@ fn gh278_jmp_indirect_x() {
     t.reset();
     let abs = t.cpu.pc + 3;
     let dst = abs + 2;
-    t.put(0x300, &[0x7C, abs as u8, (abs >> 8) as u8, dst as u8, (dst >> 8) as u8]);
+    t.put(
+        0x300,
+        &[
+            0x7C,
+            abs as u8,
+            (abs >> 8) as u8,
+            dst as u8,
+            (dst >> 8) as u8,
+        ],
+    );
     assert_eq!(t.c(), 6);
     assert_eq!(t.cpu.pc, dst);
 
@@ -535,7 +587,16 @@ fn gh278_jmp_indirect_x() {
     t.cpu.pc = 0x3FC;
     let abs = t.cpu.pc + 3;
     let dst = abs + 2;
-    t.put(0x3FC, &[0x7C, abs as u8, (abs >> 8) as u8, dst as u8, (dst >> 8) as u8]);
+    t.put(
+        0x3FC,
+        &[
+            0x7C,
+            abs as u8,
+            (abs >> 8) as u8,
+            dst as u8,
+            (dst >> 8) as u8,
+        ],
+    );
     assert_eq!(t.c(), 6);
     assert_eq!(t.cpu.pc, dst);
 
@@ -545,7 +606,17 @@ fn gh278_jmp_indirect_x() {
     t.cpu.pc = 0x3FA;
     let abs = t.cpu.pc + 3;
     let dst = abs + 2 + t.cpu.x as u16;
-    t.put(0x3FA, &[0x7C, abs as u8, (abs >> 8) as u8, 0xCC, dst as u8, (dst >> 8) as u8]);
+    t.put(
+        0x3FA,
+        &[
+            0x7C,
+            abs as u8,
+            (abs >> 8) as u8,
+            0xCC,
+            dst as u8,
+            (dst >> 8) as u8,
+        ],
+    );
     assert_eq!(t.c(), 6);
     assert_eq!(t.cpu.pc, dst);
 }
@@ -559,7 +630,11 @@ fn adc_sbc_decimal(t: &mut T, op: u8) {
         assert_eq!(t.n(), t6(px), "NMOS {op:02X} px={px}");
         setup_op(t, op, px);
         t.cpu.p = AF_DECIMAL;
-        assert_eq!(t.c(), tc(px) + 1, "CMOS {op:02X} px={px}: +1 cycle in decimal mode");
+        assert_eq!(
+            t.c(),
+            tc(px) + 1,
+            "CMOS {op:02X} px={px}: +1 cycle in decimal mode"
+        );
     }
 }
 

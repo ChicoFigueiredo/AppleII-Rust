@@ -137,10 +137,20 @@ impl LoopbackSerial {
     /// A line with DSR/DCD/CTS asserted (a device is attached and ready).
     pub fn new() -> (Self, LoopbackHandle) {
         let state = Arc::new(Mutex::new(MemState {
-            modem: ModemStatus { dsr: true, dcd: true, cts: true },
+            modem: ModemStatus {
+                dsr: true,
+                dcd: true,
+                cts: true,
+            },
             ..Default::default()
         }));
-        (LoopbackSerial { state: state.clone(), active: false }, LoopbackHandle(state))
+        (
+            LoopbackSerial {
+                state: state.clone(),
+                active: false,
+            },
+            LoopbackHandle(state),
+        )
     }
 
     /// Like [`new`](Self::new) but every transmitted byte also arrives as input.
@@ -207,12 +217,19 @@ pub struct TcpServerSerial {
 
 impl TcpServerSerial {
     pub fn new(port: u16) -> Self {
-        TcpServerSerial { port, listener: None, client: None }
+        TcpServerSerial {
+            port,
+            listener: None,
+            client: None,
+        }
     }
 
     /// Port actually bound (useful with port 0).
     pub fn local_port(&self) -> Option<u16> {
-        self.listener.as_ref().and_then(|l| l.local_addr().ok()).map(|a| a.port())
+        self.listener
+            .as_ref()
+            .and_then(|l| l.local_addr().ok())
+            .map(|a| a.port())
     }
 
     /// `CommTcpSerialAccept`: one client at a time.
@@ -306,7 +323,11 @@ impl SerialBackend for TcpServerSerial {
     fn modem_status(&mut self) -> ModemStatus {
         self.accept();
         let up = self.client.is_some();
-        ModemStatus { dsr: up, dcd: up, cts: up }
+        ModemStatus {
+            dsr: up,
+            dcd: up,
+            cts: up,
+        }
     }
 }
 
@@ -316,7 +337,9 @@ impl SerialBackend for TcpServerSerial {
 /// Names of the serial ports the host reports (AppleWin `ScanCOMPorts`, SerialComms.cpp:1255).
 #[cfg(feature = "serialport")]
 pub fn list_serial_ports() -> Vec<String> {
-    serialport::available_ports().map(|p| p.into_iter().map(|i| i.port_name).collect()).unwrap_or_default()
+    serialport::available_ports()
+        .map(|p| p.into_iter().map(|i| i.port_name).collect())
+        .unwrap_or_default()
 }
 
 /// A real COM/tty port. Reads are non-blocking (`ReadIntervalTimeout=MAXDWORD`, :297-303).
@@ -332,12 +355,19 @@ pub struct HostSerialPort {
 #[cfg(feature = "serialport")]
 impl HostSerialPort {
     pub fn new(name: impl Into<String>) -> Self {
-        HostSerialPort { name: name.into(), port: None, line: None, support_dcd: false }
+        HostSerialPort {
+            name: name.into(),
+            port: None,
+            line: None,
+            support_dcd: false,
+        }
     }
 
     fn apply(&mut self) {
         use serialport::{DataBits, Parity as P, StopBits as S};
-        let (Some(p), Some(l)) = (self.port.as_mut(), self.line) else { return };
+        let (Some(p), Some(l)) = (self.port.as_mut(), self.line) else {
+            return;
+        };
         let _ = p.set_baud_rate(l.baud);
         let _ = p.set_data_bits(match l.data_bits {
             5 => DataBits::Five,
@@ -351,7 +381,11 @@ impl HostSerialPort {
             // The crate has no mark/space parity; even is the closest 8-bit-safe fallback.
             Parity::Even | Parity::Mark | Parity::Space => P::Even,
         });
-        let _ = p.set_stop_bits(if l.stop_bits == StopBits::One { S::One } else { S::Two });
+        let _ = p.set_stop_bits(if l.stop_bits == StopBits::One {
+            S::One
+        } else {
+            S::Two
+        });
         let _ = p.write_data_terminal_ready(l.dtr);
         let _ = p.write_request_to_send(l.rts);
     }
@@ -361,7 +395,9 @@ impl HostSerialPort {
 impl SerialBackend for HostSerialPort {
     fn open(&mut self) -> bool {
         if self.port.is_none() {
-            let r = serialport::new(&self.name, 9600).timeout(std::time::Duration::from_millis(0)).open();
+            let r = serialport::new(&self.name, 9600)
+                .timeout(std::time::Duration::from_millis(0))
+                .open();
             self.port = r.ok();
             self.apply();
         }
@@ -388,7 +424,9 @@ impl SerialBackend for HostSerialPort {
     }
 
     fn write(&mut self, byte: u8) -> bool {
-        self.port.as_mut().is_some_and(|p| p.write_all(&[byte]).is_ok())
+        self.port
+            .as_mut()
+            .is_some_and(|p| p.write_all(&[byte]).is_ok())
     }
 
     fn can_send(&self) -> bool {
@@ -396,10 +434,20 @@ impl SerialBackend for HostSerialPort {
     }
 
     fn modem_status(&mut self) -> ModemStatus {
-        let Some(p) = self.port.as_mut() else { return ModemStatus::default() };
+        let Some(p) = self.port.as_mut() else {
+            return ModemStatus::default();
+        };
         let dsr = p.read_data_set_ready().unwrap_or(false);
-        let dcd = if self.support_dcd { p.read_carrier_detect().unwrap_or(false) } else { dsr };
-        ModemStatus { dsr, dcd, cts: p.read_clear_to_send().unwrap_or(false) }
+        let dcd = if self.support_dcd {
+            p.read_carrier_detect().unwrap_or(false)
+        } else {
+            dsr
+        };
+        ModemStatus {
+            dsr,
+            dcd,
+            cts: p.read_clear_to_send().unwrap_or(false),
+        }
     }
 
     fn configure(&mut self, line: &LineConfig) {
@@ -439,7 +487,14 @@ mod tests {
         c.write_all(b"hi").unwrap();
         assert_eq!(poll_until(&mut s, 2), b"hi");
         assert!(s.can_send());
-        assert_eq!(s.modem_status(), ModemStatus { dsr: true, dcd: true, cts: true });
+        assert_eq!(
+            s.modem_status(),
+            ModemStatus {
+                dsr: true,
+                dcd: true,
+                cts: true
+            }
+        );
 
         assert!(s.write(b'x'));
         let mut b = [0u8; 1];

@@ -36,12 +36,18 @@ pub fn decode_char(code: u8, lowercase: bool, alt_charset: bool) -> char {
 /// The 24 text rows of page 1, 40 characters each.
 pub fn text_screen(m: &Machine) -> Vec<String> {
     let model = m.config().model;
-    let lowercase = !model.is_apple2() || matches!(model, Model::Pravets82 | Model::Pravets8M | Model::Pravets8A);
+    let lowercase = !model.is_apple2()
+        || matches!(
+            model,
+            Model::Pravets82 | Model::Pravets8M | Model::Pravets8A
+        );
     let alt = m.board().video.altcharset && !model.is_apple2();
     (0..ROWS)
         .map(|r| {
             let base = row_address(r);
-            (0..COLS as u16).map(|c| decode_char(m.peek_main(base + c), lowercase, alt)).collect()
+            (0..COLS as u16)
+                .map(|c| decode_char(m.peek_main(base + c), lowercase, alt))
+                .collect()
         })
         .collect()
 }

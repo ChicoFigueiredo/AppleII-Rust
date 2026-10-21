@@ -5,17 +5,17 @@ use crate::game_port::GamePort;
 use crate::hooks::{GameIoDevice, RomTap};
 use crate::irq::{Interrupts, IrqSource};
 use crate::keyboard::{Keyboard, NavKey};
-use crate::speaker::Speaker;
 use crate::language_card::LanguageCards;
 use crate::memory::Memory;
 use crate::observer::{AccessKind, AccessObserver};
-use crate::video_mode::VideoMode;
-use crate::video_scanner::VideoScanner;
 use crate::scheduler::{EventId, Scheduler, SyncEvent};
 use crate::slots::Slots;
+use crate::speaker::Speaker;
+use crate::video_mode::VideoMode;
+use crate::video_scanner::VideoScanner;
 use crate::Card;
-use crate::{CardKind, MachineConfig};
 use crate::Model;
+use crate::{CardKind, MachineConfig};
 use apple2_cpu::{Bus, Cpu, FLAG_I};
 
 mod io;
@@ -29,7 +29,10 @@ pub enum EventAction {
     /// Assert the IRQ line for `source` (level; cleared with `Interrupts::set_irq`).
     RaiseIrq(IrqSource),
     /// [`Card::on_event`]`(token)` of the card in `slot`; the handler's return value re-arms it.
-    Card { slot: u8, token: u16 },
+    Card {
+        slot: u8,
+        token: u16,
+    },
     Noop,
 }
 
@@ -98,7 +101,13 @@ impl Board {
             _ => 0,
         };
         let cmos = self.cmos;
-        OpcodeInfo { pc, opcode, operand, indexed_base, cmos }
+        OpcodeInfo {
+            pc,
+            opcode,
+            operand,
+            indexed_base,
+            cmos,
+        }
     }
 
     fn refresh_hooked(&mut self) {
@@ -119,15 +128,45 @@ impl Board {
         let floating_bus = self.floating_bus();
         let (cif, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
         let cmos = self.cmos;
-        let Board { scheduler, interrupts, actions, slots, cycles, memory, opcode_pc, opcode, .. } = self;
+        let Board {
+            scheduler,
+            interrupts,
+            actions,
+            slots,
+            cycles,
+            memory,
+            opcode_pc,
+            opcode,
+            ..
+        } = self;
         let irq_on_last_cycle = scheduler.update(n, |id, rem| {
             let fc = (cif as i64 + rem as i64).rem_euclid(cpf as i64) as u32;
             match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
                 Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
                 Some(EventAction::Card { slot, token }) => {
-                    if let Some(card) = slots.cards.get_mut(slot as usize).and_then(Option::as_deref_mut) {
-                        let opcode = OpcodeInfo { pc: *opcode_pc, opcode: *opcode, cmos, ..Default::default() };
-                        let mut ctx = CardCtx { slot, cycles: *cycles, access_cycle: *cycles, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, opcode, interrupts, ops: &mut slots.ops, memory };
+                    if let Some(card) = slots
+                        .cards
+                        .get_mut(slot as usize)
+                        .and_then(Option::as_deref_mut)
+                    {
+                        let opcode = OpcodeInfo {
+                            pc: *opcode_pc,
+                            opcode: *opcode,
+                            cmos,
+                            ..Default::default()
+                        };
+                        let mut ctx = CardCtx {
+                            slot,
+                            cycles: *cycles,
+                            access_cycle: *cycles,
+                            floating_bus,
+                            frame_cycle: fc,
+                            cycles_per_frame: cpf,
+                            opcode,
+                            interrupts,
+                            ops: &mut slots.ops,
+                            memory,
+                        };
                         return card.on_event(token, &mut ctx);
                     }
                 }
@@ -141,11 +180,20 @@ impl Board {
 
     /// Runs `f` on the card in `slot` (None if empty or a RAM card) and applies the scheduling
     /// requests it made. No allocation unless the card schedules something.
-    pub(crate) fn card_call<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
+    pub(crate) fn card_call<R>(
+        &mut self,
+        slot: u8,
+        f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R,
+    ) -> Option<R> {
         let floating_bus = self.floating_bus();
         let (fc, cpf) = (self.cycles_in_frame, self.cycles_per_frame);
         let access_cycle = self.access_cycle();
-        let wants_operands = self.slots.cards.get(slot as usize)?.as_deref()?.wants_opcode_info();
+        let wants_operands = self
+            .slots
+            .cards
+            .get(slot as usize)?
+            .as_deref()?
+            .wants_opcode_info();
         let opcode = if wants_operands {
             self.opcode_info()
         } else {
@@ -157,9 +205,26 @@ impl Board {
                 ..Default::default()
             }
         };
-        let Board { slots, interrupts, cycles, memory, .. } = self;
+        let Board {
+            slots,
+            interrupts,
+            cycles,
+            memory,
+            ..
+        } = self;
         let card = slots.cards.get_mut(slot as usize)?.as_deref_mut()?;
-        let mut ctx = CardCtx { slot, cycles: *cycles, access_cycle, floating_bus, frame_cycle: fc, cycles_per_frame: cpf, opcode, interrupts, ops: &mut slots.ops, memory };
+        let mut ctx = CardCtx {
+            slot,
+            cycles: *cycles,
+            access_cycle,
+            floating_bus,
+            frame_cycle: fc,
+            cycles_per_frame: cpf,
+            opcode,
+            interrupts,
+            ops: &mut slots.ops,
+            memory,
+        };
         let r = f(card, &mut ctx);
         self.flush_card_ops();
         Some(r)
@@ -174,7 +239,12 @@ impl Board {
         let ops = std::mem::take(&mut self.slots.ops);
         for op in &ops {
             match *op {
-                CardOp::Schedule { slot, token, cycles, can_assert_irq } => {
+                CardOp::Schedule {
+                    slot,
+                    token,
+                    cycles,
+                    can_assert_irq,
+                } => {
                     let id = card_event_id(slot, token);
                     self.scheduler.remove(id);
                     self.actions.retain(|(i, _)| *i != id);
@@ -183,8 +253,13 @@ impl Board {
                     ev.can_assert_irq = can_assert_irq;
                     self.scheduler.insert(ev);
                 }
-                CardOp::SetCanAssertIrq { slot, token, can_assert_irq } => {
-                    self.scheduler.set_can_assert_irq(card_event_id(slot, token), can_assert_irq);
+                CardOp::SetCanAssertIrq {
+                    slot,
+                    token,
+                    can_assert_irq,
+                } => {
+                    self.scheduler
+                        .set_can_assert_irq(card_event_id(slot, token), can_assert_irq);
                 }
                 CardOp::Cancel { slot, token } => {
                     let id = card_event_id(slot, token);
@@ -296,7 +371,12 @@ impl Machine {
         config.validate()?;
         let rom = Self::rom_image(&config);
         let is_e = !config.model.is_apple2();
-        let mut memory = Memory::new(config.model, &rom, config.aux_card, config.slots[0].is_some());
+        let mut memory = Memory::new(
+            config.model,
+            &rom,
+            config.aux_card,
+            config.slots[0].is_some(),
+        );
         let mut lc = LanguageCards::new(is_e, &config.slots);
         lc.attach(&mut memory);
         // Kinds backed by `LanguageCards`; a new `CardKind` forces a decision here.
@@ -337,7 +417,11 @@ impl Machine {
             hooked: false,
         };
         let mut m = Machine {
-            cpu: Cpu::new(if config.is_cmos() { apple2_cpu::Variant::Cmos65C02 } else { apple2_cpu::Variant::Nmos6502 }),
+            cpu: Cpu::new(if config.is_cmos() {
+                apple2_cpu::Variant::Cmos65C02
+            } else {
+                apple2_cpu::Variant::Nmos6502
+            }),
             config,
             board,
             nmi_line: false,
@@ -395,7 +479,10 @@ impl Machine {
     }
 
     /// Installs (or removes, with `None`) the bus-access observer; returns the previous one.
-    pub fn set_access_observer(&mut self, o: Option<Box<dyn AccessObserver>>) -> Option<Box<dyn AccessObserver>> {
+    pub fn set_access_observer(
+        &mut self,
+        o: Option<Box<dyn AccessObserver>>,
+    ) -> Option<Box<dyn AccessObserver>> {
         let old = std::mem::replace(&mut self.board.observer, o);
         self.board.refresh_hooked();
         old
@@ -434,7 +521,10 @@ impl Machine {
     /// Reads as the CPU would under the current paging, without touching soft switches
     /// ($C000-$C0FF reads the floating bus) or the cycle count (test/debug helper).
     pub fn peek(&self, addr: u16) -> u8 {
-        self.board.memory.read(addr).unwrap_or_else(|| self.board.floating_bus())
+        self.board
+            .memory
+            .read(addr)
+            .unwrap_or_else(|| self.board.floating_bus())
     }
 
     /// Writes as the CPU would under the current paging (ROM and I/O ignore it).
@@ -476,7 +566,12 @@ impl Machine {
             return false;
         }
         self.board.card_call(slot, |c, ctx| c.reset(true, ctx));
-        if self.board.slots.card(slot).is_some_and(|c| c.wants_io_snoop()) {
+        if self
+            .board
+            .slots
+            .card(slot)
+            .is_some_and(|c| c.wants_io_snoop())
+        {
             self.board.snoop_mask |= 1 << slot;
         }
         true
@@ -485,7 +580,11 @@ impl Machine {
     /// Runs `f` on the card in `slot` with a [`CardCtx`] (IRQ lines, scheduling), applying what it
     /// requests. This is how a frontend feeds host input to a card: downcast through
     /// [`Card::as_any_mut`]. None if the slot has no boxed card.
-    pub fn with_card<R>(&mut self, slot: u8, f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R) -> Option<R> {
+    pub fn with_card<R>(
+        &mut self,
+        slot: u8,
+        f: impl FnOnce(&mut dyn Card, &mut CardCtx) -> R,
+    ) -> Option<R> {
         self.board.card_call(slot, f)
     }
 
@@ -521,11 +620,23 @@ impl Machine {
     /// frontends that insert/eject media or read device status. `None` if the slot is empty or
     /// holds another kind of card.
     pub fn card_mut<T: Card + 'static>(&mut self, slot: u8) -> Option<&mut T> {
-        self.board.slots.cards.get_mut(slot as usize)?.as_deref_mut()?.as_any_mut()?.downcast_mut::<T>()
+        self.board
+            .slots
+            .cards
+            .get_mut(slot as usize)?
+            .as_deref_mut()?
+            .as_any_mut()?
+            .downcast_mut::<T>()
     }
 
     pub fn card<T: Card + 'static>(&self, slot: u8) -> Option<&T> {
-        self.board.slots.cards.get(slot as usize)?.as_deref()?.as_any()?.downcast_ref::<T>()
+        self.board
+            .slots
+            .cards
+            .get(slot as usize)?
+            .as_deref()?
+            .as_any()?
+            .downcast_ref::<T>()
     }
 
     // ---- Input and sound (slice 6). Host-key translation is the frontend's job; see
@@ -690,10 +801,14 @@ impl Machine {
     /// as in AppleWin's Z80 support).
     fn step_alt_cpu(&mut self) -> Option<u32> {
         let slot = self.board.cpu_owner?;
-        let mut cpu: Box<dyn AltCpu> = self.board.slots.cards[slot as usize].as_deref_mut()?.take_alt_cpu()?;
+        let mut cpu: Box<dyn AltCpu> = self.board.slots.cards[slot as usize]
+            .as_deref_mut()?
+            .take_alt_cpu()?;
         self.board.opcode_ticks = 0;
         let n = cpu.step(&mut self.board);
-        self.board.slots.cards[slot as usize].as_deref_mut()?.restore_alt_cpu(cpu);
+        self.board.slots.cards[slot as usize]
+            .as_deref_mut()?
+            .restore_alt_cpu(cpu);
         for _ in 0..n {
             self.board.tick();
         }
@@ -773,7 +888,14 @@ mod tests {
 
     #[test]
     fn real_rom_reset_vector_is_in_rom() {
-        for model in [Model::Apple2, Model::Apple2Plus, Model::Apple2e, Model::Apple2eEnhanced, Model::Base64A, Model::Pravets8A] {
+        for model in [
+            Model::Apple2,
+            Model::Apple2Plus,
+            Model::Apple2e,
+            Model::Apple2eEnhanced,
+            Model::Base64A,
+            Model::Pravets8A,
+        ] {
             let m = Machine::new(MachineConfig::for_model(model));
             assert!(m.cpu().pc >= 0xC000, "{model:?} pc={:#x}", m.cpu().pc);
         }
@@ -900,12 +1022,22 @@ mod tests {
         m.poke(0x06, 0xF8);
         m.poke(0x07, 0xC3);
         // LDX #$10 ; STA $C400,X ; LDY #8 ; STA ($06),Y
-        run_code(&mut m, &[0xA2, 0x10, 0x9D, 0x00, 0xC4, 0xA0, 0x08, 0x91, 0x06], 4);
+        run_code(
+            &mut m,
+            &[0xA2, 0x10, 0x9D, 0x00, 0xC4, 0xA0, 0x08, 0x91, 0x06],
+            4,
+        );
         let v = seen.borrow().clone();
         assert_eq!(v.len(), 2);
-        assert_eq!((v[0].pc, v[0].opcode, v[0].operand, v[0].indexed_base), (0x302, 0x9D, 0xC400, 0xC400));
+        assert_eq!(
+            (v[0].pc, v[0].opcode, v[0].operand, v[0].indexed_base),
+            (0x302, 0x9D, 0xC400, 0xC400)
+        );
         assert!(!v[0].cmos);
-        assert_eq!((v[1].pc, v[1].opcode, v[1].indexed_base), (0x307, 0x91, 0xC3F8));
+        assert_eq!(
+            (v[1].pc, v[1].opcode, v[1].indexed_base),
+            (0x307, 0x91, 0xC3F8)
+        );
     }
 
     #[test]

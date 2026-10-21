@@ -61,5 +61,12 @@ impl DebugMem for Ram {
 
 pub fn regs_of(m: &Machine) -> Regs {
     let c = m.cpu();
-    Regs { a: c.a, x: c.x, y: c.y, sp: c.sp, pc: c.pc, p: c.p }
+    Regs {
+        a: c.a,
+        x: c.x,
+        y: c.y,
+        sp: c.sp,
+        pc: c.pc,
+        p: c.p,
+    }
 }

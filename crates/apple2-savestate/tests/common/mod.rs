@@ -6,14 +6,19 @@ use apple2_savestate::{ImageRequest, LoadHost};
 use apple2_storage::image::DiskImage;
 
 pub fn disk(name: &str) -> Vec<u8> {
-    let dir = std::env::var("APPLE2_DISKS").unwrap_or_else(|_| format!("{}/../../assets/disks", env!("CARGO_MANIFEST_DIR")));
+    let dir = std::env::var("APPLE2_DISKS")
+        .unwrap_or_else(|_| format!("{}/../../assets/disks", env!("CARGO_MANIFEST_DIR")));
     std::fs::read(format!("{dir}/{name}")).unwrap_or_else(|e| panic!("{dir}/{name}: {e}"))
 }
 
 pub const DOS33: &str = "DOS 3.3 System Master - 680-0210-A.dsk";
 
 pub fn screen(m: &Machine) -> String {
-    text_screen(m).iter().map(|l| l.trim_end()).collect::<Vec<_>>().join("\n")
+    text_screen(m)
+        .iter()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Resolves images from the shared `assets/disks` folder, recording what was asked for.
@@ -25,7 +30,11 @@ pub struct TestHost {
 impl LoadHost for TestHost {
     fn open_image(&mut self, req: &ImageRequest) -> Result<DiskImage, String> {
         self.opened.push(req.filename.to_string());
-        let name = std::path::Path::new(req.filename).file_name().unwrap().to_string_lossy().to_string();
+        let name = std::path::Path::new(req.filename)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         DiskImage::from_bytes(&name, disk(&name)).map_err(|e| e.to_string())
     }
 }
@@ -84,7 +93,11 @@ pub fn woz2_from_dsk(dsk: Vec<u8>, boot_sector_format: u8) -> Vec<u8> {
     f.extend(&data);
     let size = (f.len() - 256) as u32;
     f[252..256].copy_from_slice(&size.to_le_bytes());
-    let largest = tracks.iter().map(|(b, _)| b.len().div_ceil(512)).max().unwrap() as u16;
+    let largest = tracks
+        .iter()
+        .map(|(b, _)| b.len().div_ceil(512))
+        .max()
+        .unwrap() as u16;
     f[20 + 44..20 + 46].copy_from_slice(&largest.to_le_bytes());
     apple2_storage::woz::update_crc(&mut f);
     f

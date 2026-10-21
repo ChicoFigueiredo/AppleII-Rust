@@ -13,7 +13,10 @@ fn run_with_timeout(args: &[&str]) -> (i32, String) {
     loop {
         if let Some(status) = child.try_wait().unwrap() {
             let out = child.wait_with_output().unwrap();
-            return (status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned());
+            return (
+                status.code().unwrap_or(-1),
+                String::from_utf8_lossy(&out.stdout).into_owned(),
+            );
         }
         if t0.elapsed() > Duration::from_secs(20) {
             let _ = child.kill();

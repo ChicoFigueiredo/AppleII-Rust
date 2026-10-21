@@ -4,15 +4,15 @@
 
 use crate::audio::AudioRing;
 use crate::backend::{Backend, BackendFactory, DiskSink, DriveStatus, MouseSink};
-use crate::joy::JoyOutput;
 use crate::debug_view::render_grid;
+use crate::joy::JoyOutput;
 use crate::keymap::{DebugKey, KeyEvent};
 use crate::pacing::{audio_frames_due, Speed, TimerPacer};
 use crate::video::{Frame, FrameSource};
 use apple2_audio::{volume_gain, AudioBus, Mixer};
 use apple2_config::Settings;
-use apple2_debugger::{Debugger, RunMode};
 use apple2_core::Machine;
+use apple2_debugger::{Debugger, RunMode};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -27,8 +27,14 @@ pub const VOLUME_MAX: u32 = 59;
 pub enum Command {
     Key(KeyEvent),
     /// Joystick `index` (0 or 1) state.
-    Joy { index: usize, out: JoyOutput },
-    JoyAttached { index: usize, attached: bool },
+    Joy {
+        index: usize,
+        out: JoyOutput,
+    },
+    JoyAttached {
+        index: usize,
+        attached: bool,
+    },
     Paste(String),
     /// Ctrl+Print Screen: publish the text screen for the clipboard ([`EmuStatus::copied_text`]).
     CopyScreenText,
@@ -49,16 +55,30 @@ pub enum Command {
     /// New settings that need no machine rebuild (video, speed, input...): swaps the settings and
     /// the renderer, keeps the machine running.
     UpdateSettings(Box<Settings>),
-    SetWriteProtect { drive: usize, on: bool },
+    SetWriteProtect {
+        drive: usize,
+        on: bool,
+    },
     SetVolume(u32),
-    InsertDisk { drive: usize, path: PathBuf },
-    EjectDisk { drive: usize },
+    InsertDisk {
+        drive: usize,
+        path: PathBuf,
+    },
+    EjectDisk {
+        drive: usize,
+    },
     SwapDrives,
     VideoMode(i32),
     ToggleScanlines,
     RockerSwitch,
-    MouseMove { dx: i32, dy: i32 },
-    MouseButton { button: u8, down: bool },
+    MouseMove {
+        dx: i32,
+        dy: i32,
+    },
+    MouseButton {
+        button: u8,
+        down: bool,
+    },
     ToggleDebugger,
     /// Console input while the debugger is on screen.
     Debug(DebugKey),
@@ -191,7 +211,10 @@ impl apple2_debugger::host::Host for AutoRunHost {
 fn new_debugger(m: &mut Machine, auto_run: Option<&Path>) -> Debugger {
     let mut d = Debugger::new();
     let fs = apple2_debugger::host::FsHost::new(std::env::current_dir().unwrap_or_default());
-    d.set_host(Box::new(AutoRunHost { fs, script: auto_run.map(Path::to_path_buf) }));
+    d.set_host(Box::new(AutoRunHost {
+        fs,
+        script: auto_run.map(Path::to_path_buf),
+    }));
     d.initialize(m);
     d
 }
@@ -223,7 +246,11 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(settings: Settings, mut backend: Box<dyn Backend>, audio_rate: u32) -> Result<Self, String> {
+    pub fn new(
+        settings: Settings,
+        mut backend: Box<dyn Backend>,
+        audio_rate: u32,
+    ) -> Result<Self, String> {
         let bus = AudioBus::new(audio_rate, settings.to_machine_config().video_standard);
         let mut machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
@@ -247,7 +274,11 @@ impl Emulator {
             audio_rate,
             frame: Frame::new(0, 0),
             paused: false,
-            speed: if speed == Speed::Max { Speed::NORMAL } else { speed },
+            speed: if speed == Speed::Max {
+                Speed::NORMAL
+            } else {
+                speed
+            },
             full_speed: speed == Speed::Max,
             caps: settings_caps,
             message: String::new(),
@@ -261,7 +292,9 @@ impl Emulator {
 
     /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
     pub fn effective_full_speed(&self) -> bool {
-        self.full_speed || self.disks.wants_full_speed(&self.machine) || (self.debugger.is_stepping() && self.debugger.full_speed)
+        self.full_speed
+            || self.disks.wants_full_speed(&self.machine)
+            || (self.debugger.is_stepping() && self.debugger.full_speed)
     }
 
     pub fn clock_hz(&self) -> f64 {
@@ -274,7 +307,8 @@ impl Emulator {
 
     /// Audio sample frames one machine frame produces (at 1.0x).
     pub fn audio_frames_per_machine_frame(&self) -> usize {
-        (self.cycles_per_frame() as f64 / self.clock_hz() * f64::from(self.audio_rate)).round() as usize
+        (self.cycles_per_frame() as f64 / self.clock_hz() * f64::from(self.audio_rate)).round()
+            as usize
     }
 
     pub fn say(&mut self, msg: impl Into<String>) {
@@ -307,7 +341,8 @@ impl Emulator {
     pub fn render(&mut self) -> &Frame {
         if self.debugger.mode != RunMode::Running && self.debugger.output_view.is_none() {
             let grid = self.debugger.render(&self.machine);
-            let blink = (self.machine.frames() / 16).is_multiple_of(2) || self.debugger.mode == RunMode::Debug;
+            let blink = (self.machine.frames() / 16).is_multiple_of(2)
+                || self.debugger.mode == RunMode::Debug;
             render_grid(&grid, blink, &mut self.frame);
         } else {
             if self.debugger.mode != RunMode::Running {
@@ -394,7 +429,11 @@ impl Emulator {
         });
         match r {
             Ok(w) if w.is_empty() => self.say(format!("State saved: {}", path.display())),
-            Ok(w) => self.say(format!("State saved: {} ({})", path.display(), w.join("; "))),
+            Ok(w) => self.say(format!(
+                "State saved: {} ({})",
+                path.display(),
+                w.join("; ")
+            )),
             Err(e) => self.say(format!("Save state failed: {e}")),
         }
     }
@@ -402,7 +441,11 @@ impl Emulator {
     pub fn load_state(&mut self, path: &Path) {
         match self.try_load_state(path) {
             Ok(w) if w.is_empty() => self.say(format!("State loaded: {}", path.display())),
-            Ok(w) => self.say(format!("State loaded: {} ({})", path.display(), w.join("; "))),
+            Ok(w) => self.say(format!(
+                "State loaded: {} ({})",
+                path.display(),
+                w.join("; ")
+            )),
             Err(e) => self.say(format!("Load state failed: {e}")),
         }
     }
@@ -412,12 +455,21 @@ impl Emulator {
         crate::state_io::check_loadable(path)?;
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         // The cards the state builds hold their own audio bus; the mixer must read the same one.
-        let bus = AudioBus::new(self.audio_rate, self.settings.to_machine_config().video_standard);
-        let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).map(Path::to_path_buf);
+        let bus = AudioBus::new(
+            self.audio_rate,
+            self.settings.to_machine_config().video_standard,
+        );
+        let dir = path
+            .parent()
+            .filter(|d| !d.as_os_str().is_empty())
+            .map(Path::to_path_buf);
         let loaded = crate::state_io::load_machine(&text, &self.settings, &bus, dir.as_deref())?;
         let mut machine = loaded.machine;
         let cfg = machine.config().clone();
-        bus.set_clock(apple2_audio::SampleClock::new(self.audio_rate, cfg.video_standard));
+        bus.set_clock(apple2_audio::SampleClock::new(
+            self.audio_rate,
+            cfg.video_standard,
+        ));
         self.settings.machine.model = cfg.model;
         self.settings.machine.refresh_rate = match cfg.video_standard {
             apple2_core::VideoStandard::Pal => apple2_config::settings::RefreshRate::Hz50,
@@ -483,9 +535,12 @@ impl Emulator {
                     self.machine.set_button(2, out.buttons[0]);
                 }
             }
-            Command::JoyAttached { index, attached } => self.machine.set_joystick_attached(index.min(1), attached),
+            Command::JoyAttached { index, attached } => {
+                self.machine.set_joystick_attached(index.min(1), attached)
+            }
             Command::CopyScreenText => {
-                self.copied_text = apple2_core::text_screen::text_screen(&self.machine).join("\n") + "\n";
+                self.copied_text =
+                    apple2_core::text_screen::text_screen(&self.machine).join("\n") + "\n";
                 self.copied_seq += 1;
                 self.say("Text screen copied to the clipboard");
             }
@@ -528,17 +583,24 @@ impl Emulator {
                 if let Speed::Multiplier(_) = sp {
                     self.speed = sp;
                 }
-                apple2_storage::disk2::manager::set_enhance_disk(&mut self.machine, s.storage.enhance_disk_speed);
+                apple2_storage::disk2::manager::set_enhance_disk(
+                    &mut self.machine,
+                    s.storage.enhance_disk_speed,
+                );
                 self.settings = *s;
             }
-            Command::SetWriteProtect { drive, on } => self.disks.set_write_protect(&mut self.machine, drive, on),
+            Command::SetWriteProtect { drive, on } => {
+                self.disks.set_write_protect(&mut self.machine, drive, on)
+            }
             Command::SetVolume(v) => {
                 self.settings.sound.master_volume = v;
             }
-            Command::InsertDisk { drive, path } => match self.disks.insert(&mut self.machine, drive, &path) {
-                Ok(()) => self.say(format!("Drive {}: {}", drive + 1, path.display())),
-                Err(e) => self.say(e),
-            },
+            Command::InsertDisk { drive, path } => {
+                match self.disks.insert(&mut self.machine, drive, &path) {
+                    Ok(()) => self.say(format!("Drive {}: {}", drive + 1, path.display())),
+                    Err(e) => self.say(e),
+                }
+            }
             Command::EjectDisk { drive } => self.disks.eject(&mut self.machine, drive),
             Command::SwapDrives => self.disks.swap(&mut self.machine),
             Command::VideoMode(d) => {
@@ -549,7 +611,9 @@ impl Emulator {
             Command::ToggleScanlines => self.video.toggle_scanlines(),
             Command::RockerSwitch => self.video.toggle_rocker_switch(),
             Command::MouseMove { dx, dy } => self.mouse.motion(&mut self.machine, dx, dy),
-            Command::MouseButton { button, down } => self.mouse.button(&mut self.machine, button, down),
+            Command::MouseButton { button, down } => {
+                self.mouse.button(&mut self.machine, button, down)
+            }
             Command::ToggleDebugger => {
                 if self.debugger.mode == RunMode::Running {
                     self.debugger.enter(&mut self.machine);
@@ -639,19 +703,25 @@ pub fn spawn(
     let sh = shared.clone();
     let join = std::thread::Builder::new()
         .name("emulation".into())
-        .spawn(move || match Emulator::new(settings, factory(), audio_rate) {
-            Ok(mut emu) => {
-                emu.startup_state();
-                let _ = ready_tx.send(Ok(()));
-                drive(emu, rx, &sh, ring, &*notify);
-            }
-            Err(e) => {
-                let _ = ready_tx.send(Err(e));
-            }
-        })
+        .spawn(
+            move || match Emulator::new(settings, factory(), audio_rate) {
+                Ok(mut emu) => {
+                    emu.startup_state();
+                    let _ = ready_tx.send(Ok(()));
+                    drive(emu, rx, &sh, ring, &*notify);
+                }
+                Err(e) => {
+                    let _ = ready_tx.send(Err(e));
+                }
+            },
+        )
         .map_err(|e| e.to_string())?;
     ready_rx.recv().map_err(|e| e.to_string())??;
-    Ok(EmuHandle { tx, shared, join: Some(join) })
+    Ok(EmuHandle {
+        tx,
+        shared,
+        join: Some(join),
+    })
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -665,7 +735,13 @@ enum Mode {
 const PUBLISH_PERIOD: Duration = Duration::from_millis(15);
 const AUDIO_TARGET_SECS: f64 = 0.08;
 
-fn drive(mut emu: Emulator, rx: Receiver<Command>, shared: &Shared, ring: Option<Arc<AudioRing>>, notify: &dyn Fn()) {
+fn drive(
+    mut emu: Emulator,
+    rx: Receiver<Command>,
+    shared: &Shared,
+    ring: Option<Arc<AudioRing>>,
+    notify: &dyn Fn(),
+) {
     let start = Instant::now();
     let mut pacer = TimerPacer::new(emu.clock_hz());
     let mut done: u64 = 0;
@@ -768,7 +844,15 @@ fn drive(mut emu: Emulator, rx: Receiver<Command>, shared: &Shared, ring: Option
         }
 
         // 4. publish
-        if (ran || dirty) && last_publish.elapsed() >= if mode == Mode::Max { PUBLISH_PERIOD } else { Duration::from_millis(8) } || (mode == Mode::Paused && last_publish.elapsed() >= Duration::from_millis(33)) {
+        if (ran || dirty)
+            && last_publish.elapsed()
+                >= if mode == Mode::Max {
+                    PUBLISH_PERIOD
+                } else {
+                    Duration::from_millis(8)
+                }
+            || (mode == Mode::Paused && last_publish.elapsed() >= Duration::from_millis(33))
+        {
             let t = rate_anchor.0.elapsed().as_secs_f32();
             if t >= 0.5 {
                 let mhz = (emu.machine.cycles().saturating_sub(rate_anchor.1)) as f32 / t / 1e6;

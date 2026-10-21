@@ -25,7 +25,13 @@ pub enum Page {
 }
 
 impl Page {
-    pub const ALL: [Page; 5] = [Page::Configuration, Page::Input, Page::Sound, Page::Slots, Page::Advanced];
+    pub const ALL: [Page; 5] = [
+        Page::Configuration,
+        Page::Input,
+        Page::Sound,
+        Page::Slots,
+        Page::Advanced,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -46,13 +52,20 @@ pub enum ApplyPlan {
     /// Nothing that needs a restart changed.
     Live(Box<Settings>),
     /// Hardware changed: ask first (AppleWin's `HardwareConfigChanged` + `IsOkToRestart`).
-    Restart { reasons: Vec<String>, settings: Box<Settings> },
+    Restart {
+        reasons: Vec<String>,
+        settings: Box<Settings>,
+    },
 }
 
 /// Modal questions the dialog asks.
 #[derive(Debug)]
 enum Confirm {
-    Restart { reasons: Vec<String>, settings: Box<Settings>, close: bool },
+    Restart {
+        reasons: Vec<String>,
+        settings: Box<Settings>,
+        close: bool,
+    },
     ResetAll,
     ResetSlots,
 }
@@ -77,7 +90,10 @@ pub struct HostLists {
 
 impl HostLists {
     pub fn scan() -> Self {
-        HostLists { serial_ports: scan_serial_ports(), interfaces: scan_interfaces() }
+        HostLists {
+            serial_ports: scan_serial_ports(),
+            interfaces: scan_interfaces(),
+        }
     }
 }
 
@@ -89,7 +105,12 @@ fn scan_serial_ports() -> Vec<String> {
         .map(|d| {
             d.filter_map(|e| e.ok())
                 .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|n| n.starts_with("ttyUSB") || n.starts_with("ttyACM") || n.starts_with("cu.") || n.starts_with("tty.usb"))
+                .filter(|n| {
+                    n.starts_with("ttyUSB")
+                        || n.starts_with("ttyACM")
+                        || n.starts_with("cu.")
+                        || n.starts_with("tty.usb")
+                })
                 .map(|n| format!("/dev/{n}"))
                 .collect()
         })
@@ -100,7 +121,12 @@ fn scan_serial_ports() -> Vec<String> {
 
 fn scan_interfaces() -> Vec<(String, String)> {
     let mut v: Vec<(String, String)> = std::fs::read_dir("/sys/class/net")
-        .map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).map(|n| (n, String::new())).collect())
+        .map(|d| {
+            d.filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .map(|n| (n, String::new()))
+                .collect()
+        })
         .unwrap_or_default();
     v.sort();
     v
@@ -158,7 +184,10 @@ impl SettingsDialog {
     pub fn open_at(&mut self, settings: &Settings, spec: &str) {
         self.open_with(settings);
         let (page, slot) = spec.split_once(':').unwrap_or((spec, ""));
-        if let Some(p) = Page::ALL.iter().find(|p| p.title().eq_ignore_ascii_case(page)) {
+        if let Some(p) = Page::ALL
+            .iter()
+            .find(|p| p.title().eq_ignore_ascii_case(page))
+        {
             self.page = *p;
         }
         match slot {
@@ -195,7 +224,10 @@ impl SettingsDialog {
         if reasons.is_empty() {
             ApplyPlan::Live(Box::new(s))
         } else {
-            ApplyPlan::Restart { reasons, settings: Box::new(s) }
+            ApplyPlan::Restart {
+                reasons,
+                settings: Box::new(s),
+            }
         }
     }
 
@@ -218,7 +250,11 @@ impl SettingsDialog {
             }
             ApplyPlan::Restart { reasons, settings } => {
                 self.errors.clear();
-                self.confirm = Some(Confirm::Restart { reasons, settings, close });
+                self.confirm = Some(Confirm::Restart {
+                    reasons,
+                    settings,
+                    close,
+                });
             }
         }
     }
@@ -245,9 +281,12 @@ impl SettingsDialog {
                     }
                 });
                 ui.separator();
-                egui::ScrollArea::vertical().max_height((max_h - 240.0).max(160.0)).auto_shrink([false, true]).show(ui, |ui| {
-                    self.draw_page(ui, integer_scale, ev);
-                });
+                egui::ScrollArea::vertical()
+                    .max_height((max_h - 240.0).max(160.0))
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        self.draw_page(ui, integer_scale, ev);
+                    });
                 ui.separator();
                 for e in &self.errors {
                     ui.colored_label(egui::Color32::from_rgb(230, 80, 60), e);
@@ -296,23 +335,29 @@ impl SettingsDialog {
             ),
             Confirm::ResetSlots => ("Slots", "Reset the cards of all slots to the defaults for this model?".to_string()),
         };
-        egui::Window::new(title).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO).show(ctx, |ui| {
-            ui.set_max_width(420.0);
-            ui.label(text);
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() {
-                    answer = Answer::Yes;
-                }
-                if ui.button("Cancel").clicked() {
-                    answer = Answer::No;
-                }
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                ui.label(text);
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        answer = Answer::Yes;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        answer = Answer::No;
+                    }
+                });
             });
-        });
         match answer {
             Answer::Pending => {}
             Answer::No => self.confirm = None,
             Answer::Yes => match self.confirm.take() {
-                Some(Confirm::Restart { settings, close, .. }) => {
+                Some(Confirm::Restart {
+                    settings, close, ..
+                }) => {
                     ev.push(UiEvent::Apply(settings.clone()));
                     self.committed(&settings);
                     self.open &= !close;
@@ -361,7 +406,10 @@ mod tests {
         d.draft.video.vertical_blend = true;
         d.draft.joystick.pdl_x_trim = -5;
         d.draft.sound.master_volume = 12;
-        d.speed = SpeedForm { authentic: false, custom: 25 };
+        d.speed = SpeedForm {
+            authentic: false,
+            custom: 25,
+        };
         match d.plan() {
             ApplyPlan::Live(s) => {
                 assert!(s.video.vertical_blend);
@@ -378,7 +426,9 @@ mod tests {
         d.draft.slots.0[5] = SlotCardSpec::new(CardType::Phasor);
         match d.plan() {
             ApplyPlan::Restart { reasons, settings } => {
-                assert!(reasons.iter().any(|r| r.contains("Slot 5") && r.contains("Phasor")));
+                assert!(reasons
+                    .iter()
+                    .any(|r| r.contains("Slot 5") && r.contains("Phasor")));
                 assert_eq!(settings.slot(5).card_type(), CardType::Phasor);
             }
             p => panic!("{p:?}"),
@@ -409,7 +459,9 @@ mod tests {
     fn committed_becomes_the_new_baseline() {
         let mut d = dlg();
         d.draft.slots.0[5] = SlotCardSpec::new(CardType::Phasor);
-        let ApplyPlan::Restart { settings, .. } = d.plan() else { panic!() };
+        let ApplyPlan::Restart { settings, .. } = d.plan() else {
+            panic!()
+        };
         d.committed(&settings);
         assert!(matches!(d.plan(), ApplyPlan::Live(_)));
     }

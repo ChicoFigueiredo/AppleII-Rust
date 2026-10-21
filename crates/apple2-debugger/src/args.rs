@@ -43,7 +43,15 @@ pub struct Arg {
 
 impl Arg {
     fn new(text: &str, kind: Kind) -> Arg {
-        Arg { text: text.to_string(), kind, value: 0, value_set: false, is_symbol: false, no_reg: false, no_sym: false }
+        Arg {
+            text: text.to_string(),
+            kind,
+            value: 0,
+            value_set: false,
+            is_symbol: false,
+            no_reg: false,
+            no_sym: false,
+        }
     }
 
     pub fn is_op(&self, op: &str) -> bool {
@@ -139,13 +147,24 @@ pub fn tokenize(input: &str) -> Vec<Arg> {
             }
             let s: String = ch[start..end].iter().collect();
             if !s.is_empty() {
-                out.push(Arg::new(&s, if c == '"' { Kind::Quoted2 } else { Kind::Quoted1 }));
+                out.push(Arg::new(
+                    &s,
+                    if c == '"' {
+                        Kind::Quoted2
+                    } else {
+                        Kind::Quoted1
+                    },
+                ));
             }
             i = (end + 1).min(ch.len().max(end + 1));
             continue;
         }
         if !c.is_alphanumeric() && is_token_char(c) {
-            let kind = if OPERATORS.contains(c) { Kind::Operator } else { Kind::Punct };
+            let kind = if OPERATORS.contains(c) {
+                Kind::Operator
+            } else {
+                Kind::Punct
+            };
             out.push(Arg::new(&c.to_string(), kind));
             i += 1;
             continue;
@@ -164,7 +183,10 @@ pub fn tokenize(input: &str) -> Vec<Arg> {
 
 /// `strtoul(s, &end, 16) & 0xFFFF`: leading hex digits, 0 if none.
 pub fn hex_prefix(s: &str) -> u16 {
-    let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+    let s = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
     let mut v: u32 = 0;
     for c in s.chars() {
         match c.to_digit(16) {
@@ -348,7 +370,9 @@ pub enum RangeType {
 pub fn range_get(args: &Args, i: usize) -> (u16, u16, RangeType) {
     let a1 = args.value(i);
     match args.get(i + 1) {
-        Some(t) if t.is_op(",") && args.get(i + 2).is_some() => (a1, args.value(i + 2), RangeType::HasLen),
+        Some(t) if t.is_op(",") && args.get(i + 2).is_some() => {
+            (a1, args.value(i + 2), RangeType::HasLen)
+        }
         Some(t) if t.is_op(":") && args.get(i + 2).is_some() => {
             let e = args.value(i + 2);
             if a1 > e {
@@ -381,8 +405,16 @@ mod tests {
 
     fn cooked(line: &str, regs: Regs, syms: &Symbols, mem: &Ram) -> Args {
         let raw = tokenize(line);
-        let ctx = CookCtx { regs, symbols: syms, mem, search_results: &[10, 20] };
-        Args { cooked: cook(&raw, &ctx).unwrap(), raw }
+        let ctx = CookCtx {
+            regs,
+            symbols: syms,
+            mem,
+            search_results: &[10, 20],
+        };
+        Args {
+            cooked: cook(&raw, &ctx).unwrap(),
+            raw,
+        }
     }
 
     fn texts(line: &str) -> Vec<String> {
@@ -395,7 +427,10 @@ mod tests {
         assert_eq!(texts("m 300:3ff"), ["m", "300", ":", "3ff"]);
         assert_eq!(texts("HELP BREAKPOINTS"), ["HELP", "BREAKPOINTS"]);
         assert_eq!(texts("bp $FDED ; comment"), ["bp", "$", "FDED"]);
-        assert_eq!(texts("S 300:3FF \"Hi there\""), ["S", "300", ":", "3FF", "Hi there"]);
+        assert_eq!(
+            texts("S 300:3FF \"Hi there\""),
+            ["S", "300", ":", "3FF", "Hi there"]
+        );
         assert_eq!(texts("BPM 300 >= 5"), ["BPM", "300", ">=", "5"]);
         assert_eq!(texts("// whole line comment"), Vec::<String>::new());
         assert_eq!(texts("D.COS0+1"), ["D.COS0", "+", "1"]);
@@ -406,7 +441,14 @@ mod tests {
         let mut syms = Symbols::default();
         syms.set(Table::Main, "COUT", 0xFDED);
         let mem = Ram::default();
-        let regs = Regs { a: 0x41, x: 2, y: 3, sp: 0xF0, pc: 0x300, p: 0x30 };
+        let regs = Regs {
+            a: 0x41,
+            x: 2,
+            y: 3,
+            sp: 0xF0,
+            pc: 0x300,
+            p: 0x30,
+        };
         assert_eq!(cooked("u fded", regs, &syms, &mem).value(1), 0xFDED);
         assert_eq!(cooked("u cout", regs, &syms, &mem).value(1), 0xFDED);
         assert_eq!(cooked("u pc + 3", regs, &syms, &mem).value(1), 0x303);
@@ -447,7 +489,10 @@ mod tests {
         assert_eq!(range_end_len(t, s, l), Some((0x200F, 0x10)));
         let a = cooked("m 3FF:300", regs, &syms, &mem);
         assert_eq!(range_get(&a, 1).0, 0x300); // swapped
-        assert_eq!(range_get(&cooked("m 300", regs, &syms, &mem), 1).2, RangeType::MissingArg2);
+        assert_eq!(
+            range_get(&cooked("m 300", regs, &syms, &mem), 1).2,
+            RangeType::MissingArg2
+        );
     }
 
     #[test]
@@ -455,7 +500,12 @@ mod tests {
         let syms = Symbols::default();
         let mem = Ram::default();
         let raw = tokenize("u 300 +");
-        let ctx = CookCtx { regs: Regs::default(), symbols: &syms, mem: &mem, search_results: &[] };
+        let ctx = CookCtx {
+            regs: Regs::default(),
+            symbols: &syms,
+            mem: &mem,
+            search_results: &[],
+        };
         assert!(cook(&raw, &ctx).is_err());
         let raw = tokenize("u (300");
         assert!(cook(&raw, &ctx).is_err());

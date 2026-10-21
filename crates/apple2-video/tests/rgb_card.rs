@@ -8,7 +8,11 @@ use apple2_video::{RenderConfig, Renderer, RgbCard, VideoType};
 use common::*;
 
 fn rgb_renderer(card: RgbCard) -> Renderer {
-    Renderer::new(RenderConfig { video_type: VideoType::ColorVideocardRgb, rgb_card: card, ..Default::default() })
+    Renderer::new(RenderConfig {
+        video_type: VideoType::ColorVideocardRgb,
+        rgb_card: card,
+        ..Default::default()
+    })
 }
 
 fn lores(n: usize) -> u32 {
@@ -68,12 +72,20 @@ fn text_colors_follow_the_configured_foreground() {
 fn video7_renders_inverse_text_as_black_and_white_ignoring_the_colors() {
     let mut s = Fake::new(Model::Apple2e).text();
     s.poke(0x400, &[0x01]); // inverse 'A'
-    let cfg = RenderConfig { video_type: VideoType::ColorVideocardRgb, rgb_text_fg: 12, rgb_text_bg: 2, ..Default::default() };
+    let cfg = RenderConfig {
+        video_type: VideoType::ColorVideocardRgb,
+        rgb_text_fg: 12,
+        rgb_text_bg: 2,
+        ..Default::default()
+    };
     let mut sl7 = Renderer::new(cfg.clone());
     render(&mut sl7, &s, 1);
     assert_eq!(rgb(&sl7, 0, 0), 0xFFFFFF, "SL7: inverse is B&W");
     assert_eq!(rgb(&sl7, 6, 0), 0);
-    let mut eve = Renderer::new(RenderConfig { rgb_card: RgbCard::LeChatMauveEve, ..cfg });
+    let mut eve = Renderer::new(RenderConfig {
+        rgb_card: RgbCard::LeChatMauveEve,
+        ..cfg
+    });
     render(&mut eve, &s, 1);
     // Inverse 'A': the dots around the glyph are the lit ones.
     assert_eq!(rgb(&eve, 0, 0), lores(12), "EVE keeps the text colours");

@@ -57,10 +57,18 @@ pub struct KeyInput {
 
 impl KeyInput {
     pub fn new(key: HostKey) -> Self {
-        KeyInput { key, numpad: false, phys: 0 }
+        KeyInput {
+            key,
+            numpad: false,
+            phys: 0,
+        }
     }
     pub fn numpad(key: HostKey) -> Self {
-        KeyInput { key, numpad: true, phys: 0 }
+        KeyInput {
+            key,
+            numpad: true,
+            phys: 0,
+        }
     }
     pub fn with_phys(mut self, phys: u32) -> Self {
         self.phys = phys;
@@ -179,7 +187,13 @@ impl KeyboardState {
 
     /// `caps`: the Apple's initial Caps Lock (`-capslock=off` starts it off).
     pub fn with_caps(caps: bool) -> Self {
-        KeyboardState { held: HashSet::new(), caps, host_caps: false, scroll: false, any_down: false }
+        KeyboardState {
+            held: HashSet::new(),
+            caps,
+            host_caps: false,
+            scroll: false,
+            any_down: false,
+        }
     }
 
     pub fn caps_lock(&self) -> bool {
@@ -197,11 +211,21 @@ impl KeyboardState {
     }
 
     /// Processes one key transition. `repeat` is the OS auto-repeat flag.
-    pub fn handle(&mut self, input: KeyInput, pressed: bool, repeat: bool, mods: Mods) -> Vec<KeyEvent> {
+    pub fn handle(
+        &mut self,
+        input: KeyInput,
+        pressed: bool,
+        repeat: bool,
+        mods: Mods,
+    ) -> Vec<KeyEvent> {
         let mut out = Vec::new();
         match input.key {
             // Game-port buttons and modifiers produce no Apple key (see `joy`).
-            HostKey::AltLeft | HostKey::AltRight | HostKey::Shift | HostKey::ControlLeft | HostKey::ControlRight => {}
+            HostKey::AltLeft
+            | HostKey::AltRight
+            | HostKey::Shift
+            | HostKey::ControlLeft
+            | HostKey::ControlRight => {}
             HostKey::CapsLock => {
                 // AppleWin copies the host's toggle (`GetKeyState(VK_CAPITAL) & 1`): the first
                 // press with the host's lock off turns the host's on and leaves the Apple's on.
@@ -219,7 +243,9 @@ impl KeyboardState {
             }
             HostKey::Pause if pressed && mods.ctrl => out.push(KeyEvent::Reset),
             HostKey::Insert if pressed && mods.shift => out.push(KeyEvent::Paste),
-            HostKey::Char('v' | 'V') if pressed && mods.ctrl && mods.shift && !mods.alt => out.push(KeyEvent::Paste),
+            HostKey::Char('v' | 'V') if pressed && mods.ctrl && mods.shift && !mods.alt => {
+                out.push(KeyEvent::Paste)
+            }
             _ if pressed => {
                 if let Some(ev) = self.press_event(input.key, mods) {
                     out.push(ev);
@@ -264,9 +290,21 @@ mod tests {
     use apple2_core::keyboard::Keyboard;
     use apple2_core::Model;
 
-    const NONE: Mods = Mods { shift: false, ctrl: false, alt: false };
-    const CTRL: Mods = Mods { shift: false, ctrl: true, alt: false };
-    const SHIFT: Mods = Mods { shift: true, ctrl: false, alt: false };
+    const NONE: Mods = Mods {
+        shift: false,
+        ctrl: false,
+        alt: false,
+    };
+    const CTRL: Mods = Mods {
+        shift: false,
+        ctrl: true,
+        alt: false,
+    };
+    const SHIFT: Mods = Mods {
+        shift: true,
+        ctrl: false,
+        alt: false,
+    };
 
     fn press(k: &mut KeyboardState, key: HostKey, mods: Mods) -> Vec<KeyEvent> {
         k.handle(KeyInput::new(key), true, false, mods)
@@ -299,14 +337,21 @@ mod tests {
     fn every_ctrl_letter_maps_to_1_through_26() {
         for (i, c) in ('a'..='z').enumerate() {
             assert_eq!(char_to_ascii(c, CTRL), Some(i as u8 + 1), "Ctrl+{c}");
-            assert_eq!(char_to_ascii(c.to_ascii_uppercase(), CTRL), Some(i as u8 + 1));
+            assert_eq!(
+                char_to_ascii(c.to_ascii_uppercase(), CTRL),
+                Some(i as u8 + 1)
+            );
         }
     }
 
     #[test]
     fn altgr_is_not_ctrl() {
         // Windows reports AltGr as Ctrl+Alt: a layout character such as '@' must stay '@'.
-        let altgr = Mods { shift: false, ctrl: true, alt: true };
+        let altgr = Mods {
+            shift: false,
+            ctrl: true,
+            alt: true,
+        };
         assert_eq!(char_to_ascii('@', altgr), Some(b'@'));
         assert_eq!(char_to_ascii('q', altgr), Some(b'q'));
     }
@@ -315,7 +360,11 @@ mod tests {
     fn every_printable_ascii_reaches_the_machine_unchanged() {
         for b in 0x20u8..=0x7E {
             let mut k = KeyboardState::new();
-            let m = if b.is_ascii_uppercase() || b"~!@#$%^&*()_+{}|:\"<>?".contains(&b) { SHIFT } else { NONE };
+            let m = if b.is_ascii_uppercase() || b"~!@#$%^&*()_+{}|:\"<>?".contains(&b) {
+                SHIFT
+            } else {
+                NONE
+            };
             let ev = press(&mut k, HostKey::Char(b as char), m);
             assert_eq!(ev[0], KeyEvent::Ascii(b), "{:?}", b as char);
         }
@@ -337,7 +386,15 @@ mod tests {
     #[test]
     fn keys_the_apple_does_not_have_are_dropped() {
         let mut k = KeyboardState::new();
-        for key in [HostKey::Home, HostKey::End, HostKey::PageUp, HostKey::PageDown, HostKey::Insert, HostKey::F(5), HostKey::Clear] {
+        for key in [
+            HostKey::Home,
+            HostKey::End,
+            HostKey::PageUp,
+            HostKey::PageDown,
+            HostKey::Insert,
+            HostKey::F(5),
+            HostKey::Clear,
+        ] {
             assert_eq!(press(&mut k, key, NONE), vec![], "{key:?}");
         }
     }
@@ -346,7 +403,13 @@ mod tests {
     fn alt_and_modifier_keys_are_not_apple_keys() {
         let mut k = KeyboardState::new();
         let alt = Mods { alt: true, ..NONE };
-        for key in [HostKey::AltLeft, HostKey::AltRight, HostKey::Shift, HostKey::ControlLeft, HostKey::ControlRight] {
+        for key in [
+            HostKey::AltLeft,
+            HostKey::AltRight,
+            HostKey::Shift,
+            HostKey::ControlLeft,
+            HostKey::ControlRight,
+        ] {
             assert_eq!(press(&mut k, key, alt), vec![], "{key:?}");
         }
     }
@@ -356,10 +419,20 @@ mod tests {
         let mut k = KeyboardState::new();
         assert_eq!(press(&mut k, HostKey::Pause, CTRL), vec![KeyEvent::Reset]);
         assert_eq!(press(&mut k, HostKey::Insert, SHIFT), vec![KeyEvent::Paste]);
-        let both = Mods { shift: true, ctrl: true, alt: false };
-        assert_eq!(press(&mut k, HostKey::Char('V'), both), vec![KeyEvent::Paste]);
+        let both = Mods {
+            shift: true,
+            ctrl: true,
+            alt: false,
+        };
+        assert_eq!(
+            press(&mut k, HostKey::Char('V'), both),
+            vec![KeyEvent::Paste]
+        );
         // plain Ctrl+V is ^V for the Apple
-        assert_eq!(press(&mut k, HostKey::Char('v'), CTRL)[0], KeyEvent::Ascii(0x16));
+        assert_eq!(
+            press(&mut k, HostKey::Char('v'), CTRL)[0],
+            KeyEvent::Ascii(0x16)
+        );
     }
 
     #[test]
@@ -367,10 +440,15 @@ mod tests {
         let mut k = KeyboardState::new();
         let a = KeyInput::new(HostKey::Char('a'));
         let b = KeyInput::new(HostKey::Char('b'));
-        assert!(k.handle(a, true, false, NONE).contains(&KeyEvent::AnyKeyDown(true)));
+        assert!(k
+            .handle(a, true, false, NONE)
+            .contains(&KeyEvent::AnyKeyDown(true)));
         assert_eq!(k.handle(b, true, false, NONE), vec![KeyEvent::Ascii(b'b')]);
         assert_eq!(k.handle(a, false, false, NONE), vec![]);
-        assert_eq!(k.handle(b, false, false, NONE), vec![KeyEvent::AnyKeyDown(false)]);
+        assert_eq!(
+            k.handle(b, false, false, NONE),
+            vec![KeyEvent::AnyKeyDown(false)]
+        );
     }
 
     #[test]
@@ -379,12 +457,20 @@ mod tests {
         let mut k = KeyboardState::new();
         let down = KeyInput::new(HostKey::Char('A')).with_phys(30);
         let up = KeyInput::new(HostKey::Char('a')).with_phys(30);
-        assert!(k.handle(down, true, false, SHIFT).contains(&KeyEvent::AnyKeyDown(true)));
-        assert_eq!(k.handle(up, false, false, NONE), vec![KeyEvent::AnyKeyDown(false)]);
+        assert!(k
+            .handle(down, true, false, SHIFT)
+            .contains(&KeyEvent::AnyKeyDown(true)));
+        assert_eq!(
+            k.handle(up, false, false, NONE),
+            vec![KeyEvent::AnyKeyDown(false)]
+        );
         // Without a physical id the letter case is folded.
         let down = KeyInput::new(HostKey::Char('B'));
         k.handle(down, true, false, SHIFT);
-        assert_eq!(k.handle(KeyInput::new(HostKey::Char('b')), false, false, NONE), vec![KeyEvent::AnyKeyDown(false)]);
+        assert_eq!(
+            k.handle(KeyInput::new(HostKey::Char('b')), false, false, NONE),
+            vec![KeyEvent::AnyKeyDown(false)]
+        );
     }
 
     #[test]
@@ -401,11 +487,20 @@ mod tests {
         // keeps it on, the second turns it off.
         let mut k = KeyboardState::new();
         assert!(k.caps_lock());
-        assert_eq!(press(&mut k, HostKey::CapsLock, NONE), vec![KeyEvent::CapsLock(true)]);
+        assert_eq!(
+            press(&mut k, HostKey::CapsLock, NONE),
+            vec![KeyEvent::CapsLock(true)]
+        );
         k.handle(KeyInput::new(HostKey::CapsLock), false, false, NONE);
-        assert_eq!(press(&mut k, HostKey::CapsLock, NONE), vec![KeyEvent::CapsLock(false)]);
+        assert_eq!(
+            press(&mut k, HostKey::CapsLock, NONE),
+            vec![KeyEvent::CapsLock(false)]
+        );
         // held key does not toggle again
-        assert_eq!(k.handle(KeyInput::new(HostKey::CapsLock), true, true, NONE), vec![]);
+        assert_eq!(
+            k.handle(KeyInput::new(HostKey::CapsLock), true, true, NONE),
+            vec![]
+        );
         let off = KeyboardState::with_caps(false);
         assert!(!off.caps_lock());
     }
@@ -413,14 +508,23 @@ mod tests {
     #[test]
     fn scroll_lock_is_the_tk3000_mode_key() {
         let mut k = KeyboardState::new();
-        assert_eq!(press(&mut k, HostKey::ScrollLock, NONE), vec![KeyEvent::ScrollLock(true)]);
+        assert_eq!(
+            press(&mut k, HostKey::ScrollLock, NONE),
+            vec![KeyEvent::ScrollLock(true)]
+        );
         k.handle(KeyInput::new(HostKey::ScrollLock), false, false, NONE);
-        assert_eq!(press(&mut k, HostKey::ScrollLock, NONE), vec![KeyEvent::ScrollLock(false)]);
+        assert_eq!(
+            press(&mut k, HostKey::ScrollLock, NONE),
+            vec![KeyEvent::ScrollLock(false)]
+        );
     }
 
     #[test]
     fn debugger_console_keys() {
-        assert_eq!(debug_key(HostKey::Char('g'), NONE), Some(DebugKey::Char('g')));
+        assert_eq!(
+            debug_key(HostKey::Char('g'), NONE),
+            Some(DebugKey::Char('g'))
+        );
         assert_eq!(debug_key(HostKey::Enter, NONE), Some(DebugKey::Enter));
         assert_eq!(debug_key(HostKey::Up, NONE), Some(DebugKey::HistoryPrev));
         assert_eq!(debug_key(HostKey::F(3), NONE), None);
@@ -474,14 +578,29 @@ mod tests {
 
     #[test]
     fn printable_ascii_per_model_matches_applewin() {
-        let models = [Model::Apple2, Model::Apple2Plus, Model::Apple2JPlus, Model::Apple2e, Model::Apple2eEnhanced];
+        let models = [
+            Model::Apple2,
+            Model::Apple2Plus,
+            Model::Apple2JPlus,
+            Model::Apple2e,
+            Model::Apple2eEnhanced,
+        ];
         for model in models {
             for caps in [true, false] {
                 for key in 0x20u8..=0x7E {
-                    let mods = if key.is_ascii_uppercase() { SHIFT } else { NONE };
+                    let mods = if key.is_ascii_uppercase() {
+                        SHIFT
+                    } else {
+                        NONE
+                    };
                     let mut k = KeyboardState::new();
                     let ev = press(&mut k, HostKey::Char(key as char), mods)[0];
-                    assert_eq!(typed(model, caps, ev), expected_plain(model, caps, key), "{model:?} caps={caps} {:?}", key as char);
+                    assert_eq!(
+                        typed(model, caps, ev),
+                        expected_plain(model, caps, key),
+                        "{model:?} caps={caps} {:?}",
+                        key as char
+                    );
                 }
             }
         }
@@ -490,11 +609,29 @@ mod tests {
     #[test]
     fn navigation_keys_per_model() {
         // (key, Apple ][ family, //e family) from AppleWin's `asciicode` table.
-        let table = [(NavKey::Left, Some(0x08), Some(0x08)), (NavKey::Right, Some(0x15), Some(0x15)), (NavKey::Up, None, Some(0x0B)), (NavKey::Down, None, Some(0x0A)), (NavKey::Delete, None, Some(0x7F))];
+        let table = [
+            (NavKey::Left, Some(0x08), Some(0x08)),
+            (NavKey::Right, Some(0x15), Some(0x15)),
+            (NavKey::Up, None, Some(0x0B)),
+            (NavKey::Down, None, Some(0x0A)),
+            (NavKey::Delete, None, Some(0x7F)),
+        ];
         for (nav, ii, iie) in table {
-            assert_eq!(typed(Model::Apple2Plus, true, KeyEvent::Nav(nav)), ii, "{nav:?} on ][+");
-            assert_eq!(typed(Model::Apple2e, true, KeyEvent::Nav(nav)), iie, "{nav:?} on //e");
-            assert_eq!(typed(Model::Apple2eEnhanced, true, KeyEvent::Nav(nav)), iie, "{nav:?} on enhanced //e");
+            assert_eq!(
+                typed(Model::Apple2Plus, true, KeyEvent::Nav(nav)),
+                ii,
+                "{nav:?} on ][+"
+            );
+            assert_eq!(
+                typed(Model::Apple2e, true, KeyEvent::Nav(nav)),
+                iie,
+                "{nav:?} on //e"
+            );
+            assert_eq!(
+                typed(Model::Apple2eEnhanced, true, KeyEvent::Nav(nav)),
+                iie,
+                "{nav:?} on enhanced //e"
+            );
         }
     }
 
@@ -508,7 +645,12 @@ mod tests {
 
     #[test]
     fn control_codes_reach_every_model() {
-        for model in [Model::Apple2Plus, Model::Apple2e, Model::Apple2eEnhanced, Model::Pravets82] {
+        for model in [
+            Model::Apple2Plus,
+            Model::Apple2e,
+            Model::Apple2eEnhanced,
+            Model::Pravets82,
+        ] {
             let ev = press(&mut KeyboardState::new(), HostKey::Char('c'), CTRL)[0];
             assert_eq!(typed(model, true, ev), Some(3), "{model:?}");
         }

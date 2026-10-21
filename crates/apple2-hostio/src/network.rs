@@ -108,7 +108,13 @@ impl NetworkBackend for MockNetwork {
     }
 
     fn mac_for_ip(&mut self, ip: Ipv4) -> Option<Mac> {
-        self.0.lock().unwrap().macs.iter().find(|(i, _)| *i == ip).map(|(_, m)| *m)
+        self.0
+            .lock()
+            .unwrap()
+            .macs
+            .iter()
+            .find(|(i, _)| *i == ip)
+            .map(|(_, m)| *m)
     }
 
     fn interface_name(&self) -> &str {
@@ -122,7 +128,11 @@ pub fn crc32(data: &[u8]) -> u32 {
     for &b in data {
         crc ^= b as u32;
         for _ in 0..8 {
-            crc = if crc & 1 != 0 { 0xEDB8_8320 ^ (crc >> 1) } else { crc >> 1 };
+            crc = if crc & 1 != 0 {
+                0xEDB8_8320 ^ (crc >> 1)
+            } else {
+                crc >> 1
+            };
         }
     }
     !crc
@@ -130,7 +140,10 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 /// Internet checksum (RFC 1071), as IPRaw.cpp `checksum`. Returns the value to store big-endian.
 fn ip_checksum(data: &[u8]) -> u16 {
-    let mut sum: u32 = data.chunks(2).map(|c| u16::from_be_bytes([c[0], *c.get(1).unwrap_or(&0)]) as u32).sum();
+    let mut sum: u32 = data
+        .chunks(2)
+        .map(|c| u16::from_be_bytes([c[0], *c.get(1).unwrap_or(&0)]) as u32)
+        .sum();
     while sum >> 16 != 0 {
         sum = (sum & 0xFFFF) + (sum >> 16);
     }
@@ -178,7 +191,8 @@ pub struct IpPayload<'a> {
 }
 
 pub fn ip_payload(frame: &[u8]) -> Option<IpPayload<'_>> {
-    if frame.len() <= ETH_MINIMUM_SIZE + 20 || frame[12..14] != [0x08, 0x00] || frame[14] >> 4 != 4 {
+    if frame.len() <= ETH_MINIMUM_SIZE + 20 || frame[12..14] != [0x08, 0x00] || frame[14] >> 4 != 4
+    {
         return None;
     }
     let header = (frame[14] & 0x0F) as usize * 4;
@@ -204,16 +218,41 @@ mod tests {
 
     #[test]
     fn eth2_frame_round_trips_through_ip_payload() {
-        let f = create_eth2_frame(b"ping", [1; 6], [2; 6], 64, 0, 1, [10, 0, 0, 1], [10, 0, 0, 2]);
+        let f = create_eth2_frame(
+            b"ping",
+            [1; 6],
+            [2; 6],
+            64,
+            0,
+            1,
+            [10, 0, 0, 1],
+            [10, 0, 0, 2],
+        );
         assert_eq!(f.len(), 14 + 20 + 4);
-        assert_eq!(ip_checksum(&f[14..34]), 0, "a header with its checksum sums to zero");
+        assert_eq!(
+            ip_checksum(&f[14..34]),
+            0,
+            "a header with its checksum sums to zero"
+        );
         let p = ip_payload(&f).unwrap();
-        assert_eq!((p.protocol, p.source, p.payload), (1, [10, 0, 0, 1], &b"ping"[..]));
+        assert_eq!(
+            (p.protocol, p.source, p.payload),
+            (1, [10, 0, 0, 1], &b"ping"[..])
+        );
     }
 
     #[test]
     fn ip_payload_rejects_non_ip_and_truncated_frames() {
-        let mut f = create_eth2_frame(b"ping", [1; 6], [2; 6], 64, 0, 1, [10, 0, 0, 1], [10, 0, 0, 2]);
+        let mut f = create_eth2_frame(
+            b"ping",
+            [1; 6],
+            [2; 6],
+            64,
+            0,
+            1,
+            [10, 0, 0, 1],
+            [10, 0, 0, 2],
+        );
         assert!(ip_payload(&f[..f.len() - 1]).is_none());
         f[12] = 0x86; // not IPv4 ethertype
         assert!(ip_payload(&f).is_none());

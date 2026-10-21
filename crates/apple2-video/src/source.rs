@@ -14,7 +14,14 @@ pub trait VidHdView {
     /// `UpdateSHRCell` (VidHD.cpp:130): the 16 pixels of four SHR bytes `a` (first byte in the low
     /// bits) given the scanline's 16 IIgs palette entries; `prev` is the pixel to the left (colour
     /// fill).
-    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16];
+    fn shr_cell(
+        &self,
+        is_640: bool,
+        color_fill: bool,
+        palette: &[u16; 16],
+        a: u32,
+        prev: [u8; 3],
+    ) -> [[u8; 3]; 16];
 }
 
 pub trait VideoSource {
@@ -112,7 +119,14 @@ impl VidHdView for NoShr<'_> {
     fn is_shr(&self) -> bool {
         false
     }
-    fn shr_cell(&self, is_640: bool, fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+    fn shr_cell(
+        &self,
+        is_640: bool,
+        fill: bool,
+        palette: &[u16; 16],
+        a: u32,
+        prev: [u8; 3],
+    ) -> [[u8; 3]; 16] {
         self.0.shr_cell(is_640, fill, palette, a, prev)
     }
 }
@@ -123,7 +137,8 @@ impl<'a> DebugView<'a> {
     /// and 2 are `page2` false/true).
     pub fn new(source: &'a dyn VideoSource, flags: VideoFlags, pseudo_page: Option<u8>) -> Self {
         let mut mode = source.mode();
-        (mode.text, mode.mixed, mode.dhires, mode.col80) = (flags.text, flags.mixed, flags.dhires, flags.col80);
+        (mode.text, mode.mixed, mode.dhires, mode.col80) =
+            (flags.text, flags.mixed, flags.dhires, flags.col80);
         let mut memmode = source.memmode() & !(mf::HIRES | mf::PAGE2 | mf::STORE80);
         if flags.hires {
             memmode |= mf::HIRES;
@@ -131,7 +146,13 @@ impl<'a> DebugView<'a> {
         if flags.page2 {
             memmode |= mf::PAGE2;
         }
-        DebugView { source, mode, memmode, page: pseudo_page, hd: source.vidhd().map(NoShr) }
+        DebugView {
+            source,
+            mode,
+            memmode,
+            page: pseudo_page,
+            hd: source.vidhd().map(NoShr),
+        }
     }
 }
 

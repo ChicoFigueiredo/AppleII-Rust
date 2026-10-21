@@ -46,16 +46,23 @@ pub fn label_of<T: PartialEq + Copy>(items: &[(T, &'static str)], v: T) -> &'sta
 }
 
 /// Drop-down over `items`; true when the user picked something else.
-pub fn combo<T: PartialEq + Copy>(ui: &mut Ui, id: &str, items: &[(T, &'static str)], value: &mut T) -> bool {
+pub fn combo<T: PartialEq + Copy>(
+    ui: &mut Ui,
+    id: &str,
+    items: &[(T, &'static str)],
+    value: &mut T,
+) -> bool {
     let mut changed = false;
-    egui::ComboBox::from_id_salt(id).selected_text(label_of(items, *value)).show_ui(ui, |ui| {
-        for (t, name) in items {
-            if ui.selectable_label(*value == *t, *name).clicked() && *value != *t {
-                *value = *t;
-                changed = true;
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(label_of(items, *value))
+        .show_ui(ui, |ui| {
+            for (t, name) in items {
+                if ui.selectable_label(*value == *t, *name).clicked() && *value != *t {
+                    *value = *t;
+                    changed = true;
+                }
             }
-        }
-    });
+        });
     changed
 }
 
@@ -68,14 +75,32 @@ pub fn browse_file(title: &str, filter: Option<(&str, &[&str])>) -> Option<PathB
 }
 
 pub fn browse_save(title: &str, file_name: &str) -> Option<PathBuf> {
-    rfd::FileDialog::new().set_title(title).set_file_name(file_name).save_file()
+    rfd::FileDialog::new()
+        .set_title(title)
+        .set_file_name(file_name)
+        .save_file()
 }
 
 /// Path display + Browse... + clear. Returns true on change.
-pub fn path_row(ui: &mut Ui, title: &str, path: &mut Option<PathBuf>, filter: Option<(&str, &[&str])>) -> bool {
+pub fn path_row(
+    ui: &mut Ui,
+    title: &str,
+    path: &mut Option<PathBuf>,
+    filter: Option<(&str, &[&str])>,
+) -> bool {
     let mut changed = false;
-    let mut text = path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-    if ui.add(egui::TextEdit::singleline(&mut text).desired_width(260.0).hint_text("(none)")).changed() {
+    let mut text = path
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    if ui
+        .add(
+            egui::TextEdit::singleline(&mut text)
+                .desired_width(260.0)
+                .hint_text("(none)"),
+        )
+        .changed()
+    {
         *path = (!text.is_empty()).then(|| PathBuf::from(&text));
         changed = true;
     }
@@ -93,7 +118,12 @@ pub fn path_row(ui: &mut Ui, title: &str, path: &mut Option<PathBuf>, filter: Op
 }
 
 impl SettingsDialog {
-    pub(super) fn draw_page(&mut self, ui: &mut Ui, integer_scale: &mut bool, ev: &mut Vec<UiEvent>) {
+    pub(super) fn draw_page(
+        &mut self,
+        ui: &mut Ui,
+        integer_scale: &mut bool,
+        ev: &mut Vec<UiEvent>,
+    ) {
         match self.page {
             Page::Configuration => self.page_configuration(ui, integer_scale, ev),
             Page::Input => self.page_input(ui, ev),
@@ -105,7 +135,10 @@ impl SettingsDialog {
 
     fn volume_slider(&mut self, ui: &mut Ui, ev: &mut Vec<UiEvent>) {
         let mut pos = model::volume_to_slider(self.draft.sound.master_volume);
-        if ui.add(egui::Slider::new(&mut pos, 0..=model::VOLUME_MAX).show_value(false)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut pos, 0..=model::VOLUME_MAX).show_value(false))
+            .changed()
+        {
             self.draft.sound.master_volume = model::slider_to_volume(pos);
             ev.push(UiEvent::Volume(self.draft.sound.master_volume));
         }
@@ -117,7 +150,8 @@ impl SettingsDialog {
         ui.horizontal(|ui| {
             ui.label("Model:");
             let mut choice = ModelChoice::of(self.draft.machine.model);
-            let items: Vec<(ModelChoice, &'static str)> = ModelChoice::ALL.iter().map(|c| (*c, c.label())).collect();
+            let items: Vec<(ModelChoice, &'static str)> =
+                ModelChoice::ALL.iter().map(|c| (*c, c.label())).collect();
             if combo(ui, "model", &items, &mut choice) {
                 let m = model::model_for_choice(choice, self.draft.machine.model);
                 model::set_model(&mut self.draft, m);
@@ -148,13 +182,23 @@ impl SettingsDialog {
             });
             ui.checkbox(&mut self.draft.video.half_scanlines, "50% Scan lines");
             ui.checkbox(&mut self.draft.video.vertical_blend, "Vertical blend");
-            let mut hz50 = self.draft.machine.refresh_rate == apple2_config::settings::RefreshRate::Hz50;
+            let mut hz50 =
+                self.draft.machine.refresh_rate == apple2_config::settings::RefreshRate::Hz50;
             if ui.checkbox(&mut hz50, "50Hz video").changed() {
-                self.draft.machine.refresh_rate =
-                    if hz50 { apple2_config::settings::RefreshRate::Hz50 } else { apple2_config::settings::RefreshRate::Hz60 };
+                self.draft.machine.refresh_rate = if hz50 {
+                    apple2_config::settings::RefreshRate::Hz50
+                } else {
+                    apple2_config::settings::RefreshRate::Hz60
+                };
             }
-            ui.checkbox(&mut self.draft.video.fullscreen_show_subunit_status, "Full-Screen: Show drive/keyboard status");
-            ui.checkbox(&mut self.draft.video.show_disk_leds, "Show Disk II status in the toolbar");
+            ui.checkbox(
+                &mut self.draft.video.fullscreen_show_subunit_status,
+                "Full-Screen: Show drive/keyboard status",
+            );
+            ui.checkbox(
+                &mut self.draft.video.show_disk_leds,
+                "Show Disk II status in the toolbar",
+            );
         });
 
         group(ui, |ui| {
@@ -164,23 +208,56 @@ impl SettingsDialog {
                 ui.add(egui::Slider::new(&mut self.draft.video.window_scale, 1..=4));
             });
             ui.checkbox(integer_scale, "Integer scaling");
-            ui.checkbox(&mut self.draft.video.fullscreen, "Start in full-screen mode");
-            ui.checkbox(&mut self.draft.video.fullscreen_best_resolution, "Full-screen: best resolution");
-            ui.checkbox(&mut self.draft.video.multi_monitor, "Full-screen across all monitors");
-            ui.checkbox(&mut self.draft.video.alt_enter_toggles_fullscreen, "Alt+Enter toggles full-screen");
+            ui.checkbox(
+                &mut self.draft.video.fullscreen,
+                "Start in full-screen mode",
+            );
+            ui.checkbox(
+                &mut self.draft.video.fullscreen_best_resolution,
+                "Full-screen: best resolution",
+            );
+            ui.checkbox(
+                &mut self.draft.video.multi_monitor,
+                "Full-screen across all monitors",
+            );
+            ui.checkbox(
+                &mut self.draft.video.alt_enter_toggles_fullscreen,
+                "Alt+Enter toggles full-screen",
+            );
         });
 
         group(ui, |ui| {
             ui.strong("Emulation Speed Control");
-            ui.checkbox(&mut self.draft.storage.enhance_disk_speed, "Enhanced floppy disk access speed (all drives)");
-            ui.checkbox(&mut self.draft.keyboard.scroll_lock_toggle, "Scroll Lock acts as toggle for full-speed CPU");
-            ui.radio_value(&mut self.speed.authentic, true, "Use Authentic Machine Speed");
-            ui.radio_value(&mut self.speed.authentic, false, "Select Custom Speed (in MHz)");
+            ui.checkbox(
+                &mut self.draft.storage.enhance_disk_speed,
+                "Enhanced floppy disk access speed (all drives)",
+            );
+            ui.checkbox(
+                &mut self.draft.keyboard.scroll_lock_toggle,
+                "Scroll Lock acts as toggle for full-speed CPU",
+            );
+            ui.radio_value(
+                &mut self.speed.authentic,
+                true,
+                "Use Authentic Machine Speed",
+            );
+            ui.radio_value(
+                &mut self.speed.authentic,
+                false,
+                "Select Custom Speed (in MHz)",
+            );
             ui.add_enabled_ui(!self.speed.authentic, |ui| {
                 ui.add(
                     egui::Slider::new(&mut self.speed.custom, model::SPEED_MIN..=model::SPEED_MAX)
                         .custom_formatter(|v, _| model::speed_label(v as u32))
-                        .custom_parser(|s| s.trim().trim_end_matches("MHz").trim().parse::<f64>().ok().map(|v| v * 10.0)),
+                        .custom_parser(|s| {
+                            s.trim()
+                                .trim_end_matches("MHz")
+                                .trim()
+                                .parse::<f64>()
+                                .ok()
+                                .map(|v| v * 10.0)
+                        }),
                 );
             });
             ui.horizontal(|ui| {
@@ -203,9 +280,15 @@ impl SettingsDialog {
         group(ui, |ui| {
             ui.strong("Joystick Control");
             let j0: Vec<(Joystick0Kind, &'static str)> =
-                model::joystick0_choices(self.draft.joystick.joystick1, mouse_card).into_iter().map(|k| (k, model::joystick0_label(k))).collect();
+                model::joystick0_choices(self.draft.joystick.joystick1, mouse_card)
+                    .into_iter()
+                    .map(|k| (k, model::joystick0_label(k)))
+                    .collect();
             let j1: Vec<(Joystick1Kind, &'static str)> =
-                model::joystick1_choices(self.draft.joystick.joystick0, mouse_card).into_iter().map(|k| (k, model::joystick1_label(k))).collect();
+                model::joystick1_choices(self.draft.joystick.joystick0, mouse_card)
+                    .into_iter()
+                    .map(|k| (k, model::joystick1_label(k)))
+                    .collect();
             ui.horizontal(|ui| {
                 ui.label("Joystick 1:");
                 combo(ui, "joy0", &j0, &mut self.draft.joystick.joystick0);
@@ -222,26 +305,53 @@ impl SettingsDialog {
             });
             let cursors = model::cursor_control_enabled(&self.draft);
             let centering = model::centering_enabled(&self.draft);
-            ui.add_enabled(cursors, egui::Checkbox::new(&mut self.draft.joystick.cursor_control, "Allow cursor keys to be read from keyboard"));
+            ui.add_enabled(
+                cursors,
+                egui::Checkbox::new(
+                    &mut self.draft.joystick.cursor_control,
+                    "Allow cursor keys to be read from keyboard",
+                ),
+            );
             ui.checkbox(&mut self.draft.joystick.swap_buttons, "Swap 0/1");
             let mut af = model::autofire_all(self.draft.joystick.autofire);
             if ui.checkbox(&mut af, "Auto-fire (all 3 buttons)").changed() {
                 model::set_autofire_all(&mut self.draft, af);
             }
-            ui.add_enabled(centering, egui::Checkbox::new(&mut self.draft.joystick.centering, "Keyboard auto-centering"));
+            ui.add_enabled(
+                centering,
+                egui::Checkbox::new(
+                    &mut self.draft.joystick.centering,
+                    "Keyboard auto-centering",
+                ),
+            );
             ui.checkbox(&mut self.draft.joystick.shift_key_mod, "SHIFT key mod");
-            ui.checkbox(&mut self.draft.joystick.hook_alt_keys, "Alt keys are joystick buttons 0 and 1");
+            ui.checkbox(
+                &mut self.draft.joystick.hook_alt_keys,
+                "Alt keys are joystick buttons 0 and 1",
+            );
         });
         group(ui, |ui| {
             ui.strong("Keyboard");
             ui.checkbox(&mut self.draft.keyboard.caps_lock, "Caps Lock on at start");
-            ui.checkbox(&mut self.draft.keyboard.altgr_sends_char, "AltGr sends characters");
+            ui.checkbox(
+                &mut self.draft.keyboard.altgr_sends_char,
+                "AltGr sends characters",
+            );
             let clone = self.draft.machine.model.is_clone();
             ui.add_enabled_ui(clone, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Pravets / TK3000 keyboard:");
-                    let items = [(CloneKeyboard::Auto, "Automatic"), (CloneKeyboard::Latin, "Latin"), (CloneKeyboard::Cyrillic, "Cyrillic")];
-                    combo(ui, "clonekbd", &items, &mut self.draft.keyboard.clone_layout);
+                    let items = [
+                        (CloneKeyboard::Auto, "Automatic"),
+                        (CloneKeyboard::Latin, "Latin"),
+                        (CloneKeyboard::Cyrillic, "Cyrillic"),
+                    ];
+                    combo(
+                        ui,
+                        "clonekbd",
+                        &items,
+                        &mut self.draft.keyboard.clone_layout,
+                    );
                 });
             });
         });
@@ -261,8 +371,14 @@ impl SettingsDialog {
             self.volume_slider(ui, ev);
         });
         ui.checkbox(&mut self.draft.sound.disable_sound, "Disable all sound");
-        ui.checkbox(&mut self.draft.sound.disable_mockingboard, "Disable Mockingboard, Phasor, MegaAudio and SD Music output");
-        ui.checkbox(&mut self.draft.sound.enable_speech, "Enable speech (SSI263 / SC-01) output");
+        ui.checkbox(
+            &mut self.draft.sound.disable_mockingboard,
+            "Disable Mockingboard, Phasor, MegaAudio and SD Music output",
+        );
+        ui.checkbox(
+            &mut self.draft.sound.enable_speech,
+            "Enable speech (SSI263 / SC-01) output",
+        );
         ui.add_space(6.0);
         ui.weak("Sound cards are chosen on the Slots page (Mockingboard C, Phasor, SAM). Their chips are set with the \"...\" button.");
     }
@@ -273,53 +389,62 @@ impl SettingsDialog {
         let m = self.draft.machine.model;
         group(ui, |ui| {
             ui.strong("Slots");
-            egui::Grid::new("slots").num_columns(3).spacing([8.0, 6.0]).show(ui, |ui| {
-                for slot in 0..8 {
-                    let types = model::current_types(&self.draft);
-                    ui.label(format!("Slot {slot}:"));
-                    match model::slot_choices(slot, m, &types) {
+            egui::Grid::new("slots")
+                .num_columns(3)
+                .spacing([8.0, 6.0])
+                .show(ui, |ui| {
+                    for slot in 0..8 {
+                        let types = model::current_types(&self.draft);
+                        ui.label(format!("Slot {slot}:"));
+                        match model::slot_choices(slot, m, &types) {
+                            None => {
+                                ui.add_enabled_ui(false, |ui| {
+                                    egui::ComboBox::from_id_salt(("slot", slot))
+                                        .selected_text(model::card_name(types[0]))
+                                        .show_ui(ui, |_| {});
+                                });
+                                ui.add_enabled(false, egui::Button::new("..."));
+                            }
+                            Some(choices) => {
+                                let mut cur = types[slot];
+                                let items: Vec<(CardType, &'static str)> =
+                                    choices.iter().map(|c| (*c, model::card_name(*c))).collect();
+                                if combo(ui, &format!("slot{slot}"), &items, &mut cur) {
+                                    model::set_slot_card(&mut self.draft, slot, cur);
+                                }
+                                let has = model::has_options(self.draft.slots.0[slot].card_type());
+                                if ui.add_enabled(has, egui::Button::new("...")).clicked() {
+                                    self.open_sub(slot);
+                                }
+                            }
+                        }
+                        ui.end_row();
+                    }
+                    ui.label("Slot Aux:");
+                    match model::aux_choices(m) {
                         None => {
                             ui.add_enabled_ui(false, |ui| {
-                                egui::ComboBox::from_id_salt(("slot", slot)).selected_text(model::card_name(types[0])).show_ui(ui, |_| {});
+                                egui::ComboBox::from_id_salt("slotaux")
+                                    .selected_text("Empty")
+                                    .show_ui(ui, |_| {});
                             });
                             ui.add_enabled(false, egui::Button::new("..."));
                         }
                         Some(choices) => {
-                            let mut cur = types[slot];
-                            let items: Vec<(CardType, &'static str)> = choices.iter().map(|c| (*c, model::card_name(*c))).collect();
-                            if combo(ui, &format!("slot{slot}"), &items, &mut cur) {
-                                model::set_slot_card(&mut self.draft, slot, cur);
+                            let mut cur = self.draft.aux.card.card_type();
+                            let items: Vec<(CardType, &'static str)> =
+                                choices.iter().map(|c| (*c, model::card_name(*c))).collect();
+                            if combo(ui, "slotaux", &items, &mut cur) {
+                                model::set_aux_card(&mut self.draft, cur);
                             }
-                            let has = model::has_options(self.draft.slots.0[slot].card_type());
+                            let has = model::has_options(self.draft.aux.card.card_type());
                             if ui.add_enabled(has, egui::Button::new("...")).clicked() {
-                                self.open_sub(slot);
+                                self.open_sub(AUX);
                             }
                         }
                     }
                     ui.end_row();
-                }
-                ui.label("Slot Aux:");
-                match model::aux_choices(m) {
-                    None => {
-                        ui.add_enabled_ui(false, |ui| {
-                            egui::ComboBox::from_id_salt("slotaux").selected_text("Empty").show_ui(ui, |_| {});
-                        });
-                        ui.add_enabled(false, egui::Button::new("..."));
-                    }
-                    Some(choices) => {
-                        let mut cur = self.draft.aux.card.card_type();
-                        let items: Vec<(CardType, &'static str)> = choices.iter().map(|c| (*c, model::card_name(*c))).collect();
-                        if combo(ui, "slotaux", &items, &mut cur) {
-                            model::set_aux_card(&mut self.draft, cur);
-                        }
-                        let has = model::has_options(self.draft.aux.card.card_type());
-                        if ui.add_enabled(has, egui::Button::new("...")).clicked() {
-                            self.open_sub(AUX);
-                        }
-                    }
-                }
-                ui.end_row();
-            });
+                });
             if ui.button("Reset to Default").clicked() {
                 self.confirm = Some(Confirm::ResetSlots);
             }
@@ -328,9 +453,17 @@ impl SettingsDialog {
     }
 
     pub(super) fn open_sub(&mut self, slot: usize) {
-        let spec = if slot == AUX { self.draft.aux.card.clone() } else { self.draft.slots.0[slot].clone() };
+        let spec = if slot == AUX {
+            self.draft.aux.card.clone()
+        } else {
+            self.draft.slots.0[slot].clone()
+        };
         self.hosts();
-        self.sub = Some(Sub { slot, ssc: model::SscForm::from_spec(&spec), backup: spec });
+        self.sub = Some(Sub {
+            slot,
+            ssc: model::SscForm::from_spec(&spec),
+            backup: spec,
+        });
     }
 
     // ---- Advanced ------------------------------------------------------------------------
@@ -340,9 +473,17 @@ impl SettingsDialog {
             ui.strong("Save State");
             ui.horizontal(|ui| {
                 ui.label("Filename:");
-                path_row(ui, "Save state file", &mut self.draft.storage.savestate_filename, Some(("Save states", &["aws.yaml", "yaml", "json"])));
+                path_row(
+                    ui,
+                    "Save state file",
+                    &mut self.draft.storage.savestate_filename,
+                    Some(("Save states", &["aws.yaml", "yaml", "json"])),
+                );
             });
-            ui.checkbox(&mut self.draft.storage.save_state_on_exit, "Save state on exit");
+            ui.checkbox(
+                &mut self.draft.storage.save_state_on_exit,
+                "Save state on exit",
+            );
             ui.horizontal(|ui| {
                 if ui.button("Save State").clicked() {
                     self.state_action(crate::actions::Action::SaveState, ev);
@@ -358,7 +499,12 @@ impl SettingsDialog {
         });
         ui.horizontal(|ui| {
             ui.label("CiderPress path:");
-            path_row(ui, "CiderPress", &mut self.draft.storage.ciderpress_path, None);
+            path_row(
+                ui,
+                "CiderPress",
+                &mut self.draft.storage.ciderpress_path,
+                None,
+            );
         });
         ui.separator();
         let model_now = self.draft.machine.model;
@@ -372,8 +518,17 @@ impl SettingsDialog {
                 }
             });
         });
-        let ii = matches!(model_now, apple2_core::Model::Apple2 | apple2_core::Model::Apple2Plus);
-        ui.add_enabled(ii, egui::Checkbox::new(&mut self.draft.machine.freeze_f8_rom, "The Freeze's non-autostart F8 rom (Apple ][ or ][+ only)"));
+        let ii = matches!(
+            model_now,
+            apple2_core::Model::Apple2 | apple2_core::Model::Apple2Plus
+        );
+        ui.add_enabled(
+            ii,
+            egui::Checkbox::new(
+                &mut self.draft.machine.freeze_f8_rom,
+                "The Freeze's non-autostart F8 rom (Apple ][ or ][+ only)",
+            ),
+        );
         ui.horizontal(|ui| {
             ui.label("Game I/O Connector:");
             combo(ui, "gameio", &DONGLES, &mut self.draft.joystick.dongle);
@@ -405,14 +560,22 @@ impl SettingsDialog {
             });
             ui.horizontal(|ui| {
                 ui.label("Memory power-on pattern:");
-                ui.add(egui::DragValue::new(&mut self.draft.machine.memory_clear_type).range(0..=7));
+                ui.add(
+                    egui::DragValue::new(&mut self.draft.machine.memory_clear_type).range(0..=7),
+                );
             });
             ui.weak("ROM and pattern changes restart the emulator when applied.");
         });
         ui.collapsing("New disk images", |ui| {
             ui.label("Files copied onto new ProDOS disks:");
-            ui.checkbox(&mut self.draft.storage.new_disk_copy_bitsy_boot, "BITSY.BOOT");
-            ui.checkbox(&mut self.draft.storage.new_disk_copy_bitsy_bye, "QUIT.SYSTEM (Bitsy Bye)");
+            ui.checkbox(
+                &mut self.draft.storage.new_disk_copy_bitsy_boot,
+                "BITSY.BOOT",
+            );
+            ui.checkbox(
+                &mut self.draft.storage.new_disk_copy_bitsy_bye,
+                "QUIT.SYSTEM (Bitsy Bye)",
+            );
             ui.checkbox(&mut self.draft.storage.new_disk_copy_basic, "BASIC.SYSTEM");
             ui.checkbox(&mut self.draft.storage.new_disk_copy_prodos, "PRODOS");
         });

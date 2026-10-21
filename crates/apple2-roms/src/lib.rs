@@ -9,12 +9,14 @@ pub const APPLE2_PLUS: &[u8] = include_bytes!("../../../roms/Apple2_Plus.rom");
 pub const APPLE2_VIDEO: &[u8] = include_bytes!("../../../roms/Apple2_Video.rom");
 pub const APPLE2E: &[u8] = include_bytes!("../../../roms/Apple2e.rom");
 pub const APPLE2E_ENHANCED: &[u8] = include_bytes!("../../../roms/Apple2e_Enhanced.rom");
-pub const APPLE2E_ENHANCED_VIDEO: &[u8] = include_bytes!("../../../roms/Apple2e_Enhanced_Video.rom");
+pub const APPLE2E_ENHANCED_VIDEO: &[u8] =
+    include_bytes!("../../../roms/Apple2e_Enhanced_Video.rom");
 pub const BASE64A: &[u8] = include_bytes!("../../../roms/Base64A.rom");
 pub const BASE64A_GERMAN_VIDEO: &[u8] = include_bytes!("../../../roms/Base64A_German_Video.rom");
 pub const DISK2_13SECTOR: &[u8] = include_bytes!("../../../roms/DISK2-13sector.rom");
 pub const DISK2: &[u8] = include_bytes!("../../../roms/DISK2.rom");
-pub const FREEZES_NON_AUTOSTART_F8_ROM: &[u8] = include_bytes!("../../../roms/Freezes_Non-autostart_F8_Rom.rom");
+pub const FREEZES_NON_AUTOSTART_F8_ROM: &[u8] =
+    include_bytes!("../../../roms/Freezes_Non-autostart_F8_Rom.rom");
 pub const HDC_SMARTPORT_BIN: &[u8] = include_bytes!("../../../roms/HDC-SmartPort.bin");
 pub const HDDRVR_V2_BIN: &[u8] = include_bytes!("../../../roms/Hddrvr-v2.bin");
 pub const HDDRVR_BIN: &[u8] = include_bytes!("../../../roms/Hddrvr.bin");

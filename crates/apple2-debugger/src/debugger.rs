@@ -118,7 +118,12 @@ pub struct Profile {
 
 impl Default for Profile {
     fn default() -> Self {
-        Profile { opcodes: [0; 256], modes: [0; 14], begin_cycles: 0, active: false }
+        Profile {
+            opcodes: [0; 256],
+            modes: [0; 14],
+            begin_cycles: 0,
+            active: false,
+        }
     }
 }
 
@@ -138,7 +143,6 @@ pub const ALL_MODES: [Mode; 14] = [
     Mode::IndZp,
     Mode::IndAbs,
 ];
-
 
 pub fn mode_index(m: Mode) -> usize {
     ALL_MODES.iter().position(|x| *x == m).unwrap_or(0)
@@ -236,7 +240,12 @@ impl Default for Debugger {
 
 impl Debugger {
     pub fn new() -> Self {
-        let md = MemDump { addr: 0, view: MemView::Hex, active: false, prefix: Prefix::default() };
+        let md = MemDump {
+            addr: 0,
+            view: MemView::Hex,
+            active: false,
+            prefix: Prefix::default(),
+        };
         Debugger {
             symbols: Symbols::default(),
             data: DataBlocks::default(),
@@ -309,7 +318,14 @@ impl Debugger {
     // ---- context helpers ----
 
     pub fn ctx<'a>(&'a self, m: &'a Machine) -> DisasmCtx<'a> {
-        DisasmCtx { mem: m, regs: regs_of(m), cmos: m.cpu().is_cmos(), symbols: &self.symbols, data: &self.data, cfg: &self.cfg }
+        DisasmCtx {
+            mem: m,
+            regs: regs_of(m),
+            cmos: m.cpu().is_cmos(),
+            symbols: &self.symbols,
+            data: &self.data,
+            cfg: &self.cfg,
+        }
     }
 
     pub fn disasm_line(&self, m: &Machine, addr: u16) -> DisasmLine {
@@ -317,7 +333,10 @@ impl Debugger {
     }
 
     fn paging(m: &Machine) -> PagingView {
-        PagingView { memmode: m.memmode(), aux_bank_plus1: m.board().memory.aux_bank() as u32 + 1 }
+        PagingView {
+            memmode: m.memmode(),
+            aux_bank_plus1: m.board().memory.aux_bank() as u32 + 1,
+        }
     }
 
     // ---- entering and leaving ----
@@ -396,7 +415,13 @@ impl Debugger {
     }
 
     /// `CmdGo`: free-run until `until` (or a breakpoint), skipping `skip` (start, length).
-    pub(crate) fn begin_go(&mut self, _pc: u16, until: Option<u16>, skip: Option<(u16, u16)>, full_speed: bool) {
+    pub(crate) fn begin_go(
+        &mut self,
+        _pc: u16,
+        until: Option<u16>,
+        skip: Option<(u16, u16)>,
+        full_speed: bool,
+    ) {
         self.steps = -1;
         self.step_until = until;
         self.skip = skip;
@@ -584,7 +609,10 @@ impl Debugger {
         let mut skip_fetch = fetch_len;
         for (addr, _v, kind) in log {
             // The first reads are the opcode/operand fetches of the instruction itself.
-            if kind == AccessKind::Read && skip_fetch > 0 && addr.wrapping_sub(old_pc) < fetch_len as u16 {
+            if kind == AccessKind::Read
+                && skip_fetch > 0
+                && addr.wrapping_sub(old_pc) < fetch_len as u16
+            {
                 skip_fetch -= 1;
                 continue;
             }
@@ -593,7 +621,12 @@ impl Debugger {
                 if !b.valid() || !b.source.is_mem() || self.pre_hit.contains(&i) {
                     continue;
                 }
-                let ok = matches!((b.source, kind), (Source::MemRw, _) | (Source::MemRead, AccessKind::Read) | (Source::MemWrite, AccessKind::Write));
+                let ok = matches!(
+                    (b.source, kind),
+                    (Source::MemRw, _)
+                        | (Source::MemRead, AccessKind::Read)
+                        | (Source::MemWrite, AccessKind::Write)
+                );
                 if ok && b.check_value(addr as u32, &pg) {
                     self.break_mem_addr = addr;
                     let k = match b.source {
@@ -668,7 +701,10 @@ impl Debugger {
     fn update_lbr(&mut self, m: &Machine, op: u8) {
         let p = m.cpu().p;
         let cmos = m.cpu().is_cmos();
-        let mut flow = matches!(op, OPCODE_BRK | OPCODE_JSR | OPCODE_JMP_A | OPCODE_RTI | OPCODE_RTS | OPCODE_JMP_NA) || (cmos && op == OPCODE_JMP_IAX);
+        let mut flow = matches!(
+            op,
+            OPCODE_BRK | OPCODE_JSR | OPCODE_JMP_A | OPCODE_RTI | OPCODE_RTS | OPCODE_JMP_NA
+        ) || (cmos && op == OPCODE_JMP_IAX);
         if table(cmos)[op as usize].mode == Mode::Rel {
             let taken = match op {
                 0x80 => true,
@@ -743,10 +779,14 @@ impl Debugger {
             if Some(pc) == self.step_until || hits != 0 {
                 let reason = self.stop_reason_text(m, hits, Some(pc) == self.step_until);
                 let id = match self.hit_id {
-                    Some(i) => format!("{CHC_DEFAULT}[{CHC_ARG_SEP}B#{CHC_NUM_HEX}{i:X}{CHC_DEFAULT}]"),
+                    Some(i) => {
+                        format!("{CHC_DEFAULT}[{CHC_ARG_SEP}B#{CHC_NUM_HEX}{i:X}{CHC_DEFAULT}]")
+                    }
                     None => format!("{CHC_DEFAULT}[{CHC_ARG_SEP}B#{CHC_NUM_HEX}-{CHC_DEFAULT}]"),
                 };
-                self.console.print(&format!("{CHC_INFO}Stop reason: {id} {CHC_DEFAULT}{reason}"));
+                self.console.print(&format!(
+                    "{CHC_INFO}Stop reason: {id} {CHC_DEFAULT}{reason}"
+                ));
                 self.stop_reason = Some(reason);
                 self.hit_id = None;
                 self.steps = 0;
@@ -765,7 +805,10 @@ impl Debugger {
 
     pub(crate) fn stop_reason_text(&mut self, m: &Machine, hits: u32, until: bool) -> String {
         let pc = m.cpu().pc;
-        let pfx = self.hit_id.map(|i| self.breakpoints.slots[i].prefix.text()).unwrap_or_default();
+        let pfx = self
+            .hit_id
+            .map(|i| self.breakpoints.slots[i].prefix.text())
+            .unwrap_or_default();
         if until {
             format!("{CHC_DEFAULT}Register {CHC_REGS}PC{CHC_DEFAULT} matches '{CHC_INFO}Go until{CHC_DEFAULT}' address ${CHC_ADDRESS}{pc:04X}")
         } else if hits & hit::INVALID != 0 {
@@ -774,15 +817,27 @@ impl Debugger {
             format!("Opcode match at {CHC_ARG_SEP}${CHC_ADDRESS}{pc:04X}")
         } else if hits & hit::REG != 0 {
             match self.hit_id {
-                Some(i) => format!("Register {CHC_REGS}{}{CHC_DEFAULT} matches value", self.breakpoints.slots[i].source.name()),
+                Some(i) => format!(
+                    "Register {CHC_REGS}{}{CHC_DEFAULT} matches value",
+                    self.breakpoints.slots[i].source.name()
+                ),
                 None => "Register matches value".into(),
             }
         } else if hits & hit::MEM != 0 {
-            format!("Memory access at {CHC_INFO}{pfx}{CHC_ADDRESS}{:04X}", self.break_mem_addr)
+            format!(
+                "Memory access at {CHC_INFO}{pfx}{CHC_ADDRESS}{:04X}",
+                self.break_mem_addr
+            )
         } else if hits & hit::MEMW != 0 {
-            format!("Write access at {CHC_INFO}{pfx}{CHC_ADDRESS}{:04X}", self.break_mem_addr)
+            format!(
+                "Write access at {CHC_INFO}{pfx}{CHC_ADDRESS}{:04X}",
+                self.break_mem_addr
+            )
         } else if hits & hit::MEMR != 0 {
-            format!("Read access at {CHC_INFO}{pfx}{CHC_ADDRESS}{:04X}", self.break_mem_addr)
+            format!(
+                "Read access at {CHC_INFO}{pfx}{CHC_ADDRESS}{:04X}",
+                self.break_mem_addr
+            )
         } else if hits & hit::PC_FLOATING_OR_IO != 0 {
             "PC reads from floating bus or I/O memory".into()
         } else if hits & hit::INTERRUPT != 0 {
@@ -791,7 +846,10 @@ impl Debugger {
                 None => "Interrupt occurred (LBR unknown)".into(),
             }
         } else if hits & hit::VIDEO_POS != 0 {
-            format!("Video scanner position matches at vpos=${:04X}", m.video_position().0)
+            format!(
+                "Video scanner position matches at vpos=${:04X}",
+                m.video_position().0
+            )
         } else {
             "Unknown!".into()
         }
@@ -859,17 +917,38 @@ impl Debugger {
         let r = regs_of(m);
         let flags: String = (0..8)
             .rev()
-            .map(|bit| if r.p & (1 << bit) != 0 { ['C', 'Z', 'I', 'D', 'B', 'R', 'V', 'N'][bit] } else { '.' })
+            .map(|bit| {
+                if r.p & (1 << bit) != 0 {
+                    ['C', 'Z', 'I', 'D', 'B', 'R', 'V', 'N'][bit]
+                } else {
+                    '.'
+                }
+            })
             .collect();
         let header = std::mem::take(&mut self.trace_header);
         let text = if self.trace_scanner {
             let (v, h) = m.video_position();
             let addr = 0u16;
-            let hdr = if header { "Vert Horz Addr Data A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic\n" } else { "" };
+            let hdr = if header {
+                "Vert Horz Addr Data A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic\n"
+            } else {
+                ""
+            };
             format!("{hdr}{v:04X} {h:04X} {addr:04X}   {:02X} {:02X} {:02X} {:02X} {:04X} {flags}  {dis}\n", 0, r.a, r.x, r.y, 0x100 | r.sp as u16)
         } else {
-            let hdr = if header { "Cycles   A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic\n" } else { "" };
-            format!("{hdr}{:08X} {:02X} {:02X} {:02X} {:04X} {flags}  {dis}\n", m.cycles() as u32, r.a, r.x, r.y, 0x100 | r.sp as u16)
+            let hdr = if header {
+                "Cycles   A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic\n"
+            } else {
+                ""
+            };
+            format!(
+                "{hdr}{:08X} {:02X} {:02X} {:02X} {:04X} {flags}  {dis}\n",
+                m.cycles() as u32,
+                r.a,
+                r.x,
+                r.y,
+                0x100 | r.sp as u16
+            )
         };
         if let Some(w) = self.trace.as_mut() {
             let _ = w.write_all(text.as_bytes());

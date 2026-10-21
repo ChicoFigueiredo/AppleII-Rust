@@ -46,7 +46,12 @@ impl NewDiskKind {
     pub fn sizes(self) -> &'static [(usize, &'static str)] {
         match self {
             NewDiskKind::Dos33 => &[(FLOPPY_SIZE, "140K floppy")],
-            _ => &[(FLOPPY_SIZE, "140K floppy"), (819_200, "800K (3.5\")"), (5 * 1024 * 1024, "5MB hard disk"), (32 * 1024 * 1024, "32MB hard disk")],
+            _ => &[
+                (FLOPPY_SIZE, "140K floppy"),
+                (819_200, "800K (3.5\")"),
+                (5 * 1024 * 1024, "5MB hard disk"),
+                (32 * 1024 * 1024, "32MB hard disk"),
+            ],
         }
     }
 }
@@ -71,7 +76,12 @@ pub fn prodos_files(s: &Settings) -> ProDosFiles {
 }
 
 /// Creates the image file. Refuses to overwrite nothing silently: the save dialog already asked.
-pub fn write_new_disk(path: &Path, kind: NewDiskKind, size: usize, files: ProDosFiles) -> std::io::Result<()> {
+pub fn write_new_disk(
+    path: &Path,
+    kind: NewDiskKind,
+    size: usize,
+    files: ProDosFiles,
+) -> std::io::Result<()> {
     std::fs::write(path, new_disk_bytes(kind, size, files))
 }
 
@@ -87,11 +97,19 @@ fn recent_file() -> Option<PathBuf> {
 }
 
 pub fn parse_recent(text: &str) -> Vec<PathBuf> {
-    text.lines().map(str::trim).filter(|l| !l.is_empty()).take(MAX_RECENT).map(PathBuf::from).collect()
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .take(MAX_RECENT)
+        .map(PathBuf::from)
+        .collect()
 }
 
 pub fn format_recent(list: &[PathBuf]) -> String {
-    list.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n")
+    list.iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 struct CreateState {
@@ -108,8 +126,15 @@ pub struct DiskUi {
 
 impl Default for DiskUi {
     fn default() -> Self {
-        let recent = recent_file().and_then(|p| std::fs::read_to_string(p).ok()).map(|t| parse_recent(&t)).unwrap_or_default();
-        DiskUi { recent, create: None, note: String::new() }
+        let recent = recent_file()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .map(|t| parse_recent(&t))
+            .unwrap_or_default();
+        DiskUi {
+            recent,
+            create: None,
+            note: String::new(),
+        }
     }
 }
 
@@ -126,79 +151,116 @@ impl DiskUi {
     }
 
     /// Draws the menu of drive `*menu`; closes it by setting `*menu = None`.
-    pub fn drive_menu(&mut self, ctx: &Context, menu: &mut Option<usize>, drives: &[DriveStatus; 2], settings: &Settings, ev: &mut Vec<UiEvent>) {
+    pub fn drive_menu(
+        &mut self,
+        ctx: &Context,
+        menu: &mut Option<usize>,
+        drives: &[DriveStatus; 2],
+        settings: &Settings,
+        ev: &mut Vec<UiEvent>,
+    ) {
         let Some(d) = *menu else { return };
         let mut open = true;
         let mut close = false;
         let st = &drives[d];
-        egui::Window::new(format!("Drive {}", d + 1)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
-            ui.set_min_width(260.0);
-            match &st.image {
-                Some(name) => ui.label(format!("Disk: {name}")),
-                None => ui.label("Disk: (empty)"),
-            };
-            if ui.button("Insert disk image...").clicked() {
-                ev.push(UiEvent::Action(Action::DriveSelect(d as u8)));
-                close = true;
-            }
-            ui.add_enabled_ui(st.image.is_some(), |ui| {
-                if ui.button("Eject").clicked() {
-                    ev.push(UiEvent::EjectDisk(d));
+        egui::Window::new(format!("Drive {}", d + 1))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.set_min_width(260.0);
+                match &st.image {
+                    Some(name) => ui.label(format!("Disk: {name}")),
+                    None => ui.label("Disk: (empty)"),
+                };
+                if ui.button("Insert disk image...").clicked() {
+                    ev.push(UiEvent::Action(Action::DriveSelect(d as u8)));
                     close = true;
                 }
-                let mut wp = st.write_protected;
-                if ui.checkbox(&mut wp, "Write protected").changed() {
-                    ev.push(UiEvent::SetWriteProtect { drive: d, on: wp });
-                }
-            });
-            if ui.button("Swap drives").clicked() {
-                ev.push(UiEvent::Action(Action::SwapDrives));
-                close = true;
-            }
-            ui.separator();
-            ui.menu_button("Insert recent", |ui| {
-                if self.recent.is_empty() {
-                    ui.label("(none)");
-                }
-                for p in self.recent.clone() {
-                    let name = p.file_name().map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned());
-                    if ui.button(name).on_hover_text(p.display().to_string()).clicked() {
-                        ev.push(UiEvent::InsertDisk { drive: d, path: p });
-                        ui.close_menu();
+                ui.add_enabled_ui(st.image.is_some(), |ui| {
+                    if ui.button("Eject").clicked() {
+                        ev.push(UiEvent::EjectDisk(d));
                         close = true;
                     }
+                    let mut wp = st.write_protected;
+                    if ui.checkbox(&mut wp, "Write protected").changed() {
+                        ev.push(UiEvent::SetWriteProtect { drive: d, on: wp });
+                    }
+                });
+                if ui.button("Swap drives").clicked() {
+                    ev.push(UiEvent::Action(Action::SwapDrives));
+                    close = true;
                 }
+                ui.separator();
+                ui.menu_button("Insert recent", |ui| {
+                    if self.recent.is_empty() {
+                        ui.label("(none)");
+                    }
+                    for p in self.recent.clone() {
+                        let name = p.file_name().map_or_else(
+                            || p.display().to_string(),
+                            |n| n.to_string_lossy().into_owned(),
+                        );
+                        if ui
+                            .button(name)
+                            .on_hover_text(p.display().to_string())
+                            .clicked()
+                        {
+                            ev.push(UiEvent::InsertDisk { drive: d, path: p });
+                            ui.close_menu();
+                            close = true;
+                        }
+                    }
+                });
+                ui.separator();
+                self.create_ui(ui, d, settings, ev, &mut close);
+                if !self.note.is_empty() {
+                    ui.label(&self.note);
+                }
+                hdd_section(ui, settings, ev);
             });
-            ui.separator();
-            self.create_ui(ui, d, settings, ev, &mut close);
-            if !self.note.is_empty() {
-                ui.label(&self.note);
-            }
-            hdd_section(ui, settings, ev);
-        });
         if !open || close {
             *menu = None;
             self.create = None;
         }
     }
 
-    fn create_ui(&mut self, ui: &mut egui::Ui, d: usize, settings: &Settings, ev: &mut Vec<UiEvent>, close: &mut bool) {
+    fn create_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        d: usize,
+        settings: &Settings,
+        ev: &mut Vec<UiEvent>,
+        close: &mut bool,
+    ) {
         if self.create.is_none() {
             if ui.button("Create new disk...").clicked() {
-                self.create = Some(CreateState { kind: NewDiskKind::Blank, size: FLOPPY_SIZE });
+                self.create = Some(CreateState {
+                    kind: NewDiskKind::Blank,
+                    size: FLOPPY_SIZE,
+                });
             }
             return;
         }
-        let Some(c) = self.create.as_mut() else { return };
+        let Some(c) = self.create.as_mut() else {
+            return;
+        };
         ui.strong("Create new disk");
         for k in NewDiskKind::ALL {
-            if ui.radio_value(&mut c.kind, k, k.label()).clicked() && !k.sizes().iter().any(|(s, _)| *s == c.size) {
+            if ui.radio_value(&mut c.kind, k, k.label()).clicked()
+                && !k.sizes().iter().any(|(s, _)| *s == c.size)
+            {
                 c.size = FLOPPY_SIZE;
             }
         }
         let sizes = c.kind.sizes();
         egui::ComboBox::from_id_salt("newdisksize")
-            .selected_text(sizes.iter().find(|(s, _)| *s == c.size).map_or("140K floppy", |(_, n)| *n))
+            .selected_text(
+                sizes
+                    .iter()
+                    .find(|(s, _)| *s == c.size)
+                    .map_or("140K floppy", |(_, n)| *n),
+            )
             .show_ui(ui, |ui| {
                 for (s, n) in sizes {
                     ui.selectable_value(&mut c.size, *s, *n);
@@ -208,7 +270,9 @@ impl DiskUi {
         ui.horizontal(|ui| {
             if ui.button("Create and insert").clicked() {
                 let name = format!("NewDisk.{}", kind.extension());
-                let mut dlg = rfd::FileDialog::new().set_title("New disk image").set_file_name(&name);
+                let mut dlg = rfd::FileDialog::new()
+                    .set_title("New disk image")
+                    .set_file_name(&name);
                 if let Some(dir) = &settings.storage.disk_dir {
                     dlg = dlg.set_directory(dir);
                 }
@@ -233,21 +297,42 @@ impl DiskUi {
 /// Hard disk controller units of the applied settings. Changing an image rebuilds the machine
 /// (there is no hot-plug in the emulation thread yet), so it goes through `UiEvent::Apply`.
 fn hdd_section(ui: &mut egui::Ui, settings: &Settings, ev: &mut Vec<UiEvent>) {
-    let Some((slot, images)) = settings.slots.0.iter().enumerate().find_map(|(i, c)| match c {
-        SlotCardSpec::GenericHdd { images, .. } => Some((i, images)),
-        _ => None,
-    }) else {
+    let Some((slot, images)) = settings
+        .slots
+        .0
+        .iter()
+        .enumerate()
+        .find_map(|(i, c)| match c {
+            SlotCardSpec::GenericHdd { images, .. } => Some((i, images)),
+            _ => None,
+        })
+    else {
         return;
     };
     ui.separator();
     ui.strong(format!("Hard disks (slot {slot}) - restarts the emulator"));
     for (u, img) in images.iter().enumerate() {
         ui.horizontal(|ui| {
-            let name = img.as_ref().and_then(|p| p.file_name()).map_or("(empty)".to_string(), |n| n.to_string_lossy().into_owned());
+            let name = img
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map_or("(empty)".to_string(), |n| n.to_string_lossy().into_owned());
             ui.label(format!("HDD {}: {name}", u + 1));
             if ui.small_button("Select...").clicked() {
-                if let Some(p) = rfd::FileDialog::new().set_title("Hard disk image").add_filter("Hard disk images", &["hdv", "po", "2mg", "2img", "gz", "zip", "dsk"]).pick_file() {
-                    ev.push(UiEvent::Apply(Box::new(with_hdd(settings, slot, u, Some(p)))));
+                if let Some(p) = rfd::FileDialog::new()
+                    .set_title("Hard disk image")
+                    .add_filter(
+                        "Hard disk images",
+                        &["hdv", "po", "2mg", "2img", "gz", "zip", "dsk"],
+                    )
+                    .pick_file()
+                {
+                    ev.push(UiEvent::Apply(Box::new(with_hdd(
+                        settings,
+                        slot,
+                        u,
+                        Some(p),
+                    ))));
                 }
             }
             if img.is_some() && ui.small_button("Unplug").clicked() {

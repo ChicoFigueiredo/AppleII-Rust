@@ -70,7 +70,9 @@ fn slot_io() {
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
     assert!(m.insert_card(5, Box::new(Dummy)));
     // $0300: LDA $C0D0 / STA $C0D1 / LDA $C000 / JMP $0300 (card read, card write, keyboard read).
-    let prog = [0xAD, 0xD0, 0xC0, 0x8D, 0xD1, 0xC0, 0xAD, 0x00, 0xC0, 0x4C, 0x00, 0x03];
+    let prog = [
+        0xAD, 0xD0, 0xC0, 0x8D, 0xD1, 0xC0, 0xAD, 0x00, 0xC0, 0x4C, 0x00, 0x03,
+    ];
     for (i, b) in prog.iter().enumerate() {
         m.poke(0x300 + i as u16, *b);
     }

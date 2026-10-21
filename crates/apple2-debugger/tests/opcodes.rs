@@ -38,15 +38,30 @@ fn instruction_lengths_match_what_the_cpu_consumes() {
             if changes_flow(op, cmos) {
                 continue;
             }
-            let mut bus = Flat { mem: vec![0; 0x10000], reads: vec![], writes: vec![] };
+            let mut bus = Flat {
+                mem: vec![0; 0x10000],
+                reads: vec![],
+                writes: vec![],
+            };
             bus.mem[0x1000] = op;
             bus.mem[0x1001] = 0x12;
             bus.mem[0x1002] = 0x34;
-            let mut cpu = Cpu::new(if cmos { Variant::Cmos65C02 } else { Variant::Nmos6502 });
+            let mut cpu = Cpu::new(if cmos {
+                Variant::Cmos65C02
+            } else {
+                Variant::Nmos6502
+            });
             cpu.pc = 0x1000;
             cpu.step(&mut bus);
             let len = table(cmos)[op as usize].mode.bytes() as u16;
-            assert_eq!(cpu.pc, 0x1000 + len, "{} opcode {op:02X} ({}): CPU consumed {} bytes", if cmos { "65C02" } else { "6502" }, table(cmos)[op as usize].mnemonic, cpu.pc - 0x1000);
+            assert_eq!(
+                cpu.pc,
+                0x1000 + len,
+                "{} opcode {op:02X} ({}): CPU consumed {} bytes",
+                if cmos { "65C02" } else { "6502" },
+                table(cmos)[op as usize].mnemonic,
+                cpu.pc - 0x1000
+            );
         }
     }
 }
@@ -60,7 +75,11 @@ fn memory_access_flags_match_the_cpu_for_documented_opcodes() {
         if info.mode != Mode::Abs || info.is_extension() || matches!(op, 0x20 | 0x4C) {
             continue;
         }
-        let mut bus = Flat { mem: vec![0; 0x10000], reads: vec![], writes: vec![] };
+        let mut bus = Flat {
+            mem: vec![0; 0x10000],
+            reads: vec![],
+            writes: vec![],
+        };
         bus.mem[0x1000] = op as u8;
         bus.mem[0x1001] = 0x00;
         bus.mem[0x1002] = 0x20; // $2000
@@ -69,13 +88,22 @@ fn memory_access_flags_match_the_cpu_for_documented_opcodes() {
         cpu.step(&mut bus);
         let read = bus.reads.iter().skip(3).any(|a| *a == 0x2000);
         let wrote = bus.writes.contains(&0x2000);
-        assert_eq!(wrote, info.mem & MEM_W != 0, "{} ${op:02X} write", info.mnemonic);
+        assert_eq!(
+            wrote,
+            info.mem & MEM_W != 0,
+            "{} ${op:02X} write",
+            info.mnemonic
+        );
         // AppleWin lists several read-modify-write opcodes (TSB, TRB, LSR abs, ...) as write-only in the
         // 65C02 table; so a table flag must be backed by the CPU, not the other way round.
         if info.mem & MEM_R != 0 {
             assert!(read, "{} ${op:02X} reads its operand", info.mnemonic);
         } else if !wrote {
-            assert!(!read, "{} ${op:02X} does not read its operand", info.mnemonic);
+            assert!(
+                !read,
+                "{} ${op:02X} does not read its operand",
+                info.mnemonic
+            );
         }
     }
 }

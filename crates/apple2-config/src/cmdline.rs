@@ -33,19 +33,49 @@ pub enum Opt {
     Model(Model),
     RefreshRate(RefreshRate),
     /// `-sN <card>` / `-s0 ...` (phase 1).
-    InsertCard { slot: usize, card: SlotCardSpec },
+    InsertCard {
+        slot: usize,
+        card: SlotCardSpec,
+    },
     /// `-aux`, `-r` (phase 1).
     Aux(SlotCardSpec),
     /// `-d1/-d2/-sNdD`.
-    DiskImage { slot: usize, drive: usize, path: PathBuf },
-    DriveDisconnected { drive: usize },
+    DiskImage {
+        slot: usize,
+        drive: usize,
+        path: PathBuf,
+    },
+    DriveDisconnected {
+        drive: usize,
+    },
     /// `-h1/-h2/-sNhD`.
-    HdImage { slot: usize, unit: usize, path: PathBuf },
-    HdcFirmware { slot: usize, mode: HdcFirmware },
-    Bad6522 { slot: usize, b: bool },
-    AySocket { slot: usize, socket: usize, chip: AyChip },
-    Ssi263Socket { slot: usize, socket: usize, chip: Ssi263Chip },
-    Sc01 { slot: usize, present: bool },
+    HdImage {
+        slot: usize,
+        unit: usize,
+        path: PathBuf,
+    },
+    HdcFirmware {
+        slot: usize,
+        mode: HdcFirmware,
+    },
+    Bad6522 {
+        slot: usize,
+        b: bool,
+    },
+    AySocket {
+        slot: usize,
+        socket: usize,
+        chip: AyChip,
+    },
+    Ssi263Socket {
+        slot: usize,
+        socket: usize,
+        chip: Ssi263Chip,
+    },
+    Sc01 {
+        slot: usize,
+        present: bool,
+    },
     Slot7EmptyOnExit,
     HarddiskNumBlocks(u32),
     Fullscreen(bool),
@@ -87,8 +117,13 @@ pub enum Opt {
     RgbCardForeground(u8),
     RgbCardBackground(u8),
     NoSlotClock,
-    SnesMaxAlt { joy: usize },
-    SnesMaxUser { joy: usize, path: PathBuf },
+    SnesMaxAlt {
+        joy: usize,
+    },
+    SnesMaxUser {
+        joy: usize,
+        path: PathBuf,
+    },
     WavSpeaker(PathBuf),
     WavMockingboard(PathBuf),
     NoDisk2StepperDefer,
@@ -152,7 +187,12 @@ fn atoi(s: &str) -> i64 {
         Some(r) => (true, r),
         None => (false, t.strip_prefix('+').unwrap_or(t)),
     };
-    let n: i64 = t.chars().take_while(char::is_ascii_digit).collect::<String>().parse().unwrap_or(0);
+    let n: i64 = t
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>()
+        .parse()
+        .unwrap_or(0);
     if neg {
         -n
     } else {
@@ -163,7 +203,13 @@ fn atoi(s: &str) -> i64 {
 /// C `atof` for plain decimals.
 fn atof(s: &str) -> f64 {
     let t = s.trim_start();
-    let end = t.char_indices().take_while(|(i, c)| c.is_ascii_digit() || *c == '.' || (*i == 0 && (*c == '-' || *c == '+'))).last().map_or(0, |(i, c)| i + c.len_utf8());
+    let end = t
+        .char_indices()
+        .take_while(|(i, c)| {
+            c.is_ascii_digit() || *c == '.' || (*i == 0 && (*c == '-' || *c == '+'))
+        })
+        .last()
+        .map_or(0, |(i, c)| i + c.len_utf8());
     t[..end].parse().unwrap_or(0.0)
 }
 
@@ -173,7 +219,11 @@ impl CmdLine {
         let mut cmd_cards = [CardType::Empty; 8]; // `CardInstanceExists` (CmdLine.cpp:94) looks at the cmd line only
         let mut it = args.iter().map(AsRef::as_ref);
         while let Some(a) = it.next() {
-            let mut val = |name: &str| it.next().map(str::to_string).ok_or_else(|| CmdLineError::MissingValue(name.to_string()));
+            let mut val = |name: &str| {
+                it.next()
+                    .map(str::to_string)
+                    .ok_or_else(|| CmdLineError::MissingValue(name.to_string()))
+            };
             match a {
                 "-l" | "-log" => {
                     c.opts.push(Opt::Log);
@@ -182,13 +232,21 @@ impl CmdLine {
                 "-conf" => c.conf_file = Some(val(a)?.into()),
                 "-d1" | "-d2" => {
                     let drive = (a.as_bytes()[2] - b'1') as usize;
-                    c.opts.push(Opt::DiskImage { slot: 6, drive, path: val(a)?.into() });
+                    c.opts.push(Opt::DiskImage {
+                        slot: 6,
+                        drive,
+                        path: val(a)?.into(),
+                    });
                 }
                 "-d1-disconnected" => c.opts.push(Opt::DriveDisconnected { drive: 0 }),
                 "-d2-disconnected" => c.opts.push(Opt::DriveDisconnected { drive: 1 }),
                 "-h1" | "-h2" => {
                     let unit = (a.as_bytes()[2] - b'1') as usize;
-                    c.opts.push(Opt::HdImage { slot: 7, unit, path: val(a)?.into() });
+                    c.opts.push(Opt::HdImage {
+                        slot: 7,
+                        unit,
+                        path: val(a)?.into(),
+                    });
                 }
                 "-s0" => {
                     let v = val(a)?;
@@ -204,7 +262,10 @@ impl CmdLine {
                     }
                 }
                 "-s7-empty-on-exit" => c.opts.push(Opt::Slot7EmptyOnExit),
-                _ if a.len() >= 3 && a.starts_with("-s") && matches!(a.as_bytes()[2], b'1'..=b'7') => {
+                _ if a.len() >= 3
+                    && a.starts_with("-s")
+                    && matches!(a.as_bytes()[2], b'1'..=b'7') =>
+                {
                     let slot = (a.as_bytes()[2] - b'0') as usize;
                     let rest = &a[3..];
                     let rb = rest.as_bytes();
@@ -212,9 +273,17 @@ impl CmdLine {
                         let v = val(a)?;
                         c.slot_card(slot, &v, &mut cmd_cards);
                     } else if rb.len() == 2 && rb[0] == b'd' && matches!(rb[1], b'1' | b'2') {
-                        c.opts.push(Opt::DiskImage { slot, drive: (rb[1] - b'1') as usize, path: val(a)?.into() });
+                        c.opts.push(Opt::DiskImage {
+                            slot,
+                            drive: (rb[1] - b'1') as usize,
+                            path: val(a)?.into(),
+                        });
                     } else if rb.len() == 2 && rb[0] == b'h' && matches!(rb[1], b'1'..=b'8') {
-                        c.opts.push(Opt::HdImage { slot, unit: (rb[1] - b'1') as usize, path: val(a)?.into() });
+                        c.opts.push(Opt::HdImage {
+                            slot,
+                            unit: (rb[1] - b'1') as usize,
+                            path: val(a)?.into(),
+                        });
                     } else {
                         c.unsupported.push(a.to_string());
                     }
@@ -227,13 +296,26 @@ impl CmdLine {
                         "ext80" => c.opts.push(Opt::Aux(SlotCardSpec::Extended80Col)),
                         // banks: keep a previous `-r`, else the real RW3 default (CmdLine.cpp:369-374)
                         "rw3" => {
-                            let banks = c.opts.iter().rev().find_map(|o| if let Opt::Aux(SlotCardSpec::RamWorksIII { banks }) = o { Some(*banks) } else { None }).unwrap_or(16);
+                            let banks = c
+                                .opts
+                                .iter()
+                                .rev()
+                                .find_map(|o| {
+                                    if let Opt::Aux(SlotCardSpec::RamWorksIII { banks }) = o {
+                                        Some(*banks)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(16);
                             c.opts.push(Opt::Aux(SlotCardSpec::RamWorksIII { banks }));
                         }
                         _ => c.warnings.push(format!("Unsupported aux slot card: {v}")),
                     }
                 }
-                "-harddisknumblocks" => c.opts.push(Opt::HarddiskNumBlocks(atoi(&val(a)?).clamp(0, 0x007F_FFFF) as u32)),
+                "-harddisknumblocks" => c.opts.push(Opt::HarddiskNumBlocks(
+                    atoi(&val(a)?).clamp(0, 0x007F_FFFF) as u32,
+                )),
                 "-load-state" => c.load_state = Some(val(a)?.into()),
                 "-load-state-ignore-hdc-fw" => c.snapshot_ignore_hdc_firmware = true,
                 "-f" | "-full-screen" => c.opts.push(Opt::Fullscreen(true)),
@@ -241,8 +323,12 @@ impl CmdLine {
                 _ if a.starts_with("-fs-width=") => {
                     c.implicit_fullscreen();
                     match atoi(&a[10..]) {
-                        0 => c.warnings.push("Invalid cmd-line parameter for -fs-width=x switch".into()),
-                        w => c.opts.push(Opt::FsWidth(w.clamp(0, u32::MAX as i64) as u32)),
+                        0 => c
+                            .warnings
+                            .push("Invalid cmd-line parameter for -fs-width=x switch".into()),
+                        w => c
+                            .opts
+                            .push(Opt::FsWidth(w.clamp(0, u32::MAX as i64) as u32)),
                     }
                 }
                 _ if a.starts_with("-fs-height=") => {
@@ -251,15 +337,21 @@ impl CmdLine {
                         c.opts.push(Opt::FsHeightBest);
                     } else {
                         match atoi(&a[11..]) {
-                            0 => c.warnings.push("Invalid cmd-line parameter for -fs-height=x switch".into()),
-                            h => c.opts.push(Opt::FsHeight(h.clamp(0, u32::MAX as i64) as u32)),
+                            0 => c
+                                .warnings
+                                .push("Invalid cmd-line parameter for -fs-height=x switch".into()),
+                            h => c
+                                .opts
+                                .push(Opt::FsHeight(h.clamp(0, u32::MAX as i64) as u32)),
                         }
                     }
                 }
                 "-no-di" => c.opts.push(Opt::NoDirectInput),
                 "-m" => c.opts.push(Opt::DisableSound),
                 "-no-mb" => c.opts.push(Opt::NoMockingboard),
-                "-memclear" => c.opts.push(Opt::MemClear(atoi(&val(a)?).clamp(0, 7) as u32)),
+                "-memclear" => c
+                    .opts
+                    .push(Opt::MemClear(atoi(&val(a)?).clamp(0, 7) as u32)),
                 "-r" => {
                     let banks = atoi(&val(a)?).clamp(1, 256) as u16;
                     c.opts.push(Opt::Aux(SlotCardSpec::RamWorksIII { banks }));
@@ -276,13 +368,19 @@ impl CmdLine {
                 "-altgr-sends-wmchar" => c.opts.push(Opt::AltGrSendsChar),
                 "-capslock=off" => c.opts.push(Opt::CapsLockOff),
                 "-no-hook-alt" => c.opts.push(Opt::NoHookAlt),
-                "-left-alt-control-buttons" => c.opts.push(Opt::AltControlButtons(AltControlButtons::Left)),
-                "-right-alt-control-buttons" => c.opts.push(Opt::AltControlButtons(AltControlButtons::Right)),
+                "-left-alt-control-buttons" => {
+                    c.opts.push(Opt::AltControlButtons(AltControlButtons::Left))
+                }
+                "-right-alt-control-buttons" => c
+                    .opts
+                    .push(Opt::AltControlButtons(AltControlButtons::Right)),
                 "-swap-buttons" => c.opts.push(Opt::SwapButtons),
                 _ if a.starts_with("-no-joystick") => match a.as_bytes().get(12) {
                     Some(b'1') if a.len() == 13 => c.opts.push(Opt::NoJoystick(0)),
                     Some(b'2') if a.len() == 13 => c.opts.push(Opt::NoJoystick(1)),
-                    _ => c.warnings.push(format!("-no-joystick: unsupported device: {a}")),
+                    _ => c
+                        .warnings
+                        .push(format!("-no-joystick: unsupported device: {a}")),
                 },
                 "-spkr-inc" => c.opts.push(Opt::SpkrInc(atoi(&val(a)?) as i32)),
                 "-spkr-max" => c.opts.push(Opt::SpkrMax(atoi(&val(a)?) as i32)),
@@ -293,8 +391,12 @@ impl CmdLine {
                 "-alt-enter=toggle-full-screen" => c.opts.push(Opt::AltEnter(true)),
                 "-alt-enter=open-apple-enter" => c.opts.push(Opt::AltEnter(false)),
                 "-video-mode=idealized" => c.opts.push(Opt::VideoMode(VideoType::ColorIdealized)),
-                "-video-mode=rgb-videocard" => c.opts.push(Opt::VideoMode(VideoType::ColorVideocardRgb)),
-                "-video-mode=composite-monitor" => c.opts.push(Opt::VideoMode(VideoType::ColorMonitorNtsc)),
+                "-video-mode=rgb-videocard" => {
+                    c.opts.push(Opt::VideoMode(VideoType::ColorVideocardRgb))
+                }
+                "-video-mode=composite-monitor" => {
+                    c.opts.push(Opt::VideoMode(VideoType::ColorMonitorNtsc))
+                }
                 "-video-style=vertical-blend" => c.opts.push(Opt::VerticalBlend(true)),
                 "-video-style=no-vertical-blend" => c.opts.push(Opt::VerticalBlend(false)),
                 "-rgb-card-invert-bit7" => c.opts.push(Opt::RgbCardInvertBit7),
@@ -312,19 +414,31 @@ impl CmdLine {
                         _ => c.warnings.push(format!("-model: unsupported type: {v}")),
                     }
                 }
-                _ if a.eq_ignore_ascii_case("-50hz") => c.opts.push(Opt::RefreshRate(RefreshRate::Hz50)),
-                _ if a.eq_ignore_ascii_case("-60hz") => c.opts.push(Opt::RefreshRate(RefreshRate::Hz60)),
+                _ if a.eq_ignore_ascii_case("-50hz") => {
+                    c.opts.push(Opt::RefreshRate(RefreshRate::Hz50))
+                }
+                _ if a.eq_ignore_ascii_case("-60hz") => {
+                    c.opts.push(Opt::RefreshRate(RefreshRate::Hz60))
+                }
                 "-rgb-card-type" => {
                     let v = val(a)?;
                     match v.as_str() {
                         "apple" | "sl7" => c.opts.push(Opt::RgbCardType(RgbCardType::Video7Sl7)),
                         "eve" => c.opts.push(Opt::RgbCardType(RgbCardType::LeChatMauveEve)),
-                        "feline" => c.opts.push(Opt::RgbCardType(RgbCardType::LeChatMauveFeline)),
-                        _ => c.warnings.push(format!("-rgb-card-type: unsupported type: {v}")),
+                        "feline" => c
+                            .opts
+                            .push(Opt::RgbCardType(RgbCardType::LeChatMauveFeline)),
+                        _ => c
+                            .warnings
+                            .push(format!("-rgb-card-type: unsupported type: {v}")),
                     }
                 }
-                "-rgb-card-foreground" => c.opts.push(Opt::RgbCardForeground(atoi(&val(a)?).clamp(0, 15) as u8)),
-                "-rgb-card-background" => c.opts.push(Opt::RgbCardBackground(atoi(&val(a)?).clamp(0, 15) as u8)),
+                "-rgb-card-foreground" => c
+                    .opts
+                    .push(Opt::RgbCardForeground(atoi(&val(a)?).clamp(0, 15) as u8)),
+                "-rgb-card-background" => c
+                    .opts
+                    .push(Opt::RgbCardBackground(atoi(&val(a)?).clamp(0, 15) as u8)),
                 "-power-on" => c.power_on = true,
                 "-current-dir" => c.current_dir = Some(val(a)?.into()),
                 "-no-nsc" => c.opts.push(Opt::NoSlotClock),
@@ -332,7 +446,10 @@ impl CmdLine {
                 "-snes-max-alt-joy2" => c.opts.push(Opt::SnesMaxAlt { joy: 1 }),
                 "-snes-max-user-joy1" | "-snes-max-user-joy2" => {
                     let joy = (a.as_bytes()[a.len() - 1] - b'1') as usize;
-                    c.opts.push(Opt::SnesMaxUser { joy, path: val(a)?.into() });
+                    c.opts.push(Opt::SnesMaxUser {
+                        joy,
+                        path: val(a)?.into(),
+                    });
                 }
                 "-wav-speaker" => c.opts.push(Opt::WavSpeaker(val(a)?.into())),
                 "-wav-mockingboard" => c.opts.push(Opt::WavMockingboard(val(a)?.into())),
@@ -368,7 +485,11 @@ impl CmdLine {
 
     /// `-sN <name>` for N in 1..=7 (CmdLine.cpp:200-327).
     fn slot_card(&mut self, slot: usize, name: &str, cmd_cards: &mut [CardType; 8]) {
-        let (has_printer, has_ssc, has_vidhd) = (cmd_cards.contains(&CardType::GenericPrinter), cmd_cards.contains(&CardType::Ssc), cmd_cards.contains(&CardType::VidHd));
+        let (has_printer, has_ssc, has_vidhd) = (
+            cmd_cards.contains(&CardType::GenericPrinter),
+            cmd_cards.contains(&CardType::Ssc),
+            cmd_cards.contains(&CardType::VidHd),
+        );
         let mut insert = |c: &mut CmdLine, card: SlotCardSpec| {
             cmd_cards[slot] = card.card_type();
             c.opts.push(Opt::InsertCard { slot, card });
@@ -376,7 +497,13 @@ impl CmdLine {
         match name {
             "empty" => insert(self, SlotCardSpec::Empty),
             "diskii" => insert(self, SlotCardSpec::new(CardType::Disk2)),
-            "diskii13" => insert(self, SlotCardSpec::Disk2 { firmware_13_sector: true, drives: Default::default() }),
+            "diskii13" => insert(
+                self,
+                SlotCardSpec::Disk2 {
+                    firmware_13_sector: true,
+                    drives: Default::default(),
+                },
+            ),
             "hdc" | "hdc-sp" | "hdc-bm2" | "hdc-bm4" => {
                 let firmware = match name {
                     "hdc-sp" => HdcFirmware::SmartPort,
@@ -386,7 +513,10 @@ impl CmdLine {
                 };
                 insert(self, SlotCardSpec::new(CardType::GenericHdd));
                 if firmware != HdcFirmware::Default {
-                    self.opts.push(Opt::HdcFirmware { slot, mode: firmware });
+                    self.opts.push(Opt::HdcFirmware {
+                        slot,
+                        mode: firmware,
+                    });
                 }
             }
             "saturn" | "saturn128" => insert(self, SlotCardSpec::Saturn128K { banks: 8 }),
@@ -405,9 +535,18 @@ impl CmdLine {
             "ssc" if !has_ssc => insert(self, SlotCardSpec::new(CardType::Ssc)),
             "vidhd" if !has_vidhd => insert(self, SlotCardSpec::VidHd),
             "parallel" | "ssc" | "vidhd" => {} // single-instance card already on the command line
-            "sc01" => self.opts.push(Opt::Sc01 { slot, present: true }),
-            "no-sc01" => self.opts.push(Opt::Sc01 { slot, present: false }),
-            n if n.starts_with("ay-socket") && matches!(n.as_bytes().get(9), Some(b'0'..=b'3')) && n.as_bytes().get(10) == Some(&b'=') => {
+            "sc01" => self.opts.push(Opt::Sc01 {
+                slot,
+                present: true,
+            }),
+            "no-sc01" => self.opts.push(Opt::Sc01 {
+                slot,
+                present: false,
+            }),
+            n if n.starts_with("ay-socket")
+                && matches!(n.as_bytes().get(9), Some(b'0'..=b'3'))
+                && n.as_bytes().get(10) == Some(&b'=') =>
+            {
                 let socket = (n.as_bytes()[9] - b'0') as usize;
                 let chip = match &n[11..] {
                     "empty" => Some(AyChip::Empty),
@@ -419,10 +558,15 @@ impl CmdLine {
                 };
                 match chip {
                     Some(chip) => self.opts.push(Opt::AySocket { slot, socket, chip }),
-                    None => self.warnings.push(format!("Unsupported AY type: {}", &n[11..])),
+                    None => self
+                        .warnings
+                        .push(format!("Unsupported AY type: {}", &n[11..])),
                 }
             }
-            n if n.starts_with("socket") && matches!(n.as_bytes().get(6), Some(b'0' | b'1')) && n.as_bytes().get(7) == Some(&b'=') => {
+            n if n.starts_with("socket")
+                && matches!(n.as_bytes().get(6), Some(b'0' | b'1'))
+                && n.as_bytes().get(7) == Some(&b'=') =>
+            {
                 let socket = (n.as_bytes()[6] - b'0') as usize;
                 let chip = match &n[8..] {
                     "empty" => Some(Ssi263Chip::Empty),
@@ -432,16 +576,23 @@ impl CmdLine {
                 };
                 match chip {
                     Some(chip) => self.opts.push(Opt::Ssi263Socket { slot, socket, chip }),
-                    None => self.warnings.push(format!("Unsupported SSI263 type: {}", &n[8..])),
+                    None => self
+                        .warnings
+                        .push(format!("Unsupported SSI263 type: {}", &n[8..])),
                 }
             }
-            _ => self.warnings.push(format!("Unsupported slot-{slot} card: {name}")),
+            _ => self
+                .warnings
+                .push(format!("Unsupported slot-{slot} card: {name}")),
         }
     }
 
     /// Overlays the options on `s`.
     pub fn apply(&self, s: &mut Settings) {
-        let slot0_given = self.opts.iter().any(|o| matches!(o, Opt::InsertCard { slot: 0, .. }));
+        let slot0_given = self
+            .opts
+            .iter()
+            .any(|o| matches!(o, Opt::InsertCard { slot: 0, .. }));
         let mut ordered: Vec<&Opt> = self.opts.iter().collect();
         ordered.sort_by_key(|o| o.phase()); // stable: keeps command-line order within a phase
         for o in ordered {
@@ -457,7 +608,10 @@ impl CmdLine {
 
 fn sound_sockets(c: &mut SlotCardSpec) -> Option<&mut SoundSockets> {
     match c {
-        SlotCardSpec::MockingboardC(k) | SlotCardSpec::Phasor(k) | SlotCardSpec::MegaAudio(k) | SlotCardSpec::SdMusic(k) => Some(k),
+        SlotCardSpec::MockingboardC(k)
+        | SlotCardSpec::Phasor(k)
+        | SlotCardSpec::MegaAudio(k)
+        | SlotCardSpec::SdMusic(k) => Some(k),
         _ => None,
     }
 }
@@ -468,7 +622,9 @@ fn apply_one(o: &Opt, s: &mut Settings) {
         Opt::RefreshRate(r) => s.machine.refresh_rate = *r,
         Opt::InsertCard { slot, card } => s.slots.0[*slot] = card.clone(),
         Opt::Aux(c) => s.aux.card = c.clone(),
-        Opt::DiskImage { slot, drive, path } => s.disk_drives_mut(*slot)[*drive].image = Some(path.clone()),
+        Opt::DiskImage { slot, drive, path } => {
+            s.disk_drives_mut(*slot)[*drive].image = Some(path.clone())
+        }
         Opt::DriveDisconnected { drive } => s.disk_drives_mut(6)[*drive].connected = false,
         Opt::HdImage { slot, unit, path } => {
             if !matches!(s.slots.0[*slot], SlotCardSpec::GenericHdd { .. }) {
@@ -692,10 +848,23 @@ mod tests {
 
     #[test]
     fn disks_in_any_order() {
-        let (c, s) = run(&["-d1", "a.dsk", "-s6", "diskii13", "-d2", "b.dsk", "-d2-disconnected", "-h1", "h.hdv"]);
+        let (c, s) = run(&[
+            "-d1",
+            "a.dsk",
+            "-s6",
+            "diskii13",
+            "-d2",
+            "b.dsk",
+            "-d2-disconnected",
+            "-h1",
+            "h.hdv",
+        ]);
         assert!(c.unsupported.is_empty());
         match s.slot(6) {
-            SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
+            SlotCardSpec::Disk2 {
+                firmware_13_sector,
+                drives,
+            } => {
                 assert!(*firmware_13_sector);
                 assert_eq!(drives[0].image, Some("a.dsk".into()));
                 assert_eq!(drives[1].image, Some("b.dsk".into()));
@@ -703,17 +872,40 @@ mod tests {
             }
             x => panic!("{x:?}"),
         }
-        assert!(matches!(s.slot(7), SlotCardSpec::GenericHdd { images, .. } if images[0] == Some("h.hdv".into())));
+        assert!(
+            matches!(s.slot(7), SlotCardSpec::GenericHdd { images, .. } if images[0] == Some("h.hdv".into()))
+        );
     }
 
     #[test]
     fn slots_and_sub_options() {
-        let (c, s) = run(&["-s3", "vidhd", "-s2", "vidhd", "-s5", "hdc-sp", "-s5h3", "x.hdv", "-s4", "megaaudio", "-s4", "ay-socket1=ym2149", "-s4", "no-sc01", "-s0", "saturn64"]);
+        let (c, s) = run(&[
+            "-s3",
+            "vidhd",
+            "-s2",
+            "vidhd",
+            "-s5",
+            "hdc-sp",
+            "-s5h3",
+            "x.hdv",
+            "-s4",
+            "megaaudio",
+            "-s4",
+            "ay-socket1=ym2149",
+            "-s4",
+            "no-sc01",
+            "-s0",
+            "saturn64",
+        ]);
         assert!(c.support_extra_mb_card_types);
         assert_eq!(s.slot(3), &SlotCardSpec::VidHd);
         assert_eq!(s.slot(2).card_type(), CardType::Ssc); // 2nd vidhd ignored
-        assert!(matches!(s.slot(5), SlotCardSpec::GenericHdd { firmware: HdcFirmware::SmartPort, images } if images[2].is_some()));
-        assert!(matches!(s.slot(4), SlotCardSpec::MegaAudio(k) if k.ay[1] == AyChip::Ym2149 && !k.sc01));
+        assert!(
+            matches!(s.slot(5), SlotCardSpec::GenericHdd { firmware: HdcFirmware::SmartPort, images } if images[2].is_some())
+        );
+        assert!(
+            matches!(s.slot(4), SlotCardSpec::MegaAudio(k) if k.ay[1] == AyChip::Ym2149 && !k.sc01)
+        );
         assert_eq!(s.slot(0), &SlotCardSpec::Saturn128K { banks: 4 });
     }
 
@@ -741,22 +933,51 @@ mod tests {
 
     #[test]
     fn video_and_runtime_flags() {
-        let (c, s) = run(&["-fs-width=1600", "-fs-height=best", "-50HZ", "-load-state", "x.aws", "-power-on", "-video-mode=rgb-videocard", "-no-printscreen-dlg", "-ssc-tcp-port", "1977", "-dcd"]);
-        assert!(s.video.fullscreen && s.video.fullscreen_best_resolution && s.video.fullscreen_width == Some(1600));
+        let (c, s) = run(&[
+            "-fs-width=1600",
+            "-fs-height=best",
+            "-50HZ",
+            "-load-state",
+            "x.aws",
+            "-power-on",
+            "-video-mode=rgb-videocard",
+            "-no-printscreen-dlg",
+            "-ssc-tcp-port",
+            "1977",
+            "-dcd",
+        ]);
+        assert!(
+            s.video.fullscreen
+                && s.video.fullscreen_best_resolution
+                && s.video.fullscreen_width == Some(1600)
+        );
         assert_eq!(s.machine.refresh_rate, RefreshRate::Hz50);
         assert_eq!(c.load_state, Some("x.aws".into()));
         assert!(c.power_on);
         assert_eq!(s.video.mode, VideoType::ColorVideocardRgb);
         assert!(!s.video.show_printscreen_warning_dialog);
-        assert!(matches!(s.slot(2), SlotCardSpec::Ssc { tcp_port: Some(1977), support_dcd: true, .. }));
+        assert!(matches!(
+            s.slot(2),
+            SlotCardSpec::Ssc {
+                tcp_port: Some(1977),
+                support_dcd: true,
+                ..
+            }
+        ));
         let (_, s) = run(&["-fs-width=800", "-no-full-screen"]);
         assert!(!s.video.fullscreen);
     }
 
     #[test]
     fn errors_and_unknowns() {
-        assert_eq!(CmdLine::parse(&["-d1"]), Err(CmdLineError::MissingValue("-d1".into())));
-        let c = CmdLine::parse(&["-bogus", "-s9x", "game.dsk", "-model", "foo", "-s1", "teapot"]).unwrap();
+        assert_eq!(
+            CmdLine::parse(&["-d1"]),
+            Err(CmdLineError::MissingValue("-d1".into()))
+        );
+        let c = CmdLine::parse(&[
+            "-bogus", "-s9x", "game.dsk", "-model", "foo", "-s1", "teapot",
+        ])
+        .unwrap();
         assert_eq!(c.unsupported, ["-bogus", "-s9x"]);
         assert_eq!(c.positional, [PathBuf::from("game.dsk")]);
         assert_eq!(c.warnings.len(), 2);
@@ -765,7 +986,16 @@ mod tests {
 
     #[test]
     fn numeric_clamps_like_atoi() {
-        let (_, s) = run(&["-memclear", "99", "-harddisknumblocks", "99999999", "-clock-multiplier", "2.5x", "-spkr-inc", "abc"]);
+        let (_, s) = run(&[
+            "-memclear",
+            "99",
+            "-harddisknumblocks",
+            "99999999",
+            "-clock-multiplier",
+            "2.5x",
+            "-spkr-inc",
+            "abc",
+        ]);
         assert_eq!(s.machine.memory_clear_type, 7);
         assert_eq!(s.storage.harddisk_num_blocks, Some(0x7FFFFF));
         assert_eq!(s.machine.clock_multiplier, Some(2.5));
@@ -774,6 +1004,9 @@ mod tests {
 
     #[test]
     fn splits_quoted_command_line() {
-        assert_eq!(split_command_line(r#"-d1 "C:\my disks\a.dsk"  -f"#), ["-d1", r"C:\my disks\a.dsk", "-f"]);
+        assert_eq!(
+            split_command_line(r#"-d1 "C:\my disks\a.dsk"  -f"#),
+            ["-d1", r"C:\my disks\a.dsk", "-f"]
+        );
     }
 }

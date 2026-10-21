@@ -47,7 +47,12 @@ fn is_hex(c: char) -> bool {
 impl Debugger {
     /// Cooks `raw` arguments with the current machine state.
     pub fn cook_args(&self, m: &Machine, raw: Vec<Arg>) -> Result<Args, String> {
-        let ctx = CookCtx { regs: crate::mem::regs_of(m), symbols: &self.symbols, mem: m, search_results: &self.search_results };
+        let ctx = CookCtx {
+            regs: crate::mem::regs_of(m),
+            symbols: &self.symbols,
+            mem: m,
+            search_results: &self.search_results,
+        };
         let cooked = cook(&raw, &ctx)?;
         Ok(Args { raw, cooked })
     }
@@ -90,18 +95,44 @@ impl Debugger {
                     return upd::ALL;
                 } else if last == 'L' && !name.eq_ignore_ascii_case("cl") {
                     raw[0].text = name[..name.len() - 1].to_string();
-                    raw.insert(0, Arg { text: "U".into(), kind: Kind::Text, value: 0, value_set: false, is_symbol: false, no_reg: false, no_sym: false });
+                    raw.insert(
+                        0,
+                        Arg {
+                            text: "U".into(),
+                            kind: Kind::Text,
+                            value: 0,
+                            value_set: false,
+                            is_symbol: false,
+                            no_reg: false,
+                            no_sym: false,
+                        },
+                    );
                     override_cmd = Some(Cmd::Unassemble);
                 } else if raw.get(1).map(|a| a.is_op(":")).unwrap_or(false) {
                     raw.remove(1);
-                    raw.insert(0, Arg { text: "MEB".into(), kind: Kind::Text, value: 0, value_set: false, is_symbol: false, no_reg: false, no_sym: false });
+                    raw.insert(
+                        0,
+                        Arg {
+                            text: "MEB".into(),
+                            kind: Kind::Text,
+                            value: 0,
+                            value_set: false,
+                            is_symbol: false,
+                            no_reg: false,
+                            no_sym: false,
+                        },
+                    );
                     override_cmd = Some(Cmd::MemoryEnterByte);
                 } else if raw.get(1).map(|a| a.is_op("<")).unwrap_or(false) && raw.len() >= 3 {
                     // dst<src.endM
                     let t = raw[2].text.clone();
                     if let Some((src, rest)) = t.split_once('.') {
                         if let Some(end) = rest.strip_suffix(['M', 'm']) {
-                            if !src.is_empty() && !end.is_empty() && src.chars().all(is_hex) && end.chars().all(is_hex) {
+                            if !src.is_empty()
+                                && !end.is_empty()
+                                && src.chars().all(is_hex)
+                                && end.chars().all(is_hex)
+                            {
                                 let (s, e) = (hex_prefix(src), hex_prefix(end));
                                 if e < s {
                                     self.console.print(&format!(
@@ -109,8 +140,22 @@ impl Debugger {
                                     ));
                                     return upd::CONSOLE_DISPLAY;
                                 }
-                                let mk = |t: &str, k: Kind| Arg { text: t.into(), kind: k, value: 0, value_set: false, is_symbol: false, no_reg: false, no_sym: false };
-                                raw = vec![mk("M", Kind::Text), mk(&name, Kind::Text), mk(src, Kind::Text), mk(":", Kind::Operator), mk(end, Kind::Text)];
+                                let mk = |t: &str, k: Kind| Arg {
+                                    text: t.into(),
+                                    kind: k,
+                                    value: 0,
+                                    value_set: false,
+                                    is_symbol: false,
+                                    no_reg: false,
+                                    no_sym: false,
+                                };
+                                raw = vec![
+                                    mk("M", Kind::Text),
+                                    mk(&name, Kind::Text),
+                                    mk(src, Kind::Text),
+                                    mk(":", Kind::Operator),
+                                    mk(end, Kind::Text),
+                                ];
                                 override_cmd = Some(Cmd::MemoryMove);
                             }
                         }
@@ -125,7 +170,10 @@ impl Debugger {
             (Some(c), _) => c,
             (None, Found::One(c)) => c,
             (None, Found::Many(v)) => {
-                self.console.print(&format!("Ambiguous {CHC_NUM_DEC}{}{CHC_DEFAULT} Commands:", v.len()));
+                self.console.print(&format!(
+                    "Ambiguous {CHC_NUM_DEC}{}{CHC_DEFAULT} Commands:",
+                    v.len()
+                ));
                 let mut text = format!("{CHC_COMMAND} ");
                 for i in v {
                     let n = COMMANDS[i].name;
@@ -146,7 +194,10 @@ impl Debugger {
         };
         self.last_cmd = Some(cmd);
         let args = if cmd == Cmd::OutputEcho {
-            Args { cooked: raw.clone(), raw }
+            Args {
+                cooked: raw.clone(),
+                raw,
+            }
         } else {
             match self.cook_args(m, raw) {
                 Ok(a) => a,
@@ -168,7 +219,8 @@ impl Debugger {
             self.console.set_prompt('>');
             let n = self.asm.pending();
             if n > 0 {
-                self.console.print(&format!(" Asm: {n} sym declared, not defined"));
+                self.console
+                    .print(&format!(" Asm: {n} sym declared, not defined"));
             }
             return upd::CONSOLE_DISPLAY | upd::CONSOLE_INPUT;
         }
@@ -182,7 +234,9 @@ impl Debugger {
         // A label starts in column 0 and is not a mnemonic.
         if first != ' ' && first != '\t' {
             let w: &str = text.split_whitespace().next().unwrap_or("");
-            let is_mnemonic = crate::opcodes::OPCODES_65C02.iter().any(|o| o.mnemonic.eq_ignore_ascii_case(w));
+            let is_mnemonic = crate::opcodes::OPCODES_65C02
+                .iter()
+                .any(|o| o.mnemonic.eq_ignore_ascii_case(w));
             if !is_mnemonic && !w.is_empty() {
                 let addr = self.asm.address;
                 self.symbol_update(crate::symbols::Table::Asm, w, addr, false, true);
@@ -240,7 +294,9 @@ impl Debugger {
             Breakpoint | BreakpointAddPc => self.cmd_bp_add_pc(m, a),
             BreakpointAddSmart => self.cmd_bp_add_smart(m, a),
             BreakpointAddReg => self.cmd_bp_add_reg(m, a),
-            BreakpointAddIo | BreakpointAddMem => self.cmd_bp_add_mem(m, a, crate::bp::Source::MemRw),
+            BreakpointAddIo | BreakpointAddMem => {
+                self.cmd_bp_add_mem(m, a, crate::bp::Source::MemRw)
+            }
             BreakpointAddMemr => self.cmd_bp_add_mem(m, a, crate::bp::Source::MemRead),
             BreakpointAddMemw => self.cmd_bp_add_mem(m, a, crate::bp::Source::MemWrite),
             BreakpointAddVideo => self.cmd_bp_add_video(m, a),
@@ -288,8 +344,10 @@ impl Debugger {
             Disk => self.not_available("DISK (the storage crate is wired by the frontend)"),
             // Flags
             FlagClear | FlagSet => self.cmd_flag_list(m, a, cmd == FlagSet),
-            FlagClrC | FlagClrZ | FlagClrI | FlagClrD | FlagClrB | FlagClrR | FlagClrV | FlagClrN => self.cmd_flag_one(m, cmd, false),
-            FlagSetC | FlagSetZ | FlagSetI | FlagSetD | FlagSetB | FlagSetR | FlagSetV | FlagSetN => self.cmd_flag_one(m, cmd, true),
+            FlagClrC | FlagClrZ | FlagClrI | FlagClrD | FlagClrB | FlagClrR | FlagClrV
+            | FlagClrN => self.cmd_flag_one(m, cmd, false),
+            FlagSetC | FlagSetZ | FlagSetI | FlagSetD | FlagSetB | FlagSetR | FlagSetV
+            | FlagSetN => self.cmd_flag_one(m, cmd, true),
             // Help
             HelpList => self.cmd_help_list(),
             HelpSpecific => self.cmd_help(a),
@@ -324,15 +382,20 @@ impl Debugger {
             Source | Sync => self.not_available("SOURCE/SYNC (source level debugging)"),
             // Symbols
             SymbolsLookup => self.cmd_symbols(m, a),
-            SymbolsRom | SymbolsApplesoft | SymbolsAssembly | SymbolsUser1 | SymbolsUser2 | SymbolsSrc1 | SymbolsSrc2 | SymbolsDos33 | SymbolsProdos => {
+            SymbolsRom | SymbolsApplesoft | SymbolsAssembly | SymbolsUser1 | SymbolsUser2
+            | SymbolsSrc1 | SymbolsSrc2 | SymbolsDos33 | SymbolsProdos => {
                 self.cmd_symbols_table(m, a, cmd)
             }
             SymbolsInfo => self.cmd_symbols_info(a, None),
             SymbolsList => self.cmd_symbols_list(m, a),
             // Video
             VideoScannerInfo => self.cmd_video_info(a),
-            ViewText4x | ViewText41 | ViewText42 | ViewText8x | ViewText81 | ViewText82 | ViewGrx | ViewGr1 | ViewGr2 | ViewDgrx | ViewDgr1 | ViewDgr2 | ViewHgrx | ViewHgr0 | ViewHgr1
-            | ViewHgr2 | ViewHgr3 | ViewHgr4 | ViewHgr5 | ViewHgr6 | ViewHgr7 | ViewHgr8 | ViewDhgrx | ViewDhgr1 | ViewDhgr2 | ViewShr => self.cmd_view(cmd),
+            ViewText4x | ViewText41 | ViewText42 | ViewText8x | ViewText81 | ViewText82
+            | ViewGrx | ViewGr1 | ViewGr2 | ViewDgrx | ViewDgr1 | ViewDgr2 | ViewHgrx
+            | ViewHgr0 | ViewHgr1 | ViewHgr2 | ViewHgr3 | ViewHgr4 | ViewHgr5 | ViewHgr6
+            | ViewHgr7 | ViewHgr8 | ViewDhgrx | ViewDhgr1 | ViewDhgr2 | ViewShr => {
+                self.cmd_view(cmd)
+            }
             // Watches
             Watch | WatchAdd => self.cmd_watch_add(m, a),
             WatchClear => self.cmd_watch_clear(a),
@@ -341,12 +404,14 @@ impl Debugger {
             WatchList => self.cmd_watch_list(m),
             WatchSave => self.cmd_watch_save(a),
             // Windows
-            Window | WindowCode | WindowCode1 | WindowCode2 | WindowConsole | WindowData | WindowData1 | WindowData2 | WindowSource1 | WindowSource2 | WindowOutput => {
+            Window | WindowCode | WindowCode1 | WindowCode2 | WindowConsole | WindowData
+            | WindowData1 | WindowData2 | WindowSource1 | WindowSource2 | WindowOutput => {
                 self.cmd_window(m, a, cmd)
             }
             // Zero page
             ZeropagePointer | ZeropagePointerAdd => self.cmd_zp_add(m, a),
-            ZeropagePointer0 | ZeropagePointer1 | ZeropagePointer2 | ZeropagePointer3 | ZeropagePointer4 | ZeropagePointer5 | ZeropagePointer6 | ZeropagePointer7 => {
+            ZeropagePointer0 | ZeropagePointer1 | ZeropagePointer2 | ZeropagePointer3
+            | ZeropagePointer4 | ZeropagePointer5 | ZeropagePointer6 | ZeropagePointer7 => {
                 self.cmd_zp_pointer(m, a, cmd)
             }
             ZeropagePointerClear => self.cmd_zp_clear(a),
@@ -359,7 +424,9 @@ impl Debugger {
     }
 
     pub(crate) fn not_available(&mut self, what: &str) -> Update {
-        self.console.print(&format!("{CHC_WARNING}Not available in the debugger core: {CHC_DEFAULT}{what}"));
+        self.console.print(&format!(
+            "{CHC_WARNING}Not available in the debugger core: {CHC_DEFAULT}{what}"
+        ));
         upd::CONSOLE_DISPLAY
     }
 

@@ -63,11 +63,51 @@ enum Mode {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Op {
-    Adc, And, Asl, Bit, Cmp, Cpx, Cpy, Dec, Eor, Inc, Lda, Ldx, Ldy, Lsr, Ora, Rol, Ror, Sbc,
-    Sta, Stx, Sty, Stz, Trb, Tsb,
+    Adc,
+    And,
+    Asl,
+    Bit,
+    Cmp,
+    Cpx,
+    Cpy,
+    Dec,
+    Eor,
+    Inc,
+    Lda,
+    Ldx,
+    Ldy,
+    Lsr,
+    Ora,
+    Rol,
+    Ror,
+    Sbc,
+    Sta,
+    Stx,
+    Sty,
+    Stz,
+    Trb,
+    Tsb,
     // NMOS undocumented (AppleWin names)
-    Aso, Rla, Lse, Rra, Dcm, Ins, Axs, Lax, Anc, Alr, Arr, Xaa, Oal, Sax, Las, Nop,
-    Axa, Say, Tas, Xas,
+    Aso,
+    Rla,
+    Lse,
+    Rra,
+    Dcm,
+    Ins,
+    Axs,
+    Lax,
+    Anc,
+    Alr,
+    Arr,
+    Xaa,
+    Oal,
+    Sax,
+    Las,
+    Nop,
+    Axa,
+    Say,
+    Tas,
+    Xas,
     // 65C02 undocumented "LoaD and Discard" (reads, result thrown away)
     Ldd,
 }
@@ -100,8 +140,20 @@ impl Cpu {
     pub fn new(variant: Variant) -> Self {
         Cpu {
             // CpuInitialize(): A = X = Y = $FF, S = $1FF (the reset then leaves S at $FC).
-            a: 0xFF, x: 0xFF, y: 0xFF, sp: 0xFF, pc: 0, p: FLAG_U | FLAG_I, cycles: 0, variant,
-            irq: false, nmi_pending: false, stopped: false, waiting: false, opcode: 0, jammed: false,
+            a: 0xFF,
+            x: 0xFF,
+            y: 0xFF,
+            sp: 0xFF,
+            pc: 0,
+            p: FLAG_U | FLAG_I,
+            cycles: 0,
+            variant,
+            irq: false,
+            nmi_pending: false,
+            stopped: false,
+            waiting: false,
+            opcode: 0,
+            jammed: false,
         }
     }
 
@@ -193,7 +245,11 @@ impl Cpu {
 
     #[inline]
     fn set_flag(&mut self, f: u8, on: bool) {
-        if on { self.p |= f } else { self.p &= !f }
+        if on {
+            self.p |= f
+        } else {
+            self.p &= !f
+        }
     }
 
     /// Effective address. `write` forces the indexed-mode extra cycle that reads
@@ -282,7 +338,10 @@ impl Cpu {
         } else {
             let val = a + temp + c;
             self.set_flag(FLAG_C, val > 0xFF);
-            self.set_flag(FLAG_V, (a & 0x80) == (temp & 0x80) && (a & 0x80) != (val & 0x80));
+            self.set_flag(
+                FLAG_V,
+                (a & 0x80) == (temp & 0x80) && (a & 0x80) != (val & 0x80),
+            );
             self.a = val as u8;
             self.set_nz(self.a);
         }
@@ -306,11 +365,17 @@ impl Cpu {
             }
             self.set_flag(FLAG_C, temp2 < 0x100);
             self.set_nz(temp2 as u8);
-            self.set_flag(FLAG_V, ((a ^ temp2) & 0x80) != 0 && ((a ^ temp) & 0x80) != 0);
+            self.set_flag(
+                FLAG_V,
+                ((a ^ temp2) & 0x80) != 0 && ((a ^ temp) & 0x80) != 0,
+            );
             self.a = val as u8;
         } else {
             self.set_flag(FLAG_C, temp2 < 0x100);
-            self.set_flag(FLAG_V, (a & 0x80) != (temp & 0x80) && (a & 0x80) != (temp2 & 0x80));
+            self.set_flag(
+                FLAG_V,
+                (a & 0x80) != (temp & 0x80) && (a & 0x80) != (temp2 & 0x80),
+            );
             self.a = temp2 as u8;
             self.set_nz(self.a);
         }
@@ -414,11 +479,19 @@ impl Cpu {
     }
 
     fn adc(&mut self, m: u8) {
-        if self.is_cmos() { self.adc_cmos(m) } else { self.adc_nmos(m as u16) }
+        if self.is_cmos() {
+            self.adc_cmos(m)
+        } else {
+            self.adc_nmos(m as u16)
+        }
     }
 
     fn sbc(&mut self, m: u8) {
-        if self.is_cmos() { self.sbc_cmos(m) } else { self.sbc_nmos(m as u16) }
+        if self.is_cmos() {
+            self.sbc_cmos(m)
+        } else {
+            self.sbc_nmos(m as u16)
+        }
     }
 
     /// `ARR` (immediate, NMOS undocumented), cpu_instructions.inl.
@@ -558,12 +631,30 @@ impl Cpu {
         match op {
             Op::Adc => self.adc(m),
             Op::Sbc => self.sbc(m),
-            Op::And => { self.a &= m; self.set_nz(self.a) }
-            Op::Ora => { self.a |= m; self.set_nz(self.a) }
-            Op::Eor => { self.a ^= m; self.set_nz(self.a) }
-            Op::Lda => { self.a = m; self.set_nz(m) }
-            Op::Ldx => { self.x = m; self.set_nz(m) }
-            Op::Ldy => { self.y = m; self.set_nz(m) }
+            Op::And => {
+                self.a &= m;
+                self.set_nz(self.a)
+            }
+            Op::Ora => {
+                self.a |= m;
+                self.set_nz(self.a)
+            }
+            Op::Eor => {
+                self.a ^= m;
+                self.set_nz(self.a)
+            }
+            Op::Lda => {
+                self.a = m;
+                self.set_nz(m)
+            }
+            Op::Ldx => {
+                self.x = m;
+                self.set_nz(m)
+            }
+            Op::Ldy => {
+                self.y = m;
+                self.set_nz(m)
+            }
             Op::Cmp => self.cmp(self.a, m),
             Op::Cpx => self.cmp(self.x, m),
             Op::Cpy => self.cmp(self.y, m),
@@ -573,7 +664,11 @@ impl Cpu {
                     self.p = (self.p & !(FLAG_N | FLAG_V)) | (m & (FLAG_N | FLAG_V));
                 }
             }
-            Op::Lax => { self.a = m; self.x = m; self.set_nz(m) }
+            Op::Lax => {
+                self.a = m;
+                self.x = m;
+                self.set_nz(m)
+            }
             Op::Anc => {
                 self.a &= m;
                 self.set_nz(self.a);
@@ -586,7 +681,10 @@ impl Cpu {
                 self.set_nz(self.a); // N is 0 after the shift
             }
             Op::Arr => self.arr(m),
-            Op::Xaa => { self.a = self.x & m; self.set_nz(self.a) }
+            Op::Xaa => {
+                self.a = self.x & m;
+                self.set_nz(self.a)
+            }
             Op::Oal => {
                 self.a = (self.a | 0xEE) & m;
                 self.x = self.a;
@@ -677,62 +775,138 @@ impl Cpu {
         use Op::*;
         // (op, mode) for the regular memory instructions.
         let m: Option<(Op, Mode)> = match opcode {
-            0x69 => Some((Adc, Imm)), 0x65 => Some((Adc, Zp)), 0x75 => Some((Adc, ZpX)),
-            0x6D => Some((Adc, Abs)), 0x7D => Some((Adc, AbsX)), 0x79 => Some((Adc, AbsY)),
-            0x61 => Some((Adc, IndX)), 0x71 => Some((Adc, IndY)),
+            0x69 => Some((Adc, Imm)),
+            0x65 => Some((Adc, Zp)),
+            0x75 => Some((Adc, ZpX)),
+            0x6D => Some((Adc, Abs)),
+            0x7D => Some((Adc, AbsX)),
+            0x79 => Some((Adc, AbsY)),
+            0x61 => Some((Adc, IndX)),
+            0x71 => Some((Adc, IndY)),
             0x72 if cmos => Some((Adc, IndZ)),
-            0xE9 => Some((Sbc, Imm)), 0xE5 => Some((Sbc, Zp)), 0xF5 => Some((Sbc, ZpX)),
-            0xED => Some((Sbc, Abs)), 0xFD => Some((Sbc, AbsX)), 0xF9 => Some((Sbc, AbsY)),
-            0xE1 => Some((Sbc, IndX)), 0xF1 => Some((Sbc, IndY)),
+            0xE9 => Some((Sbc, Imm)),
+            0xE5 => Some((Sbc, Zp)),
+            0xF5 => Some((Sbc, ZpX)),
+            0xED => Some((Sbc, Abs)),
+            0xFD => Some((Sbc, AbsX)),
+            0xF9 => Some((Sbc, AbsY)),
+            0xE1 => Some((Sbc, IndX)),
+            0xF1 => Some((Sbc, IndY)),
             0xF2 if cmos => Some((Sbc, IndZ)),
-            0x29 => Some((And, Imm)), 0x25 => Some((And, Zp)), 0x35 => Some((And, ZpX)),
-            0x2D => Some((And, Abs)), 0x3D => Some((And, AbsX)), 0x39 => Some((And, AbsY)),
-            0x21 => Some((And, IndX)), 0x31 => Some((And, IndY)),
+            0x29 => Some((And, Imm)),
+            0x25 => Some((And, Zp)),
+            0x35 => Some((And, ZpX)),
+            0x2D => Some((And, Abs)),
+            0x3D => Some((And, AbsX)),
+            0x39 => Some((And, AbsY)),
+            0x21 => Some((And, IndX)),
+            0x31 => Some((And, IndY)),
             0x32 if cmos => Some((And, IndZ)),
-            0x09 => Some((Ora, Imm)), 0x05 => Some((Ora, Zp)), 0x15 => Some((Ora, ZpX)),
-            0x0D => Some((Ora, Abs)), 0x1D => Some((Ora, AbsX)), 0x19 => Some((Ora, AbsY)),
-            0x01 => Some((Ora, IndX)), 0x11 => Some((Ora, IndY)),
+            0x09 => Some((Ora, Imm)),
+            0x05 => Some((Ora, Zp)),
+            0x15 => Some((Ora, ZpX)),
+            0x0D => Some((Ora, Abs)),
+            0x1D => Some((Ora, AbsX)),
+            0x19 => Some((Ora, AbsY)),
+            0x01 => Some((Ora, IndX)),
+            0x11 => Some((Ora, IndY)),
             0x12 if cmos => Some((Ora, IndZ)),
-            0x49 => Some((Eor, Imm)), 0x45 => Some((Eor, Zp)), 0x55 => Some((Eor, ZpX)),
-            0x4D => Some((Eor, Abs)), 0x5D => Some((Eor, AbsX)), 0x59 => Some((Eor, AbsY)),
-            0x41 => Some((Eor, IndX)), 0x51 => Some((Eor, IndY)),
+            0x49 => Some((Eor, Imm)),
+            0x45 => Some((Eor, Zp)),
+            0x55 => Some((Eor, ZpX)),
+            0x4D => Some((Eor, Abs)),
+            0x5D => Some((Eor, AbsX)),
+            0x59 => Some((Eor, AbsY)),
+            0x41 => Some((Eor, IndX)),
+            0x51 => Some((Eor, IndY)),
             0x52 if cmos => Some((Eor, IndZ)),
-            0xA9 => Some((Lda, Imm)), 0xA5 => Some((Lda, Zp)), 0xB5 => Some((Lda, ZpX)),
-            0xAD => Some((Lda, Abs)), 0xBD => Some((Lda, AbsX)), 0xB9 => Some((Lda, AbsY)),
-            0xA1 => Some((Lda, IndX)), 0xB1 => Some((Lda, IndY)),
+            0xA9 => Some((Lda, Imm)),
+            0xA5 => Some((Lda, Zp)),
+            0xB5 => Some((Lda, ZpX)),
+            0xAD => Some((Lda, Abs)),
+            0xBD => Some((Lda, AbsX)),
+            0xB9 => Some((Lda, AbsY)),
+            0xA1 => Some((Lda, IndX)),
+            0xB1 => Some((Lda, IndY)),
             0xB2 if cmos => Some((Lda, IndZ)),
-            0xA2 => Some((Ldx, Imm)), 0xA6 => Some((Ldx, Zp)), 0xB6 => Some((Ldx, ZpY)),
-            0xAE => Some((Ldx, Abs)), 0xBE => Some((Ldx, AbsY)),
-            0xA0 => Some((Ldy, Imm)), 0xA4 => Some((Ldy, Zp)), 0xB4 => Some((Ldy, ZpX)),
-            0xAC => Some((Ldy, Abs)), 0xBC => Some((Ldy, AbsX)),
-            0xC9 => Some((Cmp, Imm)), 0xC5 => Some((Cmp, Zp)), 0xD5 => Some((Cmp, ZpX)),
-            0xCD => Some((Cmp, Abs)), 0xDD => Some((Cmp, AbsX)), 0xD9 => Some((Cmp, AbsY)),
-            0xC1 => Some((Cmp, IndX)), 0xD1 => Some((Cmp, IndY)),
+            0xA2 => Some((Ldx, Imm)),
+            0xA6 => Some((Ldx, Zp)),
+            0xB6 => Some((Ldx, ZpY)),
+            0xAE => Some((Ldx, Abs)),
+            0xBE => Some((Ldx, AbsY)),
+            0xA0 => Some((Ldy, Imm)),
+            0xA4 => Some((Ldy, Zp)),
+            0xB4 => Some((Ldy, ZpX)),
+            0xAC => Some((Ldy, Abs)),
+            0xBC => Some((Ldy, AbsX)),
+            0xC9 => Some((Cmp, Imm)),
+            0xC5 => Some((Cmp, Zp)),
+            0xD5 => Some((Cmp, ZpX)),
+            0xCD => Some((Cmp, Abs)),
+            0xDD => Some((Cmp, AbsX)),
+            0xD9 => Some((Cmp, AbsY)),
+            0xC1 => Some((Cmp, IndX)),
+            0xD1 => Some((Cmp, IndY)),
             0xD2 if cmos => Some((Cmp, IndZ)),
-            0xE0 => Some((Cpx, Imm)), 0xE4 => Some((Cpx, Zp)), 0xEC => Some((Cpx, Abs)),
-            0xC0 => Some((Cpy, Imm)), 0xC4 => Some((Cpy, Zp)), 0xCC => Some((Cpy, Abs)),
-            0x24 => Some((Bit, Zp)), 0x2C => Some((Bit, Abs)),
+            0xE0 => Some((Cpx, Imm)),
+            0xE4 => Some((Cpx, Zp)),
+            0xEC => Some((Cpx, Abs)),
+            0xC0 => Some((Cpy, Imm)),
+            0xC4 => Some((Cpy, Zp)),
+            0xCC => Some((Cpy, Abs)),
+            0x24 => Some((Bit, Zp)),
+            0x2C => Some((Bit, Abs)),
             0x89 if cmos => Some((Bit, Imm)),
             0x34 if cmos => Some((Bit, ZpX)),
             0x3C if cmos => Some((Bit, AbsX)),
             // stores
-            0x85 => Some((Sta, Zp)), 0x95 => Some((Sta, ZpX)), 0x8D => Some((Sta, Abs)),
-            0x9D => Some((Sta, AbsX)), 0x99 => Some((Sta, AbsY)), 0x81 => Some((Sta, IndX)),
+            0x85 => Some((Sta, Zp)),
+            0x95 => Some((Sta, ZpX)),
+            0x8D => Some((Sta, Abs)),
+            0x9D => Some((Sta, AbsX)),
+            0x99 => Some((Sta, AbsY)),
+            0x81 => Some((Sta, IndX)),
             0x91 => Some((Sta, IndY)),
             0x92 if cmos => Some((Sta, IndZ)),
-            0x86 => Some((Stx, Zp)), 0x96 => Some((Stx, ZpY)), 0x8E => Some((Stx, Abs)),
-            0x84 => Some((Sty, Zp)), 0x94 => Some((Sty, ZpX)), 0x8C => Some((Sty, Abs)),
-            0x64 if cmos => Some((Stz, Zp)), 0x74 if cmos => Some((Stz, ZpX)),
-            0x9C if cmos => Some((Stz, Abs)), 0x9E if cmos => Some((Stz, AbsX)),
+            0x86 => Some((Stx, Zp)),
+            0x96 => Some((Stx, ZpY)),
+            0x8E => Some((Stx, Abs)),
+            0x84 => Some((Sty, Zp)),
+            0x94 => Some((Sty, ZpX)),
+            0x8C => Some((Sty, Abs)),
+            0x64 if cmos => Some((Stz, Zp)),
+            0x74 if cmos => Some((Stz, ZpX)),
+            0x9C if cmos => Some((Stz, Abs)),
+            0x9E if cmos => Some((Stz, AbsX)),
             // read-modify-write
-            0x06 => Some((Asl, Zp)), 0x16 => Some((Asl, ZpX)), 0x0E => Some((Asl, Abs)), 0x1E => Some((Asl, AbsX)),
-            0x46 => Some((Lsr, Zp)), 0x56 => Some((Lsr, ZpX)), 0x4E => Some((Lsr, Abs)), 0x5E => Some((Lsr, AbsX)),
-            0x26 => Some((Rol, Zp)), 0x36 => Some((Rol, ZpX)), 0x2E => Some((Rol, Abs)), 0x3E => Some((Rol, AbsX)),
-            0x66 => Some((Ror, Zp)), 0x76 => Some((Ror, ZpX)), 0x6E => Some((Ror, Abs)), 0x7E => Some((Ror, AbsX)),
-            0xE6 => Some((Inc, Zp)), 0xF6 => Some((Inc, ZpX)), 0xEE => Some((Inc, Abs)), 0xFE => Some((Inc, AbsX)),
-            0xC6 => Some((Dec, Zp)), 0xD6 => Some((Dec, ZpX)), 0xCE => Some((Dec, Abs)), 0xDE => Some((Dec, AbsX)),
-            0x14 if cmos => Some((Trb, Zp)), 0x1C if cmos => Some((Trb, Abs)),
-            0x04 if cmos => Some((Tsb, Zp)), 0x0C if cmos => Some((Tsb, Abs)),
+            0x06 => Some((Asl, Zp)),
+            0x16 => Some((Asl, ZpX)),
+            0x0E => Some((Asl, Abs)),
+            0x1E => Some((Asl, AbsX)),
+            0x46 => Some((Lsr, Zp)),
+            0x56 => Some((Lsr, ZpX)),
+            0x4E => Some((Lsr, Abs)),
+            0x5E => Some((Lsr, AbsX)),
+            0x26 => Some((Rol, Zp)),
+            0x36 => Some((Rol, ZpX)),
+            0x2E => Some((Rol, Abs)),
+            0x3E => Some((Rol, AbsX)),
+            0x66 => Some((Ror, Zp)),
+            0x76 => Some((Ror, ZpX)),
+            0x6E => Some((Ror, Abs)),
+            0x7E => Some((Ror, AbsX)),
+            0xE6 => Some((Inc, Zp)),
+            0xF6 => Some((Inc, ZpX)),
+            0xEE => Some((Inc, Abs)),
+            0xFE => Some((Inc, AbsX)),
+            0xC6 => Some((Dec, Zp)),
+            0xD6 => Some((Dec, ZpX)),
+            0xCE => Some((Dec, Abs)),
+            0xDE => Some((Dec, AbsX)),
+            0x14 if cmos => Some((Trb, Zp)),
+            0x1C if cmos => Some((Trb, Abs)),
+            0x04 if cmos => Some((Tsb, Zp)),
+            0x0C if cmos => Some((Tsb, Abs)),
             // 65C02 undocumented NOPs that do touch the bus / consume a data cycle
             0x02 | 0x22 | 0x42 | 0x62 | 0x82 | 0xC2 | 0xE2 if cmos => Some((Nop, Imm)),
             0x44 if cmos => Some((Nop, Zp)),
@@ -794,41 +968,139 @@ impl Cpu {
         match opcode {
             0x0A | 0x2A | 0x4A | 0x6A => {
                 self.idle(bus);
-                let op = match opcode { 0x0A => Asl, 0x2A => Rol, 0x4A => Lsr, _ => Ror };
+                let op = match opcode {
+                    0x0A => Asl,
+                    0x2A => Rol,
+                    0x4A => Lsr,
+                    _ => Ror,
+                };
                 self.a = self.rmw(op, self.a);
             }
-            0x1A if cmos => { self.idle(bus); self.a = self.rmw(Inc, self.a); }
-            0x3A if cmos => { self.idle(bus); self.a = self.rmw(Dec, self.a); }
+            0x1A if cmos => {
+                self.idle(bus);
+                self.a = self.rmw(Inc, self.a);
+            }
+            0x3A if cmos => {
+                self.idle(bus);
+                self.a = self.rmw(Dec, self.a);
+            }
             0xEA => self.idle(bus),
-            0xAA => { self.idle(bus); self.x = self.a; self.set_nz(self.x) }
-            0xA8 => { self.idle(bus); self.y = self.a; self.set_nz(self.y) }
-            0x8A => { self.idle(bus); self.a = self.x; self.set_nz(self.a) }
-            0x98 => { self.idle(bus); self.a = self.y; self.set_nz(self.a) }
-            0xBA => { self.idle(bus); self.x = self.sp; self.set_nz(self.x) }
-            0x9A => { self.idle(bus); self.sp = self.x }
-            0xE8 => { self.idle(bus); self.x = self.x.wrapping_add(1); self.set_nz(self.x) }
-            0xC8 => { self.idle(bus); self.y = self.y.wrapping_add(1); self.set_nz(self.y) }
-            0xCA => { self.idle(bus); self.x = self.x.wrapping_sub(1); self.set_nz(self.x) }
-            0x88 => { self.idle(bus); self.y = self.y.wrapping_sub(1); self.set_nz(self.y) }
-            0x18 => { self.idle(bus); self.p &= !FLAG_C }
-            0x38 => { self.idle(bus); self.p |= FLAG_C }
-            0x58 => { self.idle(bus); self.p &= !FLAG_I }
-            0x78 => { self.idle(bus); self.p |= FLAG_I }
-            0xB8 => { self.idle(bus); self.p &= !FLAG_V }
-            0xD8 => { self.idle(bus); self.p &= !FLAG_D }
-            0xF8 => { self.idle(bus); self.p |= FLAG_D }
-            0x48 => { self.idle(bus); self.push(bus, self.a) }
-            0x08 => { self.idle(bus); self.push(bus, self.p | FLAG_B | FLAG_U) }
-            0x68 => { self.idle(bus); self.idle(bus); self.a = self.pull(bus); self.set_nz(self.a) }
+            0xAA => {
+                self.idle(bus);
+                self.x = self.a;
+                self.set_nz(self.x)
+            }
+            0xA8 => {
+                self.idle(bus);
+                self.y = self.a;
+                self.set_nz(self.y)
+            }
+            0x8A => {
+                self.idle(bus);
+                self.a = self.x;
+                self.set_nz(self.a)
+            }
+            0x98 => {
+                self.idle(bus);
+                self.a = self.y;
+                self.set_nz(self.a)
+            }
+            0xBA => {
+                self.idle(bus);
+                self.x = self.sp;
+                self.set_nz(self.x)
+            }
+            0x9A => {
+                self.idle(bus);
+                self.sp = self.x
+            }
+            0xE8 => {
+                self.idle(bus);
+                self.x = self.x.wrapping_add(1);
+                self.set_nz(self.x)
+            }
+            0xC8 => {
+                self.idle(bus);
+                self.y = self.y.wrapping_add(1);
+                self.set_nz(self.y)
+            }
+            0xCA => {
+                self.idle(bus);
+                self.x = self.x.wrapping_sub(1);
+                self.set_nz(self.x)
+            }
+            0x88 => {
+                self.idle(bus);
+                self.y = self.y.wrapping_sub(1);
+                self.set_nz(self.y)
+            }
+            0x18 => {
+                self.idle(bus);
+                self.p &= !FLAG_C
+            }
+            0x38 => {
+                self.idle(bus);
+                self.p |= FLAG_C
+            }
+            0x58 => {
+                self.idle(bus);
+                self.p &= !FLAG_I
+            }
+            0x78 => {
+                self.idle(bus);
+                self.p |= FLAG_I
+            }
+            0xB8 => {
+                self.idle(bus);
+                self.p &= !FLAG_V
+            }
+            0xD8 => {
+                self.idle(bus);
+                self.p &= !FLAG_D
+            }
+            0xF8 => {
+                self.idle(bus);
+                self.p |= FLAG_D
+            }
+            0x48 => {
+                self.idle(bus);
+                self.push(bus, self.a)
+            }
+            0x08 => {
+                self.idle(bus);
+                self.push(bus, self.p | FLAG_B | FLAG_U)
+            }
+            0x68 => {
+                self.idle(bus);
+                self.idle(bus);
+                self.a = self.pull(bus);
+                self.set_nz(self.a)
+            }
             0x28 => {
                 self.idle(bus);
                 self.idle(bus);
                 self.p = (self.pull(bus) | FLAG_U) & !FLAG_B;
             }
-            0xDA if cmos => { self.idle(bus); self.push(bus, self.x) }
-            0x5A if cmos => { self.idle(bus); self.push(bus, self.y) }
-            0xFA if cmos => { self.idle(bus); self.idle(bus); self.x = self.pull(bus); self.set_nz(self.x) }
-            0x7A if cmos => { self.idle(bus); self.idle(bus); self.y = self.pull(bus); self.set_nz(self.y) }
+            0xDA if cmos => {
+                self.idle(bus);
+                self.push(bus, self.x)
+            }
+            0x5A if cmos => {
+                self.idle(bus);
+                self.push(bus, self.y)
+            }
+            0xFA if cmos => {
+                self.idle(bus);
+                self.idle(bus);
+                self.x = self.pull(bus);
+                self.set_nz(self.x)
+            }
+            0x7A if cmos => {
+                self.idle(bus);
+                self.idle(bus);
+                self.y = self.pull(bus);
+                self.set_nz(self.y)
+            }
             0x10 => self.branch(bus, self.p & FLAG_N == 0),
             0x30 => self.branch(bus, self.p & FLAG_N != 0),
             0x50 => self.branch(bus, self.p & FLAG_V == 0),
@@ -955,21 +1227,58 @@ fn nmos_undocumented(opcode: u8) -> Option<(Op, Mode)> {
     use Mode::*;
     use Op::*;
     Some(match opcode {
-        0x03 => (Aso, IndX), 0x07 => (Aso, Zp), 0x0F => (Aso, Abs), 0x13 => (Aso, IndY),
-        0x17 => (Aso, ZpX), 0x1B => (Aso, AbsY), 0x1F => (Aso, AbsX),
-        0x23 => (Rla, IndX), 0x27 => (Rla, Zp), 0x2F => (Rla, Abs), 0x33 => (Rla, IndY),
-        0x37 => (Rla, ZpX), 0x3B => (Rla, AbsY), 0x3F => (Rla, AbsX),
-        0x43 => (Lse, IndX), 0x47 => (Lse, Zp), 0x4F => (Lse, Abs), 0x53 => (Lse, IndY),
-        0x57 => (Lse, ZpX), 0x5B => (Lse, AbsY), 0x5F => (Lse, AbsX),
-        0x63 => (Rra, IndX), 0x67 => (Rra, Zp), 0x6F => (Rra, Abs), 0x73 => (Rra, IndY),
-        0x77 => (Rra, ZpX), 0x7B => (Rra, AbsY), 0x7F => (Rra, AbsX),
-        0xC3 => (Dcm, IndX), 0xC7 => (Dcm, Zp), 0xCF => (Dcm, Abs), 0xD3 => (Dcm, IndY),
-        0xD7 => (Dcm, ZpX), 0xDB => (Dcm, AbsY), 0xDF => (Dcm, AbsX),
-        0xE3 => (Ins, IndX), 0xE7 => (Ins, Zp), 0xEF => (Ins, Abs), 0xF3 => (Ins, IndY),
-        0xF7 => (Ins, ZpX), 0xFB => (Ins, AbsY), 0xFF => (Ins, AbsX),
-        0x83 => (Axs, IndX), 0x87 => (Axs, Zp), 0x8F => (Axs, Abs), 0x97 => (Axs, ZpY),
-        0xA3 => (Lax, IndX), 0xA7 => (Lax, Zp), 0xAF => (Lax, Abs), 0xB3 => (Lax, IndY),
-        0xB7 => (Lax, ZpY), 0xBF => (Lax, AbsY),
+        0x03 => (Aso, IndX),
+        0x07 => (Aso, Zp),
+        0x0F => (Aso, Abs),
+        0x13 => (Aso, IndY),
+        0x17 => (Aso, ZpX),
+        0x1B => (Aso, AbsY),
+        0x1F => (Aso, AbsX),
+        0x23 => (Rla, IndX),
+        0x27 => (Rla, Zp),
+        0x2F => (Rla, Abs),
+        0x33 => (Rla, IndY),
+        0x37 => (Rla, ZpX),
+        0x3B => (Rla, AbsY),
+        0x3F => (Rla, AbsX),
+        0x43 => (Lse, IndX),
+        0x47 => (Lse, Zp),
+        0x4F => (Lse, Abs),
+        0x53 => (Lse, IndY),
+        0x57 => (Lse, ZpX),
+        0x5B => (Lse, AbsY),
+        0x5F => (Lse, AbsX),
+        0x63 => (Rra, IndX),
+        0x67 => (Rra, Zp),
+        0x6F => (Rra, Abs),
+        0x73 => (Rra, IndY),
+        0x77 => (Rra, ZpX),
+        0x7B => (Rra, AbsY),
+        0x7F => (Rra, AbsX),
+        0xC3 => (Dcm, IndX),
+        0xC7 => (Dcm, Zp),
+        0xCF => (Dcm, Abs),
+        0xD3 => (Dcm, IndY),
+        0xD7 => (Dcm, ZpX),
+        0xDB => (Dcm, AbsY),
+        0xDF => (Dcm, AbsX),
+        0xE3 => (Ins, IndX),
+        0xE7 => (Ins, Zp),
+        0xEF => (Ins, Abs),
+        0xF3 => (Ins, IndY),
+        0xF7 => (Ins, ZpX),
+        0xFB => (Ins, AbsY),
+        0xFF => (Ins, AbsX),
+        0x83 => (Axs, IndX),
+        0x87 => (Axs, Zp),
+        0x8F => (Axs, Abs),
+        0x97 => (Axs, ZpY),
+        0xA3 => (Lax, IndX),
+        0xA7 => (Lax, Zp),
+        0xAF => (Lax, Abs),
+        0xB3 => (Lax, IndY),
+        0xB7 => (Lax, ZpY),
+        0xBF => (Lax, AbsY),
         0x0B | 0x2B => (Anc, Imm),
         0x4B => (Alr, Imm),
         0x6B => (Arr, Imm),
@@ -978,8 +1287,11 @@ fn nmos_undocumented(opcode: u8) -> Option<(Op, Mode)> {
         0xCB => (Sax, Imm),
         0xEB => (Sbc, Imm),
         0xBB => (Las, AbsY),
-        0x93 => (Axa, IndY), 0x9F => (Axa, AbsY), 0x9C => (Say, AbsX),
-        0x9B => (Tas, AbsY), 0x9E => (Xas, AbsY),
+        0x93 => (Axa, IndY),
+        0x9F => (Axa, AbsY),
+        0x9C => (Say, AbsX),
+        0x9B => (Tas, AbsY),
+        0x9E => (Xas, AbsY),
         // NOPs
         0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => (Nop, Imm),
         0x04 | 0x44 | 0x64 => (Nop, Zp),
@@ -996,8 +1308,12 @@ mod tests {
 
     struct Mem([u8; 65536]);
     impl Bus for Mem {
-        fn read(&mut self, a: u16) -> u8 { self.0[a as usize] }
-        fn write(&mut self, a: u16, v: u8) { self.0[a as usize] = v }
+        fn read(&mut self, a: u16) -> u8 {
+            self.0[a as usize]
+        }
+        fn write(&mut self, a: u16, v: u8) {
+            self.0[a as usize] = v
+        }
     }
 
     fn run1(variant: Variant, code: &[u8], setup: impl FnOnce(&mut Cpu)) -> (Cpu, u32) {
@@ -1057,22 +1373,40 @@ mod tests {
 
     #[test]
     fn decimal_mode_adc_sbc() {
-        let (c, _) = run1(Variant::Nmos6502, &[0x69, 0x19], |c| { c.a = 0x28; c.p |= FLAG_D });
+        let (c, _) = run1(Variant::Nmos6502, &[0x69, 0x19], |c| {
+            c.a = 0x28;
+            c.p |= FLAG_D
+        });
         assert_eq!(c.a, 0x47);
-        let (c, _) = run1(Variant::Nmos6502, &[0xE9, 0x19], |c| { c.a = 0x46; c.p |= FLAG_D | FLAG_C });
+        let (c, _) = run1(Variant::Nmos6502, &[0xE9, 0x19], |c| {
+            c.a = 0x46;
+            c.p |= FLAG_D | FLAG_C
+        });
         assert_eq!(c.a, 0x27);
         assert!(c.p & FLAG_C != 0);
     }
 
     #[test]
     fn opcode_hook_reports_fetched_opcode() {
-        struct Spy { mem: [u8; 65536], seen: Vec<(u16, u8)> }
-        impl Bus for Spy {
-            fn read(&mut self, a: u16) -> u8 { self.mem[a as usize] }
-            fn write(&mut self, a: u16, v: u8) { self.mem[a as usize] = v }
-            fn opcode_fetched(&mut self, pc: u16, op: u8) { self.seen.push((pc, op)); }
+        struct Spy {
+            mem: [u8; 65536],
+            seen: Vec<(u16, u8)>,
         }
-        let mut b = Spy { mem: [0; 65536], seen: vec![] };
+        impl Bus for Spy {
+            fn read(&mut self, a: u16) -> u8 {
+                self.mem[a as usize]
+            }
+            fn write(&mut self, a: u16, v: u8) {
+                self.mem[a as usize] = v
+            }
+            fn opcode_fetched(&mut self, pc: u16, op: u8) {
+                self.seen.push((pc, op));
+            }
+        }
+        let mut b = Spy {
+            mem: [0; 65536],
+            seen: vec![],
+        };
         b.mem[0x300..0x305].copy_from_slice(&[0xA9, 0x01, 0xEE, 0x00, 0x04]);
         let mut c = Cpu::new(Variant::Nmos6502);
         c.pc = 0x300;

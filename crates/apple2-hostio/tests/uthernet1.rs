@@ -3,7 +3,9 @@
 use apple2_core::{Machine, MachineConfig, Model};
 use apple2_cpu::Bus;
 use apple2_hostio::network::{MockNetwork, MockNetworkHandle};
-use apple2_hostio::uthernet1::{PP_CC_RXCTL, PP_MAC_ADDR, PP_PRODUCTID, PP_RXLENGTH, PP_SE_BUSST, PP_SE_RXEVENT};
+use apple2_hostio::uthernet1::{
+    PP_CC_RXCTL, PP_MAC_ADDR, PP_PRODUCTID, PP_RXLENGTH, PP_SE_BUSST, PP_SE_RXEVENT,
+};
 use apple2_hostio::Uthernet1;
 
 const IO: u16 = 0xC080 + 3 * 16; // slot 3
@@ -59,7 +61,11 @@ const MAC: [u8; 6] = [0x00, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E];
 
 fn program_mac(m: &mut Machine) {
     for i in 0..3 {
-        pp_write(m, PP_MAC_ADDR + 2 * i, u16::from_le_bytes([MAC[2 * i as usize], MAC[2 * i as usize + 1]]));
+        pp_write(
+            m,
+            PP_MAC_ADDR + 2 * i,
+            u16::from_le_bytes([MAC[2 * i as usize], MAC[2 * i as usize + 1]]),
+        );
     }
 }
 
@@ -102,7 +108,11 @@ fn transmit_collects_words_until_the_announced_length_then_sends() {
     let (mut m, h) = setup();
     word_w(&mut m, TXCMD, 0x00C0);
     word_w(&mut m, TXLENGTH, 60);
-    assert_eq!(pp_read(&mut m, PP_SE_BUSST) & 0x180, 0x100, "ready for the frame");
+    assert_eq!(
+        pp_read(&mut m, PP_SE_BUSST) & 0x180,
+        0x100,
+        "ready for the frame"
+    );
     let frame: Vec<u8> = (0..60).collect();
     for w in frame.chunks(2) {
         word_w(&mut m, RXTXDATA, u16::from_le_bytes([w[0], w[1]]));
@@ -111,7 +121,11 @@ fn transmit_collects_words_until_the_announced_length_then_sends() {
         }
     }
     assert_eq!(h.take_tx(), vec![frame]);
-    assert_eq!(pp_read(&mut m, 0x0108), 0x00C0, "TxCMD mirrored to the status register");
+    assert_eq!(
+        pp_read(&mut m, 0x0108),
+        0x00C0,
+        "TxCMD mirrored to the status register"
+    );
 }
 
 #[test]

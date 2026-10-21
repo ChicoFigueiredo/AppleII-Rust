@@ -36,30 +36,52 @@ enum Pat {
 impl Debugger {
     // ---- mini dumps ----
 
-    pub(crate) fn cmd_mem_dump(&mut self, m: &mut Machine, a: &Args, which: usize, view: MemView) -> Update {
+    pub(crate) fn cmd_mem_dump(
+        &mut self,
+        m: &mut Machine,
+        a: &Args,
+        which: usize,
+        view: MemView,
+    ) -> Update {
         if a.n() == 0 {
             let d = self.mem_dump[which];
             if !d.active {
-                self.console.print(&format!("Mini memory area-{} not set", which + 1));
+                self.console
+                    .print(&format!("Mini memory area-{} not set", which + 1));
             } else {
-                self.console.print(&format!("Mini memory area-{}: {}", which + 1, crate::cmd_bp::prefix_addr_text(&d.prefix, d.addr, false)));
+                self.console.print(&format!(
+                    "Mini memory area-{}: {}",
+                    which + 1,
+                    crate::cmd_bp::prefix_addr_text(&d.prefix, d.addr, false)
+                ));
             }
             return upd::CONSOLE_DISPLAY;
         }
         let mut i = 1;
-        let Ok(prefix) = self.range_prefixes(a, &mut i) else { return self.help_last() };
+        let Ok(prefix) = self.range_prefixes(a, &mut i) else {
+            return self.help_last();
+        };
         if i > a.n() {
             return self.help_last();
         }
         let _ = m;
-        self.mem_dump[which] = MemDump { addr: a.value(i), view, active: true, prefix };
+        self.mem_dump[which] = MemDump {
+            addr: a.value(i),
+            view,
+            active: true,
+            prefix,
+        };
         upd::MEM_DUMP
     }
 
     // ---- enter / fill / move / compare ----
 
     pub(crate) fn cmd_memory_enter(&mut self, m: &mut Machine, a: &Args, word: bool) -> Update {
-        let cmd = if word { Cmd::MemoryEnterWord } else { Cmd::MemoryEnterByte };
+        let cmd = if word {
+            Cmd::MemoryEnterWord
+        } else {
+            Cmd::MemoryEnterByte
+        };
         if a.n() < 2 {
             return self.help_for(cmd);
         }
@@ -111,7 +133,9 @@ impl Debugger {
         }
         let mut dst = a.value(1);
         let (s, e, rt) = range_get(a, 2);
-        let Some((_, len)) = range_end_len(rt, s, e) else { return self.help_for(Cmd::MemoryMove) };
+        let Some((_, len)) = range_end_len(rt, s, e) else {
+            return self.help_for(Cmd::MemoryMove);
+        };
         let mut src = s;
         for _ in 0..len {
             if !(0xC000..=0xC0FF).contains(&dst) {
@@ -131,7 +155,9 @@ impl Debugger {
         }
         let dst = a.value(1);
         let (s, e, rt) = range_get(a, 2);
-        let Some((_, len)) = range_end_len(rt, s, e) else { return self.help_for(Cmd::MemoryCompare) };
+        let Some((_, len)) = range_end_len(rt, s, e) else {
+            return self.help_for(Cmd::MemoryCompare);
+        };
         let mut diffs = 0;
         for k in 0..len as u16 {
             let (x, y) = (m.read(s.wrapping_add(k)), m.read(dst.wrapping_add(k)));
@@ -142,7 +168,9 @@ impl Debugger {
                 }
             }
         }
-        self.console.print(&format!("{CHC_USAGE}Total{CHC_DEFAULT}: {CHC_NUM_DEC}{diffs}{CHC_DEFAULT} differences"));
+        self.console.print(&format!(
+            "{CHC_USAGE}Total{CHC_DEFAULT}: {CHC_NUM_DEC}{diffs}{CHC_DEFAULT} differences"
+        ));
         upd::CONSOLE_DISPLAY
     }
 
@@ -186,10 +214,13 @@ impl Debugger {
         }
         let (s, e, rt) = range_get(a, 1);
         let Some((end, _)) = range_end_len(rt, s, e) else {
-            self.console.error("Error: Missing address separator (comma or colon)");
+            self.console
+                .error("Error: Missing address separator (comma or colon)");
             return upd::CONSOLE_DISPLAY;
         };
-        let Some(pats) = self.parse_search(a, 4) else { return self.help_last() };
+        let Some(pats) = self.parse_search(a, 4) else {
+            return self.help_last();
+        };
         self.search_results.clear();
         self.search_results.push(0xFFFF);
         for addr in s as u32..=end as u32 {
@@ -221,7 +252,10 @@ impl Debugger {
             let mut line = String::new();
             let mut plain = 0usize;
             for i in 1..=found {
-                let item = format!("{CHC_NUM_DEC}{i:02X}{CHC_DEFAULT}:{CHC_ARG_SEP}${CHC_ADDRESS}{:04X} ", self.search_results[i]);
+                let item = format!(
+                    "{CHC_NUM_DEC}{i:02X}{CHC_DEFAULT}:{CHC_ARG_SEP}${CHC_ADDRESS}{:04X} ",
+                    self.search_results[i]
+                );
                 let w = 2 + 1 + 1 + 4 + 1;
                 if plain + w > CONSOLE_WIDTH - 1 {
                     self.console.print(&line);
@@ -250,7 +284,12 @@ impl Debugger {
         }
         i += 1;
         let mut bank = None;
-        if a.get(i + 1).map(|t| t.is_op(":")).unwrap_or(false) && n >= i + 4 && a.get(i + 3).map(|t| t.is_op(",") || t.is_op(":")).unwrap_or(false) {
+        if a.get(i + 1).map(|t| t.is_op(":")).unwrap_or(false)
+            && n >= i + 4
+            && a.get(i + 3)
+                .map(|t| t.is_op(",") || t.is_op(":"))
+                .unwrap_or(false)
+        {
             bank = Some(a.value(i));
             i += 2;
         }
@@ -264,7 +303,9 @@ impl Debugger {
             self.console.print("Last saved: none");
             return upd::CONSOLE_DISPLAY;
         }
-        let Some((name, bank, start, Some(len))) = self.parse_load_save(a) else { return self.help_for(Cmd::MemorySave) };
+        let Some((name, bank, start, Some(len))) = self.parse_load_save(a) else {
+            return self.help_for(Cmd::MemorySave);
+        };
         if len == 0 || start as u32 + len > 0x10000 {
             self.console.print("Error: Length = 0.");
             return upd::CONSOLE_DISPLAY;
@@ -294,7 +335,11 @@ impl Debugger {
         if a.n() < 1 {
             return self.help_for(Cmd::MemoryLoad);
         }
-        let name = if a.get(1).map(|x| x.kind == Kind::Quoted2).unwrap_or(false) { a.text(1).to_string() } else { String::new() };
+        let name = if a.get(1).map(|x| x.kind == Kind::Quoted2).unwrap_or(false) {
+            a.text(1).to_string()
+        } else {
+            String::new()
+        };
         // Known extensions load at fixed addresses.
         let lower = name.to_ascii_lowercase();
         let known: Option<(u16, u32)> = if lower.ends_with(".hgr2") {
@@ -324,7 +369,8 @@ impl Debugger {
             Some(l) if l > 0 => l.min(file_bytes),
             _ => file_bytes,
         };
-        self.console.print(&format!("Loaded @ A${start:04X},L${n:04X}"));
+        self.console
+            .print(&format!("Loaded @ A${start:04X},L${n:04X}"));
         for k in 0..n as u16 {
             let ad = start.wrapping_add(k);
             let v = bytes[k as usize];
@@ -359,7 +405,14 @@ impl Debugger {
     // ---- disassembler data ----
 
     /// `SymbolUpdate` (Debugger_Symbols.cpp:892).
-    pub(crate) fn symbol_update(&mut self, t: Table, name: &str, addr: u16, remove: bool, update: bool) {
+    pub(crate) fn symbol_update(
+        &mut self,
+        t: Table,
+        name: &str,
+        addr: u16,
+        remove: bool,
+        update: bool,
+    ) {
         if name.len() >= crate::symbols::MAX_SYMBOLS_LEN {
             self.console.print(&format!("{CHC_ERROR}Error: {CHC_DEFAULT}Symbol length {CHC_NUM_DEC}{} {CHC_ARG_SEP}> {CHC_NUM_DEC}{} ", name.len(), crate::symbols::MAX_SYMBOLS_LEN));
             return;
@@ -379,7 +432,12 @@ impl Debugger {
                     &format!(" Updating {CHC_SYMBOL}{name}{CHC_DEFAULT} from {CHC_ARG_SEP}${CHC_ADDRESS}{p:04X}{CHC_DEFAULT} to {CHC_ARG_SEP}${CHC_ADDRESS}{addr:04X}{CHC_DEFAULT}"),
                 );
             }
-            self.console.print_level(OutputLevel::Info, &format!(" Added: {CHC_ARG_SEP}${CHC_ADDRESS}{addr:04X}{CHC_DEFAULT} {CHC_SYMBOL}{name}"));
+            self.console.print_level(
+                OutputLevel::Info,
+                &format!(
+                    " Added: {CHC_ARG_SEP}${CHC_ADDRESS}{addr:04X}{CHC_DEFAULT} {CHC_SYMBOL}{name}"
+                ),
+            );
         }
     }
 
@@ -434,7 +492,10 @@ impl Debugger {
         let end = address.wrapping_add(nlen as u16);
         // Symbol name: the first argument unless it is a bare range.
         let name = if n > 1 && !a.get(2).map(|t| t.is_op(":")).unwrap_or(false) {
-            a.text(1).chars().take(crate::symbols::MAX_SYMBOLS_LEN - 1).collect::<String>()
+            a.text(1)
+                .chars()
+                .take(crate::symbols::MAX_SYMBOLS_LEN - 1)
+                .collect::<String>()
         } else {
             Self::auto_symbol_name(kind, start)
         };
@@ -446,7 +507,16 @@ impl Debugger {
             Nop::StringApple | Nop::StringAscii => ("ASC", false),
             _ => ("db", false),
         };
-        let d = DisasmData { symbol: name, start, end, target: 0, directive, kind, symbol_lookup: lookup, removed: false };
+        let d = DisasmData {
+            symbol: name,
+            start,
+            end,
+            target: 0,
+            directive,
+            kind,
+            symbol_lookup: lookup,
+            removed: false,
+        };
         match self.data.find_mut(address) {
             Some(existing) => *existing = d,
             None => self.data.add(d),
@@ -480,7 +550,12 @@ impl Debugger {
         let mut addr = start as u32;
         while addr <= end as u32 {
             let ad = addr as u16;
-            if let Some(idx) = self.data.0.iter().position(|d| !d.removed && ad >= d.start && ad <= d.end) {
+            if let Some(idx) = self
+                .data
+                .0
+                .iter()
+                .position(|d| !d.removed && ad >= d.start && ad <= d.end)
+            {
                 let (ds, de) = (self.data.0[idx].start, self.data.0[idx].end);
                 if ad <= ds && end >= de {
                     self.data.0[idx].removed = true;

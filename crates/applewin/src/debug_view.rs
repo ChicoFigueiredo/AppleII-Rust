@@ -9,7 +9,11 @@ const CELL_H: usize = 8;
 
 /// Glyph rows for an ASCII character (bit 0 = leftmost pixel, 1 = lit).
 fn glyph(ch: char) -> [u8; 8] {
-    let c = if (' '..='~').contains(&ch) { ch as u8 } else { b'?' };
+    let c = if (' '..='~').contains(&ch) {
+        ch as u8
+    } else {
+        b'?'
+    };
     // The ROM's first 256 characters are the alternate set: normal text at $80-$FF, and the
     // pixels are stored inverted.
     let idx = usize::from(0x80 | c);
@@ -45,11 +49,20 @@ mod tests {
     #[test]
     fn draws_foreground_and_background_pixels() {
         let mut g = Grid::new((1, 2, 3), (200, 210, 220));
-        g.cells[0] = GridCell { ch: 'A', fg: (200, 210, 220), bg: (1, 2, 3) };
+        g.cells[0] = GridCell {
+            ch: 'A',
+            fg: (200, 210, 220),
+            bg: (1, 2, 3),
+        };
         let mut f = Frame::new(0, 0);
         render_grid(&g, false, &mut f);
         assert_eq!((f.width, f.height), (560, 384));
-        let px: Vec<[u8; 3]> = (0..7 * 8).map(|i| { let o = ((i / 7) * 560 + i % 7) * 4; [f.rgba[o], f.rgba[o + 1], f.rgba[o + 2]] }).collect();
+        let px: Vec<[u8; 3]> = (0..7 * 8)
+            .map(|i| {
+                let o = ((i / 7) * 560 + i % 7) * 4;
+                [f.rgba[o], f.rgba[o + 1], f.rgba[o + 2]]
+            })
+            .collect();
         assert!(px.contains(&[200, 210, 220]) && px.contains(&[1, 2, 3]));
         // a blank cell is all background
         let o = (10 * 7) * 4;

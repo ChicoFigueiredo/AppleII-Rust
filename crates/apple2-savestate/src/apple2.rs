@@ -80,19 +80,34 @@ fn video_flags(st: &MachineState) -> u32 {
     set(v.mixed, VF_MIXED);
     set(mm & mf::PAGE2 != 0, VF_PAGE2);
     set(v.text, VF_TEXT);
-    set(st.config.aux_card == AuxCardKind::Empty && !st.config.model.is_apple2() && v.col80, VF_80COL_AUX_EMPTY);
+    set(
+        st.config.aux_card == AuxCardKind::Empty && !st.config.model.is_apple2() && v.col80,
+        VF_80COL_AUX_EMPTY,
+    );
     f
 }
 
 /// Writes `Unit: Apple2`. `extra` runs last inside `State` (the Rust extension block).
-pub fn save_apple2(w: &mut Writer, st: &MachineState, lcs: &[LcInfo], extra: impl FnOnce(&mut Writer)) {
+pub fn save_apple2(
+    w: &mut Writer,
+    st: &MachineState,
+    lcs: &[LcInfo],
+    extra: impl FnOnce(&mut Writer),
+) {
     let model = st.config.model;
     let is2 = model.is_apple2();
     w.unit("Apple2", UNIT_APPLE2_VER, |w| {
         w.line(&format!("Model: {}", model_name(model)));
         // CPU.cpp:932
         w.map("CPU", |w| {
-            w.string("Type", if model.cpu_variant() == apple2_cpu_variant_cmos() { "65C02" } else { "6502" });
+            w.string(
+                "Type",
+                if model.cpu_variant() == apple2_cpu_variant_cmos() {
+                    "65C02"
+                } else {
+                    "6502"
+                },
+            );
             w.hex8("A", st.cpu.a as u32);
             w.hex8("X", st.cpu.x as u32);
             w.hex8("Y", st.cpu.y as u32);
@@ -127,7 +142,14 @@ pub fn save_apple2(w: &mut Writer, st: &MachineState, lcs: &[LcInfo], extra: imp
             w.bool("Alt Char Set", st.video.altcharset);
             w.hex32("Video Mode", video_flags(st));
             w.uint("Cycles This Frame", st.cycles_in_frame as u64);
-            w.uint("Video Refresh Rate", if st.config.video_standard == VideoStandard::Pal { 1 } else { 2 });
+            w.uint(
+                "Video Refresh Rate",
+                if st.config.video_standard == VideoStandard::Pal {
+                    1
+                } else {
+                    2
+                },
+            );
         });
         // Memory.cpp:2840
         w.map("Memory", |w| {
@@ -135,7 +157,10 @@ pub fn save_apple2(w: &mut Writer, st: &MachineState, lcs: &[LcInfo], extra: imp
             w.hex32("Memory Mode", mm & !LC_MASK);
             if !is2 {
                 w.hex32("MMU LC Mode", mm & LC_MASK);
-                let lrw = lcs.iter().find(|c| c.slot == 0).is_some_and(|c| c.last_ram_write);
+                let lrw = lcs
+                    .iter()
+                    .find(|c| c.slot == 0)
+                    .is_some_and(|c| c.last_ram_write);
                 w.uint("Last RAM Write", lrw as u64);
             }
             w.hex8("IO_SELECT", st.slots.io_select as u32);
@@ -184,12 +209,22 @@ pub fn save_aux(w: &mut Writer, st: &MachineState) {
         let aux = &st.memory.aux;
         match st.config.aux_card {
             AuxCardKind::Empty => {}
-            AuxCardKind::Col80_1K => w.map("State", |w| w.map("Auxiliary Memory Bank", |w| w.memory(&aux[..0x400]))),
+            AuxCardKind::Col80_1K => w.map("State", |w| {
+                w.map("Auxiliary Memory Bank", |w| w.memory(&aux[..0x400]))
+            }),
             kind => w.map("State", |w| {
                 let banks = aux.len() / 0x10000;
-                w.line(&format!("Num Aux Banks: 0x{banks:03X}  # [0,1..100] 0=no aux mem, 1=128K system, etc"));
-                let active = if matches!(kind, AuxCardKind::RamWorksIII { .. }) { st.memory.aux_bank } else { 0 };
-                w.line(&format!("Active Aux Bank: 0x{active:02X} # [  0..FF] 0=memaux"));
+                w.line(&format!(
+                    "Num Aux Banks: 0x{banks:03X}  # [0,1..100] 0=no aux mem, 1=128K system, etc"
+                ));
+                let active = if matches!(kind, AuxCardKind::RamWorksIII { .. }) {
+                    st.memory.aux_bank
+                } else {
+                    0
+                };
+                w.line(&format!(
+                    "Active Aux Bank: 0x{active:02X} # [  0..FF] 0=memaux"
+                ));
                 for (b, bank) in aux.chunks(0x10000).enumerate() {
                     w.map(&format!("Auxiliary Memory Bank{b:02X}"), |w| w.memory(bank));
                 }
@@ -215,16 +250,22 @@ pub fn save_lc_card(w: &mut Writer, st: &MachineState, c: &LcInfo) {
         LcKind::Card16K => w.slot(c.slot, "Language Card", LC_CARD_VER, |w| {
             w.hex32("Memory Mode", c.memmode);
             w.uint("Last RAM Write", lrw);
-            w.map("Memory Bank", |w| w.memory(&mem[c.region * LC_SIZE..][..LC_SIZE]));
+            w.map("Memory Bank", |w| {
+                w.memory(&mem[c.region * LC_SIZE..][..LC_SIZE])
+            });
         }),
         LcKind::Saturn { banks, active } => w.slot(c.slot, "Saturn 128", SATURN_CARD_VER, |w| {
             w.hex32("Memory Mode", c.memmode);
             w.uint("Last RAM Write", lrw);
-            w.line(&format!("Num Saturn Banks: 0x{banks:02X}   # [1..8] 4=64K, 8=128K card"));
+            w.line(&format!(
+                "Num Saturn Banks: 0x{banks:02X}   # [1..8] 4=64K, 8=128K card"
+            ));
             w.line(&format!("Active Saturn Bank: 0x{active:02X} # [0..7]"));
             let base = c.region - active as usize;
             for b in 0..banks as usize {
-                w.map(&format!("Memory Bank{b:02X}"), |w| w.memory(&mem[(base + b) * LC_SIZE..][..LC_SIZE]));
+                w.map(&format!("Memory Bank{b:02X}"), |w| {
+                    w.memory(&mem[(base + b) * LC_SIZE..][..LC_SIZE])
+                });
             }
         }),
     }
@@ -250,21 +291,53 @@ pub fn parse_aux<'a>(unit_version: u32, st: Map<'a>) -> Result<AuxUnit<'a>, Erro
     }
     let card = st.string("Card")?;
     // v2 has the card version here and a nested State (absent for an empty slot).
-    let inner = if unit_version == 1 { st } else if card != "Empty" { st.need_sub("State")? } else { st };
+    let inner = if unit_version == 1 {
+        st
+    } else if card != "Empty" {
+        st.need_sub("State")?
+    } else {
+        st
+    };
     Ok(match card.as_str() {
-        "Empty" => AuxUnit { kind: AuxCardKind::Empty, active_bank: 0, state: None },
-        "80 Column" => AuxUnit { kind: AuxCardKind::Col80_1K, active_bank: 0, state: Some(inner) },
+        "Empty" => AuxUnit {
+            kind: AuxCardKind::Empty,
+            active_bank: 0,
+            state: None,
+        },
+        "80 Column" => AuxUnit {
+            kind: AuxCardKind::Col80_1K,
+            active_bank: 0,
+            state: Some(inner),
+        },
         "Extended 80 Column" | "RamWorks III" | "RamWorksIII" => {
             let banks = inner.u32("Num Aux Banks")?;
             let active = inner.u32("Active Aux Bank")?;
             let ext = card == "Extended 80 Column";
-            if ext && (banks != 1 || active != 0) || !ext && (!(2..=256).contains(&banks) || active + 1 > banks) {
-                return Err(Error::Format("Unit: AuxSlot: Bad aux slot card state".into()));
+            if ext && (banks != 1 || active != 0)
+                || !ext && (!(2..=256).contains(&banks) || active + 1 > banks)
+            {
+                return Err(Error::Format(
+                    "Unit: AuxSlot: Bad aux slot card state".into(),
+                ));
             }
-            let kind = if ext { AuxCardKind::Extended80Col } else { AuxCardKind::RamWorksIII { banks: banks as u16 } };
-            AuxUnit { kind, active_bank: active as u16, state: Some(inner) }
+            let kind = if ext {
+                AuxCardKind::Extended80Col
+            } else {
+                AuxCardKind::RamWorksIII {
+                    banks: banks as u16,
+                }
+            };
+            AuxUnit {
+                kind,
+                active_bank: active as u16,
+                state: Some(inner),
+            }
         }
-        other => return Err(Error::Format(format!("Unit: AuxSlot: Unknown card: {other}"))),
+        other => {
+            return Err(Error::Format(format!(
+                "Unit: AuxSlot: Unknown card: {other}"
+            )))
+        }
     })
 }
 
@@ -281,7 +354,9 @@ pub fn load_aux_memory(st: &mut MachineState, aux: &AuxUnit) -> Result<(), Error
         AuxCardKind::Extended80Col | AuxCardKind::RamWorksIII { .. } => {
             for (b, bank) in mem.aux.chunks_mut(0x10000).enumerate() {
                 let name = format!("Auxiliary Memory Bank{b:02X}");
-                let sub = s.sub(&name).ok_or_else(|| Error::Format(format!("Memory: Missing map name: {name}")))?;
+                let sub = s
+                    .sub(&name)
+                    .ok_or_else(|| Error::Format(format!("Memory: Missing map name: {name}")))?;
                 sub.load_memory(bank)?;
             }
             mem.aux_bank = aux.active_bank;
@@ -309,7 +384,12 @@ pub fn parse_apple2<'a>(version: u32, state: Map<'a>) -> Result<Apple2Unit<'a>, 
             video_standard = VideoStandard::Pal;
         }
     }
-    Ok(Apple2Unit { version, model, state, video_standard })
+    Ok(Apple2Unit {
+        version,
+        model,
+        state,
+        video_standard,
+    })
 }
 
 /// LC cards the Slots unit declared, with their parsed state (applied by [`apply_apple2`]).
@@ -325,13 +405,28 @@ pub struct LcLoad {
 pub fn parse_lc_card(slot: u8, saturn: bool, version: u32, st: Map) -> Result<LcLoad, Error> {
     let want = if saturn { SATURN_CARD_VER } else { LC_CARD_VER };
     if version != want {
-        return Err(Error::Format(format!("Version {version} is not supported for card '{}'.", if saturn { "Saturn 128" } else { "Language Card" })));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card '{}'.",
+            if saturn {
+                "Saturn 128"
+            } else {
+                "Language Card"
+            }
+        )));
     }
     let memmode = st.u32("Memory Mode")? & LC_MASK;
     let last_ram_write = st.u32("Last RAM Write")? != 0;
-    let mut out = LcLoad { slot, memmode, last_ram_write, active_bank: None, banks: Vec::new() };
+    let mut out = LcLoad {
+        slot,
+        memmode,
+        last_ram_write,
+        active_bank: None,
+        banks: Vec::new(),
+    };
     let read = |name: &str| -> Result<Vec<u8>, Error> {
-        let sub = st.sub(name).ok_or_else(|| Error::Format(format!("Memory: Missing map name: {name}")))?;
+        let sub = st
+            .sub(name)
+            .ok_or_else(|| Error::Format(format!("Memory: Missing map name: {name}")))?;
         let mut b = vec![0u8; LC_SIZE];
         sub.load_memory(&mut b)?;
         Ok(b)
@@ -354,7 +449,12 @@ pub fn parse_lc_card(slot: u8, saturn: bool, version: u32, st: Map) -> Result<Lc
 
 /// Patches `st` (a fresh state of a machine built for this file) with `Unit: Apple2`, the aux
 /// memory and the LC cards, like `ParseUnitApple2` + `MemInitializeFromSnapshot`.
-pub fn apply_apple2(st: &mut MachineState, unit: &Apple2Unit, lcs: &[LcLoad], warnings: &mut Vec<String>) -> Result<(), Error> {
+pub fn apply_apple2(
+    st: &mut MachineState,
+    unit: &Apple2Unit,
+    lcs: &[LcLoad],
+    warnings: &mut Vec<String>,
+) -> Result<(), Error> {
     let s = unit.state;
     let version = unit.version;
     let is2 = st.config.model.is_apple2();
@@ -366,7 +466,10 @@ pub fn apply_apple2(st: &mut MachineState, unit: &Apple2Unit, lcs: &[LcLoad], wa
         match ty.as_str() {
             "6502" | "65C02" => {
                 if (ty == "65C02") != cmos {
-                    warnings.push(format!("CPU: file says {ty}, which differs from the {} the model uses", if cmos { "65C02" } else { "6502" }));
+                    warnings.push(format!(
+                        "CPU: file says {ty}, which differs from the {} the model uses",
+                        if cmos { "65C02" } else { "6502" }
+                    ));
                 }
             }
             _ => return Err(Error::Format("Load: Unknown main CPU type".into())),
@@ -394,14 +497,22 @@ pub fn apply_apple2(st: &mut MachineState, unit: &Apple2Unit, lcs: &[LcLoad], wa
         j.i32("Joystick1 TrimY")?;
         let mut c = [0u64; 4];
         for (n, slot) in c.iter_mut().enumerate() {
-            *slot = if version >= 7 { j.u64(&format!("Paddle{n} Inactive Cycle"))? } else { j.u64("Counter Reset Cycle")? };
+            *slot = if version >= 7 {
+                j.u64(&format!("Paddle{n} Inactive Cycle"))?
+            } else {
+                j.u64("Counter Reset Cycle")?
+            };
         }
         st.game.set_inactive_cycles(c);
     }
     // Keyboard (Keyboard.cpp:478)
     if let Some(k) = s.sub("Keyboard") {
         let key = k.u32("Last Key")? as u8;
-        let waiting = if version >= 2 { k.bool("Key Waiting")? } else { false };
+        let waiting = if version >= 2 {
+            k.bool("Key Waiting")?
+        } else {
+            false
+        };
         st.keyboard.set_latch(key, waiting);
     }
     // Speaker: "Last Cycle" has no counterpart (the toggle log starts empty).
@@ -449,7 +560,11 @@ pub fn apply_apple2(st: &mut MachineState, unit: &Apple2Unit, lcs: &[LcLoad], wa
             st.annunciators[i] = m.bool(&format!("Annunciator{i}"))?;
         }
     }
-    let last_slot = if version >= 9 { m.u32("Last Slot to Set Main Mem LC")? as u8 } else { 0 };
+    let last_slot = if version >= 9 {
+        m.u32("Last Slot to Set Main Mem LC")? as u8
+    } else {
+        0
+    };
 
     // Main memory (Memory.cpp:2905)
     let mm = s.need_sub("Main Memory")?;
@@ -475,7 +590,12 @@ pub fn apply_apple2(st: &mut MachineState, unit: &Apple2Unit, lcs: &[LcLoad], wa
         };
         st.lc.set_info(info.slot, flags, lrw, active);
         if let Some(l) = load {
-            let base = st.lc.infos().iter().find(|i| i.slot == info.slot).map_or(0, |i| i.region - active.unwrap_or(0) as usize);
+            let base = st
+                .lc
+                .infos()
+                .iter()
+                .find(|i| i.slot == info.slot)
+                .map_or(0, |i| i.region - active.unwrap_or(0) as usize);
             for (b, data) in l.banks.iter().enumerate() {
                 let off = (base + b) * LC_SIZE;
                 if off + LC_SIZE <= st.memory.lc.len() {
@@ -489,7 +609,10 @@ pub fn apply_apple2(st: &mut MachineState, unit: &Apple2Unit, lcs: &[LcLoad], wa
     }
     st.lc.set_last_slot(last_slot);
     let infos = st.lc.infos();
-    let owner = infos.iter().find(|i| i.slot == last_slot).or_else(|| infos.first());
+    let owner = infos
+        .iter()
+        .find(|i| i.slot == last_slot)
+        .or_else(|| infos.first());
     if let Some(o) = owner {
         st.memory.lc_region = o.region;
         memmode |= last_flags.unwrap_or(o.memmode) & LC_MASK;

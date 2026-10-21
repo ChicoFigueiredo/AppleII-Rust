@@ -26,7 +26,11 @@ impl Drop for TempDir {
 fn dirty_first_data_nibble(img: &mut DiskImage) {
     let mut buf = vec![0u8; NIBBLES_PER_TRACK];
     let (n, _) = img.read_track(0.0, &mut buf, true);
-    let pos = buf[..n].windows(3).position(|w| w == [0xD5, 0xAA, 0xAD]).unwrap() + 3;
+    let pos = buf[..n]
+        .windows(3)
+        .position(|w| w == [0xD5, 0xAA, 0xAD])
+        .unwrap()
+        + 3;
     buf[pos] = if buf[pos] == 0x96 { 0x97 } else { 0x96 };
     img.write_track(0.0, &buf, n);
 }
@@ -74,20 +78,37 @@ fn read_only_files_and_forced_protection_never_write() {
 #[test]
 fn zero_length_files_become_blank_images_of_the_extension_type() {
     let dir = TempDir::new("blank");
-    for (name, kind, len) in [("a.dsk", ImageKind::Do, 143360), ("a.nib", ImageKind::Nib1, 35 * 0x1A00), ("a.woz", ImageKind::Woz2, 1536)] {
+    for (name, kind, len) in [
+        ("a.dsk", ImageKind::Do, 143360),
+        ("a.nib", ImageKind::Nib1, 35 * 0x1A00),
+        ("a.woz", ImageKind::Woz2, 1536),
+    ] {
         let path = dir.0.join(name);
         std::fs::write(&path, []).unwrap();
         let img = DiskImage::open_path(&path, Class::Floppy, false).unwrap();
         assert_eq!(img.kind(), kind);
-        assert_eq!(std::fs::metadata(&path).unwrap().len(), len as u64, "{name} is resized to its full size");
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().len(),
+            len as u64,
+            "{name} is resized to its full size"
+        );
     }
     let path = dir.0.join("a.po");
     std::fs::write(&path, []).unwrap();
-    assert!(matches!(DiskImage::open_path(&path, Class::Floppy, false), Err(ImageError::Unsupported)));
+    assert!(matches!(
+        DiskImage::open_path(&path, Class::Floppy, false),
+        Err(ImageError::Unsupported)
+    ));
     let ro = dir.0.join("z.dsk");
     std::fs::write(&ro, []).unwrap();
-    assert!(matches!(DiskImage::open_path(&ro, Class::Floppy, true), Err(ImageError::ZeroLengthWriteProtected)));
-    assert!(matches!(DiskImage::open_path(&dir.0.join("missing.dsk"), Class::Floppy, false), Err(ImageError::Io(_))));
+    assert!(matches!(
+        DiskImage::open_path(&ro, Class::Floppy, true),
+        Err(ImageError::ZeroLengthWriteProtected)
+    ));
+    assert!(matches!(
+        DiskImage::open_path(&dir.0.join("missing.dsk"), Class::Floppy, false),
+        Err(ImageError::Io(_))
+    ));
 }
 
 #[test]

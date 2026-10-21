@@ -57,7 +57,11 @@ impl Renderer {
         let a = self.addr;
         let below = a + self.fb_w();
         for i in 0..14isize {
-            let c = if self.half_scanlines() { crate::chroma::ALPHA } else { self.get(a + i) };
+            let c = if self.half_scanlines() {
+                crate::chroma::ALPHA
+            } else {
+                self.get(a + i)
+            };
             self.put(below + i, c);
         }
     }
@@ -67,7 +71,11 @@ impl Renderer {
     /// `UpdateLoResCell` (:1026).
     pub(crate) fn lores_cell(&mut self, s: &dyn VideoSource, x: usize, y: usize, addr: u16) {
         let val = s.main(addr);
-        let sy = if y & 4 == 0 { (val as usize & 0xF) << 4 } else { val as usize & 0xF0 };
+        let sy = if y & 4 == 0 {
+            (val as usize & 0xF) << 4
+        } else {
+            val as usize & 0xF0
+        };
         self.copy_source(14, SRCOFFS_LORES + ((x & 1) << 1), sy, 0);
     }
 
@@ -96,9 +104,17 @@ impl Renderer {
 
     /// `UpdateHiResCell` (:589): idealized single (and "double hires 40") hi-res.
     pub(crate) fn hires_cell(&mut self, s: &dyn VideoSource, x: usize, y: usize, addr: u16) {
-        let mut b1 = if x > 0 { s.main(addr.wrapping_sub(1)) } else { 0 };
+        let mut b1 = if x > 0 {
+            s.main(addr.wrapping_sub(1))
+        } else {
+            0
+        };
         let mut b2 = s.main(addr);
-        let mut b3 = if x < 39 { s.main(addr.wrapping_add(1)) } else { 0 };
+        let mut b3 = if x < 39 {
+            s.main(addr.wrapping_add(1))
+        } else {
+            0
+        };
         if self.current_flags().dhires {
             b1 &= 0x7F;
             b2 &= 0x7F;
@@ -154,7 +170,11 @@ impl Renderer {
             let mut dst = self.addr + nb as isize;
             for (k, &mixed) in buf[MAT_Y_PUB..=MAT_Y_PUB + 1].iter().enumerate() {
                 let h = MAT_Y_PUB + k;
-                let c = if half && h & 1 != 0 { crate::chroma::ALPHA } else { self.palette[mixed as usize] };
+                let c = if half && h & 1 != 0 {
+                    crate::chroma::ALPHA
+                } else {
+                    self.palette[mixed as usize]
+                };
                 self.put(dst, c);
                 dst += self.fb_w();
             }
@@ -165,12 +185,22 @@ impl Renderer {
     pub(crate) fn hires_rgb_cell(&mut self, s: &dyn VideoSource, x: usize, addr: u16) {
         let xoffset = x & 1;
         let addr = addr.wrapping_sub(xoffset as u16);
-        let b1 = if x < 2 { 0 } else { s.main(addr.wrapping_sub(1)) };
+        let b1 = if x < 2 {
+            0
+        } else {
+            s.main(addr.wrapping_sub(1))
+        };
         let b2 = s.main(addr);
         let b3 = s.main(addr.wrapping_add(1));
-        let b4 = if x >= 38 { 0 } else { s.main(addr.wrapping_add(2)) };
-        let mut dword: u32 =
-            (b1 & 0x7F) as u32 | ((b2 & 0x7F) as u32) << 7 | ((b3 & 0x7F) as u32) << 14 | ((b4 & 0x7F) as u32) << 21;
+        let b4 = if x >= 38 {
+            0
+        } else {
+            s.main(addr.wrapping_add(2))
+        };
+        let mut dword: u32 = (b1 & 0x7F) as u32
+            | ((b2 & 0x7F) as u32) << 7
+            | ((b3 & 0x7F) as u32) << 14
+            | ((b4 & 0x7F) as u32) << 21;
         // Extraction of the 14 colour pixels.
         let mut colors = [0u32; 14];
         let mut tmp = dword >> 7;
@@ -181,7 +211,11 @@ impl Renderer {
             }
             let color = (tmp & 3) as usize;
             // AppleWin's palette is in a strange order, hence two cases.
-            *c = if offset { self.palette[1 + color] } else { self.palette[6 - color] };
+            *c = if offset {
+                self.palette[1 + color]
+            } else {
+                self.palette[6 - color]
+            };
             if i % 2 == 1 {
                 tmp >>= 2;
             }
@@ -219,18 +253,40 @@ impl Renderer {
     // ---- Double hi-res. ----
 
     /// `UpdateDHiResCell` (:618): idealized DHGR, aux half then main half.
-    pub(crate) fn dhires_cell(&mut self, s: &dyn VideoSource, x: usize, addr: u16, update_aux: bool, update_main: bool) {
+    pub(crate) fn dhires_cell(
+        &mut self,
+        s: &dyn VideoSource,
+        x: usize,
+        addr: u16,
+        update_aux: bool,
+        update_main: bool,
+    ) {
         let xpixel = x * 14;
-        let b1 = if x > 0 { s.main(addr.wrapping_sub(1)) } else { 0 };
+        let b1 = if x > 0 {
+            s.main(addr.wrapping_sub(1))
+        } else {
+            0
+        };
         let b2 = s.aux(addr);
         let b3 = s.main(addr);
-        let b4 = if x < 39 { s.aux(addr.wrapping_add(1)) } else { 0 };
-        let dword: u32 =
-            (b1 & 0x70) as u32 | ((b2 & 0x7F) as u32) << 7 | ((b3 & 0x7F) as u32) << 14 | ((b4 & 0x07) as u32) << 21;
+        let b4 = if x < 39 {
+            s.aux(addr.wrapping_add(1))
+        } else {
+            0
+        };
+        let dword: u32 = (b1 & 0x70) as u32
+            | ((b2 & 0x7F) as u32) << 7
+            | ((b3 & 0x7F) as u32) << 14
+            | ((b4 & 0x07) as u32) << 21;
         let draw = |r: &mut Renderer, pixel: usize| {
             let color = (xpixel + pixel) & 3;
             let value = dword >> (4 + pixel - color);
-            r.copy_source(7, SRCOFFS_DHIRES + 10 * ((value >> 8) & 0xFF) as usize + color, (value & 0xFF) as usize, 0);
+            r.copy_source(
+                7,
+                SRCOFFS_DHIRES + 10 * ((value >> 8) & 0xFF) as usize + color,
+                (value & 0xFF) as usize,
+                0,
+            );
         };
         let mut off = 0;
         if update_aux {
@@ -248,16 +304,30 @@ impl Renderer {
     /// the width drawn.
     pub(crate) fn dhires160_cell(&mut self, s: &dyn VideoSource, x: usize, addr: u16) -> isize {
         let xpixel = x * 16;
-        let b1 = if x > 0 { s.main(addr.wrapping_sub(1)) } else { 0 };
+        let b1 = if x > 0 {
+            s.main(addr.wrapping_sub(1))
+        } else {
+            0
+        };
         let b2 = s.aux(addr);
         let b3 = s.main(addr);
-        let b4 = if x < 39 { s.aux(addr.wrapping_add(1)) } else { 0 };
-        let mut dword: u32 = (b1 & 0xF8) as u32 | (b2 as u32) << 8 | (b3 as u32) << 16 | ((b4 & 0x1F) as u32) << 24;
+        let b4 = if x < 39 {
+            s.aux(addr.wrapping_add(1))
+        } else {
+            0
+        };
+        let mut dword: u32 =
+            (b1 & 0xF8) as u32 | (b2 as u32) << 8 | (b3 as u32) << 16 | ((b4 & 0x1F) as u32) << 24;
         dword <<= 2;
         for (pixel, advance) in [(0usize, 7isize), (8, 0)] {
             let color = (xpixel + pixel) & 3;
             let value = dword >> (4 + pixel - color);
-            self.copy_source(7, SRCOFFS_DHIRES + 10 * ((value >> 8) & 0xFF) as usize + color, (value & 0xFF) as usize, 1);
+            self.copy_source(
+                7,
+                SRCOFFS_DHIRES + 10 * ((value >> 8) & 0xFF) as usize + color,
+                (value & 0xFF) as usize,
+                1,
+            );
             self.addr += advance;
         }
         self.addr -= 7;
@@ -265,13 +335,26 @@ impl Renderer {
     }
 
     /// `UpdateDHiResCellRGB` (:749): RGB-card DHGR (140-pixel colour, 560 B&W and the mixed mode).
-    pub(crate) fn dhires_cell_rgb(&mut self, s: &dyn VideoSource, x: usize, addr: u16, mix_mode: bool, invert_bit7: bool) {
+    pub(crate) fn dhires_cell_rgb(
+        &mut self,
+        s: &dyn VideoSource,
+        x: usize,
+        addr: u16,
+        mix_mode: bool,
+        invert_bit7: bool,
+    ) {
         let xoffset = x & 1;
         let addr = addr.wrapping_sub(xoffset as u16);
-        let (mut b1, mut b2, mut b3, mut b4) =
-            (s.aux(addr), s.main(addr), s.aux(addr.wrapping_add(1)), s.main(addr.wrapping_add(1)));
-        let mut dword: u32 =
-            (b1 & 0x7F) as u32 | ((b2 & 0x7F) as u32) << 7 | ((b3 & 0x7F) as u32) << 14 | ((b4 & 0x7F) as u32) << 21;
+        let (mut b1, mut b2, mut b3, mut b4) = (
+            s.aux(addr),
+            s.main(addr),
+            s.aux(addr.wrapping_add(1)),
+            s.main(addr.wrapping_add(1)),
+        );
+        let mut dword: u32 = (b1 & 0x7F) as u32
+            | ((b2 & 0x7F) as u32) << 7
+            | ((b3 & 0x7F) as u32) << 14
+            | ((b4 & 0x7F) as u32) << 21;
         // Seven colour pixels of 4 bits; DHGR colours are rotated one bit.
         let mut colors = [0u32; 7];
         let mut tmp = dword;
@@ -296,14 +379,15 @@ impl Renderer {
             n += 1;
         };
         let st = &mut self.rgb;
-        let bw_cell = |dword: &mut u32, put: &mut dyn FnMut(u32), st: &mut crate::renderer::RgbState| {
-            for _ in 0..7 {
-                st.dhgr_last_bit = *dword & 1;
-                put(bw[st.dhgr_last_bit as usize]);
-                *dword >>= 1;
-            }
-            st.dhgr_last_cell_is_color = false;
-        };
+        let bw_cell =
+            |dword: &mut u32, put: &mut dyn FnMut(u32), st: &mut crate::renderer::RgbState| {
+                for _ in 0..7 {
+                    st.dhgr_last_bit = *dword & 1;
+                    put(bw[st.dhgr_last_bit as usize]);
+                    *dword >>= 1;
+                }
+                st.dhgr_last_cell_is_color = false;
+            };
         let color_or_bw = |b: u8| (b & 0x80 != 0) || !mix_mode;
         if xoffset == 0 {
             if color_or_bw(b1) {
@@ -319,7 +403,11 @@ impl Renderer {
                 bw_cell(&mut dword, &mut put, st);
             }
             if color_or_bw(b2) {
-                put(if st.dhgr_last_cell_is_color { colors[1] } else { bw[st.dhgr_last_bit as usize] });
+                put(if st.dhgr_last_cell_is_color {
+                    colors[1]
+                } else {
+                    bw[st.dhgr_last_bit as usize]
+                });
                 for _ in 0..4 {
                     put(colors[2]);
                 }
@@ -334,7 +422,11 @@ impl Renderer {
             dword >>= 14;
             if color_or_bw(b3) {
                 for _ in 0..2 {
-                    put(if st.dhgr_last_cell_is_color { colors[3] } else { bw[st.dhgr_last_bit as usize] });
+                    put(if st.dhgr_last_cell_is_color {
+                        colors[3]
+                    } else {
+                        bw[st.dhgr_last_bit as usize]
+                    });
                 }
                 for _ in 0..4 {
                     put(colors[4]);
@@ -347,7 +439,11 @@ impl Renderer {
             }
             if color_or_bw(b4) {
                 for _ in 0..3 {
-                    put(if st.dhgr_last_cell_is_color { colors[5] } else { bw[st.dhgr_last_bit as usize] });
+                    put(if st.dhgr_last_cell_is_color {
+                        colors[5]
+                    } else {
+                        bw[st.dhgr_last_bit as usize]
+                    });
                 }
                 for _ in 0..4 {
                     put(colors[6]);
@@ -367,7 +463,13 @@ impl Renderer {
     // ---- Text on RGB cards. ----
 
     /// `UpdateText40ColorCell` (:1070).
-    pub(crate) fn text40_color_cell(&mut self, s: &dyn VideoSource, addr: u16, bits: u8, character: u8) {
+    pub(crate) fn text40_color_cell(
+        &mut self,
+        s: &dyn VideoSource,
+        addr: u16,
+        bits: u8,
+        character: u8,
+    ) {
         let (mut fg, mut bg) = (self.cfg.rgb_text_fg, self.cfg.rgb_text_bg);
         if self.rgb.text_fb {
             let val = s.aux(addr); // RGB cards with F/B text use their own AUX memory
@@ -395,7 +497,10 @@ impl Renderer {
     /// `UpdateDuochromeCell` (:1120): 7 bits as a foreground/background pattern, `h` rows of `w`
     /// dots (`w` = 14 doubles each bit).
     fn duochrome_cell(&mut self, h: usize, w: usize, bits: u8, fg: u8, bg: u8) {
-        let colors = [self.palette[12 + (bg & 15) as usize], self.palette[12 + (fg & 15) as usize]];
+        let colors = [
+            self.palette[12 + (bg & 15) as usize],
+            self.palette[12 + (fg & 15) as usize],
+        ];
         let half = self.half_scanlines();
         let doubled = w == 14;
         let base = self.addr;

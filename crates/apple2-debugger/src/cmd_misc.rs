@@ -17,7 +17,8 @@ impl Debugger {
         if let Ok(b) = self.host.read("DebuggerAutoRun.txt") {
             let text = String::from_utf8_lossy(&b).into_owned();
             self.console.print(&format!("{CHC_INFO}Run script: "));
-            self.console.print(&format!("{CHC_PATH}DebuggerAutoRun.txt"));
+            self.console
+                .print(&format!("{CHC_PATH}DebuggerAutoRun.txt"));
             self.run_script_text(m, &text);
         } else {
             self.run_script_text(m, include_str!("../symbols/DebuggerAutoRun.txt"));
@@ -56,7 +57,8 @@ impl Debugger {
                 self.run_script_text(m, &text);
             }
             Err(_) => {
-                self.console.print(&format!("{CHC_WARNING}Couldn't load script:"));
+                self.console
+                    .print(&format!("{CHC_WARNING}Couldn't load script:"));
                 self.console.print(&format!("{CHC_STRING}{name}"));
             }
         }
@@ -94,11 +96,16 @@ impl Debugger {
         let c = DebugColor::ALL[i];
         if a.n() == 1 {
             let (r, g, b) = self.colors.get(c);
-            self.console.print(&format!(" Color {i:01X}: {r:02X} {g:02X} {b:02X}"));
+            self.console
+                .print(&format!(" Color {i:01X}: {r:02X} {g:02X} {b:02X}"));
             return upd::CONSOLE_DISPLAY;
         }
         if a.n() == 4 {
-            self.colors.set(scheme, c, (a.value(2) as u8, a.value(3) as u8, a.value(4) as u8));
+            self.colors.set(
+                scheme,
+                c,
+                (a.value(2) as u8, a.value(3) as u8, a.value(4) as u8),
+            );
             return upd::ALL;
         }
         self.help_last()
@@ -111,11 +118,19 @@ impl Debugger {
         }
         let onoff = |b: bool| if b { "ON" } else { "OFF" };
         let show = n == 0;
-        let params = ["BRANCH", "CLICK", "COLON", "OPCODE", "POINTER", "SPACES", "TARGET"];
-        let names: Vec<String> = if show { params.iter().map(|s| s.to_string()).collect() } else { vec![a.text(1).to_ascii_uppercase()] };
+        let params = [
+            "BRANCH", "CLICK", "COLON", "OPCODE", "POINTER", "SPACES", "TARGET",
+        ];
+        let names: Vec<String> = if show {
+            params.iter().map(|s| s.to_string()).collect()
+        } else {
+            vec![a.text(1).to_ascii_uppercase()]
+        };
         for name in names {
             // fuzzy: unique prefix
-            let Some(p) = params.iter().find(|p| p.starts_with(name.as_str())) else { return self.help_for(Cmd::ConfigDisasm) };
+            let Some(p) = params.iter().find(|p| p.starts_with(name.as_str())) else {
+                return self.help_for(Cmd::ConfigDisasm);
+            };
             let set = !show && n > 1;
             let v = a.value(2);
             match *p {
@@ -123,36 +138,46 @@ impl Debugger {
                     if set {
                         self.cfg.branch_type = (v as u8).min(2);
                     } else {
-                        self.console.print(&format!("Branch Type: {}", self.cfg.branch_type));
+                        self.console
+                            .print(&format!("Branch Type: {}", self.cfg.branch_type));
                     }
                 }
-                "CLICK" => self.console.print(&format!("Click: {} = Left click", if set { v & 7 } else { 4 })),
+                "CLICK" => self.console.print(&format!(
+                    "Click: {} = Left click",
+                    if set { v & 7 } else { 4 }
+                )),
                 "COLON" => {
                     if set {
                         self.cfg.address_colon = v != 0;
                     } else {
-                        self.console.print(&format!("Colon: {}", onoff(self.cfg.address_colon)));
+                        self.console
+                            .print(&format!("Colon: {}", onoff(self.cfg.address_colon)));
                     }
                 }
                 "OPCODE" => {
                     if set {
                         self.cfg.opcodes_view = v != 0;
                     } else {
-                        self.console.print(&format!("Opcodes: {}", onoff(self.cfg.opcodes_view)));
+                        self.console
+                            .print(&format!("Opcodes: {}", onoff(self.cfg.opcodes_view)));
                     }
                 }
                 "POINTER" => {
                     if set {
                         self.info_target_pointer = v != 0;
                     } else {
-                        self.console.print(&format!("Info Target Pointer: {}", onoff(self.info_target_pointer)));
+                        self.console.print(&format!(
+                            "Info Target Pointer: {}",
+                            onoff(self.info_target_pointer)
+                        ));
                     }
                 }
                 "SPACES" => {
                     if set {
                         self.cfg.opcode_spaces = v != 0;
                     } else {
-                        self.console.print(&format!("Opcode spaces: {}", onoff(self.cfg.opcode_spaces)));
+                        self.console
+                            .print(&format!("Opcode spaces: {}", onoff(self.cfg.opcode_spaces)));
                     }
                 }
                 _ => {
@@ -192,7 +217,11 @@ impl Debugger {
 
     pub(crate) fn cmd_config_save(&mut self, _m: &mut Machine, a: &Args) -> Update {
         let text = self.config_script();
-        let name = if a.n() > 0 { a.text(1).to_string() } else { "Debugger.cfg".to_string() };
+        let name = if a.n() > 0 {
+            a.text(1).to_string()
+        } else {
+            "Debugger.cfg".to_string()
+        };
         match self.host.write(&name, text.as_bytes()) {
             Ok(()) => self.console.print(&format!("Saved: {name}")),
             Err(e) => self.console.error(&format!("Error saving config: {e}")),
@@ -201,7 +230,11 @@ impl Debugger {
     }
 
     pub(crate) fn cmd_config_load(&mut self, m: &mut Machine, a: &Args) -> Update {
-        let name = if a.n() > 0 { a.text(1).to_string() } else { "Debugger.cfg".to_string() };
+        let name = if a.n() > 0 {
+            a.text(1).to_string()
+        } else {
+            "Debugger.cfg".to_string()
+        };
         match self.host.read(&name) {
             Ok(b) => {
                 let t = String::from_utf8_lossy(&b).into_owned();
@@ -280,7 +313,16 @@ impl Debugger {
     }
 
     pub(crate) fn cmd_log(&mut self, a: &Args) -> Update {
-        let names = [("NONE", OutputLevel::None), ("ERROR", OutputLevel::Error), ("WARN", OutputLevel::Warn), ("INFO", OutputLevel::Info), ("DEFAULT", OutputLevel::Default), ("ALL", OutputLevel::All), ("OFF", OutputLevel::None), ("ON", OutputLevel::All)];
+        let names = [
+            ("NONE", OutputLevel::None),
+            ("ERROR", OutputLevel::Error),
+            ("WARN", OutputLevel::Warn),
+            ("INFO", OutputLevel::Info),
+            ("DEFAULT", OutputLevel::Default),
+            ("ALL", OutputLevel::All),
+            ("OFF", OutputLevel::None),
+            ("ON", OutputLevel::All),
+        ];
         if a.n() > 1 {
             return self.help_for(Cmd::OutputLog);
         }
@@ -294,8 +336,14 @@ impl Debugger {
                 }
             }
         }
-        let cur = names.iter().find(|(_, l)| *l == self.console.level).map(|x| x.0).unwrap_or("?");
-        self.console.print(&format!("{CHC_INFO}Verbosity level set to {CHC_COMMAND}{cur}"));
+        let cur = names
+            .iter()
+            .find(|(_, l)| *l == self.console.level)
+            .map(|x| x.0)
+            .unwrap_or("?");
+        self.console.print(&format!(
+            "{CHC_INFO}Verbosity level set to {CHC_COMMAND}{cur}"
+        ));
         upd::CONSOLE_DISPLAY
     }
 
@@ -327,7 +375,10 @@ impl Debugger {
         if a.n() == 0 {
             return self.help_for(Cmd::OutputPrintf);
         }
-        let values: Vec<u16> = (1..=a.n()).filter(|i| a.cooked[*i].kind != Kind::Quoted2 && !a.cooked[*i].is_op(",")).map(|i| a.value(i)).collect();
+        let values: Vec<u16> = (1..=a.n())
+            .filter(|i| a.cooked[*i].kind != Kind::Quoted2 && !a.cooked[*i].is_op(","))
+            .map(|i| a.value(i))
+            .collect();
         let mut out = String::new();
         let mut iv = 0usize;
         let mut i = 1;
@@ -349,7 +400,8 @@ impl Debugger {
                         }
                         _ => {
                             if iv >= values.len() {
-                                self.console.print(&format!("Error: Missing value arg: {}", iv + 1));
+                                self.console
+                                    .print(&format!("Error: Missing value arg: {}", iv + 1));
                                 return upd::CONSOLE_DISPLAY;
                             }
                             match c {
@@ -363,7 +415,11 @@ impl Debugger {
                                 }
                                 'z' | 'Z' => {
                                     for b in (0..8).rev() {
-                                        out.push(if (values[iv] >> b) & 1 != 0 { '1' } else { '0' });
+                                        out.push(if (values[iv] >> b) & 1 != 0 {
+                                            '1'
+                                        } else {
+                                            '0'
+                                        });
                                     }
                                     iv += 1;
                                 }
@@ -493,7 +549,8 @@ impl Debugger {
 
     pub(crate) fn cmd_motd(&mut self, m: &mut Machine) -> Update {
         let _ = m;
-        self.console.print("`9 Apple ][ ][+ //e `7Emulator`9 (Rust)");
+        self.console
+            .print("`9 Apple ][ ][+ //e `7Emulator`9 (Rust)");
         self.cmd_version();
         self.cmd_symbols_info(&Args::default(), None);
         self.console.print(&format!(

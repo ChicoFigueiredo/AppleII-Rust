@@ -25,7 +25,9 @@ fn prodos_hdv() -> DiskImage {
 #[test]
 fn prodos_boots_from_the_hard_disk_card_in_smartport_mode() {
     let mut m = hdd_machine(Model::Apple2eEnhanced, HdcMode::Default, prodos_hdv());
-    let frames = run_until(&mut m, 900, "ProDOS on S7,D1", |m| screen_has(m, "S7,D1:/PRODOS.2.4.3"));
+    let frames = run_until(&mut m, 900, "ProDOS on S7,D1", |m| {
+        screen_has(m, "S7,D1:/PRODOS.2.4.3")
+    });
     println!("HDD boot: {frames} frames");
     assert!(screen_has(&m, "BITSY"));
 }
@@ -33,7 +35,9 @@ fn prodos_boots_from_the_hard_disk_card_in_smartport_mode() {
 #[test]
 fn prodos_boots_from_the_hard_disk_card_in_block_mode_on_a_plain_iie() {
     let mut m = hdd_machine(Model::Apple2e, HdcMode::Default, prodos_hdv());
-    run_until(&mut m, 900, "ProDOS on S7,D1 (block mode)", |m| screen_has(m, "S7,D1:/PRODOS.2.4.3"));
+    run_until(&mut m, 900, "ProDOS on S7,D1 (block mode)", |m| {
+        screen_has(m, "S7,D1:/PRODOS.2.4.3")
+    });
 }
 
 fn setup_machine() -> Machine {
@@ -74,20 +78,31 @@ fn block_read_dmas_the_block_and_reports_busy_while_it_runs() {
     assert_eq!(st & 0x01, 0, "no error");
     assert_eq!(st & 0x80, 0x80, "busy during the DMA");
     assert_eq!(m.board_mut().read(reg(1)) & 0x80, 0x80);
-    assert_eq!(m.card::<HardDiskCard>(7).unwrap().light_status(0), DiskStatus::Read);
+    assert_eq!(
+        m.card::<HardDiskCard>(7).unwrap().light_status(0),
+        DiskStatus::Read
+    );
     m.run_cycles(600);
     assert_eq!(m.board_mut().read(reg(1)), 0, "idle again, no error");
     let got: Vec<u8> = (0..512).map(|i| m.peek(0x4000 + i)).collect();
     assert_eq!(got, &img[1024..1536]);
     // Size in blocks: 280.
-    assert_eq!((m.board_mut().read(reg(9)), m.board_mut().read(reg(10))), (0x18, 0x01));
-    assert_eq!(m.card::<HardDiskCard>(7).unwrap().light_status(0), DiskStatus::Off);
+    assert_eq!(
+        (m.board_mut().read(reg(9)), m.board_mut().read(reg(10))),
+        (0x18, 0x01)
+    );
+    assert_eq!(
+        m.card::<HardDiskCard>(7).unwrap().light_status(0),
+        DiskStatus::Off
+    );
 }
 
 #[test]
 fn block_write_updates_the_image_and_the_store() {
     let store = MemStore::new(disk("ProDOS_2_4_3.po"));
-    let image = DiskImage::hard_disk_from_bytes("ProDOS.hdv", disk("ProDOS_2_4_3.po")).unwrap().with_store(Box::new(store.clone()));
+    let image = DiskImage::hard_disk_from_bytes("ProDOS.hdv", disk("ProDOS_2_4_3.po"))
+        .unwrap()
+        .with_store(Box::new(store.clone()));
     let mut m = setup_machine();
     m.card_mut::<HardDiskCard>(7).unwrap().insert(0, image);
     for i in 0..512u16 {
@@ -101,7 +116,10 @@ fn block_write_updates_the_image_and_the_store() {
     // Reading it back through the card gives the same.
     blk(&mut m, 1, 0x70, 0x7000, 5);
     m.run_cycles(600);
-    assert_eq!((0..512u16).map(|i| m.peek(0x7000 + i)).collect::<Vec<_>>(), want);
+    assert_eq!(
+        (0..512u16).map(|i| m.peek(0x7000 + i)).collect::<Vec<_>>(),
+        want
+    );
 }
 
 #[test]
@@ -116,7 +134,11 @@ fn errors_unknown_unit_write_protect_and_bad_destinations() {
     // Block past the end of the image.
     let st = blk(&mut m, 1, 0x70, 0x4000, 400);
     assert_eq!(st >> 1 & 0x3F, 0x27);
-    m.card_mut::<HardDiskCard>(7).unwrap().image_mut(0).unwrap().set_write_protected(true);
+    m.card_mut::<HardDiskCard>(7)
+        .unwrap()
+        .image_mut(0)
+        .unwrap()
+        .set_write_protected(true);
     let st = blk(&mut m, 2, 0x70, 0x4000, 1);
     assert_eq!(st >> 1 & 0x3F, 0x2B, "write-protected");
 }
@@ -141,7 +163,15 @@ fn smartport_status_reports_the_devices() {
     b(&mut m, 5, 0x51);
     b(&mut m, 6, 0);
     m.board_mut().read(reg(0));
-    assert_eq!([m.peek(0x5100), m.peek(0x5101), m.peek(0x5102), m.peek(0x5103)], [0xF8, 0x18, 0x01, 0x00]);
+    assert_eq!(
+        [
+            m.peek(0x5100),
+            m.peek(0x5101),
+            m.peek(0x5102),
+            m.peek(0x5103)
+        ],
+        [0xF8, 0x18, 0x01, 0x00]
+    );
     // Device information block carries the ID string.
     b(&mut m, 2, 0x80);
     b(&mut m, 3, 1);

@@ -22,9 +22,16 @@ pub const MAP: Mapping = Mapping {
     load,
 };
 
-fn load(ctx: &mut LoadCtx, slot: u8, version: u32, _st: Map) -> Result<Option<Box<dyn Card>>, Error> {
+fn load(
+    ctx: &mut LoadCtx,
+    slot: u8,
+    version: u32,
+    _st: Map,
+) -> Result<Option<Box<dyn Card>>, Error> {
     if !(1..=VERSION).contains(&version) {
-        return Err(Error::Format(format!("Version {version} is not supported for card 'Breakpoint'.")));
+        return Err(Error::Format(format!(
+            "Version {version} is not supported for card 'Breakpoint'."
+        )));
     }
     Ok(make(ctx, "Breakpoint", slot))
 }

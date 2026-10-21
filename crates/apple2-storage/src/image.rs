@@ -89,9 +89,16 @@ impl fmt::Display for ImageError {
             ImageError::BadSize => write!(f, "the disk image is an unsupported size"),
             ImageError::BadFile => write!(f, "the OS can't access the file"),
             ImageError::Unsupported => write!(f, "the disk image format is not recognized"),
-            ImageError::UnsupportedHdv => write!(f, "this UniDisk 3.5/Apple IIGS/hard-disk image is not supported in a floppy drive"),
-            ImageError::Gz | ImageError::Zip => write!(f, "the compressed disk image is corrupt/unsupported"),
-            ImageError::ZeroLengthWriteProtected => write!(f, "unsupported zero-length write-protected file"),
+            ImageError::UnsupportedHdv => write!(
+                f,
+                "this UniDisk 3.5/Apple IIGS/hard-disk image is not supported in a floppy drive"
+            ),
+            ImageError::Gz | ImageError::Zip => {
+                write!(f, "the compressed disk image is corrupt/unsupported")
+            }
+            ImageError::ZeroLengthWriteProtected => {
+                write!(f, "unsupported zero-length write-protected file")
+            }
             ImageError::Io(e) => write!(f, "{e}"),
         }
     }
@@ -127,12 +134,20 @@ impl Class {
 /// Lower-cased extension with its dot, the way `GetCharLowerExt` finds it.
 fn lower_ext(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
-    base.rfind('.').map_or(base, |i| &base[i..]).to_ascii_lowercase()
+    base.rfind('.')
+        .map_or(base, |i| &base[i..])
+        .to_ascii_lowercase()
 }
 
 /// `GetImageTitle`: (image name without extension, full name).
 pub fn image_title(path: &str) -> (String, String) {
-    let base: String = path.rsplit(['/', '\\']).next().unwrap_or(path).chars().take(127).collect();
+    let base: String = path
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(path)
+        .chars()
+        .take(127)
+        .collect();
     let full = if !base.chars().any(char::is_lowercase) && base.chars().count() > 2 {
         let mut it = base.chars();
         it.next().map(String::from).unwrap_or_default() + &it.as_str().to_lowercase()
@@ -195,14 +210,20 @@ fn detect_order(image: &[u8], prodos_order: bool) -> Det {
         if (1..=15usize).all(|l| image[0x11002 + (l << 8)] as usize == l - 1) {
             return Det::Match;
         }
-        if (2..=5usize).all(|l| w((l << 9) + 0x100) as usize == if l == 5 { 0 } else { 6 - l } && w((l << 9) + 0x102) as usize == if l == 2 { 0 } else { 8 - l }) {
+        if (2..=5usize).all(|l| {
+            w((l << 9) + 0x100) as usize == if l == 5 { 0 } else { 6 - l }
+                && w((l << 9) + 0x102) as usize == if l == 2 { 0 } else { 8 - l }
+        }) {
             return Det::Match;
         }
     } else {
         if (5..=13usize).all(|l| image[0x11002 + (l << 8)] as usize == 14 - l) {
             return Det::Match;
         }
-        if (2..=5usize).all(|l| w(l << 9) as usize == if l == 2 { 0 } else { l - 1 } && w((l << 9) + 2) as usize == if l == 5 { 0 } else { l + 1 }) {
+        if (2..=5usize).all(|l| {
+            w(l << 9) as usize == if l == 2 { 0 } else { l - 1 }
+                && w((l << 9) + 2) as usize == if l == 5 { 0 } else { l + 1 }
+        }) {
             return Det::Match;
         }
     }
@@ -223,7 +244,13 @@ struct Wrap {
 
 /// `CMacBinaryHelper::DetectHdr` (:1419).
 fn skip_macbinary(image: &[u8], w: &mut Wrap) {
-    if w.size > MACBINARY_HDR_SIZE && image[w.offset] == 0 && image[w.offset + 1] < 120 && image[w.offset + image[w.offset + 1] as usize + 2] == 0 && image[w.offset + 0x7A] == 0x81 && image[w.offset + 0x7B] == 0x81 {
+    if w.size > MACBINARY_HDR_SIZE
+        && image[w.offset] == 0
+        && image[w.offset + 1] < 120
+        && image[w.offset + image[w.offset + 1] as usize + 2] == 0
+        && image[w.offset + 0x7A] == 0x81
+        && image[w.offset + 0x7B] == 0x81
+    {
         w.offset += MACBINARY_HDR_SIZE;
         w.size -= MACBINARY_HDR_SIZE;
     }
@@ -249,8 +276,14 @@ fn detect_2img(image: &[u8], w: &mut Wrap, floppy: bool) {
     let ok = match format {
         0 => data_len >= TRACKS_STANDARD as usize * TRACK_DENIBBLIZED_SIZE,
         1 => {
-            w.size = if data_len != 0 { data_len } else { blocks * HD_BLOCK_SIZE };
-            !floppy || (w.size >= TRACKS_STANDARD as usize * TRACK_DENIBBLIZED_SIZE && w.size <= TRACKS_MAX as usize * TRACK_DENIBBLIZED_SIZE)
+            w.size = if data_len != 0 {
+                data_len
+            } else {
+                blocks * HD_BLOCK_SIZE
+            };
+            !floppy
+                || (w.size >= TRACKS_STANDARD as usize * TRACK_DENIBBLIZED_SIZE
+                    && w.size <= TRACKS_MAX as usize * TRACK_DENIBBLIZED_SIZE)
         }
         2 => data_len == TRACKS_STANDARD as usize * NIBBLES_PER_TRACK_NIB,
         _ => false,
@@ -259,18 +292,40 @@ fn detect_2img(image: &[u8], w: &mut Wrap, floppy: bool) {
         w.two_img = true;
         w.format = format;
         w.locked = flags & 0x8000_0000 != 0;
-        w.volume = if format == 0 && flags & 0x100 != 0 { flags as u8 } else { DEFAULT_VOLUME_NUMBER };
+        w.volume = if format == 0 && flags & 0x100 != 0 {
+            flags as u8
+        } else {
+            DEFAULT_VOLUME_NUMBER
+        };
     }
 }
 
 fn detect_floppy(image: &[u8], ext: &str) -> Option<Detected> {
-    let mut w = Wrap { offset: 0, size: image.len(), two_img: false, volume: DEFAULT_VOLUME_NUMBER, locked: false, format: 3 };
+    let mut w = Wrap {
+        offset: 0,
+        size: image.len(),
+        two_img: false,
+        volume: DEFAULT_VOLUME_NUMBER,
+        locked: false,
+        format: 3,
+    };
     skip_macbinary(image, &mut w);
     detect_2img(image, &mut w, true);
     let body = &image[w.offset.min(image.len())..];
     let body = &body[..w.size.min(body.len())];
 
-    let order = [ImageKind::Woz1, ImageKind::Woz2, ImageKind::Do, ImageKind::Po, ImageKind::Nib1, ImageKind::Nib2, ImageKind::Hdv, ImageKind::Iie, ImageKind::Apl, ImageKind::Prg];
+    let order = [
+        ImageKind::Woz1,
+        ImageKind::Woz2,
+        ImageKind::Do,
+        ImageKind::Po,
+        ImageKind::Nib1,
+        ImageKind::Nib2,
+        ImageKind::Hdv,
+        ImageKind::Iie,
+        ImageKind::Apl,
+        ImageKind::Prg,
+    ];
     let mut found: Option<(ImageKind, u32)> = None;
     let mut possible: Option<(ImageKind, u32)> = None;
 
@@ -306,7 +361,16 @@ fn detect_floppy(image: &[u8], ext: &str) -> Option<Detected> {
         }
     }
     let (kind, mut num_tracks) = found.or(possible)?;
-    let mut d = Detected { kind, offset: w.offset, size: w.size, num_tracks, volume: DEFAULT_VOLUME_NUMBER, locked: false, sim_order: [0; 16], woz: None };
+    let mut d = Detected {
+        kind,
+        offset: w.offset,
+        size: w.size,
+        num_tracks,
+        volume: DEFAULT_VOLUME_NUMBER,
+        locked: false,
+        sim_order: [0; 16],
+        woz: None,
+    };
     if kind.is_woz() {
         // CRC is advisory (a mismatch asks the user in AppleWin); trust the content.
         d.woz = Some(woz::process_chunks(image)?);
@@ -337,7 +401,11 @@ fn detect_kind(kind: ImageKind, image: &[u8], ext: &str) -> (Det, u32) {
     let size = image.len();
     match kind {
         ImageKind::Woz1 | ImageKind::Woz2 => {
-            let id: &[u8; 4] = if kind == ImageKind::Woz1 { woz::ID1_WOZ1 } else { woz::ID1_WOZ2 };
+            let id: &[u8; 4] = if kind == ImageKind::Woz1 {
+                woz::ID1_WOZ1
+            } else {
+                woz::ID1_WOZ2
+            };
             if size >= 12 && &image[0..4] == id && image[4..8] == woz::ID2 {
                 (Det::Match, woz::MAX_TRACKS_5_25)
             } else {
@@ -350,7 +418,10 @@ fn detect_kind(kind: ImageKind, image: &[u8], ext: &str) -> (Det, u32) {
         },
         ImageKind::Nib1 => {
             const T: usize = NIBBLES_PER_TRACK_NIB;
-            if size < T * TRACKS_STANDARD as usize || !size.is_multiple_of(T) || size > T * TRACKS_MAX as usize {
+            if size < T * TRACKS_STANDARD as usize
+                || !size.is_multiple_of(T)
+                || size > T * TRACKS_MAX as usize
+            {
                 (Det::Mismatch, 0)
             } else {
                 (Det::Match, (size / T) as u32)
@@ -386,13 +457,27 @@ fn detect_kind(kind: ImageKind, image: &[u8], ext: &str) -> (Det, u32) {
             let ok = len + 4 == size || len + 4 + ((256 - ((len + 4) & 255)) & 255) == size;
             (if ok { Det::Possible } else { Det::Mismatch }, 0)
         }
-        ImageKind::Prg => (if size >= 4 && image[0..4] == [0x0A, 0x47, 0x4C, 0x21] { Det::Match } else { Det::Mismatch }, 0),
+        ImageKind::Prg => (
+            if size >= 4 && image[0..4] == [0x0A, 0x47, 0x4C, 0x21] {
+                Det::Match
+            } else {
+                Det::Mismatch
+            },
+            0,
+        ),
     }
 }
 
 /// Detection for a hard disk: HDV only (`CHardDiskImageHelper::Detect`, :2207).
 fn detect_hard_disk(image: &[u8], ext: &str) -> Option<Detected> {
-    let mut w = Wrap { offset: 0, size: image.len(), two_img: false, volume: DEFAULT_VOLUME_NUMBER, locked: false, format: 3 };
+    let mut w = Wrap {
+        offset: 0,
+        size: image.len(),
+        two_img: false,
+        volume: DEFAULT_VOLUME_NUMBER,
+        locked: false,
+        format: 3,
+    };
     detect_2img(image, &mut w, false);
     let body = &image[w.offset.min(image.len())..];
     let body = &body[..w.size.min(body.len())];
@@ -445,15 +530,27 @@ fn woz_empty_track() -> Vec<u8> {
         x ^= x << 5;
         x
     };
-    (0..woz::EMPTY_TRACK_SIZE).map(|_| (0..8).fold(0u8, |n, j| if next() % 10 < 3 { n | 1 << j } else { n })).collect()
+    (0..woz::EMPTY_TRACK_SIZE)
+        .map(|_| (0..8).fold(0u8, |n, j| if next() % 10 < 3 { n | 1 << j } else { n }))
+        .collect()
 }
 
 impl DiskImage {
-    fn from_detected(d: Detected, data: Vec<u8>, container: Container, pathname: &str, class: Class) -> Self {
+    fn from_detected(
+        d: Detected,
+        data: Vec<u8>,
+        container: Container,
+        pathname: &str,
+        class: Class,
+    ) -> Self {
         let woz = d.woz;
         DiskImage {
             kind: d.kind,
-            max_nibbles_per_track: if class == Class::HardDisk { 0 } else { woz.map_or(NIBBLES_PER_TRACK, |l| l.max_nibbles_per_track) },
+            max_nibbles_per_track: if class == Class::HardDisk {
+                0
+            } else {
+                woz.map_or(NIBBLES_PER_TRACK, |l| l.max_nibbles_per_track)
+            },
             write_protected: d.locked || woz.is_some_and(|l| l.write_protected),
             data,
             offset: d.offset,
@@ -466,7 +563,11 @@ impl DiskImage {
             woz,
             sim_order: d.sim_order,
             num_valid_images_in_zip: 0,
-            woz_empty_track: if d.kind.is_woz() { woz_empty_track() } else { Vec::new() },
+            woz_empty_track: if d.kind.is_woz() {
+                woz_empty_track()
+            } else {
+                Vec::new()
+            },
             io_error: None,
         }
     }
@@ -525,8 +626,12 @@ impl DiskImage {
     pub fn blank(class: Class, name: &str) -> Result<Self, ImageError> {
         let ext = lower_ext(name);
         let data = match (class, ext.as_str()) {
-            (Class::Floppy, ".do" | ".dsk") => vec![0u8; TRACKS_STANDARD as usize * TRACK_DENIBBLIZED_SIZE],
-            (Class::Floppy, ".nib") => (0..TRACKS_STANDARD as usize * NIBBLES_PER_TRACK_NIB).map(|i| 0x80 | (i & 1) as u8).collect(),
+            (Class::Floppy, ".do" | ".dsk") => {
+                vec![0u8; TRACKS_STANDARD as usize * TRACK_DENIBBLIZED_SIZE]
+            }
+            (Class::Floppy, ".nib") => (0..TRACKS_STANDARD as usize * NIBBLES_PER_TRACK_NIB)
+                .map(|i| 0x80 | (i & 1) as u8)
+                .collect(),
             (Class::Floppy, ".woz") => woz::create_empty_woz2(),
             _ => return Err(ImageError::Unsupported),
         };
@@ -536,7 +641,10 @@ impl DiskImage {
 
     fn open_gz(class: Class, name: &str, bytes: &[u8]) -> Result<Self, ImageError> {
         let mut data = Vec::new();
-        flate2::read::GzDecoder::new(bytes).take(class.max_image_size() as u64 + 1).read_to_end(&mut data).map_err(|_| ImageError::Gz)?;
+        flate2::read::GzDecoder::new(bytes)
+            .take(class.max_image_size() as u64 + 1)
+            .read_to_end(&mut data)
+            .map_err(|_| ImageError::Gz)?;
         if data.is_empty() || data.len() > class.max_image_size() {
             return Err(ImageError::BadSize);
         }
@@ -549,7 +657,8 @@ impl DiskImage {
     }
 
     fn open_zip(class: Class, name: &str, bytes: &[u8]) -> Result<Self, ImageError> {
-        let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes)).map_err(|_| ImageError::Zip)?;
+        let mut archive =
+            zip::ZipArchive::new(io::Cursor::new(bytes)).map_err(|_| ImageError::Zip)?;
         let entries = archive.len();
         let mut first: Option<(Detected, Vec<u8>, String)> = None;
         let mut valid = 0;
@@ -563,7 +672,8 @@ impl DiskImage {
             }
             let entry = f.name().to_string();
             let mut data = Vec::with_capacity(f.size() as usize);
-            f.read_to_end(&mut data).map_err(|_| ImageError::Unsupported)?;
+            f.read_to_end(&mut data)
+                .map_err(|_| ImageError::Unsupported)?;
             if let Some(d) = Self::detect(class, &data, &lower_ext(&entry)) {
                 valid += 1;
                 if first.is_none() {
@@ -586,7 +696,11 @@ impl DiskImage {
     /// Reads and opens a file. Write-back goes to the file unless it is read-only (then the image
     /// is write-protected) or `force_write_protected`. A zero-length file is initialised as a
     /// blank image of the type its extension names.
-    pub fn open_path(path: &Path, class: Class, force_write_protected: bool) -> Result<DiskImage, ImageError> {
+    pub fn open_path(
+        path: &Path,
+        class: Class,
+        force_write_protected: bool,
+    ) -> Result<DiskImage, ImageError> {
         let name = path.to_string_lossy().to_string();
         let meta = std::fs::metadata(path).map_err(ImageError::Io)?;
         let readonly = force_write_protected || meta.permissions().readonly();
@@ -657,12 +771,14 @@ impl DiskImage {
 
     /// WOZ bit-cell time in 125ns units (32 = 4us); 32 for every other format.
     pub fn optimal_bit_timing(&self) -> u8 {
-        self.woz.map_or(woz::OPTIMAL_BIT_TIMING_5_25, |l| l.optimal_bit_timing)
+        self.woz
+            .map_or(woz::OPTIMAL_BIT_TIMING_5_25, |l| l.optimal_bit_timing)
     }
 
     /// WOZ INFO says the boot sector is 13-sector only (`ImageIsBootSectorFormatSector13`).
     pub fn boot_sector_is_13(&self) -> bool {
-        self.woz.is_some_and(|l| l.boot_sector_format == woz::BOOT_SECTOR_13)
+        self.woz
+            .is_some_and(|l| l.boot_sector_format == woz::BOOT_SECTOR_13)
     }
 
     /// APL/PRG "zero tracks" are valid (`ImageIsZeroTracksValidForThisType`).
@@ -741,9 +857,15 @@ impl DiskImage {
         let track = Self::phase_to_track(phase) as usize;
         match self.kind {
             ImageKind::Do | ImageKind::Po => {
-                let order = if self.kind == ImageKind::Do { &DOS_ORDER } else { &PRODOS_ORDER };
+                let order = if self.kind == ImageKind::Do {
+                    &DOS_ORDER
+                } else {
+                    &PRODOS_ORDER
+                };
                 let start = self.offset + track * TRACK_DENIBBLIZED_SIZE;
-                let Some(src) = self.data.get(start..start + TRACK_DENIBBLIZED_SIZE) else { return (0, 0) };
+                let Some(src) = self.data.get(start..start + TRACK_DENIBBLIZED_SIZE) else {
+                    return (0, 0);
+                };
                 let n = nibblize_track(src, order, self.volume, track as u8, buf);
                 if !enhance {
                     skew_track(track as u8, &mut buf[..n]);
@@ -751,7 +873,11 @@ impl DiskImage {
                 (n, 0)
             }
             ImageKind::Nib1 | ImageKind::Nib2 => {
-                let size = if self.kind == ImageKind::Nib1 { NIBBLES_PER_TRACK_NIB } else { 6384 };
+                let size = if self.kind == ImageKind::Nib1 {
+                    NIBBLES_PER_TRACK_NIB
+                } else {
+                    6384
+                };
                 let start = self.offset + track * size;
                 match self.data.get(start..start + size) {
                     Some(src) => {
@@ -790,10 +916,16 @@ impl DiskImage {
             if start < d.len() {
                 work[..avail].copy_from_slice(&d[start..start + avail]);
             }
-            (nibblize_track(&work, &self.sim_order, self.volume, track as u8, buf), 0)
+            (
+                nibblize_track(&work, &self.sim_order, self.volume, track as u8, buf),
+                0,
+            )
         } else {
             let n = u16le(d, track * 2 + 14) as usize;
-            let off = 88 + (0..track).map(|t| u16le(d, t * 2 + 14) as usize).sum::<usize>();
+            let off = 88
+                + (0..track)
+                    .map(|t| u16le(d, t * 2 + 14) as usize)
+                    .sum::<usize>();
             buf[..n].fill(0);
             if let Some(src) = d.get(off..off + n) {
                 buf[..n].copy_from_slice(src);
@@ -814,15 +946,24 @@ impl DiskImage {
         }
         if self.kind == ImageKind::Woz1 {
             let start = self.offset + idx as usize * woz::WOZ1_TRACK_SIZE;
-            let Some(src) = self.data.get(start..start + woz::WOZ1_TRACK_SIZE) else { return empty(buf) };
+            let Some(src) = self.data.get(start..start + woz::WOZ1_TRACK_SIZE) else {
+                return empty(buf);
+            };
             buf[..woz::WOZ1_TRACK_SIZE].copy_from_slice(src);
             let t = woz::WOZ1_TRK_OFFSET;
             (u16le(src, t) as usize, u16le(src, t + 2) as u32) // bytesUsed, bitCount
         } else {
-            let Some((start, _blocks, bits)) = woz::trk2(&self.data, &l, idx as usize) else { return empty(buf) };
+            let Some((start, _blocks, bits)) = woz::trk2(&self.data, &l, idx as usize) else {
+                return empty(buf);
+            };
             let nibbles = (bits as usize).div_ceil(8);
             let start = start as usize * woz::BLOCK_SIZE;
-            if nibbles > self.max_nibbles_per_track.max(NIBBLES_PER_TRACK).min(buf.len()) {
+            if nibbles
+                > self
+                    .max_nibbles_per_track
+                    .max(NIBBLES_PER_TRACK)
+                    .min(buf.len())
+            {
                 return empty(buf); // more than the largest track the INFO chunk announced
             }
             match self.data.get(start..start + nibbles) {
@@ -845,13 +986,21 @@ impl DiskImage {
         let track = Self::phase_to_track(phase) as usize;
         match self.kind {
             ImageKind::Do | ImageKind::Po => {
-                let order = if self.kind == ImageKind::Do { &DOS_ORDER } else { &PRODOS_ORDER };
+                let order = if self.kind == ImageKind::Do {
+                    &DOS_ORDER
+                } else {
+                    &PRODOS_ORDER
+                };
                 let work = denibblize_track(&buf[..nibbles], order);
                 let start = self.offset + track * TRACK_DENIBBLIZED_SIZE;
                 self.write_data(start, &work);
             }
             ImageKind::Nib1 | ImageKind::Nib2 => {
-                let size = if self.kind == ImageKind::Nib1 { NIBBLES_PER_TRACK_NIB } else { 6384 };
+                let size = if self.kind == ImageKind::Nib1 {
+                    NIBBLES_PER_TRACK_NIB
+                } else {
+                    6384
+                };
                 if nibbles == size {
                     let start = self.offset + track * size;
                     self.write_data(start, &buf[..size]);
@@ -865,7 +1014,9 @@ impl DiskImage {
 
     /// Copies `bytes` into the image at absolute `start` and persists them.
     fn write_data(&mut self, start: usize, bytes: &[u8]) -> bool {
-        let Some(dst) = self.data.get_mut(start..start + bytes.len()) else { return false };
+        let Some(dst) = self.data.get_mut(start..start + bytes.len()) else {
+            return false;
+        };
         dst.copy_from_slice(bytes);
         self.persist(start..start + bytes.len());
         true
@@ -877,12 +1028,16 @@ impl DiskImage {
             (_, None) => return,
             (Container::Plain, Some(s)) => s.write_at(range.start as u64, &self.data[range]),
             (Container::Gz, Some(s)) => {
-                let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-                enc.write_all(&self.data).and_then(|_| enc.finish()).and_then(|z| s.replace_all(&z))
+                let mut enc =
+                    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+                enc.write_all(&self.data)
+                    .and_then(|_| enc.finish())
+                    .and_then(|z| s.replace_all(&z))
             }
             (Container::Zip { name }, Some(s)) => {
                 let mut w = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
-                let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+                let opts = zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated);
                 w.start_file(name.as_str(), opts)
                     .map_err(io::Error::other)
                     .and_then(|_| w.write_all(&self.data))
@@ -909,7 +1064,11 @@ impl DiskImage {
     }
 
     fn next_free_index(&self, l: &WozLayout) -> u8 {
-        self.data[l.tmap..l.tmap + woz::MAX_QUARTER_TRACKS_5_25].iter().filter(|&&b| b != woz::TMAP_TRACK_EMPTY).max().map_or(0, |m| m + 1)
+        self.data[l.tmap..l.tmap + woz::MAX_QUARTER_TRACKS_5_25]
+            .iter()
+            .filter(|&&b| b != woz::TMAP_TRACK_EMPTY)
+            .max()
+            .map_or(0, |m| m + 1)
     }
 
     /// Grows the TRKS chunk by `len` zero bytes (inserted at its end, before any trailing chunk)
@@ -952,7 +1111,9 @@ impl DiskImage {
             let t = woz::WOZ1_TRK_OFFSET;
             block[t..t + 2].copy_from_slice(&(nibbles as u16).to_le_bytes());
             block[t + 2..t + 4].copy_from_slice(&((nibbles * 8) as u16).to_le_bytes());
-            let Some(new_start) = self.grow_trks(&l, woz::WOZ1_TRACK_SIZE) else { return };
+            let Some(new_start) = self.grow_trks(&l, woz::WOZ1_TRACK_SIZE) else {
+                return;
+            };
             // The new track is appended after the existing ones: index == number of tracks.
             let expect = l.trks + idx as usize * woz::WOZ1_TRACK_SIZE;
             if new_start != expect {
@@ -962,7 +1123,9 @@ impl DiskImage {
             grew = true;
         }
         let start = l.trks + idx as usize * woz::WOZ1_TRACK_SIZE;
-        let Some(dst) = self.data.get_mut(start..start + woz::WOZ1_TRACK_SIZE) else { return };
+        let Some(dst) = self.data.get_mut(start..start + woz::WOZ1_TRACK_SIZE) else {
+            return;
+        };
         dst.copy_from_slice(&block);
         self.woz_finish(grew, start..start + woz::WOZ1_TRACK_SIZE);
     }
@@ -979,21 +1142,28 @@ impl DiskImage {
             // Pad so that the new bits start on a block boundary.
             let at = l.trks + l.trks_size;
             let pad = (woz::BLOCK_SIZE - at % woz::BLOCK_SIZE) % woz::BLOCK_SIZE;
-            let Some(new_start) = self.grow_trks(&l, pad + ext) else { return };
+            let Some(new_start) = self.grow_trks(&l, pad + ext) else {
+                return;
+            };
             let start_block = (new_start + pad) / woz::BLOCK_SIZE;
             l = self.woz.expect("layout");
             let rec = l.trks + idx as usize * 8;
             self.data[rec..rec + 2].copy_from_slice(&(start_block as u16).to_le_bytes());
-            self.data[rec + 2..rec + 4].copy_from_slice(&((ext / woz::BLOCK_SIZE) as u16).to_le_bytes());
+            self.data[rec + 2..rec + 4]
+                .copy_from_slice(&((ext / woz::BLOCK_SIZE) as u16).to_le_bytes());
             self.data[rec + 4..rec + 8].copy_from_slice(&((nibbles * 8) as u32).to_le_bytes());
             grew = true;
         }
-        let Some((start_block, _, bits)) = woz::trk2(&self.data, &l, idx as usize) else { return };
+        let Some((start_block, _, bits)) = woz::trk2(&self.data, &l, idx as usize) else {
+            return;
+        };
         if (bits as usize).div_ceil(8) != nibbles {
             return; // track size changed: WOZ writes keep the bit count
         }
         let start = start_block as usize * woz::BLOCK_SIZE;
-        let Some(dst) = self.data.get_mut(start..start + nibbles) else { return };
+        let Some(dst) = self.data.get_mut(start..start + nibbles) else {
+            return;
+        };
         dst.copy_from_slice(&buf[..nibbles]);
         self.woz_finish(grew, start..start + nibbles);
     }
@@ -1037,8 +1207,14 @@ mod tests {
 
     #[test]
     fn title_follows_get_image_title() {
-        assert_eq!(image_title("C:\\disks\\DOS33.DSK"), ("Dos33".to_string(), "Dos33.dsk".to_string()));
-        assert_eq!(image_title("/a/b/Game.dsk"), ("Game".to_string(), "Game.dsk".to_string()));
+        assert_eq!(
+            image_title("C:\\disks\\DOS33.DSK"),
+            ("Dos33".to_string(), "Dos33.dsk".to_string())
+        );
+        assert_eq!(
+            image_title("/a/b/Game.dsk"),
+            ("Game".to_string(), "Game.dsk".to_string())
+        );
         assert_eq!(image_title("XY"), ("XY".to_string(), "XY".to_string()));
     }
 

@@ -75,11 +75,15 @@ pub struct DataBlocks(pub Vec<DisasmData>);
 impl DataBlocks {
     /// `Disassembly_IsDataAddress`.
     pub fn find(&self, addr: u16) -> Option<&DisasmData> {
-        self.0.iter().find(|d| !d.removed && addr >= d.start && addr <= d.end)
+        self.0
+            .iter()
+            .find(|d| !d.removed && addr >= d.start && addr <= d.end)
     }
 
     pub fn find_mut(&mut self, addr: u16) -> Option<&mut DisasmData> {
-        self.0.iter_mut().find(|d| !d.removed && addr >= d.start && addr <= d.end)
+        self.0
+            .iter_mut()
+            .find(|d| !d.removed && addr >= d.start && addr <= d.end)
     }
 
     pub fn add(&mut self, d: DisasmData) {
@@ -121,7 +125,14 @@ pub struct DisasmConfig {
 
 impl Default for DisasmConfig {
     fn default() -> Self {
-        DisasmConfig { address_view: true, address_colon: true, opcodes_view: true, opcode_spaces: true, targets: DISASM_TARGET_BOTH, branch_type: 2 }
+        DisasmConfig {
+            address_view: true,
+            address_colon: true,
+            opcodes_view: true,
+            opcode_spaces: true,
+            targets: DISASM_TARGET_BOTH,
+            branch_type: 2,
+        }
     }
 }
 
@@ -188,7 +199,10 @@ fn ctrl_char(b: u8) -> char {
 }
 
 /// Length and mode of the thing at `addr` (`_6502_GetOpmodeOpbyte`).
-pub fn opmode_opbyte<'a>(ctx: &DisasmCtx<'a>, addr: u16) -> (u8, Option<Mode>, usize, Option<&'a DisasmData>) {
+pub fn opmode_opbyte<'a>(
+    ctx: &DisasmCtx<'a>,
+    addr: u16,
+) -> (u8, Option<Mode>, usize, Option<&'a DisasmData>) {
     let op = ctx.mem.read(addr);
     let info = table(ctx.cmos)[op as usize];
     if let Some(d) = ctx.data.find(addr) {
@@ -214,7 +228,12 @@ pub fn opmode_opbyte<'a>(ctx: &DisasmCtx<'a>, addr: u16) -> (u8, Option<Mode>, u
 
 /// `_6502_GetTargets`: effective addresses of the instruction at `addr` with current registers.
 /// Returns (partial, partial2, pointer, bytes); `NO_TARGET` (-1) when absent.
-pub fn get_targets(ctx: &DisasmCtx, addr: u16, ignore_branch: bool, include_next: bool) -> (i32, i32, i32, u8) {
+pub fn get_targets(
+    ctx: &DisasmCtx,
+    addr: u16,
+    ignore_branch: bool,
+    include_next: bool,
+) -> (i32, i32, i32, u8) {
     let (mut p1, mut p2, mut ptr, mut nbytes) = (NO_TARGET, NO_TARGET, NO_TARGET, 0u8);
     let m = ctx.mem;
     let r = ctx.regs;
@@ -363,7 +382,10 @@ fn fac_text(ctx: &DisasmCtx, a: u16) -> String {
         return "0.0".into();
     }
     let m1 = ctx.mem.read(a.wrapping_add(1));
-    let mant = ((m1 | 0x80) as u32) << 24 | (ctx.mem.read(a.wrapping_add(2)) as u32) << 16 | (ctx.mem.read(a.wrapping_add(3)) as u32) << 8 | ctx.mem.read(a.wrapping_add(4)) as u32;
+    let mant = ((m1 | 0x80) as u32) << 24
+        | (ctx.mem.read(a.wrapping_add(2)) as u32) << 16
+        | (ctx.mem.read(a.wrapping_add(3)) as u32) << 8
+        | ctx.mem.read(a.wrapping_add(4)) as u32;
     let exp = e0 as i32 - 0x80;
     let f = mant as f64 * 2f64.powi(exp - 32);
     format!("{}{}", if m1 & 0x80 != 0 { '-' } else { '+' }, c_exp(f))
@@ -404,10 +426,18 @@ fn nopcode_text(ctx: &DisasmCtx, d: &DisasmData, addr: u16, nbytes: usize) -> St
         Nop::Address => {}
         Nop::StringApple | Nop::StringAscii | Nop::StringMixed => {
             let len = (d.end as i32 - addr as i32 + 1).max(0) as usize;
-            let copy = |n: usize| (0..n).map(|k| ctrl_char(ctx.mem.read(d.start.wrapping_add(k as u16)))).collect::<String>();
+            let copy = |n: usize| {
+                (0..n)
+                    .map(|k| ctrl_char(ctx.mem.read(d.start.wrapping_add(k as u16))))
+                    .collect::<String>()
+            };
             if len > DISASM_DISPLAY_MAX_IMMEDIATE_LEN - 2 {
                 let ellipsis = len > DISASM_DISPLAY_MAX_IMMEDIATE_LEN;
-                let n = if ellipsis { DISASM_DISPLAY_MAX_IMMEDIATE_LEN - 3 } else { len };
+                let n = if ellipsis {
+                    DISASM_DISPLAY_MAX_IMMEDIATE_LEN - 3
+                } else {
+                    len
+                };
                 s = copy(n);
                 if ellipsis {
                     s += "...";
@@ -434,13 +464,20 @@ pub fn disassemble(ctx: &DisasmCtx, base: u16) -> DisasmLine {
         line.target_immediate = true;
     }
     if let Some(mm) = m {
-        if matches!(mm, Mode::IndZpX | Mode::IndAbsX | Mode::IndZpY | Mode::IndZp | Mode::IndAbs) {
+        if matches!(
+            mm,
+            Mode::IndZpX | Mode::IndAbsX | Mode::IndZpY | Mode::IndZp | Mode::IndAbs
+        ) {
             line.target_indirect = true;
         }
         if matches!(mm, Mode::IndZpX | Mode::IndAbsX | Mode::IndZpY) {
             line.target_indexed = true;
         }
-        if matches!(mm, Mode::Abs | Mode::Zp | Mode::AbsX | Mode::AbsY | Mode::ZpX | Mode::ZpY) || line.target_indirect {
+        if matches!(
+            mm,
+            Mode::Abs | Mode::Zp | Mode::AbsX | Mode::AbsY | Mode::ZpX | Mode::ZpY
+        ) || line.target_indirect
+        {
             line.target_value_flag = true;
         }
         if matches!(mm, Mode::AbsX | Mode::ZpX | Mode::IndZpX | Mode::IndAbsX) {
@@ -486,7 +523,10 @@ pub fn disassemble(ctx: &DisasmCtx, base: u16) -> DisasmLine {
         }
         if !matches!(mm, Mode::Imm) {
             line.n_target = target;
-            let mut sym = ctx.symbols.find_symbol(target).map(|(s, t)| (s.to_string(), t));
+            let mut sym = ctx
+                .symbols
+                .find_symbol(target)
+                .map(|(s, t)| (s.to_string(), t));
             if let Some(d) = data {
                 if !d.symbol_lookup {
                     sym = None;
@@ -499,7 +539,11 @@ pub fn disassemble(ctx: &DisasmCtx, base: u16) -> DisasmLine {
                 tgt = Some(s);
             }
             if !line.fmt_symbol {
-                if let Some((s, t)) = ctx.symbols.find_symbol(target.wrapping_sub(1)).map(|(s, t)| (s.to_string(), t)) {
+                if let Some((s, t)) = ctx
+                    .symbols
+                    .find_symbol(target.wrapping_sub(1))
+                    .map(|(s, t)| (s.to_string(), t))
+                {
                     line.fmt_symbol = true;
                     line.fmt_offset = true;
                     line.target_offset = 1;
@@ -508,7 +552,11 @@ pub fn disassemble(ctx: &DisasmCtx, base: u16) -> DisasmLine {
                 }
             }
             if !line.fmt_symbol || data.is_some() {
-                if let Some((s, t)) = ctx.symbols.find_symbol(target.wrapping_add(1)).map(|(s, t)| (s.to_string(), t)) {
+                if let Some((s, t)) = ctx
+                    .symbols
+                    .find_symbol(target.wrapping_add(1))
+                    .map(|(s, t)| (s.to_string(), t))
+                {
                     line.fmt_symbol = true;
                     line.fmt_offset = true;
                     line.target_offset = -1;
@@ -629,27 +677,47 @@ impl Tabs {
             }
         }
         let f = |x: f32| x.max(0.0) as usize;
-        Tabs { opcode: f(t[0]), label: f(t[1]), instruction: f(t[2]), immediate: f(t[3]), branch: f(t[4]), ch: f(t[5]) }
+        Tabs {
+            opcode: f(t[0]),
+            label: f(t[1]),
+            instruction: f(t[2]),
+            immediate: f(t[3]),
+            branch: f(t[4]),
+            ch: f(t[5]),
+        }
     }
 }
 
 /// Lays a decoded line out like `DrawDisassemblyLine` (:1376), without cursor/breakpoint colors
 /// (the caller overrides foreground for the cursor line). `label` is the symbol at the line's address.
-pub fn render_line(line: &DisasmLine, label: Option<(&str, Table)>, cfg: &DisasmConfig) -> Vec<Span> {
+pub fn render_line(
+    line: &DisasmLine,
+    label: Option<(&str, Table)>,
+    cfg: &DisasmConfig,
+) -> Vec<Span> {
     use DebugColor::*;
     let tabs = Tabs::new(cfg);
     let mut out: Vec<Span> = Vec::new();
     let mut col = 0usize;
     let put = |out: &mut Vec<Span>, col: &mut usize, text: &str, fg: DebugColor| {
         if !text.is_empty() {
-            out.push(Span { col: *col, text: text.to_string(), fg });
+            out.push(Span {
+                col: *col,
+                text: text.to_string(),
+                fg,
+            });
             *col += text.chars().count();
         }
     };
     if cfg.address_view {
         put(&mut out, &mut col, &line.address, FG_DISASM_ADDRESS);
     }
-    put(&mut out, &mut col, if cfg.address_colon { ":" } else { " " }, FG_DISASM_OPERATOR);
+    put(
+        &mut out,
+        &mut col,
+        if cfg.address_colon { ":" } else { " " },
+        FG_DISASM_OPERATOR,
+    );
     col = tabs.opcode;
     if cfg.opcodes_view {
         put(&mut out, &mut col, &line.opcodes, FG_DISASM_OPCODE);
@@ -658,10 +726,28 @@ pub fn render_line(line: &DisasmLine, label: Option<(&str, Table)>, cfg: &Disasm
     if let Some((s, t)) = label {
         let room = tabs.instruction.saturating_sub(tabs.label + 1).max(1);
         let s: String = s.chars().take(room).collect();
-        put(&mut out, &mut col, &s, if t == Table::User2 { FG_INFO_ADDRESS } else { FG_DISASM_SYMBOL });
+        put(
+            &mut out,
+            &mut col,
+            &s,
+            if t == Table::User2 {
+                FG_INFO_ADDRESS
+            } else {
+                FG_DISASM_SYMBOL
+            },
+        );
     }
     col = tabs.instruction;
-    put(&mut out, &mut col, &line.mnemonic, if line.is_data { FG_DISASM_DIRECTIVE } else { FG_DISASM_MNEMONIC });
+    put(
+        &mut out,
+        &mut col,
+        &line.mnemonic,
+        if line.is_data {
+            FG_DISASM_DIRECTIVE
+        } else {
+            FG_DISASM_MNEMONIC
+        },
+    );
     put(&mut out, &mut col, " ", FG_DISASM_MNEMONIC);
     if line.target_immediate {
         put(&mut out, &mut col, "#$", FG_DISASM_OPERATOR);
@@ -713,11 +799,25 @@ pub fn render_line(line: &DisasmLine, label: Option<(&str, Table)>, cfg: &Disasm
         over += line.immediate.len() as i32;
     }
     let lim = (max - over).max(0) as usize;
-    let t: String = if target.chars().count() >= lim { target.chars().take(lim).collect() } else { target.to_string() };
+    let t: String = if target.chars().count() >= lim {
+        target.chars().take(lim).collect()
+    } else {
+        target.to_string()
+    };
     put(&mut out, &mut col, &t, tcolor);
     if line.fmt_offset {
-        put(&mut out, &mut col, if line.target_offset > 0 { "+" } else { "-" }, FG_DISASM_OPERATOR);
-        put(&mut out, &mut col, &line.target_offset_str, FG_DISASM_OPCODE);
+        put(
+            &mut out,
+            &mut col,
+            if line.target_offset > 0 { "+" } else { "-" },
+            FG_DISASM_OPERATOR,
+        );
+        put(
+            &mut out,
+            &mut col,
+            &line.target_offset_str,
+            FG_DISASM_OPCODE,
+        );
     }
     if line.target_indirect || line.target_x || line.target_y {
         if line.target_x {
@@ -753,7 +853,12 @@ pub fn render_line(line: &DisasmLine, label: Option<(&str, Table)>, cfg: &Disasm
         let len = line.immediate_signed_dec.len();
         col = tabs.immediate + 2 + 4usize.saturating_sub(len);
         put(&mut out, &mut col, "#", FG_INFO_OPERATOR);
-        put(&mut out, &mut col, &line.immediate_signed_dec, FG_DISASM_SINT8);
+        put(
+            &mut out,
+            &mut col,
+            &line.immediate_signed_dec,
+            FG_DISASM_SINT8,
+        );
     }
     if line.fmt_char {
         col = tabs.ch;
@@ -788,8 +893,18 @@ mod tests {
         ram.load(at, bytes);
         let syms = Symbols::default();
         let data = DataBlocks::default();
-        let cfg = DisasmConfig { branch_type: 1, ..Default::default() };
-        let ctx = DisasmCtx { mem: &ram, regs: Regs::default(), cmos, symbols: &syms, data: &data, cfg: &cfg };
+        let cfg = DisasmConfig {
+            branch_type: 1,
+            ..Default::default()
+        };
+        let ctx = DisasmCtx {
+            mem: &ram,
+            regs: Regs::default(),
+            cmos,
+            symbols: &syms,
+            data: &data,
+            cfg: &cfg,
+        };
         let l = disassemble(&ctx, at);
         line_text(&render_line(&l, None, &cfg))
     }
@@ -797,8 +912,14 @@ mod tests {
     #[test]
     fn plain_instructions_match_applewin_layout() {
         // Columns: addr(0-3) ':' opcodes@5 mnemonic@25 operand
-        assert_eq!(dis(&[0xA9, 0x41], 0x300, true), "0300:A9 41               LDA #$41          #+65 A");
-        assert_eq!(dis(&[0x4C, 0xED, 0xFD], 0x300, true), "0300:4C ED FD            JMP $FDED");
+        assert_eq!(
+            dis(&[0xA9, 0x41], 0x300, true),
+            "0300:A9 41               LDA #$41          #+65 A"
+        );
+        assert_eq!(
+            dis(&[0x4C, 0xED, 0xFD], 0x300, true),
+            "0300:4C ED FD            JMP $FDED"
+        );
         assert_eq!(dis(&[0xEA], 0x300, true), "0300:EA                  NOP");
     }
 
@@ -830,9 +951,19 @@ mod tests {
         syms.set(Table::Main, "COUT", 0xFDED);
         let data = DataBlocks::default();
         let cfg = DisasmConfig::default();
-        let ctx = DisasmCtx { mem: &ram, regs: Regs::default(), cmos: false, symbols: &syms, data: &data, cfg: &cfg };
+        let ctx = DisasmCtx {
+            mem: &ram,
+            regs: Regs::default(),
+            cmos: false,
+            symbols: &syms,
+            data: &data,
+            cfg: &cfg,
+        };
         let l = disassemble(&ctx, 0x300);
-        assert_eq!(line_text(&render_line(&l, Some(("START", Table::User1)), &cfg)), "0300:20 ED FD  START     JSR COUT");
+        assert_eq!(
+            line_text(&render_line(&l, Some(("START", Table::User1)), &cfg)),
+            "0300:20 ED FD  START     JSR COUT"
+        );
         let l = disassemble(&ctx, 0x303);
         assert!(line_text(&render_line(&l, None, &cfg)).contains("LDA COUT+1"));
     }
@@ -883,8 +1014,18 @@ mod tests {
         let syms = Symbols::default();
         let data = DataBlocks::default();
         let cfg = DisasmConfig::default();
-        let regs = Regs { x: 5, ..Default::default() };
-        let ctx = DisasmCtx { mem: &ram, regs, cmos: false, symbols: &syms, data: &data, cfg: &cfg };
+        let regs = Regs {
+            x: 5,
+            ..Default::default()
+        };
+        let ctx = DisasmCtx {
+            mem: &ram,
+            regs,
+            cmos: false,
+            symbols: &syms,
+            data: &data,
+            cfg: &cfg,
+        };
         let l = disassemble(&ctx, 0x300);
         assert_eq!(l.target_pointer, "0405");
         assert_eq!(l.target_value, "C1");
@@ -898,14 +1039,45 @@ mod tests {
         ram.load(0x2010, &[0x34, 0x12, 0x78, 0x56]);
         let syms = Symbols::default();
         let mut data = DataBlocks::default();
-        data.add(DisasmData { symbol: "T".into(), start: 0x2000, end: 0x2002, target: 0, directive: "ASC", kind: Nop::StringApple, symbol_lookup: false, removed: false });
-        data.add(DisasmData { symbol: "W".into(), start: 0x2010, end: 0x2013, target: 0, directive: "dw", kind: Nop::Word2, symbol_lookup: false, removed: false });
+        data.add(DisasmData {
+            symbol: "T".into(),
+            start: 0x2000,
+            end: 0x2002,
+            target: 0,
+            directive: "ASC",
+            kind: Nop::StringApple,
+            symbol_lookup: false,
+            removed: false,
+        });
+        data.add(DisasmData {
+            symbol: "W".into(),
+            start: 0x2010,
+            end: 0x2013,
+            target: 0,
+            directive: "dw",
+            kind: Nop::Word2,
+            symbol_lookup: false,
+            removed: false,
+        });
         let cfg = DisasmConfig::default();
-        let ctx = DisasmCtx { mem: &ram, regs: Regs::default(), cmos: true, symbols: &syms, data: &data, cfg: &cfg };
+        let ctx = DisasmCtx {
+            mem: &ram,
+            regs: Regs::default(),
+            cmos: true,
+            symbols: &syms,
+            data: &data,
+            cfg: &cfg,
+        };
         let l = disassemble(&ctx, 0x2000);
-        assert_eq!((l.mnemonic.as_str(), l.target.as_str(), l.bytes), ("ASC", "\"HI!\"", 3));
+        assert_eq!(
+            (l.mnemonic.as_str(), l.target.as_str(), l.bytes),
+            ("ASC", "\"HI!\"", 3)
+        );
         let l = disassemble(&ctx, 0x2010);
-        assert_eq!((l.mnemonic.as_str(), l.target.as_str(), l.bytes), ("dw", "1234,5678", 4));
+        assert_eq!(
+            (l.mnemonic.as_str(), l.target.as_str(), l.bytes),
+            ("dw", "1234,5678", 4)
+        );
     }
 
     #[test]
@@ -916,9 +1088,25 @@ mod tests {
         ram.load(0x2000, &[0x81, 0x00, 0x00, 0x00, 0x00]);
         let syms = Symbols::default();
         let mut data = DataBlocks::default();
-        data.add(DisasmData { symbol: String::new(), start: 0x2000, end: 0x2004, target: 0, directive: "df", kind: Nop::Fac, symbol_lookup: false, removed: false });
+        data.add(DisasmData {
+            symbol: String::new(),
+            start: 0x2000,
+            end: 0x2004,
+            target: 0,
+            directive: "df",
+            kind: Nop::Fac,
+            symbol_lookup: false,
+            removed: false,
+        });
         let cfg = DisasmConfig::default();
-        let ctx = DisasmCtx { mem: &ram, regs: Regs::default(), cmos: true, symbols: &syms, data: &data, cfg: &cfg };
+        let ctx = DisasmCtx {
+            mem: &ram,
+            regs: Regs::default(),
+            cmos: true,
+            symbols: &syms,
+            data: &data,
+            cfg: &cfg,
+        };
         assert_eq!(disassemble(&ctx, 0x2000).target, "+1.000000e+00");
     }
 }

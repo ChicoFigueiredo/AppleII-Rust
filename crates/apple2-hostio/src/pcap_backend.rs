@@ -28,10 +28,20 @@ impl PcapNetwork {
             .ok()
             .and_then(|l| l.into_iter().find(|d| d.name == interface_name))
             .and_then(|d| Capture::from_device(d).ok())
-            .and_then(|c| c.promisc(true).snaplen(1700).timeout(20).immediate_mode(true).open().ok())
+            .and_then(|c| {
+                c.promisc(true)
+                    .snaplen(1700)
+                    .timeout(20)
+                    .immediate_mode(true)
+                    .open()
+                    .ok()
+            })
             .and_then(|c| c.setnonblock().ok())
             .filter(|c| c.get_datalink() == Linktype::ETHERNET);
-        PcapNetwork { name: interface_name.to_string(), capture }
+        PcapNetwork {
+            name: interface_name.to_string(),
+            capture,
+        }
     }
 }
 

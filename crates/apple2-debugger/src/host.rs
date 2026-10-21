@@ -46,7 +46,9 @@ impl Host for FsHost {
     }
 
     fn create(&mut self, name: &str) -> io::Result<Box<dyn Write>> {
-        Ok(Box::new(io::BufWriter::new(std::fs::File::create(self.path(name))?)))
+        Ok(Box::new(io::BufWriter::new(std::fs::File::create(
+            self.path(name),
+        )?)))
     }
 
     fn dir(&self) -> String {
@@ -70,15 +72,24 @@ pub struct NoHost;
 
 impl Host for NoHost {
     fn read(&mut self, _: &str) -> io::Result<Vec<u8>> {
-        Err(io::Error::new(io::ErrorKind::Unsupported, "no host file access"))
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no host file access",
+        ))
     }
 
     fn write(&mut self, _: &str, _: &[u8]) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Unsupported, "no host file access"))
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no host file access",
+        ))
     }
 
     fn create(&mut self, _: &str) -> io::Result<Box<dyn Write>> {
-        Err(io::Error::new(io::ErrorKind::Unsupported, "no host file access"))
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no host file access",
+        ))
     }
 
     fn dir(&self) -> String {
@@ -111,7 +122,10 @@ impl Write for SharedWriter {
 
 impl Host for MemHost {
     fn read(&mut self, name: &str) -> io::Result<Vec<u8>> {
-        self.files.get(name).cloned().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, name.to_string()))
+        self.files
+            .get(name)
+            .cloned()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, name.to_string()))
     }
 
     fn write(&mut self, name: &str, data: &[u8]) -> io::Result<()> {

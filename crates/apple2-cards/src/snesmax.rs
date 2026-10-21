@@ -47,7 +47,11 @@ impl Default for SnesMax {
 
 impl SnesMax {
     pub fn new() -> Self {
-        SnesMax { host: [None; 2], shift: [IDLE; 2], index: 0 }
+        SnesMax {
+            host: [None; 2],
+            shift: [IDLE; 2],
+            index: 0,
+        }
     }
 
     /// Controller `n` (0 or 1): the pressed-button mask, or `None` if not connected.

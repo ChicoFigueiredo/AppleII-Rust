@@ -55,7 +55,8 @@ impl VidHd {
 
     /// `IsWriteAux` (VidHD.cpp:84, `MemIsWriteAux`): AUXWRITE, or 80STORE with PAGE2.
     pub fn is_write_aux(&self) -> bool {
-        self.mem_mode & mf::AUXWRITE != 0 || (self.mem_mode & mf::STORE80 != 0 && self.mem_mode & mf::PAGE2 != 0)
+        self.mem_mode & mf::AUXWRITE != 0
+            || (self.mem_mode & mf::STORE80 != 0 && self.mem_mode & mf::PAGE2 != 0)
     }
 
     /// The registers `VidHDCard::SaveSnapshot` writes (VidHD.cpp:199), unmasked.
@@ -71,8 +72,19 @@ impl VidHd {
 
     /// `VidHDCard::LoadSnapshot` (VidHD.cpp:224).
     pub fn apply_snapshot(&mut self, s: &VidHdSnapshot) {
-        (self.mem_mode, self.screen_color, self.new_video, self.border_color, self.shadow) =
-            (s.mem_mode & MIRRORED, s.screen_color, s.new_video, s.border_color, s.shadow);
+        (
+            self.mem_mode,
+            self.screen_color,
+            self.new_video,
+            self.border_color,
+            self.shadow,
+        ) = (
+            s.mem_mode & MIRRORED,
+            s.screen_color,
+            s.new_video,
+            s.border_color,
+            s.shadow,
+        );
     }
 
     pub fn mem_mode(&self) -> u32 {
@@ -144,7 +156,11 @@ impl Card for VidHd {
 
     fn save(&self) -> Vec<u8> {
         let mut e = Enc::default();
-        e.u32(self.mem_mode & MIRRORED).u8(self.screen_color).u8(self.new_video).u8(self.border_color).u8(self.shadow);
+        e.u32(self.mem_mode & MIRRORED)
+            .u8(self.screen_color)
+            .u8(self.new_video)
+            .u8(self.border_color)
+            .u8(self.shadow);
         e.0
     }
 
@@ -152,7 +168,13 @@ impl Card for VidHd {
         let mut d = Dec::new(state);
         match (d.u32(), d.u8(), d.u8(), d.u8(), d.u8()) {
             (Some(m), Some(sc), Some(nv), Some(bc), Some(sh)) if d.done() => {
-                (self.mem_mode, self.screen_color, self.new_video, self.border_color, self.shadow) = (m & MIRRORED, sc, nv, bc, sh);
+                (
+                    self.mem_mode,
+                    self.screen_color,
+                    self.new_video,
+                    self.border_color,
+                    self.shadow,
+                ) = (m & MIRRORED, sc, nv, bc, sh);
                 true
             }
             _ => false,
@@ -166,7 +188,14 @@ impl apple2_video::VidHdView for VidHd {
     fn is_shr(&self) -> bool {
         VidHd::is_shr(self)
     }
-    fn shr_cell(&self, is_640: bool, color_fill: bool, palette: &[u16; 16], a: u32, prev: [u8; 3]) -> [[u8; 3]; 16] {
+    fn shr_cell(
+        &self,
+        is_640: bool,
+        color_fill: bool,
+        palette: &[u16; 16],
+        a: u32,
+        prev: [u8; 3],
+    ) -> [[u8; 3]; 16] {
         shr_cell(is_640, color_fill, palette, a, prev)
     }
 }
@@ -174,14 +203,24 @@ impl apple2_video::VidHdView for VidHd {
 /// `ConvertIIgs2RGB` (VidHD.cpp:120): a IIgs `$0RGB` palette entry (4 bits per channel) to
 /// 8-bit RGB.
 pub fn iigs_color_to_rgb(color: u16) -> [u8; 3] {
-    [((color >> 8) & 0xF) as u8 * 16, ((color >> 4) & 0xF) as u8 * 16, (color & 0xF) as u8 * 16]
+    [
+        ((color >> 8) & 0xF) as u8 * 16,
+        ((color >> 4) & 0xF) as u8 * 16,
+        (color & 0xF) as u8 * 16,
+    ]
 }
 
 /// `VidHDCard::UpdateSHRCell` (:131): four SHR bytes (`a`, first byte in the low bits) become 16
 /// pixels. `palette` is the scanline's 16 IIgs colours, `prev` the pixel to the left (colour fill
 /// mode repeats it for palette index 0). In 640 mode each byte holds four 2-bit pixels using
 /// palette quarters `$8`, `$C`, `$0`, `$4`.
-pub fn shr_cell(is_640: bool, color_fill: bool, palette: &[u16; 16], mut a: u32, mut prev: [u8; 3]) -> [[u8; 3]; 16] {
+pub fn shr_cell(
+    is_640: bool,
+    color_fill: bool,
+    palette: &[u16; 16],
+    mut a: u32,
+    mut prev: [u8; 3],
+) -> [[u8; 3]; 16] {
     let mut out = [[0u8; 3]; 16];
     let mut o = 0;
     for _ in 0..4 {
@@ -226,7 +265,10 @@ mod tests {
         pal[2] = 0x00F0;
         // First byte 0x12 -> pixels 1,1,2,2; the other three bytes are index 0 (black).
         let c = shr_cell(false, false, &pal, 0x12, [9, 9, 9]);
-        assert_eq!(&c[..4], &[[0xF0, 0, 0], [0xF0, 0, 0], [0, 0xF0, 0], [0, 0xF0, 0]]);
+        assert_eq!(
+            &c[..4],
+            &[[0xF0, 0, 0], [0xF0, 0, 0], [0, 0xF0, 0], [0, 0xF0, 0]]
+        );
         assert_eq!(c[4], [0, 0, 0]);
     }
 
@@ -239,7 +281,11 @@ mod tests {
         assert_eq!(c[2], [0, 0, 0xF0]);
         let c = shr_cell(false, true, &pal, 0x50, [7, 7, 7]);
         assert_eq!(c[0], [0, 0, 0xF0]);
-        assert_eq!(c[2], [0, 0, 0xF0], "fill continues from the first pixel of the byte");
+        assert_eq!(
+            c[2],
+            [0, 0, 0xF0],
+            "fill continues from the first pixel of the byte"
+        );
     }
 
     #[test]
@@ -250,6 +296,9 @@ mod tests {
         pal[1] = 0x0300;
         pal[0x4] = 0x0400;
         let c = shr_cell(true, false, &pal, 0b11_10_01_00, [0; 3]);
-        assert_eq!([c[0][0], c[1][0], c[2][0], c[3][0]], [0x10, 0x20, 0x30, 0x40]);
+        assert_eq!(
+            [c[0][0], c[1][0], c[2][0], c[3][0]],
+            [0x10, 0x20, 0x30, 0x40]
+        );
     }
 }

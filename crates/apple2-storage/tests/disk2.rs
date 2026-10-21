@@ -74,7 +74,10 @@ fn stepper_moves_the_head_a_half_track_per_phase_in_dsk_images() {
 #[test]
 fn woz_images_get_quarter_tracks_when_two_adjacent_magnets_are_on() {
     let mut m = bare();
-    card(&mut m).insert_disk(0, DiskImage::from_bytes("a.woz", woz2_from_dsk(disk(DOS33), 0)).unwrap());
+    card(&mut m).insert_disk(
+        0,
+        DiskImage::from_bytes("a.woz", woz2_from_dsk(disk(DOS33), 0)).unwrap(),
+    );
     rd(&mut m, MOTOR_ON);
     phase(&mut m, 1, true);
     m.run_cycles(20);
@@ -142,10 +145,17 @@ fn write_protect_is_sensed_through_q6h_q7l() {
 fn empty_and_unplugged_drives_read_noise_or_0x80() {
     let mut m = bare();
     rd(&mut m, MOTOR_ON);
-    assert_eq!(rd(&mut m, Q6L), 0x80, "right after the motor starts the LSS has not settled");
+    assert_eq!(
+        rd(&mut m, Q6L),
+        0x80,
+        "right after the motor starts the LSS has not settled"
+    );
     m.run_cycles(2000);
     let seen: std::collections::HashSet<u8> = (0..50).map(|_| rd(&mut m, Q6L)).collect();
-    assert!(seen.len() > 5, "an empty drive returns random nibbles (GH#748)");
+    assert!(
+        seen.len() > 5,
+        "an empty drive returns random nibbles (GH#748)"
+    );
     card(&mut m).unplug_drive(0);
     m.run_cycles(2000);
     assert_eq!(rd(&mut m, Q6L), 0x80);
@@ -161,7 +171,10 @@ fn media_management() {
     assert!(c.is_drive_empty(0) && c.light_status(0) == DiskStatus::Off);
     c.insert_disk(0, a);
     c.insert_disk(1, b);
-    assert_eq!((c.base_name(0), c.full_name(0), c.base_name(1)), ("Alpha", "Alpha.dsk", "Beta"));
+    assert_eq!(
+        (c.base_name(0), c.full_name(0), c.base_name(1)),
+        ("Alpha", "Alpha.dsk", "Beta")
+    );
     c.swap_disks();
     assert_eq!((c.base_name(0), c.base_name(1)), ("Beta", "Alpha"));
     // Inserting a disk already in the other drive moves it.
@@ -193,7 +206,10 @@ fn state_round_trips_through_the_slots_save() {
     let mut m2 = machine_with_disk(DiskImage::from_bytes("a.dsk", disk(DOS33)).unwrap());
     assert!(m2.board_mut().slots.load(&state));
     let c = m2.card::<Disk2Card>(6).unwrap();
-    assert_eq!((c.phase(0), c.is_motor_on(), c.track(0)), (phase, motor, track));
+    assert_eq!(
+        (c.phase(0), c.is_motor_on(), c.track(0)),
+        (phase, motor, track)
+    );
 }
 
 #[test]
@@ -208,7 +224,6 @@ fn authentic_mode_skews_the_sectors_and_enhanced_does_not() {
     assert_eq!(s[..n1 - skew], e[skew..n1]);
 }
 
-
 #[test]
 fn several_cards_are_independent_and_the_manager_sees_all_of_them() {
     use apple2_storage::disk2::manager;
@@ -217,7 +232,10 @@ fn several_cards_are_independent_and_the_manager_sees_all_of_them() {
     second.insert_disk(0, DiskImage::from_bytes("b.dsk", disk(DOS33)).unwrap());
     assert!(m.insert_card(5, Box::new(second)));
     rd(&mut m, 0xC0D9); // slot 5 motor on
-    assert!(m.card::<Disk2Card>(5).unwrap().is_motor_on() && !m.card::<Disk2Card>(6).unwrap().is_motor_on());
+    assert!(
+        m.card::<Disk2Card>(5).unwrap().is_motor_on()
+            && !m.card::<Disk2Card>(6).unwrap().is_motor_on()
+    );
     assert!(manager::is_condition_for_full_speed(&m));
     manager::set_enhance_disk(&mut m, false);
     assert!(!manager::enhance_disk(&m) && !m.card::<Disk2Card>(6).unwrap().enhance_disk());
@@ -225,6 +243,12 @@ fn several_cards_are_independent_and_the_manager_sees_all_of_them() {
     assert!(!manager::is_any_firmware_13_sector(&m));
     // Each card answers from its own slot registers.
     rd(&mut m, 0xC0DB);
-    assert_eq!((m.card::<Disk2Card>(5).unwrap().current_drive(), m.card::<Disk2Card>(6).unwrap().current_drive()), (1, 0));
+    assert_eq!(
+        (
+            m.card::<Disk2Card>(5).unwrap().current_drive(),
+            m.card::<Disk2Card>(6).unwrap().current_drive()
+        ),
+        (1, 0)
+    );
     manager::flush_all(&mut m);
 }

@@ -8,12 +8,12 @@
 //! the config, so the receiving machine must have the same cards inserted in the same slots.
 
 use super::*;
+use crate::game_port::GamePort;
+use crate::keyboard::Keyboard;
 use crate::language_card::LanguageCards;
 use crate::memory::MemoryState;
 use crate::slots::SlotsState;
 use crate::speaker::Speaker;
-use crate::game_port::GamePort;
-use crate::keyboard::Keyboard;
 use serde::{Deserialize, Serialize};
 
 /// CPU registers and latches ([`Cpu`]; the variant comes from the config).
@@ -81,7 +81,9 @@ impl std::fmt::Display for StateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             StateError::ConfigMismatch => "state was saved with a different machine configuration",
-            StateError::Incompatible => "state does not fit this machine (memory sizes or cards differ)",
+            StateError::Incompatible => {
+                "state does not fit this machine (memory sizes or cards differ)"
+            }
         })
     }
 }
@@ -96,8 +98,18 @@ impl Machine {
         MachineState {
             config: self.config.clone(),
             cpu: CpuState {
-                a: c.a, x: c.x, y: c.y, sp: c.sp, pc: c.pc, p: c.p, cycles: c.cycles, irq: c.irq,
-                nmi_pending: c.nmi_pending(), stopped: c.stopped, waiting: c.waiting, opcode: c.opcode,
+                a: c.a,
+                x: c.x,
+                y: c.y,
+                sp: c.sp,
+                pc: c.pc,
+                p: c.p,
+                cycles: c.cycles,
+                irq: c.irq,
+                nmi_pending: c.nmi_pending(),
+                stopped: c.stopped,
+                waiting: c.waiting,
+                opcode: c.opcode,
             },
             memory: b.memory.state(),
             lc: b.lc.clone(),
@@ -160,11 +172,13 @@ impl Machine {
         b.scheduler.set_events(s.events.clone());
         b.actions = s.actions.clone();
         b.interrupts = s.interrupts;
-        (b.cycles, b.cycles_in_frame, b.frames, b.pending) = (s.cycles, s.cycles_in_frame, s.frames, s.pending);
+        (b.cycles, b.cycles_in_frame, b.frames, b.pending) =
+            (s.cycles, s.cycles_in_frame, s.frames, s.pending);
         (b.opcode_ticks, b.opcode_pc, b.opcode) = (s.opcode_ticks, s.opcode_pc, s.opcode);
         let c = &mut self.cpu;
         let cs = &s.cpu;
-        (c.a, c.x, c.y, c.sp, c.pc, c.p, c.cycles) = (cs.a, cs.x, cs.y, cs.sp, cs.pc, cs.p, cs.cycles);
+        (c.a, c.x, c.y, c.sp, c.pc, c.p, c.cycles) =
+            (cs.a, cs.x, cs.y, cs.sp, cs.pc, cs.p, cs.cycles);
         (c.irq, c.stopped, c.waiting, c.opcode) = (cs.irq, cs.stopped, cs.waiting, cs.opcode);
         c.set_nmi_pending(cs.nmi_pending);
         self.nmi_line = s.nmi_line;

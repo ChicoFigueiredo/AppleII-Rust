@@ -22,18 +22,38 @@ pub enum Table {
 pub const NUM_TABLES: usize = 9;
 
 impl Table {
-    pub const ALL: [Table; NUM_TABLES] =
-        [Table::Main, Table::Basic, Table::Asm, Table::User1, Table::User2, Table::Src1, Table::Src2, Table::Dos33, Table::ProDos];
+    pub const ALL: [Table; NUM_TABLES] = [
+        Table::Main,
+        Table::Basic,
+        Table::Asm,
+        Table::User1,
+        Table::User2,
+        Table::Src1,
+        Table::Src2,
+        Table::Dos33,
+        Table::ProDos,
+    ];
 
     /// `g_aSymbolTableNames` (Debugger_Symbols.cpp:58).
     pub fn name(self) -> &'static str {
-        ["Main", "Basic", "Asm", "User1", "User2", "Src1", "Src2", "DOS33", "ProDOS"][self as usize]
+        [
+            "Main", "Basic", "Asm", "User1", "User2", "Src1", "Src2", "DOS33", "ProDOS",
+        ][self as usize]
     }
 
     /// `g_sFileNameSymbols` (:45).
     pub fn file_name(self) -> &'static str {
-        ["APPLE2E.SYM", "A2_BASIC.SYM", "A2_ASM.SYM", "A2_USER1.SYM", "A2_USER2.SYM", "A2_SRC1.SYM", "A2_SRC2.SYM", "A2_DOS33.SYM2", "A2_PRODOS.SYM"]
-            [self as usize]
+        [
+            "APPLE2E.SYM",
+            "A2_BASIC.SYM",
+            "A2_ASM.SYM",
+            "A2_USER1.SYM",
+            "A2_USER2.SYM",
+            "A2_SRC1.SYM",
+            "A2_SRC2.SYM",
+            "A2_DOS33.SYM2",
+            "A2_PRODOS.SYM",
+        ][self as usize]
     }
 
     fn bit(self) -> u32 {
@@ -64,7 +84,10 @@ pub struct Symbols {
 
 impl Default for Symbols {
     fn default() -> Self {
-        Symbols { tables: Default::default(), display: ((1 << NUM_TABLES) - 1) & !Table::ProDos.bit() }
+        Symbols {
+            tables: Default::default(),
+            display: ((1 << NUM_TABLES) - 1) & !Table::ProDos.bit(),
+        }
     }
 }
 
@@ -89,7 +112,10 @@ impl Symbols {
             if self.display & t.bit() == 0 {
                 continue;
             }
-            if let Some((a, _)) = self.tables[*t as usize].iter().find(|(_, s)| s.eq_ignore_ascii_case(name)) {
+            if let Some((a, _)) = self.tables[*t as usize]
+                .iter()
+                .find(|(_, s)| s.eq_ignore_ascii_case(name))
+            {
                 return Some((*a, *t));
             }
         }
@@ -151,7 +177,10 @@ impl Symbols {
     }
 
     fn find_in_table(&self, t: Table, name: &str) -> Option<u16> {
-        self.tables[t as usize].iter().find(|(_, s)| s.eq_ignore_ascii_case(name)).map(|(a, _)| *a)
+        self.tables[t as usize]
+            .iter()
+            .find(|(_, s)| s.eq_ignore_ascii_case(name))
+            .map(|(a, _)| *a)
     }
 
     /// `ParseSymbolTable` (:555): reads `.SYM` text into table `t`, adding `offset` to every address.
@@ -161,7 +190,11 @@ impl Symbols {
         for raw in text.lines() {
             let parsed = if !raw.contains('$') {
                 let mut it = raw.split_whitespace();
-                match (it.next().and_then(|a| u32::from_str_radix(a.trim_start_matches("0x"), 16).ok()), it.next()) {
+                match (
+                    it.next()
+                        .and_then(|a| u32::from_str_radix(a.trim_start_matches("0x"), 16).ok()),
+                    it.next(),
+                ) {
                     (Some(a), Some(n)) => Some((a, n.to_string())),
                     _ => None,
                 }
@@ -169,7 +202,10 @@ impl Symbols {
                 let line = raw.split(';').next().unwrap_or("");
                 let line = line.replacen('=', " ", 1).replacen('$', " ", 1);
                 let mut it = line.split_whitespace();
-                match (it.next(), it.next().and_then(|a| u32::from_str_radix(a, 16).ok())) {
+                match (
+                    it.next(),
+                    it.next().and_then(|a| u32::from_str_radix(a, 16).ok()),
+                ) {
                     (Some(n), Some(a)) => Some((a, n.to_string())),
                     _ => None,
                 }
@@ -182,10 +218,14 @@ impl Symbols {
             }
             let name: String = name.chars().take(MAX_SYMBOLS_LEN).collect();
             if let Some((prev, pt)) = self.find_symbol(addr as u16) {
-                rep.aliases.push(format!("{name} aliases ${addr:04X} {prev} ({})", pt.name()));
+                rep.aliases
+                    .push(format!("{name} aliases ${addr:04X} {prev} ({})", pt.name()));
             }
             if let Some((_, pt)) = self.find_address(&name) {
-                rep.duplicates.push(format!("Dup Symbol Name ({}) ${addr:04X} {name}", pt.name()));
+                rep.duplicates.push(format!(
+                    "Dup Symbol Name ({}) ${addr:04X} {name}",
+                    pt.name()
+                ));
             }
             self.tables[t as usize].insert(addr as u16, name);
             rep.loaded += 1;
@@ -221,7 +261,11 @@ mod tests {
     #[test]
     fn acme_syntax_and_offset() {
         let mut s = Symbols::default();
-        let r = s.parse_table("FOO = $1234 ; comment\nBAR=$0010\n; ignored\n", Table::User1, 0x100);
+        let r = s.parse_table(
+            "FOO = $1234 ; comment\nBAR=$0010\n; ignored\n",
+            Table::User1,
+            0x100,
+        );
         assert_eq!(r.loaded, 2);
         assert_eq!(s.find_address("foo"), Some((0x1334, Table::User1)));
         assert_eq!(s.find_address("BAR"), Some((0x0110, Table::User1)));

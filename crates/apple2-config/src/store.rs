@@ -34,7 +34,8 @@ impl From<std::io::Error> for StoreError {
 /// Platform config directory for the emulator (`~/.config/applewin-rs`, `%APPDATA%\...`,
 /// `~/Library/Application Support/...`), `None` when no home directory exists.
 pub fn config_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("org", "AppleII-Rust", "applewin-rs").map(|d| d.config_dir().to_path_buf())
+    directories::ProjectDirs::from("org", "AppleII-Rust", "applewin-rs")
+        .map(|d| d.config_dir().to_path_buf())
 }
 
 static PATH_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
@@ -47,7 +48,10 @@ pub fn set_path_override(path: PathBuf) -> bool {
 
 /// Default settings file path.
 pub fn default_path() -> Option<PathBuf> {
-    PATH_OVERRIDE.get().cloned().or_else(|| config_dir().map(|d| d.join(FILE_NAME)))
+    PATH_OVERRIDE
+        .get()
+        .cloned()
+        .or_else(|| config_dir().map(|d| d.join(FILE_NAME)))
 }
 
 impl Settings {
@@ -125,8 +129,14 @@ mod tests {
         s.machine.model = Model::Apple2Plus;
         s.reset_slot0_for_model();
         s.disk_drives_mut(6)[0].image = Some("games/a.dsk".into());
-        *s.slot_mut(7) = SlotCardSpec::GenericHdd { firmware: HdcFirmware::SmartPort, images: std::array::from_fn(|i| (i == 2).then(|| "h.hdv".into())) };
-        *s.slot_mut(5) = SlotCardSpec::Uthernet2 { interface: "eth0".into(), virtual_dns: true };
+        *s.slot_mut(7) = SlotCardSpec::GenericHdd {
+            firmware: HdcFirmware::SmartPort,
+            images: std::array::from_fn(|i| (i == 2).then(|| "h.hdv".into())),
+        };
+        *s.slot_mut(5) = SlotCardSpec::Uthernet2 {
+            interface: "eth0".into(),
+            virtual_dns: true,
+        };
         *s.slot_mut(3) = SlotCardSpec::Saturn128K { banks: 4 };
         s.video.window_pos = Some((10, -20));
         let text = s.to_toml().unwrap();

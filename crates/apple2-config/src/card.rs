@@ -41,9 +41,32 @@ impl CardType {
     const ALL: [CardType; 26] = {
         use CardType::*;
         [
-            Empty, Disk2, Ssc, MockingboardC, GenericPrinter, GenericHdd, GenericClock, MouseInterface, Z80, Phasor, Echo, Sam,
-            Col80, Extended80Col, RamWorksIII, Uthernet, LanguageCard, LanguageCardIIe, Saturn128K, FourPlay, SnesMax, VidHd,
-            Uthernet2, MegaAudio, SdMusic, BreakpointCard,
+            Empty,
+            Disk2,
+            Ssc,
+            MockingboardC,
+            GenericPrinter,
+            GenericHdd,
+            GenericClock,
+            MouseInterface,
+            Z80,
+            Phasor,
+            Echo,
+            Sam,
+            Col80,
+            Extended80Col,
+            RamWorksIII,
+            Uthernet,
+            LanguageCard,
+            LanguageCardIIe,
+            Saturn128K,
+            FourPlay,
+            SnesMax,
+            VidHd,
+            Uthernet2,
+            MegaAudio,
+            SdMusic,
+            BreakpointCard,
         ]
     };
 
@@ -133,7 +156,11 @@ pub struct DriveSpec {
 
 impl Default for DriveSpec {
     fn default() -> Self {
-        DriveSpec { image: None, write_protect: false, connected: true }
+        DriveSpec {
+            image: None,
+            write_protect: false,
+            connected: true,
+        }
     }
 }
 
@@ -152,7 +179,14 @@ pub struct PrinterSpec {
 
 impl Default for PrinterSpec {
     fn default() -> Self {
-        PrinterSpec { dump_to_printer: false, convert_encoding: true, filter_unprintable: true, append: false, filename: None, idle_limit: 10 }
+        PrinterSpec {
+            dump_to_printer: false,
+            convert_encoding: true,
+            filter_unprintable: true,
+            append: false,
+            filename: None,
+            idle_limit: 10,
+        }
     }
 }
 
@@ -172,7 +206,12 @@ pub struct SoundSockets {
 
 impl Default for SoundSockets {
     fn default() -> Self {
-        SoundSockets { ay: [AyChip::Ay8910, AyChip::Ay8910, AyChip::Empty, AyChip::Empty], ssi263: [Ssi263Chip::Empty, Ssi263Chip::Ssi263AP], sc01: true, bad_6522: [false; 2] }
+        SoundSockets {
+            ay: [AyChip::Ay8910, AyChip::Ay8910, AyChip::Empty, AyChip::Empty],
+            ssi263: [Ssi263Chip::Empty, Ssi263Chip::Ssi263AP],
+            sc01: true,
+            bad_6522: [false; 2],
+        }
     }
 }
 
@@ -265,14 +304,28 @@ mod opt_paths {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::path::PathBuf;
 
-    pub fn serialize<S: Serializer, const N: usize>(v: &[Option<PathBuf>; N], s: S) -> Result<S::Ok, S::Error> {
-        let strings: Vec<String> = v.iter().map(|p| p.as_ref().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()).collect();
+    pub fn serialize<S: Serializer, const N: usize>(
+        v: &[Option<PathBuf>; N],
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
+        let strings: Vec<String> = v
+            .iter()
+            .map(|p| {
+                p.as_ref()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .collect();
         strings.serialize(s)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>, const N: usize>(d: D) -> Result<[Option<PathBuf>; N], D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>, const N: usize>(
+        d: D,
+    ) -> Result<[Option<PathBuf>; N], D::Error> {
         let strings = Vec::<String>::deserialize(d)?;
-        Ok(std::array::from_fn(|i| strings.get(i).filter(|s| !s.is_empty()).map(PathBuf::from)))
+        Ok(std::array::from_fn(|i| {
+            strings.get(i).filter(|s| !s.is_empty()).map(PathBuf::from)
+        }))
     }
 }
 
@@ -293,29 +346,53 @@ impl SlotCardSpec {
         use SlotCardSpec as S;
         match ty {
             C::Empty => S::Empty,
-            C::Disk2 => S::Disk2 { firmware_13_sector: false, drives: Default::default() },
-            C::Ssc => S::Ssc { serial_port: String::new(), tcp_port: None, support_dcd: false },
+            C::Disk2 => S::Disk2 {
+                firmware_13_sector: false,
+                drives: Default::default(),
+            },
+            C::Ssc => S::Ssc {
+                serial_port: String::new(),
+                tcp_port: None,
+                support_dcd: false,
+            },
             C::MockingboardC => S::MockingboardC(Default::default()),
-            C::Phasor => S::Phasor(SoundSockets { ay: [AyChip::Ay8910; 4], ..Default::default() }),
+            C::Phasor => S::Phasor(SoundSockets {
+                ay: [AyChip::Ay8910; 4],
+                ..Default::default()
+            }),
             C::MegaAudio => S::MegaAudio(Default::default()),
             C::SdMusic => S::SdMusic(Default::default()),
             C::GenericPrinter => S::GenericPrinter(Default::default()),
-            C::GenericHdd => S::GenericHdd { firmware: HdcFirmware::Default, images: Default::default() },
+            C::GenericHdd => S::GenericHdd {
+                firmware: HdcFirmware::Default,
+                images: Default::default(),
+            },
             C::GenericClock => S::GenericClock,
-            C::MouseInterface => S::MouseInterface { show_crosshair: true, restrict_to_window: false },
+            C::MouseInterface => S::MouseInterface {
+                show_crosshair: true,
+                restrict_to_window: false,
+            },
             C::Z80 => S::Z80,
             C::Echo => S::Echo,
             C::Sam => S::Sam,
             C::Col80 => S::Col80,
             C::Extended80Col => S::Extended80Col,
             C::RamWorksIII => S::RamWorksIII { banks: 16 },
-            C::Uthernet => S::Uthernet { interface: String::new() },
-            C::Uthernet2 => S::Uthernet2 { interface: String::new(), virtual_dns: false },
+            C::Uthernet => S::Uthernet {
+                interface: String::new(),
+            },
+            C::Uthernet2 => S::Uthernet2 {
+                interface: String::new(),
+                virtual_dns: false,
+            },
             C::LanguageCard => S::LanguageCard,
             C::LanguageCardIIe => S::LanguageCardIIe,
             C::Saturn128K => S::Saturn128K { banks: 8 },
             C::FourPlay => S::FourPlay,
-            C::SnesMax => S::SnesMax { alt_controller: [false; 2], user_mapping: Default::default() },
+            C::SnesMax => S::SnesMax {
+                alt_controller: [false; 2],
+                user_mapping: Default::default(),
+            },
             C::VidHd => S::VidHd,
             C::BreakpointCard => S::BreakpointCard,
         }
@@ -373,21 +450,38 @@ impl SlotCardSpec {
 impl AyChip {
     /// `AY891xType` registry value (AY8910.h:3).
     pub fn from_value(v: u32) -> Option<Self> {
-        [AyChip::Empty, AyChip::Ay8910, AyChip::Ay8912, AyChip::Ay8913, AyChip::Ym2149].get(v as usize).copied()
+        [
+            AyChip::Empty,
+            AyChip::Ay8910,
+            AyChip::Ay8912,
+            AyChip::Ay8913,
+            AyChip::Ym2149,
+        ]
+        .get(v as usize)
+        .copied()
     }
 }
 
 impl Ssi263Chip {
     /// `SSI263Type` registry value (MockingboardDefs.h:10); 3 (SC01) is not a socket chip.
     pub fn from_value(v: u32) -> Option<Self> {
-        [Ssi263Chip::Empty, Ssi263Chip::Ssi263P, Ssi263Chip::Ssi263AP].get(v as usize).copied()
+        [Ssi263Chip::Empty, Ssi263Chip::Ssi263P, Ssi263Chip::Ssi263AP]
+            .get(v as usize)
+            .copied()
     }
 }
 
 impl HdcFirmware {
     /// `HdcMode` registry value (Harddisk.h:41).
     pub fn from_value(v: u32) -> Option<Self> {
-        [HdcFirmware::Default, HdcFirmware::SmartPort, HdcFirmware::BlockMode2Devices, HdcFirmware::BlockMode4Devices].get(v as usize).copied()
+        [
+            HdcFirmware::Default,
+            HdcFirmware::SmartPort,
+            HdcFirmware::BlockMode2Devices,
+            HdcFirmware::BlockMode4Devices,
+        ]
+        .get(v as usize)
+        .copied()
     }
 }
 
@@ -405,7 +499,12 @@ mod tests {
         assert_eq!(CardType::from_value(26), None);
         for v in 0..26 {
             assert_eq!(CardType::from_value(v).unwrap().value(), v);
-            assert_eq!(SlotCardSpec::new(CardType::from_value(v).unwrap()).card_type().value(), v);
+            assert_eq!(
+                SlotCardSpec::new(CardType::from_value(v).unwrap())
+                    .card_type()
+                    .value(),
+                v
+            );
         }
     }
 }

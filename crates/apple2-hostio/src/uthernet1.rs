@@ -245,7 +245,10 @@ impl Uthernet1 {
         let busst = self.pp16(PP_SE_BUSST);
         let txlen = txlen as usize;
         let inhibit_crc = txcmd & 0x1000 != 0;
-        if txlen > MAX_TXLENGTH || (txlen > MAX_TXLENGTH - 4 && !inhibit_crc) || txlen < MIN_TXLENGTH {
+        if txlen > MAX_TXLENGTH
+            || (txlen > MAX_TXLENGTH - 4 && !inhibit_crc)
+            || txlen < MIN_TXLENGTH
+        {
             return; // not allowed: ignored
         }
         self.set_pp16(PP_SE_BUSST, busst & !0x180);
@@ -284,7 +287,9 @@ impl Uthernet1 {
                 let txlength = self.pp16(PP_TXLENGTH) as usize;
                 let txcommand = self.pp16(PP_TXCMD);
                 let busst = self.pp16(PP_SE_BUSST);
-                if txlength > MAX_TXLENGTH || (txlength > MAX_TXLENGTH - 4 && txcommand & 0x1000 == 0) {
+                if txlength > MAX_TXLENGTH
+                    || (txlength > MAX_TXLENGTH - 4 && txcommand & 0x1000 == 0)
+                {
                     self.set_pp16(PP_SE_BUSST, (busst | 0x80) & !0x100); // too big: error
                 } else {
                     self.set_pp16(PP_SE_BUSST, (busst & !0x80) | 0x100); // ready for the next frame
@@ -298,7 +303,8 @@ impl Uthernet1 {
                 self.hash_mask[word] |= (self.pp8(ppaddress + odd as u16) as u32) << shift;
             }
             PP_MAC_ADDR | 0x015A | 0x015C => {
-                self.ia_mac[(ppaddress - PP_MAC_ADDR) as usize + odd] = self.pp8(ppaddress + odd as u16);
+                self.ia_mac[(ppaddress - PP_MAC_ADDR) as usize + odd] =
+                    self.pp8(ppaddress + odd as u16);
             }
             // PP_SE_RXEVENT and PP_SE_BUSST are read-only: the write is accepted but has no effect.
             _ => {}
@@ -536,7 +542,8 @@ impl Card for Uthernet1 {
             return false;
         }
         self.tfe.copy_from_slice(&state[..IO_REGISTERS]);
-        self.pp.copy_from_slice(&state[IO_REGISTERS..IO_REGISTERS + PACKETPAGE_SIZE]);
+        self.pp
+            .copy_from_slice(&state[IO_REGISTERS..IO_REGISTERS + PACKETPAGE_SIZE]);
         let t = IO_REGISTERS + PACKETPAGE_SIZE;
         self.txcollect_buffer = u16::from_le_bytes([state[t], state[t + 1]]);
         self.rx_buffer = u16::from_le_bytes([state[t + 2], state[t + 3]]);

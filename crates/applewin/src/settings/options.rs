@@ -8,9 +8,18 @@ use super::{HostLists, SettingsDialog, AUX};
 use apple2_config::card::{AyChip, HdcFirmware, SlotCardSpec, SoundSockets, Ssi263Chip};
 use egui::{Context, Ui};
 
-const AY_CHIPS: [(AyChip, &str); 5] =
-    [(AyChip::Empty, "Empty"), (AyChip::Ay8910, "AY8910"), (AyChip::Ay8912, "AY8912"), (AyChip::Ay8913, "AY8913"), (AyChip::Ym2149, "YM2149")];
-const SSI_CHIPS: [(Ssi263Chip, &str); 3] = [(Ssi263Chip::Empty, "Empty"), (Ssi263Chip::Ssi263P, "SSI263P"), (Ssi263Chip::Ssi263AP, "SSI263AP")];
+const AY_CHIPS: [(AyChip, &str); 5] = [
+    (AyChip::Empty, "Empty"),
+    (AyChip::Ay8910, "AY8910"),
+    (AyChip::Ay8912, "AY8912"),
+    (AyChip::Ay8913, "AY8913"),
+    (AyChip::Ym2149, "YM2149"),
+];
+const SSI_CHIPS: [(Ssi263Chip, &str); 3] = [
+    (Ssi263Chip::Empty, "Empty"),
+    (Ssi263Chip::Ssi263P, "SSI263P"),
+    (Ssi263Chip::Ssi263AP, "SSI263AP"),
+];
 const HDC_FW: [(HdcFirmware, &str); 4] = [
     (HdcFirmware::Default, "Default"),
     (HdcFirmware::SmartPort, "SmartPort"),
@@ -37,20 +46,36 @@ fn title(spec: &SlotCardSpec) -> &'static str {
 impl SettingsDialog {
     /// Draws the open card options dialog, if any.
     pub(super) fn draw_sub(&mut self, ctx: &Context) {
-        let Some(mut sub) = self.sub.take() else { return };
+        let Some(mut sub) = self.sub.take() else {
+            return;
+        };
         let hosts = self.hosts().clone();
-        let mut spec = if sub.slot == AUX { self.draft.aux.card.clone() } else { self.draft.slots.0[sub.slot].clone() };
+        let mut spec = if sub.slot == AUX {
+            self.draft.aux.card.clone()
+        } else {
+            self.draft.slots.0[sub.slot].clone()
+        };
         let mut ok = false;
         let mut cancel = false;
-        egui::Window::new(title(&spec)).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO).show(ctx, |ui| {
-            ui.set_min_width(380.0);
-            card_ui(ui, &mut spec, &mut sub.ssc, &hosts, &mut self.draft.video.show_disk_leds);
-            ui.separator();
-            ui.horizontal(|ui| {
-                ok = ui.button("OK").clicked();
-                cancel = ui.button("Cancel").clicked();
+        egui::Window::new(title(&spec))
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_min_width(380.0);
+                card_ui(
+                    ui,
+                    &mut spec,
+                    &mut sub.ssc,
+                    &hosts,
+                    &mut self.draft.video.show_disk_leds,
+                );
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ok = ui.button("OK").clicked();
+                    cancel = ui.button("Cancel").clicked();
+                });
             });
-        });
         if cancel {
             spec = sub.backup.clone();
         }
@@ -65,9 +90,18 @@ impl SettingsDialog {
     }
 }
 
-fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, hosts: &HostLists, show_leds: &mut bool) {
+fn card_ui(
+    ui: &mut Ui,
+    spec: &mut SlotCardSpec,
+    ssc: &mut Option<SscForm>,
+    hosts: &HostLists,
+    show_leds: &mut bool,
+) {
     match spec {
-        SlotCardSpec::Disk2 { firmware_13_sector, drives } => {
+        SlotCardSpec::Disk2 {
+            firmware_13_sector,
+            drives,
+        } => {
             group(ui, |ui| {
                 ui.strong("Floppy Disk Drives");
                 if ui.button("Swap").clicked() {
@@ -82,7 +116,13 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                             ui,
                             "Disk image",
                             &mut d.image,
-                            Some(("Disk images", &["dsk", "do", "po", "nib", "woz", "2mg", "2img", "gz", "zip", "iie"])),
+                            Some((
+                                "Disk images",
+                                &[
+                                    "dsk", "do", "po", "nib", "woz", "2mg", "2img", "gz", "zip",
+                                    "iie",
+                                ],
+                            )),
                         );
                     });
                     ui.horizontal(|ui| {
@@ -104,7 +144,15 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                 for (i, img) in images.iter_mut().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(format!("HDD {}:", i + 1));
-                        path_row(ui, "Hard disk image", img, Some(("Hard disk images", &["hdv", "po", "2mg", "2img", "gz", "zip", "dsk"])));
+                        path_row(
+                            ui,
+                            "Hard disk image",
+                            img,
+                            Some((
+                                "Hard disk images",
+                                &["hdv", "po", "2mg", "2img", "gz", "zip", "dsk"],
+                            )),
+                        );
                     });
                 }
                 ui.horizontal(|ui| {
@@ -125,25 +173,39 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                     ui.horizontal(|ui| {
                         ui.label("TCP port:");
                         let mut p = u32::from(form.tcp_port);
-                        if ui.add(egui::DragValue::new(&mut p).range(1..=65535)).changed() {
+                        if ui
+                            .add(egui::DragValue::new(&mut p).range(1..=65535))
+                            .changed()
+                        {
                             form.tcp_port = p as u16;
                         }
                     });
-                    ui.colored_label(egui::Color32::from_rgb(230, 150, 40), model::SSC_TCP_WARNING);
+                    ui.colored_label(
+                        egui::Color32::from_rgb(230, 150, 40),
+                        model::SSC_TCP_WARNING,
+                    );
                 } else {
                     ui.horizontal(|ui| {
                         ui.label("Serial Port:");
-                        let shown = if form.serial_port.is_empty() { "(none)".to_string() } else { form.serial_port.clone() };
-                        egui::ComboBox::from_id_salt("serialport").selected_text(shown).show_ui(ui, |ui| {
-                            ui.selectable_value(&mut form.serial_port, String::new(), "(none)");
-                            for p in &hosts.serial_ports {
-                                ui.selectable_value(&mut form.serial_port, p.clone(), p);
-                            }
-                        });
+                        let shown = if form.serial_port.is_empty() {
+                            "(none)".to_string()
+                        } else {
+                            form.serial_port.clone()
+                        };
+                        egui::ComboBox::from_id_salt("serialport")
+                            .selected_text(shown)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut form.serial_port, String::new(), "(none)");
+                                for p in &hosts.serial_ports {
+                                    ui.selectable_value(&mut form.serial_port, p.clone(), p);
+                                }
+                            });
                     });
                     ui.horizontal(|ui| {
                         ui.label("or type a name:");
-                        ui.add(egui::TextEdit::singleline(&mut form.serial_port).desired_width(180.0));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut form.serial_port).desired_width(180.0),
+                        );
                     });
                 }
                 ui.checkbox(&mut form.support_dcd, "Support DCD (modem control lines)");
@@ -153,8 +215,15 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
         SlotCardSpec::GenericPrinter(p) => {
             ui.label("Printer dump filename:");
             ui.horizontal(|ui| {
-                let mut text = p.filename.as_ref().map(|f| f.display().to_string()).unwrap_or_default();
-                if ui.add(egui::TextEdit::singleline(&mut text).desired_width(260.0)).changed() {
+                let mut text = p
+                    .filename
+                    .as_ref()
+                    .map(|f| f.display().to_string())
+                    .unwrap_or_default();
+                if ui
+                    .add(egui::TextEdit::singleline(&mut text).desired_width(260.0))
+                    .changed()
+                {
                     p.filename = (!text.is_empty()).then(|| text.clone().into());
                 }
                 if ui.button("Browse...").clicked() {
@@ -175,7 +244,10 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                 });
             });
         }
-        SlotCardSpec::MouseInterface { show_crosshair, restrict_to_window } => {
+        SlotCardSpec::MouseInterface {
+            show_crosshair,
+            restrict_to_window,
+        } => {
             group(ui, |ui| {
                 ui.strong("UI");
                 ui.checkbox(show_crosshair, "Show crosshairs in window's frame");
@@ -185,10 +257,19 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
         SlotCardSpec::Saturn128K { banks } => {
             group(ui, |ui| {
                 ui.strong("RAM Size (KB)");
-                let mut idx = model::SATURN_BANK_STEPS.iter().position(|b| b == banks).unwrap_or(3);
+                let mut idx = model::SATURN_BANK_STEPS
+                    .iter()
+                    .position(|b| b == banks)
+                    .unwrap_or(3);
                 let steps = model::SATURN_BANK_STEPS;
                 if ui
-                    .add(egui::Slider::new(&mut idx, 0..=steps.len() - 1).custom_formatter(move |v, _| format!("{}KB", u32::from(steps[v as usize]) * 16)).show_value(true))
+                    .add(
+                        egui::Slider::new(&mut idx, 0..=steps.len() - 1)
+                            .custom_formatter(move |v, _| {
+                                format!("{}KB", u32::from(steps[v as usize]) * 16)
+                            })
+                            .show_value(true),
+                    )
                     .changed()
                 {
                     *banks = steps[idx];
@@ -201,10 +282,18 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                 let steps = model::RW3_BANK_STEPS;
                 let mut idx = steps.iter().position(|b| b == banks).unwrap_or(4);
                 if ui
-                    .add(egui::Slider::new(&mut idx, 0..=steps.len() - 1).custom_formatter(move |v, _| {
-                        let kb = u32::from(steps[v as usize]) * 64;
-                        if kb >= 1024 { format!("{}MB", kb / 1024) } else { format!("{kb}KB") }
-                    }))
+                    .add(
+                        egui::Slider::new(&mut idx, 0..=steps.len() - 1).custom_formatter(
+                            move |v, _| {
+                                let kb = u32::from(steps[v as usize]) * 64;
+                                if kb >= 1024 {
+                                    format!("{}MB", kb / 1024)
+                                } else {
+                                    format!("{kb}KB")
+                                }
+                            },
+                        ),
+                    )
                     .changed()
                 {
                     *banks = steps[idx];
@@ -214,7 +303,10 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
         SlotCardSpec::MockingboardC(s) => sockets_ui(ui, s, 2),
         SlotCardSpec::Phasor(s) => sockets_ui(ui, s, 4),
         SlotCardSpec::Uthernet { interface } => ethernet_ui(ui, interface, None, hosts),
-        SlotCardSpec::Uthernet2 { interface, virtual_dns } => ethernet_ui(ui, interface, Some(virtual_dns), hosts),
+        SlotCardSpec::Uthernet2 {
+            interface,
+            virtual_dns,
+        } => ethernet_ui(ui, interface, Some(virtual_dns), hosts),
         _ => {
             ui.label("This card has no options.");
         }
@@ -245,17 +337,33 @@ fn sockets_ui(ui: &mut Ui, s: &mut SoundSockets, ay_count: usize) {
     });
 }
 
-fn ethernet_ui(ui: &mut Ui, interface: &mut String, virtual_dns: Option<&mut bool>, hosts: &HostLists) {
+fn ethernet_ui(
+    ui: &mut Ui,
+    interface: &mut String,
+    virtual_dns: Option<&mut bool>,
+    hosts: &HostLists,
+) {
     ui.horizontal(|ui| {
         ui.label("Interface");
-        let shown = if interface.is_empty() { "(none)".to_string() } else { interface.clone() };
-        egui::ComboBox::from_id_salt("tfeif").width(260.0).selected_text(shown).show_ui(ui, |ui| {
-            ui.selectable_value(interface, String::new(), "(none)");
-            for (name, desc) in &hosts.interfaces {
-                let label = if desc.is_empty() { name.clone() } else { format!("{name} - {desc}") };
-                ui.selectable_value(interface, name.clone(), label);
-            }
-        });
+        let shown = if interface.is_empty() {
+            "(none)".to_string()
+        } else {
+            interface.clone()
+        };
+        egui::ComboBox::from_id_salt("tfeif")
+            .width(260.0)
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(interface, String::new(), "(none)");
+                for (name, desc) in &hosts.interfaces {
+                    let label = if desc.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{name} - {desc}")
+                    };
+                    ui.selectable_value(interface, name.clone(), label);
+                }
+            });
     });
     ui.horizontal(|ui| {
         ui.label("or type a name:");

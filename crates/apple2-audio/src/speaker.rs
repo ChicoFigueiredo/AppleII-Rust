@@ -34,7 +34,13 @@ pub struct SpeakerPcm {
 
 impl Default for SpeakerPcm {
     fn default() -> Self {
-        SpeakerPcm { level: SPKR_DATA_INIT, quieter: false, dc: 0.0, frames_done: 0, last_activity: None }
+        SpeakerPcm {
+            level: SPKR_DATA_INIT,
+            quieter: false,
+            dc: 0.0,
+            frames_done: 0,
+            last_activity: None,
+        }
     }
 }
 
@@ -53,7 +59,11 @@ impl SpeakerPcm {
         self.dc = DC_FULL;
         match ev {
             SpeakerEvent::Toggle => {
-                let drive = if self.quieter { SPKR_DATA_INIT / 4 } else { SPKR_DATA_INIT };
+                let drive = if self.quieter {
+                    SPKR_DATA_INIT / 4
+                } else {
+                    SPKR_DATA_INIT
+                };
                 self.level = if self.level == drive { !drive } else { drive };
             }
             SpeakerEvent::Dac(d) => {
@@ -80,7 +90,11 @@ impl SpeakerPcm {
             let b0 = clock.cycle_of_frame(self.frames_done);
             let b1 = clock.cycle_of_frame(self.frames_done + 1);
             // 0.2 s of Apple time without activity: undo the DAC muting (Spkr_SetActive(false)).
-            if self.quieter && self.last_activity.is_some_and(|a| b0.saturating_sub(a) > clock.clk_mhz / 5000) {
+            if self.quieter
+                && self
+                    .last_activity
+                    .is_some_and(|a| b0.saturating_sub(a) > clock.clk_mhz / 5000)
+            {
                 self.quieter = false;
             }
             let mut cur = b0;
@@ -151,7 +165,10 @@ mod tests {
         // A toggle every 500 cycles at 1 MHz = 1 kHz square wave (period 1000 cycles).
         let toggles: Vec<u64> = (1..=400).map(|i| i * 500).collect();
         let out = render(&toggles, 200_000);
-        let crossings = out.windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
+        let crossings = out
+            .windows(2)
+            .filter(|w| (w[0] < 0.0) != (w[1] < 0.0))
+            .count();
         // 0.2 s * 1 kHz * 2 edges per period = 400 edges.
         assert!((395..=405).contains(&crossings), "{crossings}");
         let peak = out.iter().cloned().fold(0.0, f32::max);
@@ -171,7 +188,10 @@ mod tests {
     #[test]
     fn sam_dac_sets_level_and_quietens_speaker_until_idle() {
         let mut s = SpeakerPcm::new();
-        let mut ev = vec![(10, SpeakerEvent::Dac(0xFF)), (20_000, SpeakerEvent::Toggle)];
+        let mut ev = vec![
+            (10, SpeakerEvent::Dac(0xFF)),
+            (20_000, SpeakerEvent::Toggle),
+        ];
         let mut out = vec![];
         s.render(&clock(), &mut ev, 50_000, &mut out);
         assert!(s.is_quieter());

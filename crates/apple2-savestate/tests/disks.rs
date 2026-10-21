@@ -24,7 +24,9 @@ fn document(slot_entries: &str) -> String {
     t.push_str("\nUnit:\n  Type: Auxiliary Slot\n  Version: 2\n  State:\n    Card: Empty\n    Version: 4\n");
     t.push_str("\nUnit:\n  Type: Slots\n  Version: 1\n  State:\n");
     t.push_str(slot_entries);
-    t.push_str("\nUnit:\n  Type: Game I/O Connector\n  Version: 4\n  State:\n    Shift Key Mod: false\n");
+    t.push_str(
+        "\nUnit:\n  Type: Game I/O Connector\n  Version: 4\n  State:\n    Shift Key Mod: false\n",
+    );
     t
 }
 
@@ -63,14 +65,35 @@ fn golden_disk2_v9_entry_restores_the_drive() {
     let m = loaded.machine;
     let c = m.card::<Disk2Card>(6).expect("Disk II in slot 6");
     let s = c.snapshot();
-    assert_eq!((s.current_drive, s.magnet_states, s.enhance_disk, s.floppy_latch, s.motor_on), (1, 4, false, 0x96, true));
+    assert_eq!(
+        (
+            s.current_drive,
+            s.magnet_states,
+            s.enhance_disk,
+            s.floppy_latch,
+            s.motor_on
+        ),
+        (1, 4, false, 0x96, true)
+    );
     assert_eq!((s.last_cycle, s.last_read_latch_cycle), (0xFFF00, 0xFFF10));
     assert_eq!((s.shift_reg, s.latch_delay, s.seq_func), (0x5A, -2, 2));
     let d0 = &s.drives[0];
     assert!(d0.connected);
     assert_eq!((d0.phase, d0.phase_precise, d0.head_window), (8, 8.0, 3));
-    assert_eq!((d0.last_stepper_cycle, d0.motor_on_cycle, d0.spinning), (0xFFE00, 0xFF000, 77));
-    assert_eq!((d0.byte, d0.nibbles, d0.extra_cycles, d0.track_data, d0.track_dirty), (0x123, 0x1A00, 0.25, true, false));
+    assert_eq!(
+        (d0.last_stepper_cycle, d0.motor_on_cycle, d0.spinning),
+        (0xFFE00, 0xFF000, 77)
+    );
+    assert_eq!(
+        (
+            d0.byte,
+            d0.nibbles,
+            d0.extra_cycles,
+            d0.track_data,
+            d0.track_dirty
+        ),
+        (0x123, 0x1A00, 0.25, true, false)
+    );
     assert_eq!(d0.filename, DOS33);
     assert_eq!(d0.track.as_ref().unwrap()[..64], [0xFF; 64]);
     assert!(c.is_drive_empty(1));
@@ -90,7 +113,10 @@ fn old_v3_unit_layout_loads() {
     let c = loaded.machine.card::<Disk2Card>(6).unwrap();
     let snap = c.snapshot();
     assert_eq!((snap.last_cycle, snap.last_read_latch_cycle), (0x10, 0x20));
-    assert_eq!((snap.drives[0].phase, snap.drives[0].phase_precise), (6, 6.0));
+    assert_eq!(
+        (snap.drives[0].phase, snap.drives[0].phase_precise),
+        (6, 6.0)
+    );
 }
 
 #[test]
@@ -104,7 +130,11 @@ fn missing_image_is_a_warning_not_an_error() {
     let loaded = load_aws_yaml(&document(&disk2_v9("gone.dsk")), &mut NoDisks).unwrap();
     assert_eq!(loaded.warnings.len(), 1, "{:?}", loaded.warnings);
     assert!(loaded.warnings[0].contains("gone.dsk"));
-    assert!(loaded.machine.card::<Disk2Card>(6).unwrap().is_drive_empty(0));
+    assert!(loaded
+        .machine
+        .card::<Disk2Card>(6)
+        .unwrap()
+        .is_drive_empty(0));
 }
 
 #[test]
@@ -115,8 +145,23 @@ fn path_with_backslashes_round_trips() {
     img.set_write_protected(true);
     card.insert_disk(0, img);
     m.insert_card(6, Box::new(card));
-    let saved = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap();
-    assert!(saved.text.contains("Filename: x.dsk\n"), "{}", saved.text.lines().filter(|l| l.contains("Filename")).collect::<String>());
+    let saved = save_aws_yaml(
+        &m,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        saved.text.contains("Filename: x.dsk\n"),
+        "{}",
+        saved
+            .text
+            .lines()
+            .filter(|l| l.contains("Filename"))
+            .collect::<String>()
+    );
 }
 
 #[test]
@@ -141,9 +186,20 @@ fn woz_disk_saved_mid_boot_continues_identically() {
     assert_eq!(a.save_state(), b.save_state());
     // Without the extension the WOZ bit position, shift register and track buffer still come
     // from the AppleWin keys.
-    let text2 = save_aws_yaml(&a, &SaveOptions { extension: false, ..Default::default() }).unwrap().text;
+    let text2 = save_aws_yaml(
+        &a,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .text;
     let c = load_aws_yaml(&text2, &mut Woz(woz)).unwrap().machine;
-    let (sa, sc) = (a.card::<Disk2Card>(6).unwrap().snapshot(), c.card::<Disk2Card>(6).unwrap().snapshot());
+    let (sa, sc) = (
+        a.card::<Disk2Card>(6).unwrap().snapshot(),
+        c.card::<Disk2Card>(6).unwrap().snapshot(),
+    );
     assert_eq!(sa, sc);
     for _ in 0..500 {
         a.run_frame();
@@ -168,12 +224,25 @@ fn hard_disk_controller_round_trips() {
     impl LoadHost for Hd {
         fn open_image(&mut self, req: &ImageRequest) -> Result<DiskImage, String> {
             assert!(req.hard_disk);
-            DiskImage::hard_disk_from_bytes(req.filename, disk("ProDOS_2_4_3.po")).map_err(|e| e.to_string())
+            DiskImage::hard_disk_from_bytes(req.filename, disk("ProDOS_2_4_3.po"))
+                .map_err(|e| e.to_string())
         }
     }
     let saved = save_aws_yaml(&m, &SaveOptions::default()).unwrap();
-    assert!(saved.text.contains("Card: Hard Disk Controller\n      Version: 6\n"), "{}", saved.text.lines().filter(|l| l.contains("Card")).collect::<String>());
-    assert!(saved.text.contains("        Unit1:\n          Filename: ProDOS.hdv\n"));
+    assert!(
+        saved
+            .text
+            .contains("Card: Hard Disk Controller\n      Version: 6\n"),
+        "{}",
+        saved
+            .text
+            .lines()
+            .filter(|l| l.contains("Card"))
+            .collect::<String>()
+    );
+    assert!(saved
+        .text
+        .contains("        Unit1:\n          Filename: ProDOS.hdv\n"));
     let mut b = load_aws_yaml(&saved.text, &mut Hd).unwrap().machine;
     assert_eq!(m.save_state(), b.save_state());
     for _ in 0..300 {
@@ -181,7 +250,17 @@ fn hard_disk_controller_round_trips() {
         b.run_frame();
     }
     assert_eq!(m.save_state(), b.save_state());
-    let no_ext = save_aws_yaml(&m, &SaveOptions { extension: false, ..Default::default() }).unwrap();
+    let no_ext = save_aws_yaml(
+        &m,
+        &SaveOptions {
+            extension: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     let c = load_aws_yaml(&no_ext.text, &mut Hd).unwrap().machine;
-    assert_eq!(m.card::<HardDiskCard>(7).unwrap().snapshot().units, c.card::<HardDiskCard>(7).unwrap().snapshot().units);
+    assert_eq!(
+        m.card::<HardDiskCard>(7).unwrap().snapshot().units,
+        c.card::<HardDiskCard>(7).unwrap().snapshot().units
+    );
 }

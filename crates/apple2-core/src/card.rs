@@ -35,10 +35,25 @@ pub fn card_event_id(slot: u8, token: u16) -> EventId {
 /// scheduler may be mid-update).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CardOp {
-    Schedule { slot: u8, token: u16, cycles: i32, can_assert_irq: bool },
-    SetCanAssertIrq { slot: u8, token: u16, can_assert_irq: bool },
-    Cancel { slot: u8, token: u16 },
-    SetCpuOwner { slot: u8, active: bool },
+    Schedule {
+        slot: u8,
+        token: u16,
+        cycles: i32,
+        can_assert_irq: bool,
+    },
+    SetCanAssertIrq {
+        slot: u8,
+        token: u16,
+        can_assert_irq: bool,
+    },
+    Cancel {
+        slot: u8,
+        token: u16,
+    },
+    SetCpuOwner {
+        slot: u8,
+        active: bool,
+    },
 }
 
 /// The instruction in execution when a card is called: lets a card model the 6502 false read of
@@ -126,29 +141,48 @@ impl CardCtx<'_> {
     /// [`CardCtx::schedule`] with `SyncEvent::m_canAssertIRQ`: when false, expiring exactly on
     /// the last cycle of an opcode does not defer the IRQ by one opcode (6522, IER bit clear).
     pub fn schedule_gated(&mut self, token: u16, cycles: i32, can_assert_irq: bool) {
-        self.ops.push(CardOp::Schedule { slot: self.slot, token, cycles, can_assert_irq });
+        self.ops.push(CardOp::Schedule {
+            slot: self.slot,
+            token,
+            cycles,
+            can_assert_irq,
+        });
     }
 
     /// Changes `can_assert_irq` of the pending event `token`, if any (6522.cpp:217-220).
     pub fn set_can_assert_irq(&mut self, token: u16, can_assert_irq: bool) {
-        self.ops.push(CardOp::SetCanAssertIrq { slot: self.slot, token, can_assert_irq });
+        self.ops.push(CardOp::SetCanAssertIrq {
+            slot: self.slot,
+            token,
+            can_assert_irq,
+        });
     }
 
     pub fn cancel(&mut self, token: u16) {
-        self.ops.push(CardOp::Cancel { slot: self.slot, token });
+        self.ops.push(CardOp::Cancel {
+            slot: self.slot,
+            token,
+        });
     }
 
     /// Hands the CPU to this card's [`AltCpu`] (`true`, e.g. Z80 SoftCard, AppleWin
     /// `SetActiveCpu(CPU_Z80)`) or back to the 6502 (`false`).
     pub fn set_cpu_owner(&mut self, active: bool) {
-        self.ops.push(CardOp::SetCpuOwner { slot: self.slot, active });
+        self.ops.push(CardOp::SetCpuOwner {
+            slot: self.slot,
+            active,
+        });
     }
 
     /// `NTSC_GetCyclesUntilVBlank(0)` (NTSC.cpp:2761): cycles from now to line 192.
     pub fn cycles_until_vblank(&self) -> u32 {
         let vbl = 192 * 65;
         let pos = self.frame_cycle % self.cycles_per_frame;
-        if pos < vbl { vbl - pos } else { self.cycles_per_frame - pos + vbl }
+        if pos < vbl {
+            vbl - pos
+        } else {
+            self.cycles_per_frame - pos + vbl
+        }
     }
 }
 

@@ -118,7 +118,13 @@ fn reset_clears_keycode_and_strobe() {
 #[test]
 fn arrow_keys_per_model() {
     let mut e = custom(Model::Apple2e);
-    for (k, code) in [(NavKey::Left, 0x08), (NavKey::Up, 0x0B), (NavKey::Right, 0x15), (NavKey::Down, 0x0A), (NavKey::Delete, 0x7F)] {
+    for (k, code) in [
+        (NavKey::Left, 0x08),
+        (NavKey::Up, 0x0B),
+        (NavKey::Right, 0x15),
+        (NavKey::Down, 0x0A),
+        (NavKey::Delete, 0x7F),
+    ] {
         assert!(e.key_press_nav(k));
         assert_eq!(rd(&mut e, 0xC000), 0x80 | code);
     }
@@ -143,11 +149,19 @@ fn paste_queue_advances_one_char_per_strobe_clear_and_collapses_crlf() {
     rd(&mut m, 0xC010); // a ][ read of $C01x clears too
     assert_eq!(rd(&mut m, 0xC000), 0xC2);
     wr(&mut m, 0xC010, 0);
-    assert_eq!(rd(&mut m, 0xC000), 0x8A, "lone LF is kept; non-ASCII is dropped");
+    assert_eq!(
+        rd(&mut m, 0xC000),
+        0x8A,
+        "lone LF is kept; non-ASCII is dropped"
+    );
     wr(&mut m, 0xC010, 0);
     assert_eq!(rd(&mut m, 0xC000), 0xC3);
     wr(&mut m, 0xC010, 0);
-    assert_eq!(rd(&mut m, 0xC000), 0, "queue empty: real keyboard state again");
+    assert_eq!(
+        rd(&mut m, 0xC000),
+        0,
+        "queue empty: real keyboard state again"
+    );
     assert!(m.paste("Z"));
 }
 
@@ -195,7 +209,11 @@ fn pravets8a_c060_reports_8bit_keyboard_mode() {
     wr(&mut m, 0xC060, 1); // allow 8-bit
     m.set_caps_lock(false);
     m.key_press(b'a');
-    assert_eq!(rd(&mut m, 0xC060) & 0x80, 0, "lowercase letter: bit 7 clear");
+    assert_eq!(
+        rd(&mut m, 0xC060) & 0x80,
+        0,
+        "lowercase letter: bit 7 clear"
+    );
     m.key_press(0x01); // CTRL-A: special key
     assert_eq!(rd(&mut m, 0xC060) & 0x80, 0x80);
     m.key_press(b'A'); // shifted (caps lock off, uppercase typed)
@@ -226,7 +244,11 @@ fn speaker_toggles_record_the_cycle_the_opcode_started() {
     // AppleWin runs the I/O handler before adding the opcode's cycles (cpu6502.h `ABS STA CYC(4)`),
     // so a toggle is stamped with the cycle count at the start of the instruction.
     let mut m = custom(Model::Apple2Plus);
-    load(&mut m, 0x300, &[0xAD, 0x30, 0xC0, 0x8D, 0x30, 0xC0, 0x2C, 0x30, 0xC0, 0xEA]);
+    load(
+        &mut m,
+        0x300,
+        &[0xAD, 0x30, 0xC0, 0x8D, 0x30, 0xC0, 0x2C, 0x30, 0xC0, 0xEA],
+    );
     let c0 = m.cycles();
     for _ in 0..4 {
         m.step();
@@ -259,7 +281,11 @@ fn speaker_log_is_bounded_and_drops_the_oldest() {
     assert_eq!(m.speaker_toggles_dropped(), 10);
     let v: Vec<u64> = m.drain_speaker_toggles().collect();
     assert_eq!((v.len(), v[0]), (CAPACITY, c0 + 70));
-    assert_eq!(m.speaker_toggles_dropped(), 10, "the counter survives draining");
+    assert_eq!(
+        m.speaker_toggles_dropped(),
+        10,
+        "the counter survives draining"
+    );
 }
 
 // ---- Game port ----
@@ -293,15 +319,24 @@ fn buttons_combine_joystick_and_apple_keys() {
 fn default_is_joystick_0_only() {
     let mut ii = custom(Model::Apple2Plus);
     // PB0/PB1 not pressed with joystick 0; PB2 pressed (no joystick 1).
-    assert_eq!([0xC061, 0xC062, 0xC063].map(|a| rd(&mut ii, a) >> 7), [0, 0, 1]);
+    assert_eq!(
+        [0xC061, 0xC062, 0xC063].map(|a| rd(&mut ii, a) >> 7),
+        [0, 0, 1]
+    );
     ii.set_joystick_attached(0, false);
-    assert_eq!([0xC061, 0xC062, 0xC063].map(|a| rd(&mut ii, a) >> 7), [1, 1, 1]);
+    assert_eq!(
+        [0xC061, 0xC062, 0xC063].map(|a| rd(&mut ii, a) >> 7),
+        [1, 1, 1]
+    );
     ii.set_joystick_attached(1, true);
     assert_eq!(rd(&mut ii, 0xC063) >> 7, 0);
     // //e: PB0/PB1 are only the Apple keys even with no joystick 0.
     let mut e = custom(Model::Apple2e);
     e.set_joystick_attached(0, false);
-    assert_eq!([0xC061, 0xC062, 0xC063].map(|a| rd(&mut e, a) >> 7), [0, 0, 1]);
+    assert_eq!(
+        [0xC061, 0xC062, 0xC063].map(|a| rd(&mut e, a) >> 7),
+        [0, 0, 1]
+    );
 }
 
 /// Runs `LDA $C070`, `delay - 4` cycles of filler, then `LDA $C064,X`; true if paddle X read active.
@@ -331,7 +366,10 @@ fn paddle_timer_length_is_exact() {
     // 10 * 2816/255 = 110.43 -> 110 cycles after the strobe's opcode started.
     assert!(paddle_active_after(10, 110, 0));
     assert!(!paddle_active_after(10, 111, 0));
-    assert!(!paddle_active_after(0, 4, 0), "position 0: already out at the next opcode");
+    assert!(
+        !paddle_active_after(0, 4, 0),
+        "position 0: already out at the next opcode"
+    );
     // 255 counts as 287 (KEGS): 3169 cycles.
     assert!(paddle_active_after(255, 3169, 1));
     assert!(!paddle_active_after(255, 3170, 1));
@@ -358,7 +396,10 @@ fn strobe_while_a_timer_runs_has_no_effect() {
 fn paddles_always_active_without_joystick() {
     let mut m = custom(Model::Apple2e);
     m.set_joystick_attached(0, false);
-    assert_eq!([0, 1, 2, 3].map(|n| rd(&mut m, 0xC064 + n) >> 7), [1, 1, 1, 1]);
+    assert_eq!(
+        [0, 1, 2, 3].map(|n| rd(&mut m, 0xC064 + n) >> 7),
+        [1, 1, 1, 1]
+    );
 }
 
 /// The monitor's PREAD ($FB1E) run from the real ROM: Y counts 11-cycle loops until the timer ends.
@@ -423,7 +464,10 @@ fn jplus_an2_selects_ascii_charset() {
     assert!(m.board().video.jplus_ascii);
     let mut p = custom(Model::Apple2Plus);
     rd(&mut p, 0xC05D);
-    assert!(!p.board().video.jplus_ascii, "only the J-Plus has the Katakana ROM");
+    assert!(
+        !p.board().video.jplus_ascii,
+        "only the J-Plus has the Katakana ROM"
+    );
 }
 
 #[test]

@@ -44,13 +44,27 @@ pub enum DiskStatus {
 /// What the drive hardware did, for sound and UI hooks.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DriveEvent {
-    MotorOn { drive: usize },
-    MotorOff { drive: usize },
+    MotorOn {
+        drive: usize,
+    },
+    MotorOff {
+        drive: usize,
+    },
     /// The head moved (phases are in half tracks, `phase / 2` = track).
-    HeadStep { drive: usize, from_phase: f32, to_phase: f32 },
-    DriveSelected { drive: usize },
-    DiskInserted { drive: usize },
-    DiskEjected { drive: usize },
+    HeadStep {
+        drive: usize,
+        from_phase: f32,
+        to_phase: f32,
+    },
+    DriveSelected {
+        drive: usize,
+    },
+    DiskInserted {
+        drive: usize,
+    },
+    DiskEjected {
+        drive: usize,
+    },
 }
 
 /// `Logic State Sequencer` function (UTAIIe 9-14): bit 0 = write mode ($C08E/F), bit 1 = load
@@ -119,7 +133,8 @@ impl Floppy {
         if self.bit_count == 0 {
             return;
         }
-        self.bit_offset = ((self.bit_offset as u64 + bit_cell_delta as u64) % self.bit_count as u64) as u32;
+        self.bit_offset =
+            ((self.bit_offset as u64 + bit_cell_delta as u64) % self.bit_count as u64) as u32;
         self.update_bit_stream_offsets();
     }
 
@@ -142,7 +157,9 @@ impl Floppy {
     }
 
     fn bit(&self) -> bool {
-        self.track.get(self.byte).is_some_and(|b| b & self.bit_mask != 0)
+        self.track
+            .get(self.byte)
+            .is_some_and(|b| b & self.bit_mask != 0)
     }
 }
 
@@ -226,7 +243,9 @@ pub struct Disk2Card {
 }
 
 /// NB. Non-standard 4&4, with Vol=0x00 and Chk=0x00 (only a few titles match). `m_T00S00Pattern`.
-const T00S00_PATTERN: [u8; 12] = [0xD5, 0xAA, 0x96, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xDE];
+const T00S00_PATTERN: [u8; 12] = [
+    0xD5, 0xAA, 0x96, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xDE,
+];
 
 impl Default for Disk2Card {
     fn default() -> Self {
@@ -283,7 +302,13 @@ impl Disk2Card {
         }
         let previous = self.eject_disk(drive);
         let other = 1 - drive;
-        if !image.pathname().is_empty() && self.drives[other].disk.image.as_ref().is_some_and(|i| i.pathname() == image.pathname()) {
+        if !image.pathname().is_empty()
+            && self.drives[other]
+                .disk
+                .image
+                .as_ref()
+                .is_some_and(|i| i.pathname() == image.pathname())
+        {
             self.eject_disk(other);
         }
         let (name, full_name) = image_title(image.pathname());
@@ -300,7 +325,12 @@ impl Disk2Card {
     }
 
     /// Opens `path` and inserts it. `force_write_protected`: ignore the file's writability.
-    pub fn insert_path(&mut self, drive: usize, path: &std::path::Path, force_write_protected: bool) -> Result<(), ImageError> {
+    pub fn insert_path(
+        &mut self,
+        drive: usize,
+        path: &std::path::Path,
+        force_write_protected: bool,
+    ) -> Result<(), ImageError> {
         let image = DiskImage::open_path(path, crate::image::Class::Floppy, force_write_protected)?;
         self.insert_disk(drive, image);
         Ok(())
@@ -379,7 +409,9 @@ impl Disk2Card {
     }
 
     pub fn is_write_protected(&self, drive: usize) -> bool {
-        self.drives.get(drive).is_none_or(|d| d.disk.write_protected)
+        self.drives
+            .get(drive)
+            .is_none_or(|d| d.disk.write_protected)
     }
 
     pub fn set_write_protect(&mut self, drive: usize, wp: bool) {
@@ -432,7 +464,12 @@ impl Disk2Card {
     /// (`InitFirmware`, :2084). Done on every reset; call it after inserting a disk to apply it
     /// without resetting.
     pub fn init_firmware(&mut self) {
-        self.is_13_sector_firmware = self.force_13_sector_firmware || self.drives[0].disk.image.as_ref().is_some_and(DiskImage::boot_sector_is_13);
+        self.is_13_sector_firmware = self.force_13_sector_firmware
+            || self.drives[0]
+                .disk
+                .image
+                .as_ref()
+                .is_some_and(DiskImage::boot_sector_is_13);
     }
 
     /// Selected drive (`GetCurrentDrive`).
@@ -455,7 +492,9 @@ impl Disk2Card {
 
     /// Track under the head (`GetTrack`).
     pub fn track(&self, drive: usize) -> u32 {
-        self.drives.get(drive).map_or(0, |d| DiskImage::phase_to_track(d.phase_precise))
+        self.drives
+            .get(drive)
+            .map_or(0, |d| DiskImage::phase_to_track(d.phase_precise))
     }
 
     /// "NN.nn" track string in hex (`GetCurrentTrackString`).
@@ -560,7 +599,11 @@ impl Disk2Card {
             self.motor_on = new_state;
             self.format_track.drive_not_writing_track();
             let drive = self.curr_drive;
-            self.push_event(if new_state { DriveEvent::MotorOn { drive } } else { DriveEvent::MotorOff { drive } });
+            self.push_event(if new_state {
+                DriveEvent::MotorOn { drive }
+            } else {
+                DriveEvent::MotorOff { drive }
+            });
         }
         self.check_spinning(changed, now);
     }
@@ -646,7 +689,11 @@ impl Disk2Card {
             pd.phase_precise = new_precise;
             pd.disk.track_data = false;
             self.format_track.drive_not_writing_track();
-            self.push_event(DriveEvent::HeadStep { drive: curr, from_phase: from, to_phase: new_precise });
+            self.push_event(DriveEvent::HeadStep {
+                drive: curr,
+                from_phase: from,
+                to_phase: new_precise,
+            });
         }
     }
 
@@ -699,7 +746,9 @@ impl Disk2Card {
         let enhance = self.enhance_disk;
         let f = &mut self.drives[drive].disk;
         let (current_pos, current_len) = (f.bit_offset, f.bit_count);
-        let Some(image) = f.image.as_mut() else { return };
+        let Some(image) = f.image.as_mut() else {
+            return;
+        };
         let (nibbles, bits) = image.read_track(phase, &mut f.track, enhance);
         f.nibbles = nibbles;
         if !is_woz {
@@ -711,7 +760,8 @@ impl Disk2Card {
                 f.bit_count = 8;
             }
             // Cross-track position, WOZ-1.01; "round-up" for sensitive cross-track sync checks (GH#1022).
-            f.bit_offset = ((current_pos as u64 * f.bit_count as u64) / current_len.max(1) as u64) as u32 + 7;
+            f.bit_offset =
+                ((current_pos as u64 * f.bit_count as u64) / current_len.max(1) as u64) as u32 + 7;
             if f.bit_offset >= f.bit_count {
                 f.bit_offset = 0;
             }
@@ -747,7 +797,10 @@ impl Disk2Card {
             let out = f.bit() as u8;
             f.inc_bit_stream();
             guard -= 1;
-            if guard == 0 || (start_bit_offset < 0 && f.bit_offset == 0) || start_bit_offset == f.bit_offset as i32 {
+            if guard == 0
+                || (start_bit_offset < 0 && f.bit_offset == 0)
+                || start_bit_offset == f.bit_offset as i32
+            {
                 break;
             }
             if shift_reg & 0x80 != 0 {
@@ -850,7 +903,8 @@ impl Disk2Card {
             }
             self.floppy_latch = f.track[f.byte];
             self.disk_last_read_latch_cycle = now;
-            self.format_track.decode_latch_nibble_read(self.floppy_latch);
+            self.format_track
+                .decode_latch_nibble_read(self.floppy_latch);
         } else if !self.drives[curr].disk.write_protected {
             if !spinning {
                 return; // if not spinning then only 1 bit-cell gets written?
@@ -860,7 +914,8 @@ impl Disk2Card {
             f.track[f.byte] = latch;
             f.track_dirty = true;
             let (wp, byte, nibbles) = (f.write_protected, f.byte, f.nibbles);
-            self.format_track.decode_latch_nibble_write(latch, spin_nibbles, wp, byte, nibbles);
+            self.format_track
+                .decode_latch_nibble_write(latch, spin_nibbles, wp, byte, nibbles);
         }
         // GH #1212: mirror so the shift register shows the last nibble.
         self.shift_reg = self.floppy_latch;
@@ -874,7 +929,11 @@ impl Disk2Card {
     /// `GetBitCellDelta`: whole bit cells elapsed since the last call (carrying the remainder).
     fn bit_cell_delta(&mut self, now: u64) -> u32 {
         let curr = self.curr_drive;
-        let timing = self.drives[curr].disk.image.as_ref().map_or(32, DiskImage::optimal_bit_timing);
+        let timing = self.drives[curr]
+            .disk
+            .image
+            .as_ref()
+            .map_or(32, DiskImage::optimal_bit_timing);
         let floppy = &mut self.drives[curr].disk;
         // m_extraCycles retains accuracy: 0->9 and 9->20 give the same 5 cells as 0->20.
         let cycle_delta = now.saturating_sub(self.disk_last_cycle) as f64 + floppy.extra_cycles;
@@ -914,7 +973,11 @@ impl Disk2Card {
     /// long FF/10 run.
     fn add_track_seam_jitter(&mut self, phase_precise: f32) {
         let f = &self.drives[self.curr_drive].disk;
-        if phase_precise >= 33.0 * 2.0 && f.longest_sync_ff_run > 110 && f.bit_offset as i32 == f.longest_sync_ff_start && self.rng.chance(5, 10) {
+        if phase_precise >= 33.0 * 2.0
+            && f.longest_sync_ff_run > 110
+            && f.bit_offset as i32 == f.longest_sync_ff_start
+            && self.rng.chance(5, 10)
+        {
             self.drives[self.curr_drive].disk.inc_bit_stream();
         }
     }
@@ -973,7 +1036,11 @@ impl Disk2Card {
             drive.head_window = ((drive.head_window << 1) | bit) & 0xF; // only 4 cells matter; AppleWin saves 4 bits
             let hw = drive.head_window;
             // Within four zero cells the MC3470 returns random "fake" bits (~30% ones, WOZ-2.0).
-            let output = if hw & 0xF != 0 { (hw >> 1) & 1 } else { self.rng.chance(3, 10) as u8 };
+            let output = if hw & 0xF != 0 {
+                (hw >> 1) & 1
+            } else {
+                self.rng.chance(3, 10) as u8
+            };
             self.drives[curr].disk.inc_bit_stream();
             self.add_track_seam_jitter(phase_precise);
 
@@ -992,7 +1059,8 @@ impl Disk2Card {
                 if self.shift_reg & 0x80 != 0 {
                     self.latch_delay = 7;
                     self.shift_reg = 0;
-                    self.format_track.decode_latch_nibble_read(self.floppy_latch);
+                    self.format_track
+                        .decode_latch_nibble_read(self.floppy_latch);
                 }
             }
         }
@@ -1047,13 +1115,19 @@ impl Disk2Card {
             return; // GH#599
         }
         // The LSS saturates the data register before the CPU can read an intermediate value (GH#1078).
-        self.floppy_latch = if self.drives[self.curr_drive].disk.write_protected { 0xFF } else { 0x00 };
+        self.floppy_latch = if self.drives[self.curr_drive].disk.write_protected {
+            0xFF
+        } else {
+            0x00
+        };
         if self.write_started {
             return; // keep reset_logic_state_sequencer from resetting write_started
         }
         if self.drives[self.curr_drive].disk.is_woz() {
             let delta = self.bit_cell_delta(now);
-            self.drives[self.curr_drive].disk.update_bit_stream_position(delta); // fix E7 copy-protection
+            self.drives[self.curr_drive]
+                .disk
+                .update_bit_stream_position(delta); // fix E7 copy-protection
             self.reset_logic_state_sequencer(); // "Set the sequencer to State 0" (UTAIIe 9-21)
         }
     }
@@ -1061,7 +1135,8 @@ impl Disk2Card {
     fn set_read_mode(&mut self) {
         let f = &mut self.drives[self.curr_drive].disk;
         let (byte, nibbles) = (f.byte, f.nibbles);
-        self.format_track.drive_switched_to_read_mode(&mut f.track, byte, nibbles);
+        self.format_track
+            .drive_switched_to_read_mode(&mut f.track, byte, nibbles);
     }
 
     fn set_write_mode(&mut self) {
@@ -1085,11 +1160,16 @@ impl Disk2Card {
         if self.seq_func & 1 == 0 {
             self.write_started = false;
         }
-        if old == CHECK_WRITE_PROT_AND_INIT_WRITE && self.seq_func != CHECK_WRITE_PROT_AND_INIT_WRITE && self.drives[self.curr_drive].disk.is_woz() {
+        if old == CHECK_WRITE_PROT_AND_INIT_WRITE
+            && self.seq_func != CHECK_WRITE_PROT_AND_INIT_WRITE
+            && self.drives[self.curr_drive].disk.is_woz()
+        {
             // Use up the remaining cycles before leaving this mode (write-protect check, bit-slip
             // copy protections such as E7).
             let delta = self.bit_cell_delta(now);
-            self.drives[self.curr_drive].disk.update_bit_stream_position(delta);
+            self.drives[self.curr_drive]
+                .disk
+                .update_bit_stream_position(delta);
         }
     }
 
@@ -1241,7 +1321,10 @@ impl Disk2Card {
             let (data, dirty) = (r.bool()?, r.bool()?);
             let len = r.u32()? as usize;
             let track = r.take(len)?;
-            if f.image.is_some() && f.track.len() >= len && (f.bit_count == 0 || f.bit_offset < f.bit_count) {
+            if f.image.is_some()
+                && f.track.len() >= len
+                && (f.bit_count == 0 || f.bit_offset < f.bit_count)
+            {
                 f.track[..len].copy_from_slice(track);
                 f.track_data = data;
                 f.track_dirty = dirty;
@@ -1330,7 +1413,11 @@ impl Disk2Card {
                 spinning: d.spinning,
                 write_light: d.write_light,
                 filename: f.full_name.clone(),
-                pathname: f.image.as_ref().map(|i| i.pathname().to_string()).unwrap_or_default(),
+                pathname: f
+                    .image
+                    .as_ref()
+                    .map(|i| i.pathname().to_string())
+                    .unwrap_or_default(),
                 write_protected: f.write_protected,
                 byte: f.byte as u32,
                 nibbles: f.nibbles as u32,
@@ -1369,7 +1456,10 @@ impl Disk2Card {
     /// card's context at the loaded cycle count.
     pub fn rearm_deferred_stepper(&self, ctx: &mut CardCtx) {
         if self.deferred_stepper_event {
-            let remaining = self.deferred_stepper_cycles.saturating_sub(ctx.cycles).clamp(1, i32::MAX as u64);
+            let remaining = self
+                .deferred_stepper_cycles
+                .saturating_sub(ctx.cycles)
+                .clamp(1, i32::MAX as u64);
             ctx.schedule(STEPPER_EVENT, remaining as i32);
         }
     }
@@ -1530,12 +1620,17 @@ pub mod manager {
 
     /// True if any card has its motor on in enhanced speed (`IsConditionForFullSpeed`).
     pub fn is_condition_for_full_speed(m: &Machine) -> bool {
-        (0..8).any(|s| m.card::<Disk2Card>(s).is_some_and(Disk2Card::is_condition_for_full_speed))
+        (0..8).any(|s| {
+            m.card::<Disk2Card>(s)
+                .is_some_and(Disk2Card::is_condition_for_full_speed)
+        })
     }
 
     /// All cards share one setting; the first card's is reported (`GetEnhanceDisk`).
     pub fn enhance_disk(m: &Machine) -> bool {
-        (0..8).find_map(|s| m.card::<Disk2Card>(s)).is_some_and(Disk2Card::enhance_disk)
+        (0..8)
+            .find_map(|s| m.card::<Disk2Card>(s))
+            .is_some_and(Disk2Card::enhance_disk)
     }
 
     pub fn set_enhance_disk(m: &mut Machine, enhance: bool) {
@@ -1547,7 +1642,10 @@ pub mod manager {
     }
 
     pub fn is_any_firmware_13_sector(m: &Machine) -> bool {
-        (0..8).any(|s| m.card::<Disk2Card>(s).is_some_and(|c| c.current_firmware() == 13))
+        (0..8).any(|s| {
+            m.card::<Disk2Card>(s)
+                .is_some_and(|c| c.current_firmware() == 13)
+        })
     }
 
     /// Writes back the dirty tracks of every card (before saving or quitting).

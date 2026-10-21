@@ -111,7 +111,9 @@ fn build() -> CharSets {
         // Decoded from AppleWin resource/CHARSET{82,8M,8C}.bmp by tools/gen_pravets_charsets.py.
         pravets82: one(include_bytes!("../data/pravets82.bin")),
         pravets8m: one(include_bytes!("../data/pravets8m.bin")),
-        pravets8c: from_bits(include_bytes!("../data/pravets8c.bin")).try_into().expect("two sets"),
+        pravets8c: from_bits(include_bytes!("../data/pravets8c.bin"))
+            .try_into()
+            .expect("two sets"),
         base64a: [
             from_2k(&roms::BASE64A_GERMAN_VIDEO[..2048], Rom2k::Base64a),
             from_2k(&roms::BASE64A_GERMAN_VIDEO[2048..], Rom2k::Base64a),
@@ -140,7 +142,11 @@ pub fn char_sets(model: Model, jplus_ascii: bool, base64a_rocker: bool) -> &'sta
         Model::Pravets8A => &s.pravets8c,
         Model::Base64A => &s.base64a[!base64a_rocker as usize..][..1],
         // Enhanced //e, TK3000 //e, and AppleWin's fallback for the //c and the "bad" Pravets tags.
-        Model::Apple2eEnhanced | Model::Tk3000e | Model::Apple2c | Model::BadPravets82 | Model::BadPravets8M => &s.e_enhanced,
+        Model::Apple2eEnhanced
+        | Model::Tk3000e
+        | Model::Apple2c
+        | Model::BadPravets82
+        | Model::BadPravets8M => &s.e_enhanced,
     }
 }
 
@@ -153,7 +159,9 @@ pub fn char_sets(model: Model, jplus_ascii: bool, base64a_rocker: bool) -> &'sta
 pub fn user_char_sets(model: Model, rom: &[u8]) -> Option<&'static [Glyphs]> {
     let sets: Vec<Glyphs> = match model {
         Model::Apple2 | Model::Apple2Plus if rom.len() == 2048 => vec![from_2k(rom, Rom2k::Plain)],
-        Model::Apple2e | Model::Apple2eEnhanced | Model::Tk3000e | Model::Apple2c if rom.len() >= 4096 => {
+        Model::Apple2e | Model::Apple2eEnhanced | Model::Tk3000e | Model::Apple2c
+            if rom.len() >= 4096 =>
+        {
             let at = if rom.len() == 4096 { 0 } else { 4096 };
             from_4k(&rom[at..at + 4096]).to_vec()
         }
@@ -167,20 +175,32 @@ mod tests {
     use super::*;
 
     fn art(g: &[u8; 8]) -> Vec<String> {
-        g.iter().map(|r| (0..7).map(|b| if r >> b & 1 != 0 { '#' } else { '.' }).collect()).collect()
+        g.iter()
+            .map(|r| {
+                (0..7)
+                    .map(|b| if r >> b & 1 != 0 { '#' } else { '.' })
+                    .collect()
+            })
+            .collect()
     }
 
-    const F_NORMAL: [&str; 8] =
-        [".......", ".#####.", ".#.....", ".#.....", ".####..", ".#.....", ".#.....", ".#....."];
-
+    const F_NORMAL: [&str; 8] = [
+        ".......", ".#####.", ".#.....", ".#.....", ".####..", ".#.....", ".#.....", ".#.....",
+    ];
 
     #[test]
     fn apple2_f_is_normal_inverse_and_flash_alike() {
         let g = &char_sets(Model::Apple2, false, false)[0];
         assert_eq!(art(&g[0xC6]), F_NORMAL);
         // $06 is inverse: the same dots inverted over all seven columns.
-        let inv: Vec<String> =
-            F_NORMAL.iter().map(|r| r.chars().map(|c| if c == '#' { '.' } else { '#' }).collect()).collect();
+        let inv: Vec<String> = F_NORMAL
+            .iter()
+            .map(|r| {
+                r.chars()
+                    .map(|c| if c == '#' { '.' } else { '#' })
+                    .collect()
+            })
+            .collect();
         assert_eq!(art(&g[0x06]), inv);
         // $46 is the flash half: the normal dots (the flash mask inverts them on alternate phases).
         assert_eq!(art(&g[0x46]), F_NORMAL);
@@ -196,7 +216,10 @@ mod tests {
         let s = user_char_sets(Model::Apple2eEnhanced, &rom4k).unwrap();
         assert_eq!((s.len(), s[1][1][0]), (2, 0x55 ^ 0xFF));
         assert!(user_char_sets(Model::Apple2eEnhanced, &rom2k).is_none());
-        assert_eq!(user_char_sets(Model::Apple2e, &[0u8; 8192]).unwrap().len(), 2);
+        assert_eq!(
+            user_char_sets(Model::Apple2e, &[0u8; 8192]).unwrap().len(),
+            2
+        );
     }
 
     #[test]
@@ -238,7 +261,10 @@ mod tests {
         // AN2 only matters for the inverse/flash half ($00-$7F); normal 'A' is the ][+ glyph.
         assert_ne!(kata[0x01], asc[0x01]);
         assert_eq!(kata[0xC1], asc[0xC1]);
-        assert_eq!(asc[0xC1], char_sets(Model::Apple2Plus, false, false)[0][0xC1]);
+        assert_eq!(
+            asc[0xC1],
+            char_sets(Model::Apple2Plus, false, false)[0][0xC1]
+        );
         // Katakana half repeats $00-$3F at $40-$7F.
         assert_eq!(kata[0x01], kata[0x41]);
     }
@@ -259,7 +285,10 @@ mod tests {
         // Normal 'A' ($C1) of the Pravets 82, decoded from CHARSET82.bmp.
         assert_eq!(
             art(&p82[0xC1]),
-            ["....#..", "...#.#.", "..#...#", "..#...#", "..#####", "..#...#", "..#...#", "......."]
+            [
+                "....#..", "...#.#.", "..#...#", "..#...#", "..#####", "..#...#", "..#...#",
+                "......."
+            ]
         );
         let c = char_sets(Model::Pravets8A, false, false);
         assert_ne!(c[0], c[1]);
