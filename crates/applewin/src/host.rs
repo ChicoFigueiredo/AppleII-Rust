@@ -44,11 +44,14 @@ pub fn key_input(ev: &KeyEvent, m: ModifiersState) -> KeyInput {
                 key,
                 numpad: false,
                 phys,
+                base: None,
             };
         }
     }
+    // Ctrl with Alt is AltGr on Windows (GH#749): its text is the layout character.
+    let ctrl = m.control_key() && !m.alt_key();
     // With Ctrl held some platforms report the control character; ask for the plain key.
-    let logical = if m.control_key() {
+    let logical = if ctrl {
         ev.key_without_modifiers()
     } else {
         ev.logical_key.clone()
@@ -56,7 +59,7 @@ pub fn key_input(ev: &KeyEvent, m: ModifiersState) -> KeyInput {
     let mut key = host_key(&logical);
     // Text wins when there is any: it already includes layout, Shift, Caps Lock, dead keys and
     // AltGr. Control characters (Enter, Tab...) keep their named keys.
-    if !m.control_key() && !matches!(ev.logical_key, Key::Named(_)) {
+    if !ctrl && !matches!(ev.logical_key, Key::Named(_)) {
         if let Some(c) = ev
             .text
             .as_ref()
@@ -66,7 +69,18 @@ pub fn key_input(ev: &KeyEvent, m: ModifiersState) -> KeyInput {
             key = HostKey::Char(c);
         }
     }
-    KeyInput { key, numpad, phys }
+    // The key with no modifier tells AltGr + key with a layout character from one without.
+    let base = match ev.key_without_modifiers() {
+        Key::Character(s) => s.chars().next().filter(|c| !c.is_control()),
+        Key::Named(NamedKey::Space) => Some(' '),
+        _ => None,
+    };
+    KeyInput {
+        key,
+        numpad,
+        phys,
+        base,
+    }
 }
 
 pub fn host_key(key: &Key) -> HostKey {

@@ -627,6 +627,9 @@ impl App {
                     self.input
                         .kbd
                         .set_altgr_sends_char(self.settings.keyboard.altgr_sends_char);
+                    self.input
+                        .kbd
+                        .set_hook_altgr_control(self.settings.keyboard.hook_altgr_control);
                     self.input.resend(); // the machine is rebuilt: it knows no input
                     if !self.input.joy.using_mouse() {
                         self.set_joy_cursor(false);

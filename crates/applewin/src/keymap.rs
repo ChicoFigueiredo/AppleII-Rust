@@ -54,6 +54,11 @@ pub struct KeyInput {
     /// Identity of the physical key (0 = unknown). Press and release of one key can carry
     /// different characters (Shift released first), so AKD tracking goes by this when known.
     pub phys: u32,
+    /// The key with no modifier applied (`KeyEventExtModifierSupplement::key_without_modifiers`):
+    /// what the key is on the layout without Shift or AltGr. `None` when the platform cannot say.
+    /// Tells AltGr + key that produced a layout character (`WM_CHAR` arrives) from one that did
+    /// not (only `WM_KEYDOWN`), see [`altgr_char`].
+    pub base: Option<char>,
 }
 
 impl KeyInput {
@@ -62,6 +67,7 @@ impl KeyInput {
             key,
             numpad: false,
             phys: 0,
+            base: None,
         }
     }
     pub fn numpad(key: HostKey) -> Self {
@@ -69,10 +75,15 @@ impl KeyInput {
             key,
             numpad: true,
             phys: 0,
+            base: None,
         }
     }
     pub fn with_phys(mut self, phys: u32) -> Self {
         self.phys = phys;
+        self
+    }
+    pub fn with_base(mut self, base: char) -> Self {
+        self.base = Some(base);
         self
     }
 
@@ -130,6 +141,50 @@ pub fn char_to_ascii(c: char, mods: Mods) -> Option<u8> {
     }
     let code = c as u32;
     (code != 0 && code <= 0xFF).then_some(code as u8)
+}
+
+/// What AppleWin does with a character key typed while the right Alt (AltGr) is down, as a pure
+/// decision (Keyboard.cpp:231-252). `layout` is the character the layout produced for the key
+/// with the modifiers (the winit `text`, the `WM_CHAR` of Windows) and `base` the same key with
+/// no modifier. `shift`/`caps`: Shift and the Apple's Caps Lock; `ctrl`: Ctrl held *and*
+/// `GetHookAltGrControl()` (`-hook-altgr-control`). `Some(c)` is the character to type; `None`
+/// drops the key.
+///
+/// - The layout defines a character for AltGr + key (`@` on German, `/` on ABNT2): Windows posts
+///   `WM_CHAR` and AppleWin takes it as any other (`KeybQueueKeypress(.., ASCII)`, :123-146).
+///   Whether it is above 0x7F (`€`, `ã`) is then decided by the model, as :139 and :161 do.
+/// - It does not (AltGr + A on US): there is no `WM_CHAR`, and only `-altgr-sends-wmchar`
+///   (`g_bAltGrSendsWM_CHAR`) makes AppleWin post one from the key code (:231-248): letters in
+///   lower case unless Shift or Caps Lock, then control code if `ctrl`; digits and space as
+///   they are. The C++ posts the raw virtual key for the OEM punctuation keys (`VK_OEM_*` are
+///   above 0x7F, which a non-clone //e then rejects at :139), so those give `None` here.
+pub fn altgr_char(
+    layout: char,
+    base: Option<char>,
+    sends_wmchar: bool,
+    shift: bool,
+    caps: bool,
+    ctrl: bool,
+) -> Option<char> {
+    let key = base.unwrap_or(layout);
+    let lower = |c: char| c.to_lowercase().next().unwrap_or(c);
+    if lower(layout) != lower(key) {
+        return Some(layout); // WM_CHAR
+    }
+    if !sends_wmchar {
+        return None; // WM_KEYDOWN only: the key is lost
+    }
+    match lower(key) {
+        c @ 'a'..='z' => Some(if !shift && !caps {
+            c
+        } else if ctrl {
+            (c.to_ascii_uppercase() as u8 - b'A' + 1) as char
+        } else {
+            c.to_ascii_uppercase()
+        }),
+        c @ ('0'..='9' | ' ') => Some(c),
+        _ => None,
+    }
 }
 
 /// Keys the debugger understands (`DebuggerProcessKey`, Debug.cpp:9653): `Char` is a typed
@@ -237,6 +292,8 @@ pub struct KeyboardState {
     /// `-altgr-sends-wmchar` (`g_bAltGrSendsWM_CHAR`, Keyboard.cpp:55): off by default, so
     /// AltGr + key is dropped; on, it is delivered (GH#558, GH#625; Keyboard.cpp:231).
     altgr_sends_char: bool,
+    /// `-hook-altgr-control` (`GetHookAltGrControl`, Keyboard.cpp:244).
+    hook_altgr_control: bool,
 }
 
 impl Default for KeyboardState {
@@ -260,6 +317,7 @@ impl KeyboardState {
             any_down: false,
             altgr_down: false,
             altgr_sends_char: false,
+            hook_altgr_control: false,
         }
     }
 
@@ -272,6 +330,11 @@ impl KeyboardState {
     /// Turns `-altgr-sends-wmchar` on or off.
     pub fn set_altgr_sends_char(&mut self, on: bool) {
         self.altgr_sends_char = on;
+    }
+
+    /// Turns `-hook-altgr-control` on or off.
+    pub fn set_hook_altgr_control(&mut self, on: bool) {
+        self.hook_altgr_control = on;
     }
 
     pub fn caps_lock(&self) -> bool {
@@ -325,8 +388,22 @@ impl KeyboardState {
             HostKey::Char('v' | 'V') if pressed && mods.ctrl && mods.shift && !mods.alt => {
                 out.push(KeyEvent::Paste)
             }
-            // AltGr + character: AppleWin drops it unless `-altgr-sends-wmchar` (Keyboard.cpp:231)
-            HostKey::Char(_) if pressed && self.altgr_down && !self.altgr_sends_char => {}
+            // AltGr + character: WM_CHAR when the layout defines one, else only with
+            // `-altgr-sends-wmchar` (Keyboard.cpp:231, see `altgr_char`)
+            HostKey::Char(c) if pressed && self.altgr_down => {
+                let typed = altgr_char(
+                    c,
+                    input.base,
+                    self.altgr_sends_char,
+                    mods.shift,
+                    self.caps,
+                    mods.ctrl && self.hook_altgr_control,
+                );
+                if let Some(code) = typed.filter(|t| (1..=0xFF).contains(&(*t as u32))) {
+                    out.push(KeyEvent::Ascii(code as u8));
+                    self.held.insert(input.id());
+                }
+            }
             _ if pressed => {
                 if let Some(ev) = self.press_event(input.key, mods) {
                     out.push(ev);
@@ -423,6 +500,63 @@ mod tests {
                 Some(i as u8 + 1)
             );
         }
+    }
+
+    #[test]
+    fn altgr_char_rule() {
+        // WM_CHAR: the layout defines a character, delivered with the option off or on
+        for on in [false, true] {
+            assert_eq!(
+                altgr_char('/', Some('q'), on, false, false, false),
+                Some('/')
+            );
+            assert_eq!(
+                altgr_char('@', Some('q'), on, false, false, false),
+                Some('@')
+            );
+            assert_eq!(
+                altgr_char('€', Some('e'), on, false, false, false),
+                Some('€')
+            );
+        }
+        // WM_KEYDOWN only: text equal to the base key, or none at all
+        for layout in ['a', 'A'] {
+            assert_eq!(
+                altgr_char(layout, Some('a'), false, false, false, false),
+                None
+            );
+        }
+        assert_eq!(altgr_char('a', None, false, false, false, false), None);
+        // option on: Keyboard.cpp:240-246
+        assert_eq!(
+            altgr_char('a', Some('a'), true, false, false, false),
+            Some('a')
+        );
+        assert_eq!(
+            altgr_char('A', Some('a'), true, true, false, false),
+            Some('A')
+        );
+        assert_eq!(
+            altgr_char('a', Some('a'), true, false, true, false),
+            Some('A')
+        );
+        assert_eq!(
+            altgr_char('a', Some('a'), true, true, false, true),
+            Some('\u{1}')
+        );
+        assert_eq!(
+            altgr_char('a', Some('a'), true, false, false, true),
+            Some('a')
+        );
+        assert_eq!(
+            altgr_char('7', Some('7'), true, false, false, false),
+            Some('7')
+        );
+        assert_eq!(
+            altgr_char(' ', Some(' '), true, false, false, false),
+            Some(' ')
+        );
+        assert_eq!(altgr_char(';', Some(';'), true, false, false, false), None);
     }
 
     #[test]
