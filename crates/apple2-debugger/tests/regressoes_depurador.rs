@@ -201,7 +201,10 @@ fn gh226_save_with_bad_arguments_does_not_crash() {
         "SAVE \u{0} \u{202e} 😀".to_string(),
     ] {
         let t = run(&mut d, &mut m, &line);
-        assert!(t.contains("Saved:") || t.contains("Error"), "{line:.40}: {t}");
+        assert!(
+            t.contains("Saved:") || t.contains("Error"),
+            "{line:.40}: {t}"
+        );
     }
     assert!(files.borrow().contains_key("Debugger.cfg"));
     // host que recusa gravação: erro descritivo, não panic
@@ -230,7 +233,14 @@ fn gh349_ntsc_load_and_save_without_filename_are_handled() {
     // agora o arquivo existe e o LOAD sem nome o valida
     let t = run(&mut d, &mut m, "NTSC LOAD");
     assert!(!t.contains("couldn't open"), "{t}");
-    for line in ["NTSC", "NTSC FOO", "NTSC RESET", "NTSC SAVE .bmp", "NTSC LOAD 😀", "NTSC SAVE 😀.bmp"] {
+    for line in [
+        "NTSC",
+        "NTSC FOO",
+        "NTSC RESET",
+        "NTSC SAVE .bmp",
+        "NTSC LOAD 😀",
+        "NTSC SAVE 😀.bmp",
+    ] {
         run(&mut d, &mut m, line);
     }
     // sem host: erro de escrita descritivo
@@ -277,7 +287,12 @@ fn gh622_disassembly_with_operand_across_ffff_does_not_panic() {
 /// gh622: máquina recém-criada (nenhum ciclo rodou, tela do logo), F7 e navegação.
 #[test]
 fn gh622_entering_the_debugger_on_a_fresh_machine_renders() {
-    for model in [Model::Apple2, Model::Apple2Plus, Model::Apple2e, Model::Apple2eEnhanced] {
+    for model in [
+        Model::Apple2,
+        Model::Apple2Plus,
+        Model::Apple2e,
+        Model::Apple2eEnhanced,
+    ] {
         let mut m = Machine::new(MachineConfig::for_model(model));
         let mut d = Debugger::new();
         d.initialize(&mut m);

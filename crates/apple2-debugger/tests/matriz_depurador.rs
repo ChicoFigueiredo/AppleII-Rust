@@ -2,145 +2,11 @@
 //! Um teste por issue (ou por grupo), nomeado `gh<N>_...`. Resultado por issue em
 //! `docs/conformance/results/depurador.csv`. Oráculo: AppleWin a8f0d1d (Debugger/*.cpp).
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::io::{self, Write};
-use std::rc::Rc;
+mod common;
 
 use apple2_core::{Machine, MachineConfig, Model};
-use apple2_debugger::console::line_string;
-use apple2_debugger::display::{Grid, GRID_W};
-use apple2_debugger::host::Host;
-use apple2_debugger::{Debugger, Key, KeyMods, RunMode};
-
-type Files = Rc<RefCell<HashMap<String, Vec<u8>>>>;
-
-struct SharedHost(Files);
-
-struct Sink(Files, String);
-
-impl Write for Sink {
-    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
-        self.0
-            .borrow_mut()
-            .entry(self.1.clone())
-            .or_default()
-            .extend_from_slice(b);
-        Ok(b.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl Host for SharedHost {
-    fn read(&mut self, name: &str) -> io::Result<Vec<u8>> {
-        self.0
-            .borrow()
-            .get(name)
-            .cloned()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, name.to_string()))
-    }
-    fn write(&mut self, name: &str, data: &[u8]) -> io::Result<()> {
-        self.0.borrow_mut().insert(name.into(), data.to_vec());
-        Ok(())
-    }
-    fn create(&mut self, name: &str) -> io::Result<Box<dyn Write>> {
-        self.0.borrow_mut().insert(name.into(), Vec::new());
-        Ok(Box::new(Sink(self.0.clone(), name.into())))
-    }
-    fn dir(&self) -> String {
-        "/d/".into()
-    }
-    fn set_dir(&mut self, _: &str) -> bool {
-        true
-    }
-}
-
-const NONE: KeyMods = KeyMods {
-    shift: false,
-    ctrl: false,
-    alt: false,
-};
-const CTRL: KeyMods = KeyMods {
-    shift: false,
-    ctrl: true,
-    alt: false,
-};
-
-/// Apple II+ com ROM de NOPs (vetores em $0500/$0300/$0400); RAM zerada = BRK.
-fn nop_machine() -> Machine {
-    let mut rom = vec![0xEAu8; 0x3000];
-    for (vec, target) in [(0xFFFAu16, 0x0500u16), (0xFFFC, 0x0300), (0xFFFE, 0x0400)] {
-        let o = vec as usize - 0xD000;
-        rom[o] = target as u8;
-        rom[o + 1] = (target >> 8) as u8;
-    }
-    let mut cfg = MachineConfig::for_model(Model::Apple2Plus);
-    cfg.custom_rom = Some(rom);
-    Machine::new(cfg)
-}
-
-fn setup_with(mut m: Machine) -> (Machine, Debugger, Files) {
-    let files = Files::default();
-    let mut d = Debugger::new();
-    d.set_host(Box::new(SharedHost(files.clone())));
-    d.initialize(&mut m);
-    d.enter(&mut m);
-    d.console.clear();
-    (m, d, files)
-}
-
-fn setup() -> (Machine, Debugger, Files) {
-    setup_with(nop_machine())
-}
-
-fn setup_e() -> (Machine, Debugger, Files) {
-    setup_with(Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced)))
-}
-
-fn load(m: &mut Machine, at: u16, bytes: &[u8]) {
-    for (i, b) in bytes.iter().enumerate() {
-        m.poke(at.wrapping_add(i as u16), *b);
-    }
-}
-
-fn text(d: &Debugger) -> String {
-    d.console
-        .lines()
-        .map(line_string)
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn cmd(d: &mut Debugger, m: &mut Machine, line: &str) -> String {
-    d.console.clear();
-    d.execute(m, line);
-    text(d)
-}
-
-/// Roda fatias limitadas até o depurador parar (falha em vez de travar a suíte).
-fn run_until_stopped(d: &mut Debugger, m: &mut Machine) {
-    for _ in 0..4000 {
-        if d.mode != RunMode::Stepping {
-            return;
-        }
-        d.run(m, 1000);
-    }
-    panic!("o depurador não parou");
-}
-
-fn key(d: &mut Debugger, m: &mut Machine, k: Key, mods: KeyMods) {
-    d.process_key(m, k, mods);
-}
-
-fn row(g: &Grid, y: usize) -> String {
-    (0..GRID_W).map(|x| g.cell(x, y).ch).collect()
-}
-
-fn screen(g: &Grid) -> String {
-    (0..g.h).map(|y| row(g, y)).collect::<Vec<_>>().join("\n")
-}
+use apple2_debugger::{Key, RunMode};
+use common::*;
 
 // =============================================================== execução, passos, traço
 
@@ -187,9 +53,18 @@ fn gh38_trace_file_writes_disassembly_per_instruction() {
         lines[0],
         "Cycles   A: X: Y: SP:  Flags     Addr:Opcode    Mnemonic"
     );
-    assert!(lines[1].contains("0300:A9 80") && lines[1].contains("LDA #$80"), "{f}");
-    assert!(lines[2].contains("0302:AA") && lines[2].contains("TAX"), "{f}");
-    assert!(lines[3].contains("0303:EA") && lines[3].contains("NOP"), "{f}");
+    assert!(
+        lines[1].contains("0300:A9 80") && lines[1].contains("LDA #$80"),
+        "{f}"
+    );
+    assert!(
+        lines[2].contains("0302:AA") && lines[2].contains("TAX"),
+        "{f}"
+    );
+    assert!(
+        lines[3].contains("0303:EA") && lines[3].contains("NOP"),
+        "{f}"
+    );
     // depois do LDA #$80 o A é $80 e a flag N está ligada
     assert!(lines[2].contains(" 80 "), "{f}");
     assert!(lines[2].contains('N'), "{f}");
@@ -229,12 +104,18 @@ fn gh106_breakpoint_clear_by_id_list_and_star() {
     let t = cmd(&mut d, &mut m, "BPC 1");
     assert!(!t.contains("Illegal"), "{t}");
     let t = cmd(&mut d, &mut m, "BPL");
-    assert!(t.contains("#0 ") && t.contains("#2 ") && t.contains("#3 "), "{t}");
+    assert!(
+        t.contains("#0 ") && t.contains("#2 ") && t.contains("#3 "),
+        "{t}"
+    );
     assert!(!t.contains("#1 "), "{t}");
     cmd(&mut d, &mut m, "BPC 99");
     cmd(&mut d, &mut m, "BPC 0,2");
     let t = cmd(&mut d, &mut m, "BPL");
-    assert!(t.contains("#3 ") && !t.contains("#0 ") && !t.contains("#2 "), "{t}");
+    assert!(
+        t.contains("#3 ") && !t.contains("#0 ") && !t.contains("#2 "),
+        "{t}"
+    );
     cmd(&mut d, &mut m, "BPX 340");
     cmd(&mut d, &mut m, "BPC *");
     let t = cmd(&mut d, &mut m, "BPL");
@@ -331,11 +212,18 @@ fn gh1194_step_over_wait_with_large_delay_completes() {
 #[test]
 fn gh450_set_pc_then_go_restarts_execution_at_the_new_pc() {
     let (mut m, mut d, _) = setup();
-    load(&mut m, 0x0300, &[0xA9, 0x5A, 0x8D, 0x00, 0x04, 0x4C, 0x05, 0x03]);
+    load(
+        &mut m,
+        0x0300,
+        &[0xA9, 0x5A, 0x8D, 0x00, 0x04, 0x4C, 0x05, 0x03],
+    );
     m.cpu_mut().pc = 0x0900;
     cmd(&mut d, &mut m, "R PC 300");
     assert_eq!(m.cpu().pc, 0x0300);
-    assert_eq!(d.disasm_cur, 0x0300, "o cursor do disassembly acompanha o PC");
+    assert_eq!(
+        d.disasm_cur, 0x0300,
+        "o cursor do disassembly acompanha o PC"
+    );
     cmd(&mut d, &mut m, "G 305");
     run_until_stopped(&mut d, &mut m);
     assert_eq!(m.cpu().pc, 0x0305);
@@ -365,7 +253,12 @@ fn gh451_gh445_memory_breakpoints_read_write_and_stack() {
         run_until_stopped(&mut d, &mut m);
         match expect_stop_after {
             Some(pc) => {
-                assert!(d.stop_reason.as_deref().is_some_and(|r| r.contains("access")), "{cmdline}");
+                assert!(
+                    d.stop_reason
+                        .as_deref()
+                        .is_some_and(|r| r.contains("access")),
+                    "{cmdline}"
+                );
                 assert_eq!(m.cpu().pc, pc, "{cmdline}");
             }
             None => assert_eq!(m.cpu().pc, 0x0307, "{cmdline} não devia parar antes"),
@@ -398,7 +291,9 @@ fn gh1103_bpmw_stops_at_the_first_write_even_at_full_speed() {
         load(
             &mut m,
             0x0300,
-            &[0xA9, 0x9E, 0x8D, 0xB5, 0x7F, 0xA9, 0x85, 0x8D, 0xB5, 0x7F, 0x4C, 0x00, 0x03],
+            &[
+                0xA9, 0x9E, 0x8D, 0xB5, 0x7F, 0xA9, 0x85, 0x8D, 0xB5, 0x7F, 0x4C, 0x00, 0x03,
+            ],
         );
         m.cpu_mut().pc = 0x0300;
         m.poke(0x7FB5, 0x00);
@@ -408,7 +303,9 @@ fn gh1103_bpmw_stops_at_the_first_write_even_at_full_speed() {
         assert_eq!(m.cpu().pc, 0x0302, "{go}: para no primeiro STA");
         assert_eq!(m.peek(0x7FB5), 0x00, "{go}: antes da escrita");
         assert!(
-            d.stop_reason.as_deref().is_some_and(|r| r.contains("Write access")),
+            d.stop_reason
+                .as_deref()
+                .is_some_and(|r| r.contains("Write access")),
             "{go}: {:?}",
             d.stop_reason
         );
@@ -420,11 +317,18 @@ fn gh1103_bpmw_stops_at_the_first_write_even_at_full_speed() {
 #[test]
 fn gh737_gh787_cycle_counter_modes() {
     let (mut m, mut d, _) = setup();
-    load(&mut m, 0x0300, &[0xAD, 0x00, 0x06, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA]);
+    load(
+        &mut m,
+        0x0300,
+        &[0xAD, 0x00, 0x06, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA],
+    );
     m.cpu_mut().pc = 0x0300;
     d.goto(&m, 0x0300);
     let t = cmd(&mut d, &mut m, "CYCLES REL");
-    assert!(t.contains("Cycles display updated: REL") || t.contains("updated"), "{t}");
+    assert!(
+        t.contains("Cycles display updated: REL") || t.contains("updated"),
+        "{t}"
+    );
     d.trace_n(&mut m, 1); // LDA abs = 4 ciclos
     assert!(screen(&d.render(&m)).contains("cycles:00000004"));
     d.trace_n(&mut m, 1); // NOP = 2
@@ -470,7 +374,7 @@ fn gh1164_bpv_hits_non_visible_scan_lines() {
             "BPV {line}: {:?}",
             d.stop_reason
         );
-        assert_eq!(m.video_position().0 as u32, want, "BPV {line}");
+        assert_eq!(m.video_position().0, want, "BPV {line}");
     }
 }
 
@@ -486,7 +390,11 @@ fn gh269_escape_only_clears_the_input_line() {
     d.exit(&mut m);
     assert_eq!(d.mode, RunMode::Running);
     key(&mut d, &mut m, Key::Escape, NONE);
-    assert_eq!(d.mode, RunMode::Running, "Esc não devolve o depurador sozinho");
+    assert_eq!(
+        d.mode,
+        RunMode::Running,
+        "Esc não devolve o depurador sozinho"
+    );
 }
 
 /// gh570: a barra de espaço dá passos repetidos sem deixar espaços no buffer do console.
