@@ -370,6 +370,67 @@ a2: lda $c08c,x
         .into(),
     ));
 
+    // HU-0702 (#116, #330, #1261, #778, #985): the $C01x reads (no key held: on the ][ family they
+    // are the floating bus and do not read the keyboard latch; on the //e, keycode | AKD), the
+    // $C06x buttons and the paddle timers (centred stick; stick 1 absent: timers always active;
+    // a strobe while a timer runs has no effect).
+    v.push((
+        "input-io",
+        r#".org $0801
+ lda $c010
+ sta $0300
+ lda $c011
+ sta $0301
+ lda $c01f
+ sta $0302
+ sta $c010
+ lda $c060
+ sta $0303
+ lda $c061
+ sta $0304
+ lda $c062
+ sta $0305
+ lda $c063
+ sta $0306
+ lda $c070
+ ldy #0
+p0: lda $c064
+ bpl d0
+ iny
+ bne p0
+d0: sty $0310
+ lda $c070
+ ldy #0
+p1: lda $c065
+ bpl d1
+ iny
+ bne p1
+d1: sty $0311
+ lda $c070
+ ldy #0
+p2: lda $c066
+ bpl d2
+ iny
+ bne p2
+d2: sty $0312
+ lda $c070
+ ldy #0
+s0: lda $c064
+ bpl s0e
+ iny
+ cpy #40
+ bne s0
+ lda $c070
+s1: lda $c064
+ bpl s0e
+ iny
+ bne s1
+s0e: sty $0313
+ jmp *
+"#
+        .into(),
+    ));
+
     // #582: partial nibble reads when two reads are very close (threshold 6 cycles).
     let mut pn = String::from(".org $0801\n lda $c08e,x\n");
     for k in 0..6 {

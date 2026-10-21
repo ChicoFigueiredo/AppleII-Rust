@@ -21,6 +21,9 @@ disk-micro-even-latch-dsk|apple2e-enhanced|apple2ee|3000000|0|@M@/even-latch.do.
 disk-micro-even-latch-woz|apple2e-enhanced|apple2ee|3000000|0|@M@/even-latch.woz|||||Endereços pares do controlador devolvem o latch de dados e os ímpares o floating bus (WOZ)|HU-0301|#672
 disk-micro-wp-sense|apple2e-enhanced|apple2ee|3000000|0|@M@/wp-sense.do.gz|||||A leitura de write-protect ($C08D+$C08E) de um disco gravável não devolve bit 7|HU-0301|#389
 disk-micro-wp-sense-readonly|apple2e-enhanced|apple2ee|3000000|0|@M@/wp-sense.do.gz||||ro:fixture|A leitura de write-protect de um disco somente leitura devolve bit 7|HU-0301|#389
+disk-micro-input-io-apple2plus|apple2plus|apple2p|3000000|0|@M@/input-io.do.gz|||||Leituras de $C01x, botões ($C06x) e temporizadores de paddle (stick central, stick 1 ausente, strobe com o timer rodando) idênticas ao AppleWin|HU-0702|#116, #1261, #778, #985
+disk-micro-input-io-apple2e|apple2e|apple2e|3000000|0|@M@/input-io.do.gz|||||Leituras de $C01x, botões ($C06x) e temporizadores de paddle (stick central, stick 1 ausente, strobe com o timer rodando) idênticas ao AppleWin|HU-0702|#116, #330, #778, #985
+disk-micro-input-io-apple2e-enhanced|apple2e-enhanced|apple2ee|3000000|0|@M@/input-io.do.gz|||||Leituras de $C01x, botões ($C06x) e temporizadores de paddle (stick central, stick 1 ausente, strobe com o timer rodando) idênticas ao AppleWin|HU-0702|#330, #778, #985
 disk-micro-partial-nibble|apple2e-enhanced|apple2ee|3500000|0|@M@/partial-nibble.do.gz|||||Duas leituras de Q6L a poucos ciclos devolvem um nibble parcial (limite de 6 ciclos)|HU-0301|#582
 disk-micro-partial-nibble-authentic|apple2e-enhanced|apple2ee|3500000|0|@M@/partial-nibble.do.gz||||authentic|Duas leituras de Q6L a poucos ciclos devolvem um nibble parcial, velocidade autêntica|HU-0301|#582, #599, #831
 disk-micro-partial-nibble-woz|apple2e-enhanced|apple2ee|3500000|0|@M@/partial-nibble.woz|||||Duas leituras de Q6L a poucos ciclos em WOZ|HU-0301|#582

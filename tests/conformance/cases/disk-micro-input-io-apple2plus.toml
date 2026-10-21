@@ -1,0 +1,20 @@
+id = "disk-micro-input-io-apple2plus"
+story = "HU-0702"
+criterion = "Leituras de $C01x, botões ($C06x) e temporizadores de paddle (stick central, stick 1 ausente, strobe com o timer rodando) idênticas ao AppleWin"
+model = "apple2plus"
+cards = ["0:language-card-16k", "6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #116, #1261, #778, #985. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple ][+, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-micro-input-io-apple2plus (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 3000000
+
+[fixture]
+path = "tests/conformance/inputs/disk-micro/input-io.do.gz"
+sha256 = "e36a0c7ea80f31078f21cb079be8bd16b2ee5a1bf1c97509b90059264e6ab8a7"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2p --cycles 3000000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-micro-input-io-apple2plus.ckpt"
