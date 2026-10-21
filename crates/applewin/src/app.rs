@@ -396,8 +396,7 @@ impl App {
         let input = host::key_input(ev, self.mods);
         let mods = self.mods();
         let alt_enter = self.settings.video.alt_enter_toggles_fullscreen;
-        let action =
-            action_for_mode_with(input.key, mods, self.status.debugger_active, alt_enter);
+        let action = action_for_mode_with(input.key, mods, self.status.debugger_active, alt_enter);
         if pressed && !ev.repeat {
             if let Some(a) = action {
                 self.do_action(a);
