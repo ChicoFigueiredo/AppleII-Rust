@@ -243,6 +243,23 @@ pub struct Emulator {
     copied_seq: u64,
     mhz: f32,
     underruns: u64,
+    rom_report: Vec<apple2_config::roms::RomInfo>,
+}
+
+/// Writes the ROMs in use to the start-up log (stderr) and returns them.
+fn log_roms(settings: &Settings) -> Vec<apple2_config::roms::RomInfo> {
+    match settings.resolve_roms() {
+        Ok(r) => {
+            for i in &r.report {
+                eprintln!("rom: {i}");
+            }
+            r.report
+        }
+        Err(e) => {
+            eprintln!("rom: {e}");
+            Vec::new()
+        }
+    }
 }
 
 impl Emulator {
@@ -258,6 +275,7 @@ impl Emulator {
         let disks = backend.disks_for(&machine, &settings);
         let mouse = backend.mouse_for(&machine, &settings);
         let debugger = new_debugger(&mut machine, settings.debugger.auto_run_script.as_deref());
+        let rom_report = log_roms(&settings);
         let speed = speed_from_settings(&settings);
         let settings_caps = settings.keyboard.caps_lock; // `-capslock=off`
         machine.set_caps_lock(settings_caps);
@@ -287,7 +305,13 @@ impl Emulator {
             copied_seq: 0,
             mhz: 0.0,
             underruns: 0,
+            rom_report,
         })
+    }
+
+    /// The ROMs in use (embedded or file, size, SHA-256), for the conformance manifest.
+    pub fn rom_report(&self) -> &[apple2_config::roms::RomInfo] {
+        &self.rom_report
     }
 
     /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
@@ -411,6 +435,7 @@ impl Emulator {
                 if let Speed::Multiplier(_) = sp {
                     self.speed = sp;
                 }
+                self.rom_report = log_roms(&settings);
                 self.settings = settings;
                 self.say("Settings applied");
             }

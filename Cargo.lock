@@ -124,6 +124,7 @@ name = "apple2-config"
 version = "0.1.0"
 dependencies = [
  "apple2-core",
+ "apple2-roms",
  "directories",
  "serde",
  "toml 0.8.23",

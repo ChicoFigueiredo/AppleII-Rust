@@ -5,32 +5,24 @@ use crate::settings::{CpuType, RefreshRate, Settings};
 use apple2_core::{AuxCardKind, CardKind, MachineConfig, VideoStandard};
 
 impl Settings {
-    /// The part of the settings the core models: model, video standard, aux card and the RAM cards
-    /// (Language Card / Saturn). Other cards are the frontend's business. The custom ROM is read
-    /// by the frontend (`machine.custom_rom` is a path here, bytes in the core).
-    /// [`Settings::to_machine_config`] plus the ROM files named by `-rom` and `-f8rom`.
+    /// [`Settings::to_machine_config`] plus the ROM files named by `-rom`, `-f8rom` and `[roms]`,
+    /// validated (see [`crate::roms`]).
     pub fn to_machine_config_with_roms(&self) -> Result<MachineConfig, String> {
-        let mut c = self.to_machine_config();
-        let read =
-            |p: &std::path::Path| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()));
-        if let Some(p) = &self.machine.custom_rom {
-            c.custom_rom = Some(read(p)?);
-        }
-        if let Some(p) = &self.machine.custom_f8_rom {
-            c.custom_f8_rom = Some(read(p)?);
-        }
-        Ok(c)
+        self.resolve_roms()
+            .map(|r| r.machine)
+            .map_err(|e| e.to_string())
     }
 
-    /// The `-videorom` file (for the renderer), if one was given.
+    /// The `-videorom` / `[roms].video` file (for the renderer), if one was given.
     pub fn read_video_rom(&self) -> Result<Option<Vec<u8>>, String> {
-        self.machine
-            .video_rom
-            .as_ref()
-            .map(|p| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display())))
-            .transpose()
+        self.resolve_roms()
+            .map(|r| r.video_rom)
+            .map_err(|e| e.to_string())
     }
 
+    /// The part of the settings the core models: model, video standard, aux card and the RAM cards
+    /// (Language Card / Saturn). Other cards are the frontend's business. ROM files are read by
+    /// [`Settings::resolve_roms`] (`machine.custom_rom` is a path here, bytes in the core).
     pub fn to_machine_config(&self) -> MachineConfig {
         let mut c = MachineConfig::for_model(self.machine.model);
         c.video_standard = match self.machine.refresh_rate {

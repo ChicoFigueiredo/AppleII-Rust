@@ -1003,6 +1003,33 @@ mod tests {
     }
 
     #[test]
+    fn rom_options_set_paths_and_need_a_value() {
+        let (c, s) = run(&[
+            "-rom",
+            "my sys.rom",
+            "-f8rom",
+            "f8.bin",
+            "-videorom",
+            "v.rom",
+        ]);
+        assert!(c.unsupported.is_empty());
+        assert_eq!(s.machine.custom_rom, Some("my sys.rom".into()));
+        assert_eq!(s.machine.custom_f8_rom, Some("f8.bin".into()));
+        assert_eq!(s.machine.video_rom, Some("v.rom".into()));
+        // the last occurrence wins, as AppleWin replaces the earlier handle
+        let (_, s) = run(&["-rom", "a.rom", "-rom", "b.rom"]);
+        assert_eq!(s.machine.custom_rom, Some("b.rom".into()));
+        assert!(matches!(
+            CmdLine::parse(&["-rom"]),
+            Err(CmdLineError::MissingValue(o)) if o == "-rom"
+        ));
+        assert!(matches!(
+            CmdLine::parse(&["-f8rom"]),
+            Err(CmdLineError::MissingValue(o)) if o == "-f8rom"
+        ));
+    }
+
+    #[test]
     fn splits_quoted_command_line() {
         assert_eq!(
             split_command_line(r#"-d1 "C:\my disks\a.dsk"  -f"#),

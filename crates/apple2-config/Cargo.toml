@@ -9,5 +9,6 @@ repository.workspace = true
 [dependencies]
 apple2-core = { path = "../apple2-core" }
 serde.workspace = true
+apple2-roms = { path = "../apple2-roms" }
 toml = "0.8"
 directories = "6"
