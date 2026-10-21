@@ -243,6 +243,11 @@ impl SuperSerialCard {
         }
     }
 
+    /// Why the transport could not be opened (busy or missing port, no permission), if so.
+    pub fn last_error(&self) -> Option<&str> {
+        self.backend.last_error()
+    }
+
     /// `CheckComm` (:212): opens the transport on first use.
     fn check_comm(&mut self) -> bool {
         if self.backend.is_active() {
