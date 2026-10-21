@@ -1,0 +1,13 @@
+apple2-bench: desempenho determinístico do emulador (HU-1001)
+
+  --reps N               repetições por cenário (padrão 10; uma a mais, descartada, aquece)
+  --only a,b             só estes cenários (veja --list)
+  --list                 lista os cenários
+  --json FILE            resultado completo em JSON
+  --report FILE          relatório Markdown (tests/conformance/reports/performance.md)
+  --write-baseline FILE  grava o baseline (tests/conformance/perf-baseline.json)
+  --check FILE           compara com o baseline; sai com 1 se a mediana piorar além da margem
+                         ou se ciclos/quadro/áudio deixarem de ser idênticos
+  --breakdown            decompõe o custo por quadro (máquina, renderer, RGBA, áudio)
+  --no-latency           pula a medição de latência de entrada
+  --allow-debug          deixa rodar sem --release (números inválidos)
