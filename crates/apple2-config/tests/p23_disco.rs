@@ -4,7 +4,6 @@
 use apple2_config::card::SlotCardSpec;
 use apple2_config::cmdline::CmdLine;
 use apple2_config::settings::Settings;
-use std::path::PathBuf;
 
 fn applied(args: &[&str]) -> Settings {
     let mut s = Settings::default();
