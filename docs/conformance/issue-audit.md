@@ -91,23 +91,23 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| UNVERIFIED | 655 | 58.7 |
+| UNVERIFIED | 643 | 57.7 |
 | NOT_APPLICABLE | 274 | 24.6 |
-| PASS | 128 | 11.5 |
-| BLOCKED | 48 | 4.3 |
-| FAIL | 10 | 0.9 |
+| PASS | 137 | 12.3 |
+| BLOCKED | 50 | 4.5 |
+| FAIL | 11 | 1.0 |
 
 ## Taxas
 
-Taxa geral: PASS 128 / aplicáveis 841 = 15.2%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 137 / aplicáveis 841 = 16.3%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 747 | 105 | 8 | 589 | 14.1% |
+| todos | 1004 | 747 | 113 | 9 | 578 | 15.1% |
 | apple2e | 59 | 52 | 21 | 1 | 27 | 40.4% |
-| apple2e-enhanced | 59 | 49 | 14 | 0 | 32 | 28.6% |
+| apple2e-enhanced | 59 | 49 | 15 | 0 | 31 | 30.6% |
 | apple2plus | 29 | 27 | 9 | 2 | 16 | 33.3% |
 | apple2 | 26 | 24 | 8 | 2 | 14 | 33.3% |
 | apple2jplus | 11 | 9 | 5 | 0 | 4 | 55.6% |
@@ -138,7 +138,7 @@ Taxa geral: PASS 128 / aplicáveis 841 = 15.2%. Aplicável = estado diferente de
 | mockingboard | 47 | 42 | 0 | 0 | 42 | 0.0% |
 | joystick | 41 | 36 | 0 | 0 | 36 | 0.0% |
 | audio | 32 | 25 | 0 | 0 | 25 | 0.0% |
-| savestate | 32 | 29 | 0 | 0 | 29 | 0.0% |
+| savestate | 32 | 29 | 9 | 1 | 17 | 31.0% |
 | hdd | 28 | 21 | 3 | 0 | 17 | 14.3% |
 | serial | 20 | 19 | 0 | 0 | 19 | 0.0% |
 | mouse | 16 | 13 | 0 | 0 | 13 | 0.0% |
@@ -153,12 +153,12 @@ Taxa geral: PASS 128 / aplicáveis 841 = 15.2%. Aplicável = estado diferente de
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 388 | 55 | 0 | 300 | 14.2% |
+| runtime | 388 | 388 | 56 | 0 | 299 | 14.4% |
 | feature-futura | 146 | 146 | 0 | 0 | 146 | 0.0% |
 | ui | 122 | 122 | 0 | 0 | 122 | 0.0% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
-| formato | 77 | 77 | 11 | 0 | 57 | 14.3% |
+| formato | 77 | 77 | 19 | 1 | 46 | 24.7% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
 | documentacao | 30 | 30 | 0 | 0 | 30 | 0.0% |
