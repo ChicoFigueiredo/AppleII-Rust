@@ -47,11 +47,15 @@ impl Settings {
             AuxCardKind::Empty
         };
         c.slots = [None; 8];
+        c.saturn_banks = [8; 8];
         for (i, spec) in self.slots.0.iter().enumerate() {
             c.slots[i] = match spec {
                 // The //e's Language Card is built in; it is not a slot card.
                 SlotCardSpec::LanguageCard if !is_e => Some(CardKind::LanguageCard16K),
-                SlotCardSpec::Saturn128K { .. } => Some(CardKind::Saturn128K),
+                SlotCardSpec::Saturn128K { banks } => {
+                    c.saturn_banks[i] = (*banks).clamp(1, 8); // AUD-C-002: never beyond the card
+                    Some(CardKind::Saturn128K)
+                }
                 _ => None,
             };
         }

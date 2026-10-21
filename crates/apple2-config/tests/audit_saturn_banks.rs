@@ -68,7 +68,6 @@ fn settings_toml_keeps_the_banks() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-001; remover ignore quando corrigido"]
 fn machine_config_carries_saturn_bank_count() {
     // machine.rs:64 descarta `banks` (`Saturn128K { .. }`); language_card.rs:116 fixa 8.
     let m4 = machine_from_settings(4);
@@ -78,7 +77,6 @@ fn machine_config_carries_saturn_bank_count() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-001; remover ignore quando corrigido"]
 fn four_and_eight_banks_behave_differently() {
     // Banco 4 ($C0CC) num Saturn 64K: o AppleWin fixa em total-1 (banco 3), logo ve o que foi
     // escrito no banco 3 ($C0C7). Com 8 bancos reais, o banco 4 e outro e le 0.

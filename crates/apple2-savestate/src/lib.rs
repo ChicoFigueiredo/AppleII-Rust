@@ -320,6 +320,10 @@ pub fn load_aws_yaml(text: &str, host: &mut dyn LoadHost) -> Result<Loaded, Erro
     if let Some(e) = &extension {
         cfg = e.state.config.clone();
     }
+    // The file's `Num Saturn Banks` is the card's real size (LanguageCard.cpp:499/:518).
+    for l in lc_loads.iter().filter(|l| l.active_bank.is_some()) {
+        cfg.saturn_banks[l.slot as usize] = l.banks.len().clamp(1, 8) as u8;
+    }
     let mut machine =
         Machine::try_new(cfg.clone()).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut inserted = [false; 8];
