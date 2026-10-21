@@ -16,6 +16,8 @@ pub mod capture;
 pub mod command;
 pub mod document;
 pub mod engine;
+pub mod escp;
 pub mod font;
+pub mod lx310;
 pub mod paper;
 pub mod units;
