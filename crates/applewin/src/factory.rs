@@ -380,15 +380,17 @@ pub fn parse_controller_mapping_file(path: &std::path::Path) -> Result<ButtonMap
     Ok(map)
 }
 
-/// Slot configuration checks done before building (CardManager.cpp:52-131 and the slot dialog's
-/// choice lists, `GetCardChoicesForSlot`). `Err` for what AppleWin cannot build at all: a second
-/// Mouse Interface, SSC, printer, Z80, 4Play, SNES MAX, VidHD or Uthernet card (`_ASSERT` and an
-/// empty slot there), and Uthernet together with Uthernet II. `Ok` carries warnings for a card
-/// that is ignored: anything but a Language Card / Saturn 128K (or empty) in slot 0 of an
-/// Apple ][ family model, and a Language Card in slots 1-7.
-pub fn check_slots(s: &Settings) -> Result<Vec<String>, String> {
-    let mut errors = Vec::new();
+/// Slot configuration checks done before building, with AppleWin's behaviour (the oracle wins,
+/// ADR 0004): `CardManager::InsertInternal` (CardManager.cpp:52-131) takes the slots in ascending
+/// order and, for the cards it keeps a single pointer to (Mouse Interface, SSC, printer, Z80,
+/// VidHD), leaves a later duplicate's slot EMPTY (`_ASSERT` in debug builds). The first one stays.
+/// Uthernet, Uthernet II, 4Play and SNES MAX have no such check there (only the slot dialog
+/// refuses them), so they are built as configured. Returns the warnings (our extension, shown in
+/// the status line and on stderr; they do not change what is emulated) and the slots whose card
+/// must be left empty.
+pub fn check_slots(s: &Settings) -> (Vec<String>, [bool; 8]) {
     let mut warnings = Vec::new();
+    let mut ignored = [false; 8];
     let types: Vec<CardType> = s.slots.0.iter().map(SlotCardSpec::card_type).collect();
     let slots_of = |ty: CardType| -> Vec<usize> { (1..8).filter(|&i| types[i] == ty).collect() };
     let list = |v: &[usize]| {
@@ -397,30 +399,46 @@ pub fn check_slots(s: &Settings) -> Result<Vec<String>, String> {
             .collect::<Vec<_>>()
             .join(", ")
     };
-    // CardManager::IsSingleInstanceCard.
+    // The cards CardManager.cpp:64-117 refuses a second time.
     for ty in [
         CardType::MouseInterface,
         CardType::Ssc,
         CardType::GenericPrinter,
         CardType::Z80,
+        CardType::VidHd,
+    ] {
+        let at = slots_of(ty);
+        if let Some((first, rest)) = at.split_first() {
+            for &n in rest {
+                ignored[n] = true;
+            }
+            if !rest.is_empty() {
+                warnings.push(format!(
+                    "{ty:?} can be plugged in only one slot: kept in slot {first}, slots {} left empty (as AppleWin)",
+                    list(rest)
+                ));
+            }
+        }
+    }
+    // Only the slot dialog prevents these in AppleWin; the card manager builds them all.
+    for ty in [
         CardType::FourPlay,
         CardType::SnesMax,
         CardType::Uthernet,
         CardType::Uthernet2,
-        CardType::VidHd,
     ] {
         let at = slots_of(ty);
         if at.len() > 1 {
-            errors.push(format!(
-                "{ty:?} can be plugged in only one slot (found in slots {})",
+            warnings.push(format!(
+                "{ty:?} is in several slots ({}); AppleWin's slot dialog would refuse this",
                 list(&at)
             ));
         }
     }
     let (u1, u2) = (slots_of(CardType::Uthernet), slots_of(CardType::Uthernet2));
     if !u1.is_empty() && !u2.is_empty() {
-        errors.push(format!(
-            "Uthernet (slot {}) and Uthernet II (slot {}) cannot both be plugged in",
+        warnings.push(format!(
+            "Uthernet (slot {}) and Uthernet II (slot {}) together: AppleWin's slot dialog would refuse this",
             list(&u1),
             list(&u2)
         ));
@@ -448,11 +466,7 @@ pub fn check_slots(s: &Settings) -> Result<Vec<String>, String> {
             ));
         }
     }
-    if errors.is_empty() {
-        Ok(warnings)
-    } else {
-        Err(errors.join("\n"))
-    }
+    (warnings, ignored)
 }
 
 /// The machine for `settings`: core configuration (model, CPU, ROMs, RAM cards, aux card), the
@@ -466,11 +480,14 @@ pub fn build_machine_report(
     settings: &Settings,
     bus: &AudioBus,
 ) -> Result<(Machine, Vec<String>), String> {
-    let mut warnings = check_slots(settings)?;
+    let (mut warnings, ignored) = check_slots(settings);
     let config = settings.to_machine_config_with_roms()?;
     let mut m = Machine::try_new(config).map_err(|e| e.to_string())?;
     let env = Env { settings, bus };
     for (slot, spec) in settings.slots.0.iter().enumerate().skip(1) {
+        if ignored[slot] {
+            continue;
+        }
         if let Some(card) = build_card(spec, slot as u8, &env, &mut warnings) {
             if !m.insert_card(slot as u8, card) {
                 warnings.push(format!("slot {slot}: card not accepted"));

@@ -34,57 +34,90 @@ fn tmp(name: &str, text: &str) -> PathBuf {
 // ------------------------------------------------------------------ slot conflicts
 
 #[test]
-fn two_mouse_interfaces_are_an_error_naming_the_slots() {
+fn second_mouse_interface_leaves_its_slot_empty_with_a_warning() {
     let mut s = base();
     s.slots.0[4] = SlotCardSpec::new(CardType::MouseInterface);
     s.slots.0[7] = SlotCardSpec::new(CardType::MouseInterface);
-    let e = check_slots(&s).unwrap_err();
-    assert!(e.contains("MouseInterface") && e.contains("4, 7"), "{e}");
-    assert!(build_machine_report(&s, &bus()).is_err());
-    assert!(Emulator::new(s, Box::new(DefaultBackend), 48_000).is_err());
+    let (w, ignored) = check_slots(&s);
+    assert!(ignored[7] && !ignored[4]);
+    assert!(
+        w.iter()
+            .any(|m| m.contains("MouseInterface") && m.contains("slot 4") && m.contains('7')),
+        "{w:?}"
+    );
+    let (m, _) = build_machine_report(&s, &bus()).unwrap();
+    assert!(
+        m.card::<apple2_cards::MouseCard>(4).is_some(),
+        "the first one stays"
+    );
+    assert!(
+        m.board().slots.card(7).is_none(),
+        "the second slot is empty"
+    );
+    let e = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
+    assert!(
+        e.status().message.contains("MouseInterface"),
+        "{}",
+        e.status().message
+    );
 }
 
 #[test]
-fn every_single_instance_card_rejects_a_second_copy() {
+fn every_card_the_manager_tracks_keeps_only_the_first_copy() {
     for ty in [
         CardType::Ssc,
         CardType::GenericPrinter,
         CardType::Z80,
-        CardType::FourPlay,
-        CardType::SnesMax,
-        CardType::Uthernet,
-        CardType::Uthernet2,
         CardType::VidHd,
+        CardType::MouseInterface,
     ] {
         let mut s = base();
+        for i in 0..8 {
+            if s.slots.0[i].card_type() == ty {
+                s.slots.0[i] = SlotCardSpec::Empty;
+            }
+        }
         s.slots.0[2] = SlotCardSpec::new(ty);
         s.slots.0[3] = SlotCardSpec::new(ty);
-        assert!(check_slots(&s).is_err(), "{ty:?}");
+        let (w, ignored) = check_slots(&s);
+        assert!(ignored[3] && !ignored[2] && !w.is_empty(), "{ty:?}");
+        assert!(
+            Emulator::new(s, Box::new(DefaultBackend), 48_000).is_ok(),
+            "{ty:?}"
+        );
     }
 }
 
 #[test]
-fn uthernet_and_uthernet_ii_cannot_coexist() {
+fn uthernet_with_uthernet_ii_is_built_as_configured_with_a_warning() {
+    // CardManager::InsertInternal has no check for them; only the slot dialog refuses.
     let mut s = base();
     s.slots.0[3] = SlotCardSpec::new(CardType::Uthernet);
     s.slots.0[4] = SlotCardSpec::new(CardType::Uthernet2);
-    let e = check_slots(&s).unwrap_err();
-    assert!(e.contains("Uthernet") && e.contains("Uthernet II"), "{e}");
+    let (w, ignored) = check_slots(&s);
+    assert_eq!(ignored, [false; 8]);
+    assert!(
+        w.iter()
+            .any(|m| m.contains("Uthernet") && m.contains("Uthernet II")),
+        "{w:?}"
+    );
+    let (m, _) = build_machine_report(&s, &bus()).unwrap();
+    assert!(m.board().slots.card(3).is_some() && m.board().slots.card(4).is_some());
 }
 
 #[test]
-fn a_valid_configuration_has_no_errors_or_warnings() {
+fn a_valid_configuration_has_no_warnings() {
     let mut s = base();
     s.slots.0[4] = SlotCardSpec::new(CardType::MouseInterface);
     s.slots.0[7] = SlotCardSpec::new(CardType::Uthernet2);
-    assert_eq!(check_slots(&s), Ok(vec![]));
+    assert_eq!(check_slots(&s), (vec![], [false; 8]));
 }
 
 #[test]
 fn invalid_card_in_slot_0_of_the_plus_is_reported_not_dropped() {
     let mut s = base();
     s.slots.0[0] = SlotCardSpec::new(CardType::Ssc);
-    let w = check_slots(&s).unwrap();
+    let (w, _) = check_slots(&s);
     assert!(w.iter().any(|m| m.starts_with("Slot 0: Ssc")), "{w:?}");
     let e = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
     assert!(
@@ -98,7 +131,7 @@ fn invalid_card_in_slot_0_of_the_plus_is_reported_not_dropped() {
 fn language_card_in_a_numbered_slot_is_reported() {
     let mut s = base();
     s.slots.0[3] = SlotCardSpec::new(CardType::LanguageCard);
-    let w = check_slots(&s).unwrap();
+    let (w, _) = check_slots(&s);
     assert!(
         w.iter()
             .any(|m| m.contains("Slot 3") && m.contains("slot 0")),

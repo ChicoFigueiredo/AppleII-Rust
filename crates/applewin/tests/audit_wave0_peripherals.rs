@@ -139,17 +139,17 @@ fn aud_p_015_thunderclock_has_no_card_type_like_applewin() {
     assert_eq!(names.len(), 26, "Card.h tem 26 tipos incluindo Empty");
 }
 
-/// HU-0602. `Emulator::new` aceita configurações que o diálogo recusa (`settings::model::validate`):
-/// dois cartões de mouse, Uthernet + Uthernet II. Sem erro nem aviso.
+/// HU-0602. No AppleWin, `CardManager::InsertInternal` deixa vazio o slot da segunda Mouse
+/// Interface (o oráculo vence): a Máquina inicia, o slot 7 fica vazio e há aviso visível.
 #[test]
-fn aud_p_019_emulator_rejects_conflicting_slot_configuration() {
+fn aud_p_019_emulator_ignores_duplicate_card_with_warning_like_applewin() {
     let mut s = base_settings();
     s.slots.0[5] = SlotCardSpec::new(CardType::MouseInterface);
     s.slots.0[7] = SlotCardSpec::new(CardType::MouseInterface);
-    assert!(
-        Emulator::new(s, Box::new(DefaultBackend), 48_000).is_err(),
-        "dois Mouse Interface devem ser recusados"
-    );
+    let e = Emulator::new(s, Box::new(DefaultBackend), 48_000).expect("a Máquina inicia");
+    assert!(e.machine.board().slots.card(5).is_some());
+    assert!(e.machine.board().slots.card(7).is_none());
+    assert!(e.status().message.contains("MouseInterface"));
 }
 
 /// HU-0602. Cartão que não é Language Card no slot 0 do ][+ some em silêncio.

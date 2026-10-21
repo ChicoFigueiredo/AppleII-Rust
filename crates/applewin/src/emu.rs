@@ -251,9 +251,12 @@ impl Emulator {
         mut backend: Box<dyn Backend>,
         audio_rate: u32,
     ) -> Result<Self, String> {
-        // AppleWin's CardManager refuses what it cannot build and ignores what is invalid in a slot;
-        // here the first is an error and the second a visible warning (AUD-P-019/020).
-        let slot_warnings = crate::factory::check_slots(&settings)?;
+        // AppleWin leaves a duplicate single-instance card's slot empty and ignores invalid slot 0
+        // cards; the factory does the same and we add a visible warning (AUD-P-019/020).
+        let (slot_warnings, _) = crate::factory::check_slots(&settings);
+        for w in &slot_warnings {
+            eprintln!("warning: {w}");
+        }
         let bus = AudioBus::new(audio_rate, settings.to_machine_config().video_standard);
         let mut machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
