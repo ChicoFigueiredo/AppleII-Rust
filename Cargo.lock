@@ -110,6 +110,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "apple2-bench"
+version = "0.1.0"
+dependencies = [
+ "apple2-audio",
+ "apple2-config",
+ "apple2-core",
+ "apple2-video",
+ "applewin",
+ "serde_json",
+]
+
+[[package]]
 name = "apple2-cards"
 version = "0.1.0"
 dependencies = [

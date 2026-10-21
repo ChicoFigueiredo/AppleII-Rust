@@ -221,3 +221,28 @@ fn user_video_rom_replaces_the_character_generator() {
     // glyph row 0 of the built-in 'A' is blank; the user's is a full 7-dot bar
     assert_eq!(art(&r, 0, 0, 14), "##############");
 }
+
+#[test]
+fn rgba8_into_matches_pixel_by_pixel_and_reuses_the_buffer() {
+    let mut s = Fake::new(Model::Apple2Plus).text();
+    s.poke(0x400, &[0xC1, 0x01, 0xFF]);
+    let mut r = renderer(VideoType::ColorTv);
+    render(&mut r, &s, 1);
+    let mut buf = vec![7u8; 10]; // wrong size and dirty: must be resized and fully overwritten
+    r.rgba8_into(&mut buf);
+    let (_, _, w, h) = r.visible_rect();
+    assert_eq!(buf.len(), w * h * 4);
+    for y in 0..h {
+        for x in 0..w {
+            assert_eq!(&buf[(y * w + x) * 4..][..4], &r.pixel(x, y), "({x}, {y})");
+        }
+    }
+    assert_eq!(buf, r.rgba8());
+    let ptr = buf.as_ptr();
+    r.rgba8_into(&mut buf);
+    assert_eq!(
+        buf.as_ptr(),
+        ptr,
+        "no reallocation when the size is unchanged"
+    );
+}
