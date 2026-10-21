@@ -63,13 +63,7 @@ impl SettingsDialog {
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
             .show(ctx, |ui| {
                 ui.set_min_width(380.0);
-                card_ui(
-                    ui,
-                    &mut spec,
-                    &mut sub.ssc,
-                    &hosts,
-                    &mut self.draft.video.show_disk_leds,
-                );
+                card_ui(ui, &mut spec, &mut sub.ssc, &hosts);
                 ui.separator();
                 ui.horizontal(|ui| {
                     ok = ui.button("OK").clicked();
@@ -90,13 +84,7 @@ impl SettingsDialog {
     }
 }
 
-fn card_ui(
-    ui: &mut Ui,
-    spec: &mut SlotCardSpec,
-    ssc: &mut Option<SscForm>,
-    hosts: &HostLists,
-    show_leds: &mut bool,
-) {
+fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, hosts: &HostLists) {
     match spec {
         SlotCardSpec::Disk2 {
             firmware_13_sector,
@@ -131,7 +119,8 @@ fn card_ui(
                         ui.checkbox(&mut d.connected, "Drive connected");
                     });
                 }
-                ui.checkbox(show_leds, "Show status for slots 5 & 6");
+                // "Show status for slots 5 & 6" is global: it lives in the Configuration page,
+                // not in this card dialog (GH#1490).
                 ui.checkbox(firmware_13_sector, "13-sector Firmware");
             });
         }

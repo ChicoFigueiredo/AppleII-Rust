@@ -199,11 +199,18 @@ impl App {
         }
         match a {
             Action::Help => self.help.toggle(),
-            Action::Reboot => self.emu.send(Command::PowerCycle),
+            Action::Reboot => {
+                if self.ui.request_reboot(self.settings.misc.confirm_reboot) {
+                    self.emu.send(Command::PowerCycle)
+                }
+            }
             Action::SoftReset => self.emu.send(Command::Reset),
             Action::DriveSelect(d) => self.pick_disk(usize::from(d), false),
             Action::DriveMenu(d) => self.ui.drive_menu = Some(usize::from(d)),
-            Action::SwapDrives => self.emu.send(Command::SwapDrives),
+            Action::SwapDrives => {
+                self.remember_media(&Command::SwapDrives);
+                self.emu.send(Command::SwapDrives)
+            }
             Action::ToggleFullscreen => {
                 if let Some(w) = self.window() {
                     let fs = if w.fullscreen().is_some() {
@@ -262,6 +269,16 @@ impl App {
         });
     }
 
+    /// AppleWin saves the image of a floppy drive as soon as it changes (`SaveLastDiskImage`), so
+    /// a restart from the settings dialog and the next run keep the disks (GH#98, GH#511, GH#960).
+    fn remember_media(&mut self, c: &Command) {
+        if crate::hotswap::remember_media(&mut self.settings, c) {
+            if let Err(e) = self.settings.save_default() {
+                self.ui.message = format!("Could not save settings: {e}");
+            }
+        }
+    }
+
     /// `read_only`: "Open as Read Only" (the disk is mounted write-protected).
     fn pick_disk(&mut self, drive: usize, read_only: bool) {
         // Pause while the modal dialog is open so sound does not stutter and time does not pass.
@@ -286,11 +303,13 @@ impl App {
         self.emu.send(Command::SetPaused(was_paused));
         if let Some(path) = picked {
             self.ui.disk.note_inserted(&path);
-            self.emu.send(Command::InsertDisk {
+            let c = Command::InsertDisk {
                 drive,
                 path,
                 read_only,
-            });
+            };
+            self.remember_media(&c);
+            self.emu.send(c);
         }
     }
 
@@ -471,7 +490,9 @@ impl App {
         }
         let t = toolbar::drop_target(self.cursor, self.ui.drive_rects);
         self.ui.disk.note_inserted(&path);
-        self.emu.send(toolbar::drop_command(&t, path));
+        let c = toolbar::drop_command(&t, path);
+        self.remember_media(&c);
+        self.emu.send(c);
     }
 
     /// Lets go of every held key and key-driven joystick (F7, full screen, focus lost).
@@ -609,20 +630,27 @@ impl App {
                     self.emu.send(Command::UpdateSettings(s));
                 }
                 UiEvent::Volume(v) => self.emu.send(Command::SetVolume(v)),
-                UiEvent::EjectDisk(d) => self.emu.send(Command::EjectDisk { drive: d }),
+                UiEvent::EjectDisk(d) => {
+                    let c = Command::EjectDisk { drive: d };
+                    self.remember_media(&c);
+                    self.emu.send(c);
+                }
                 UiEvent::InsertDisk { drive, path } => {
                     self.ui.disk.note_inserted(&path);
-                    self.emu.send(Command::InsertDisk {
+                    let c = Command::InsertDisk {
                         drive,
                         path,
                         read_only: false,
-                    });
+                    };
+                    self.remember_media(&c);
+                    self.emu.send(c);
                 }
                 UiEvent::PickDiskReadOnly(drive) => self.pick_disk(drive, true),
                 UiEvent::SetWriteProtect { drive, on } => {
                     self.emu.send(Command::SetWriteProtect { drive, on })
                 }
                 UiEvent::Paste => self.paste(),
+                UiEvent::RebootConfirmed => self.emu.send(Command::PowerCycle),
                 UiEvent::Benchmark => self.start_benchmark(),
             }
         }

@@ -589,6 +589,38 @@ impl Settings {
         }
     }
 
+    /// Drive `drive` of the first Disk II card now holds `image` (`None` = ejected). AppleWin
+    /// writes it to the registry at once (`SaveLastDiskImage`, Disk.cpp:227-258), so a restart
+    /// from the configuration dialog or a new run finds the same disks (GH#98, GH#511, GH#960);
+    /// 'Starting Directory' follows slot 6 drive 1 only.
+    pub fn remember_floppy(&mut self, drive: usize, image: Option<PathBuf>) {
+        let Some(slot) = self.find_card(CardType::Disk2) else {
+            return;
+        };
+        if slot == 6 && drive == 0 {
+            if let Some(dir) = image.as_deref().and_then(std::path::Path::parent) {
+                self.storage.disk_dir = Some(dir.to_path_buf());
+            }
+        }
+        if let SlotCardSpec::Disk2 { drives, .. } = &mut self.slots.0[slot] {
+            if let Some(d) = drives.get_mut(drive) {
+                d.image = image;
+            }
+        }
+    }
+
+    /// The drives of the first Disk II card swapped (F5; `Disk2InterfaceCard::SwapDisks`).
+    pub fn swap_floppies(&mut self) {
+        if let Some(SlotCardSpec::Disk2 { drives, .. }) = self
+            .find_card(CardType::Disk2)
+            .map(|s| &mut self.slots.0[s])
+        {
+            let a = drives[0].image.take();
+            drives[0].image = drives[1].image.take();
+            drives[1].image = a;
+        }
+    }
+
     /// Re-apply new-install slot-0 default after a model change (slot 0 depends on the model).
     pub fn reset_slot0_for_model(&mut self) {
         self.slots.0[0] = SlotCardSpec::default_for_slot(0, self.machine.model);

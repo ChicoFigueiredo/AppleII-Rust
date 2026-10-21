@@ -65,6 +65,22 @@ pub fn commands(old: &Settings, new: &Settings) -> Vec<Command> {
     v
 }
 
+/// AppleWin writes a floppy's image to the registry as soon as it changes
+/// (`Disk2InterfaceCard::SaveLastDiskImage`, Disk.cpp:227-258), so that a restart from the
+/// configuration dialog, and the next run, find the same disks (GH#98, GH#511, GH#960). Brings
+/// `settings` up to date with an insert / drop / eject / swap command; `true` = it changed.
+pub fn remember_media(settings: &mut Settings, c: &Command) -> bool {
+    match c {
+        Command::InsertDisk { drive, path, .. } | Command::DropDisk { drive, path, .. } => {
+            settings.remember_floppy(*drive, Some(path.clone()))
+        }
+        Command::EjectDisk { drive } => settings.remember_floppy(*drive, None),
+        Command::SwapDrives => settings.swap_floppies(),
+        _ => return false,
+    }
+    true
+}
+
 /// `spec` with the parts that are hot-swappable (images, write protect) cleared, so that two
 /// specs compare equal when only those differ.
 pub fn without_media(spec: &SlotCardSpec) -> SlotCardSpec {
