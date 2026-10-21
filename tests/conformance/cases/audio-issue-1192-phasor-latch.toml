@@ -1,0 +1,20 @@
+id = "audio-issue-1192-phasor-latch"
+story = "HU-0501"
+criterion = "Phasor nativo: latch de endereco independente por AY e chip select (GH#1192, sequencias A a D): eventos 6522/AY iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-phasor-ay-latch.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "phasor"
+slot = 4
+program = "audio/programs/issue-phasor-ay-latch.bin"
+
+[run]
+cycles = 12000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-1192-phasor-latch"
+events = "reference-audio/audio-issue-1192-phasor-latch.events"

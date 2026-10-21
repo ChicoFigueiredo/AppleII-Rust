@@ -1,0 +1,20 @@
+id = "audio-issue-1274-sdmusic-ay-read-regs"
+story = "HU-0501"
+criterion = "Cartao sdmusic (GH#1274, mb-audit 1.50): programa ay-read-regs; eventos 6522/AY iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/ay-read-regs.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "sdmusic"
+slot = 4
+program = "audio/programs/ay-read-regs.bin"
+
+[run]
+cycles = 12000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-1274-sdmusic-ay-read-regs"
+events = "reference-audio/audio-issue-1274-sdmusic-ay-read-regs.events"
