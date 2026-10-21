@@ -12,6 +12,7 @@ use crate::video::{Frame, FrameSource};
 use apple2_audio::{volume_gain, AudioBus, Mixer};
 use apple2_config::Settings;
 use apple2_core::Machine;
+use apple2_debugger::keys::{Key as DbgKey, KeyMods as DbgMods};
 use apple2_debugger::{Debugger, RunMode};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -369,6 +370,11 @@ impl Emulator {
         (cycles, audio)
     }
 
+    /// The debugger (read-only access for the frontend and tests).
+    pub fn debugger(&self) -> &Debugger {
+        &self.debugger
+    }
+
     /// True while the debugger owns the machine (stopped at the prompt).
     pub fn debugger_halted(&self) -> bool {
         self.debugger.mode == RunMode::Debug
@@ -666,23 +672,11 @@ impl Emulator {
                 }
             }
             Command::Debug(k) => {
-                let d = &mut self.debugger;
-                match k {
-                    DebugKey::Char(c) => {
-                        d.console.input_char(c);
-                    }
-                    DebugKey::Backspace => {
-                        d.console.backspace();
-                    }
-                    DebugKey::Enter => {
-                        d.input_enter(&mut self.machine);
-                    }
-                    DebugKey::HistoryPrev => d.console.history_prev(),
-                    DebugKey::HistoryNext => d.console.history_next(),
-                    DebugKey::ClearInput => d.console.clear_input(),
-                    DebugKey::ScrollUp => d.console.scroll_up(4),
-                    DebugKey::ScrollDown => d.console.scroll_down(4),
-                }
+                let (key, mods) = match k {
+                    DebugKey::Char(c) => (DbgKey::Char(c), DbgMods::default()),
+                    DebugKey::Press(key, mods) => (key, mods),
+                };
+                self.debugger.process_key(&mut self.machine, key, mods);
             }
             Command::Shutdown => {
                 self.shutdown_state();

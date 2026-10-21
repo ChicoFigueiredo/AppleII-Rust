@@ -497,6 +497,28 @@ impl Disk2Card {
             .map_or(0, |d| DiskImage::phase_to_track(d.phase_precise))
     }
 
+    /// Bit position in the selected drive's track (`GetCurrentBitOffset`).
+    pub fn current_bit_offset(&self) -> u32 {
+        self.drives[self.curr_drive].disk.bit_offset
+    }
+
+    /// Cycles carried over in the selected drive's bit stream (`GetCurrentExtraCycles`).
+    pub fn current_extra_cycles(&self) -> f64 {
+        self.drives[self.curr_drive].disk.extra_cycles
+    }
+
+    /// The logic state sequencer's shift register (`GetCurrentShiftReg`).
+    pub fn current_shift_reg(&self) -> u8 {
+        self.shift_reg
+    }
+
+    /// "NN.nn" head position of the selected drive, in hex (`GetCurrentPhaseString`).
+    pub fn current_phase_string(&self) -> String {
+        let p = self.phase(self.curr_drive);
+        let int = p as u32;
+        format!("{:02X}.{:02}", int, ((p - int as f32) * 100.0 + 0.5) as u32)
+    }
+
     /// "NN.nn" track string in hex (`GetCurrentTrackString`).
     pub fn track_string(&self, drive: usize) -> String {
         let p = self.phase(drive) / 2.0;

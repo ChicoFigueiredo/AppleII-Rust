@@ -89,6 +89,20 @@ pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
     })
 }
 
+/// [`action_for`] as seen from the current mode. While the debugger is on screen AppleWin sends
+/// every key to `DebuggerProcessKey` and only handles the Ctrl+0/1/3 speed shortcuts when running
+/// (WinFrame.cpp:1336-1393), so there Ctrl+digit jumps to a bookmark instead.
+pub fn action_for_mode(key: HostKey, mods: Mods, debugger_active: bool) -> Option<Action> {
+    let speed = matches!(
+        action_for(key, mods),
+        Some(Action::SpeedToggleMax | Action::Speed1Mhz | Action::SpeedMax)
+    );
+    if debugger_active && speed {
+        return None;
+    }
+    action_for(key, mods)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,6 +122,18 @@ mod tests {
         ctrl: false,
         alt: false,
     };
+
+    #[test]
+    fn ctrl_digits_are_bookmarks_not_speed_shortcuts_in_the_debugger() {
+        let k = HostKey::Char('1');
+        assert_eq!(action_for_mode(k, CTRL, false), Some(Action::Speed1Mhz));
+        assert_eq!(action_for_mode(k, CTRL, true), None);
+        // the function keys keep working in the debugger
+        assert_eq!(
+            action_for_mode(HostKey::F(7), NONE, true),
+            Some(Action::ToggleDebugger)
+        );
+    }
 
     #[test]
     fn function_keys_follow_applewin() {
