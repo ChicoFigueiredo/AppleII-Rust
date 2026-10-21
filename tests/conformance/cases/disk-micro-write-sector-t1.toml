@@ -10,8 +10,8 @@ notes = "Issues do AppleWin: #119, #499. Micro-programa de boot (tests/conforman
 cycles = 4500000
 
 [fixture]
-path = "tests/conformance/inputs/disk-micro/write-sector-t1.do"
-sha256 = "8f6adecc4a57934799e39554c6d32e426e5e2dd81e50c26b8abb3ad5cefce933"
+path = "tests/conformance/inputs/disk-micro/write-sector-t1.do.gz"
+sha256 = "0d49d081fb0986766b1b943f9118776ae296e0cfb1b47ae972eec8f944f99925"
 
 [oracle]
 kind = "trace-checkpoints"

@@ -10,7 +10,7 @@
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
 #oracle_trace_sha256=c1ec2a729b722b85982fd4cbbfb1cf265b293ecc5285424052eda14af4047c84
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 10000000 --disk <fixture> --memclear 0
-#final_sha256_fixture=aefc8382c07e9801173ede6fbce70870c82012d3407c2ffcd2b48765f750a491
+#final_sha256_fixture=6e44ad4feafa9a9eaf3abdf23439687fb27d36a2d7a6f8a3719f44637fa02cba
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E

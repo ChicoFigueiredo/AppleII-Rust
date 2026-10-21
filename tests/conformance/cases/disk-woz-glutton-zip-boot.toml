@@ -1,0 +1,20 @@
+id = "disk-woz-glutton-zip-boot"
+story = "HU-0301"
+criterion = "WOZ Glutton (dentro de um .zip) no //e Enhanced: boot idêntico ao AppleWin"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #1021. Micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): trace ciclo a ciclo e SHA-256 das imagens ao final. Regerar: tools/conformance/oracle/run-audetto-oracle.sh + disk_follow --emit-ckpt (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 6000000
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/WOZ/Glutton.zip"
+sha256 = "6fa8b1bd223555fe1c6722214f423aec6012ee937f64c37bb5d800213e3c1288"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 6000000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-woz-glutton-zip-boot.ckpt"
