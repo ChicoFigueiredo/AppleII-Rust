@@ -1,5 +1,7 @@
 # Wave 0 — linhas para a matriz de capacidades (núcleo)
 
+> **Superada.** Esta tabela é o retrato da wave 0 (SHA `6da6048`, 20/10/2026) e muitos estados mudaram depois (por exemplo, Saturn, save-state, depurador, vídeo, áudio). O estado vigente está em [capability-matrix.md](../capability-matrix.md).
+
 Alvo Rust `6da6048`; oráculo AppleWin `a8f0d1d`. Regras: **IMPLEMENTED** = há código, sem teste comparativo contra o oráculo; **PASS** = teste comparativo contra o oráculo (C++, especificação de hardware ou fixture real); o resultado de um modelo não vale para outro. IDs `AUD-C-NNN` apontam para `wave0-core.md`.
 
 | Componente | Modelo | Estado | Evidência | Divergência |

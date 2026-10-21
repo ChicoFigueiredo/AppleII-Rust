@@ -28,12 +28,13 @@ Um item só muda para PASS com evidência. Dúvida ou falta de teste é UNVERIFI
 | [test-oracles.md](test-oracles.md) | Pirâmide de testes, política de comparação, formato do Trace de referência e Manifesto de execução |
 | [gaps-and-known-limitations.md](gaps-and-known-limitations.md) | Lacunas e limitações conhecidas no vocabulário de Estados de verificação, e a lista de Divergências intencionais |
 | [release-readiness.md](release-readiness.md) | Gates G0 a G3, rubrica Verônica e estado atual de cada Gate |
-| `capability-matrix.md` | Matriz de capacidades por Modelo (produzida por outra frente de trabalho) |
-| `applewin-issue-matrix.csv` | Matriz das issues do AppleWin (idem) |
-| `issue-audit.md` | Auditoria das issues (idem) |
-| `upstream-open-issues-triage.md` | Triagem das issues abertas do upstream (idem) |
-
-Os quatro últimos podem ainda não existir no seu checkout.
+| [capability-matrix.md](capability-matrix.md) | Matriz de capacidades por componente e Modelo, com a evidência de cada resultado |
+| [relatorio-final.md](relatorio-final.md) | Relatório final do §21 do plano: baseline, tabela-resumo, issues, Top 10, testes, diferencial, risco, nota e recomendação |
+| [applewin-issue-matrix.csv](applewin-issue-matrix.csv), [issue-audit.md](issue-audit.md), [issue-audit-review.md](issue-audit-review.md), [issue-classification-guide.md](issue-classification-guide.md) | As 1.115 issues do AppleWin, com o estado de verificação de cada uma, o sumário e a revisão independente da triagem |
+| [upstream-open-issues-triage.md](upstream-open-issues-triage.md), [upstream-open-selected.md](upstream-open-selected.md), [wave1-candidates.md](wave1-candidates.md) | Triagem das issues abertas, as 36 selecionadas e a fila da onda 1 |
+| [backlog.md](backlog.md), [backlog.json](backlog.json) | Backlog importável (épicos e histórias; issues #2 a #80 no GitHub) |
+| `results/*.csv`, `audit/*.md`, `platform/*`, `manual-tests/*` | Resultados por issue, auditorias e diferenciais, relatórios de plataforma e roteiros manuais |
+| [savestate-schema.md](savestate-schema.md), [wasm-estudo.md](wasm-estudo.md), [apple1-investigation.md](apple1-investigation.md) | Esquema de save-state, estudo de WASM e investigação do Apple I |
 
 Os testes, as entradas e os relatórios gerados ficam em [tests/conformance](../../tests/conformance/README.md). Os nomes dos arquivos são em inglês (seguem o plano), e o conteúdo é em português.
 

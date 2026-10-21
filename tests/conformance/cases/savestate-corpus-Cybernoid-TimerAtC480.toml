@@ -1,0 +1,20 @@
+id = "savestate-corpus-Cybernoid-TimerAtC480"
+story = "HU-0401"
+criterion = "Importar o save-state real Cybernoid-TimerAtC480.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/Cybernoid-TimerAtC480.aws.yaml"
+sha256 = "100c97421b3a6eb4317ce29cb506aa3c71d2f878cc6efd48cacd8cdfe29f2f9f"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Cybernoid-TimerAtC480.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "83bd623716f9d59c65c8671fbab2874357edc9ade8ca51e481cf1a73a5314613"

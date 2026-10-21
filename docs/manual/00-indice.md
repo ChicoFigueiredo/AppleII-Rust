@@ -18,6 +18,8 @@ Este é o manual do usuário do **AppleII-Rust**, uma reescrita em Rust do emula
 12. Diferenças em relação ao AppleWin
 13. Créditos e licença
 14. Laboratório educacional
+15. Depuração no VS Code (DAP)
+16. Depuração temporal (rewind)
 
 Pressione **F1** a qualquer momento para abrir este manual dentro do emulador. Use o campo de busca para localizar um termo e o sumário à esquerda para saltar entre os capítulos. Pressione F1 de novo para fechar.
 
