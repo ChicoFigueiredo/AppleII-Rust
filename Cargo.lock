@@ -265,6 +265,7 @@ dependencies = [
  "apple2-cpu",
  "apple2-debugger",
  "apple2-hostio",
+ "apple2-printer",
  "apple2-roms",
  "apple2-savestate",
  "apple2-storage",

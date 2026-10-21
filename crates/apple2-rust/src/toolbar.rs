@@ -16,6 +16,9 @@ pub enum Button {
     Fullscreen,
     Debug,
     Settings,
+    /// Printer Center (virtual printer window). Not in [`Button::ALL`]: it exists only while a
+    /// Generic Printer is configured, and it has no F-key (F9 is the video mode in AppleWin).
+    Printer,
 }
 
 impl Button {
@@ -31,8 +34,12 @@ impl Button {
         Button::Settings,
     ];
 
-    pub fn fkey(self) -> u8 {
-        Button::ALL.iter().position(|b| *b == self).unwrap_or(0) as u8 + 1
+    /// `None` for the Printer button: F9..F12 already do other things in AppleWin.
+    pub fn fkey(self) -> Option<u8> {
+        Button::ALL
+            .iter()
+            .position(|b| *b == self)
+            .map(|i| i as u8 + 1)
     }
 
     pub fn label(self) -> &'static str {
@@ -45,6 +52,7 @@ impl Button {
             Button::Fullscreen => "Full",
             Button::Debug => "Debug",
             Button::Settings => "Config",
+            Button::Printer => "Printer",
         }
     }
 
@@ -59,6 +67,7 @@ impl Button {
             Button::Fullscreen => Icon::Fullscreen,
             Button::Debug => Icon::Debug,
             Button::Settings => Icon::Setup,
+            Button::Printer => Icon::Printer,
         }
     }
 
@@ -73,6 +82,7 @@ impl Button {
             Button::Fullscreen => Action::ToggleFullscreen,
             Button::Debug => Action::ToggleDebugger,
             Button::Settings => Action::Settings,
+            Button::Printer => Action::PrinterCenter,
         }
     }
 }
@@ -191,13 +201,16 @@ mod tests {
 
     #[test]
     fn buttons_follow_function_keys() {
-        assert_eq!(Button::Help.fkey(), 1);
-        assert_eq!(Button::Drive2.fkey(), 4);
-        assert_eq!(Button::Settings.fkey(), 8);
+        assert_eq!(Button::Help.fkey(), Some(1));
+        assert_eq!(Button::Drive2.fkey(), Some(4));
+        assert_eq!(Button::Settings.fkey(), Some(8));
+        // F9 is the video mode: the Printer button has no F-key and is not in the AppleWin column.
+        assert_eq!(Button::Printer.fkey(), None);
+        assert!(!Button::ALL.contains(&Button::Printer));
         // Every F1-F8 binding in `actions` matches the toolbar button of the same number.
         use crate::keymap::{HostKey, Mods};
         for b in Button::ALL {
-            let key = HostKey::F(b.fkey());
+            let key = HostKey::F(b.fkey().unwrap());
             assert_eq!(
                 crate::actions::action_for(key, Mods::default()),
                 Some(b.action()),
