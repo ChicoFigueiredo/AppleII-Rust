@@ -1,0 +1,22 @@
+[package]
+name = "apple2-lab"
+description = "Laboratório educacional: explica instruções 6502/65C02, gera traces didáticos e verifica exercícios de Assembly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "apple2_lab"
+path = "src/lib.rs"
+
+[[bin]]
+name = "apple2-lab"
+path = "src/main.rs"
+
+[dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
+apple2-core = { path = "../apple2-core" }
+apple2-debugger = { path = "../apple2-debugger" }
+serde.workspace = true
+toml = "0.8"
