@@ -140,6 +140,7 @@ dependencies = [
  "apple2-core",
  "apple2-storage",
  "apple2-video",
+ "flate2",
  "image",
  "serde",
  "serde_json",

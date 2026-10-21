@@ -179,9 +179,32 @@ pub fn fold_row(h: u64, cycle: u64, pc: u16, a: u8, x: u8, y: u8, sp: u8, p: u8)
 
 pub const HASH_SEED: u64 = 0xCBF2_9CE4_8422_2325;
 
+/// SHA-256 of an image file's content. A `.gz` image is hashed decompressed: the compressed
+/// bytes depend on the compressor, the content is what the emulation wrote.
+pub fn content_sha256(path: &std::path::Path) -> String {
+    use std::io::Read;
+    let bytes = std::fs::read(path).unwrap_or_default();
+    let is_gz = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("gz"));
+    if is_gz {
+        let mut out = Vec::new();
+        if flate2::read::GzDecoder::new(&bytes[..])
+            .read_to_end(&mut out)
+            .is_ok()
+        {
+            return sha256_hex(&out);
+        }
+    }
+    sha256_hex(&bytes)
+}
+
 /// The machine of a disk boot case plus the scratch copies of its disk images.
 pub struct Rig {
     pub machine: Machine,
+    /// Images the emulation refused to mount (the drive stays empty, like AppleWin after its
+    /// "Unable to open the file" message): `(role, reason)`.
+    pub open_errors: Vec<(&'static str, String)>,
     /// `(role, path of the scratch copy)`: `fixture`, `fixture2`, `hdd`, `hdd2`.
     pub files: Vec<(&'static str, PathBuf)>,
     dir: PathBuf,
@@ -212,7 +235,7 @@ impl Rig {
         }
         self.files
             .iter()
-            .map(|(r, p)| (*r, sha256_hex(&std::fs::read(p).unwrap_or_default())))
+            .map(|(r, p)| (*r, content_sha256(p)))
             .collect()
     }
 }
@@ -252,13 +275,15 @@ pub fn build(env: &Env, case: &Case) -> Result<Rig, String> {
     }
     let path_of = |r: &str| files.iter().find(|(x, _)| *x == r).map(|(_, p)| p.clone());
     let mut m = apple2_core::Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let mut open_errors = Vec::new();
     let slot = case.disk2_slot()?;
     if slot.is_some() || path_of("fixture").is_some() || path_of("fixture2").is_some() {
         let mut card = Disk2Card::new();
         for (drive, role) in [(0, "fixture"), (1, "fixture2")] {
             if let Some(p) = path_of(role) {
-                card.insert_path(drive, &p, false)
-                    .map_err(|e| format!("{}: {e}", p.display()))?;
+                if let Err(e) = card.insert_path(drive, &p, false) {
+                    open_errors.push((role, e.to_string()));
+                }
             }
         }
         let slot = slot.unwrap_or(6);
@@ -273,8 +298,9 @@ pub fn build(env: &Env, case: &Case) -> Result<Rig, String> {
         let mut card = HardDiskCard::new(7, model, HdcMode::Default);
         for (unit, role) in [(0, "hdd"), (1, "hdd2")] {
             if let Some(p) = path_of(role) {
-                card.insert_path(unit, &p)
-                    .map_err(|e| format!("{}: {e}", p.display()))?;
+                if let Err(e) = card.insert_path(unit, &p) {
+                    open_errors.push((role, e.to_string()));
+                }
             }
         }
         if !m.insert_card(7, Box::new(card)) {
@@ -289,6 +315,7 @@ pub fn build(env: &Env, case: &Case) -> Result<Rig, String> {
     }
     Ok(Rig {
         machine: m,
+        open_errors,
         files,
         dir,
     })
@@ -384,5 +411,9 @@ pub fn check(rig: &mut Rig, ck: &Checkpoints) -> Result<String, Failure> {
         } else {
             format!("; imagens finais idênticas ({})", finals.trim())
         }
-    ))
+    ) + &rig
+        .open_errors
+        .iter()
+        .map(|(r, e)| format!("; {r} recusada na montagem ({e}), drive vazio como no oráculo"))
+        .collect::<String>())
 }

@@ -1,0 +1,20 @@
+id = "disk-micro-bad-woz-trks"
+story = "HU-0301"
+criterion = "WOZ com o chunk TRKS de id [0,0,0,0] é recusado sem derrubar o emulador (drive vazio)"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+memclear = 0
+notes = "Issues do AppleWin: #1402. Micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): trace ciclo a ciclo e SHA-256 das imagens ao final. Regerar: tools/conformance/oracle/run-audetto-oracle.sh + disk_follow --emit-ckpt (ver docs/conformance/audit/disk-differential.md)."
+
+[run]
+cycles = 3500000
+
+[fixture]
+path = "tests/conformance/inputs/disk-micro/bad-trks.woz"
+sha256 = "b96288565ac7b33bb9b8cd592a6cf1dda2fd11bce8cfa70c0c6b18f2958c5740"
+
+[oracle]
+kind = "trace-checkpoints"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c03, upstream 3e8054b) via tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 3500000 --memclear 0; checkpoints gerados por disk_follow"
+trace = "reference-traces/disk/disk-micro-bad-woz-trks.ckpt"
