@@ -610,17 +610,49 @@ fn ier_write_gates_whether_pending_timer_events_defer_an_irq() {
             .collect::<Vec<_>>()
     };
     let mut code = sta(0x00, 0xC404).to_vec();
-    code.extend(sta(0x40, 0xC405)); // T1 pending, IER off: still IRQ-capable until IER is written
+    code.extend(sta(0x40, 0xC405)); // T1 pending, IER never written
+    let after_start = 0x300 + code.len() as u16;
     code.extend(sta(0x40, 0xC40E)); // IER: clear T1
     let at_clear = 0x300 + code.len() as u16;
     code.extend(sta(0xC0, 0xC40E)); // IER: set T1
     code.extend(spin_at(0x300 + code.len() as u16));
     let end = 0x300 + code.len() as u16 - 3;
     load(&mut m, 0x300, &code);
+    // GH#1176: the reset wrote IER = $7F (cpp:50), so m_canAssertIRQ is already false.
+    run_to(&mut m, after_start);
+    assert_eq!(flag(&m), [false]);
     run_to(&mut m, at_clear);
     assert_eq!(flag(&m), [false]);
     run_to(&mut m, end);
     assert_eq!(flag(&m), [true]);
+}
+
+#[test]
+fn gh1176_timer_event_on_the_cli_last_cycle_does_not_defer_the_pending_irq() {
+    // 6522 #1 free-running with latch 0 (event every 2 cycles, IER never written) next to an
+    // IRQ held pending by 6522 #0: the event expires on the last cycle of the CLI, but its IER
+    // bit is clear (reset wrote $7F), so the IRQ is taken right after the CLI.
+    let (mut m, _bus) = setup(Variant::MockingboardC);
+    let mut code = sta(0x40, 0xC48B).to_vec(); // 6522 #1 ACR: free-running
+    code.extend(sta(0x00, 0xC484));
+    code.extend(sta(0x00, 0xC485)); // start the 2-cycle events
+    code.extend(sta(0xC0, 0xC40E)); // 6522 #0 IER: T1
+    code.extend(sta(0x00, 0xC40B)); // ACR: one-shot
+    code.extend(sta(0x02, 0xC404));
+    code.extend(sta(0x00, 0xC405)); // T1 of #0 expires in a few cycles
+    code.extend([0xEA; 8]); // wait until the IRQ line is up, I still set
+    let cli = 0x300 + code.len() as u16;
+    code.push(0x58); // CLI
+    code.extend([0xE8, 0xE8, 0xE8]); // INX: the handler must run before these
+    code.extend(spin_at(0x300 + code.len() as u16));
+    load(&mut m, 0x300, &code);
+    run_to(&mut m, cli);
+    assert!(m.board().interrupts.irq_line());
+    m.step(); // CLI
+    assert!(
+        m.next_step_is_interrupt_entry(),
+        "the IRQ must be taken after the CLI, not one opcode later"
+    );
 }
 
 #[test]

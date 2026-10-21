@@ -43,6 +43,7 @@ Comando: `conformance run --all` (manifestos em `tests/conformance/reports/`). O
 | Envelopes do AY (oito formas, zumbido) | `audio-ay-envelope` | PASS | 148 eventos idênticos |
 | Ruído do AY | `audio-ay-noise` | PASS | 155 eventos idênticos |
 | Timers do 6522, IRQ, IFR/IER/ACR | `audio-via-timers-irq` | PASS | 110 eventos idênticos (inclui `IRQ,6522` e leituras de IFR) |
+| 6522: T1 contínuo (evento a cada 2 ciclos) com IRQ pendente e CLI (GH#1176) | `audio-issue-1176-last-cycle` | PASS | 20 eventos idênticos; o portão `m_canAssertIRQ` dos eventos de timer fecha no Reset (`Write(rIER,0x7f)`), então o IRQ entra logo depois do CLI |
 | Cliques do alto-falante (leitura e escrita em `$C030`) | `audio-speaker-clicks` | PASS | 150 eventos idênticos |
 | Phasor nativo, 2 AY por 6522, leitura dos registradores 14, Echo+ | `audio-phasor-two-ay` | PASS | 76 eventos idênticos; PCM dentro da tolerância (RMS 1,03 %) |
 | Soquetes de AY (AUD-P-006) e `6522a-bad` (AUD-P-007) | `audio-ay-sockets-bad6522` | PASS | 524 eventos idênticos (16 registradores dos dois AY e o DDRB lidos de volta) |

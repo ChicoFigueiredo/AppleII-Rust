@@ -74,6 +74,13 @@ A ordem é a da investigação. "Primeira linha" é o ponto em que o `diff` paro
 - **Correção:** `Machine::update_cards` (API pública, já usada por `run_cycles`/`run_frame`) e `TraceWriter` a chama a cada 1020 ciclos (`trace::BATCH_CYCLES`), como o oráculo.
 - **Teste:** `oracle_conventions.rs::cards_are_updated_at_the_end_of_each_1ms_batch_like_the_oracle`; caso `trace-applewin-iie-enhanced-dos33-5m`.
 
+### D8. IRQ adiada um opcode depois do CLI (GH#1176)
+
+- **Sintoma:** com o Mockingboard no slot 4, um IRQ pendente do 6522 #0 e o T1 do 6522 #1 em modo contínuo com latch 0 (evento a cada 2 ciclos, IER nunca escrito), o AppleWin toma o IRQ logo depois do CLI (oráculo: CLI em 128, tratador a partir de 137). O Rust executava mais um opcode (`LDX #1` em 130) e só entrava em 139. Primeira divergência do Trace v1: linha 44 (`137,FA40` contra `130,033F`). Afeta a temporização de interrupção em geral, não só o áudio.
+- **Causa:** a lógica da CPU e do `Scheduler` estava correta (`CPU.cpp` `IRQ()`, `SetIrqOnLastOpcodeCycle`, `SynchronousEventManager::Update`). Com o oráculo instrumentado (fprintf em `Update` e em `IRQ()`), os ciclos de todos os eventos são idênticos aos do Rust, inclusive o que expira em 130, o último ciclo do CLI. A diferença era `SyncEvent::m_canAssertIRQ` do evento de T1 do 6522 #1: o oráculo a tem **falsa**, o Rust verdadeira. `SY6522::Reset()` executa `Write(rIER, 0x7f)` (6522.cpp:50) e o ramo `case 0x0e` recalcula `m_canAssertIRQ = IER & IxR_TIMER1/2` (cpp:217-220): depois do reset, nenhum evento de timer marca "IRQ no último ciclo do opcode" até o IER habilitar o bit. Em `Via::reset` o IER era zerado direto, sem atualizar `t1_gated/t2_gated`, que ficavam no valor inicial (`false` = pode marcar). Portanto as duas hipóteses já descartadas (fase dos eventos de 2 ciclos e bandeira `irq_on_last_opcode_cycle`) realmente não eram a causa.
+- **Correção:** `Via::reset` põe `t1_gated = t2_gated = true` junto com `ier = 0` (`apple2-audio/src/via6522.rs`). Nenhuma mudança em `apple2-core`.
+- **Teste:** `via6522.rs::tests::reset_gates_both_timer_events_until_ier_enables_them`, `apple2-audio/tests/machine.rs::gh1176_timer_event_on_the_cli_last_cycle_does_not_defer_the_pending_irq`, `::ier_write_gates_whether_pending_timer_events_defer_an_irq` (ajustado: o evento já nasce fechado) e o caso `audio-issue-1176-last-cycle` (PASS, 20 eventos idênticos; `known_divergence` retirado).
+
 ## Hipóteses descartadas
 
 - O estado inicial da RAM, hipótese inicial do supervisor para a divergência do ciclo 132.313: correto implementar (D2), mas a causa era o Disk II (D5).
