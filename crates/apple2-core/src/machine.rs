@@ -528,6 +528,15 @@ impl Machine {
             .unwrap_or_else(|| self.board.floating_bus())
     }
 
+    /// Like [`Machine::peek`] but also right for `$C100-$CFFF` (slot, expansion and internal ROM).
+    pub fn peek_code(&mut self, addr: u16) -> u8 {
+        if (0xC100..0xD000).contains(&addr) {
+            self.board.peek_cx(addr)
+        } else {
+            self.peek(addr)
+        }
+    }
+
     /// Writes as the CPU would under the current paging (ROM and I/O ignore it).
     pub fn poke(&mut self, addr: u16, value: u8) {
         if !(0xC000..0xD000).contains(&addr) {

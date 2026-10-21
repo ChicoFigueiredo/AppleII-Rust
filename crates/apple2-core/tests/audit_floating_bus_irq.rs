@@ -44,7 +44,6 @@ fn floating_bus_reads_main_text_page_with_default_switches() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-050; remover ignore quando corrigido"]
 fn floating_bus_with_ramrd_follows_the_cpu_read_image_like_applewin() {
     // Memory.cpp:2460/2470: `MemGetMainPtr(0)[scanner]` indexa `mem`, a imagem que a CPU le. Com
     // RAMRD=1 (e ALTZP=0) o AppleWin devolve o byte da RAM AUXILIAR; memory.rs/io.rs:22 le sempre

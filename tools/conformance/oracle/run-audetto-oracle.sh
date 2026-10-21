@@ -59,6 +59,7 @@ META=("${ROM_META[@]}"
   --meta "fork_sha=$FORK_SHA"
   --meta "fork_url=https://github.com/audetto/AppleWin")
 
+case "$OUT" in ""|/*) ;; *) OUT="$PWD/$OUT" ;; esac
 TARGET="${OUT:-/dev/stdout}"
 if [ -n "$OUT" ]; then
   mkdir -p "$(dirname "$OUT")"
@@ -88,5 +89,6 @@ for ((i = 0; i < ${#ARGS[@]}; i++)); do
     ARGS[i+1]="$SCRATCH/state.aws.yaml"
   fi
 done
-HOME="$SCRATCH" "$BIN" "${ARGS[@]}" "${META[@]}" --out "$TMP" 1>&2
+# cwd = the scratch dir: AppleWin opens the images named in a save-state relative to the cwd.
+(cd "$SCRATCH" && HOME="$SCRATCH" "$BIN" "${ARGS[@]}" "${META[@]}" --out "$TMP" 1>&2)
 if [ -n "$OUT" ]; then mv "$TMP" "$OUT"; else cat "$TMP" > "$TARGET"; rm -f "$TMP"; fi

@@ -204,15 +204,8 @@ impl<W: Write> TraceWriter<W> {
     pub fn step(&mut self, m: &mut Machine) -> io::Result<u32> {
         let mut row = TraceRow::from_machine(m);
         if (0xC100..0xD000).contains(&row.pc) {
-            // `peek` cannot read the slot/internal Cx ROM without side effects: take the opcode the
-            // CPU really fetched.
-            let cycles = m.step();
-            let (pc, op) = m.board().current_opcode();
-            if pc == row.pc {
-                row.op = op;
-            }
-            self.record_row(&row)?;
-            return Ok(cycles);
+            // `peek` cannot read slot/internal Cx ROM; `peek_code` can, without side effects.
+            row.op = m.peek_code(row.pc);
         }
         self.record_row(&row)?;
         Ok(m.step())
