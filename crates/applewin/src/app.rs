@@ -28,6 +28,19 @@ use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 pub enum UserEvent {
     /// The emulation thread published a frame.
     Frame,
+    /// A termination signal (SIGINT/SIGTERM/SIGHUP, console close) asked to quit: leave the
+    /// event loop so the emulation thread flushes the disks (see [`request_exit`]).
+    Exit,
+}
+
+static EXIT_PROXY: std::sync::OnceLock<EventLoopProxy<UserEvent>> = std::sync::OnceLock::new();
+
+/// Asks the running window to close as if the user had; callable from any thread (signal
+/// handlers). Returns false when no event loop is running yet.
+pub fn request_exit() -> bool {
+    EXIT_PROXY
+        .get()
+        .is_some_and(|p| p.send_event(UserEvent::Exit).is_ok())
 }
 
 pub struct Options {
@@ -49,6 +62,7 @@ pub fn run(opts: Options) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
+    let _ = EXIT_PROXY.set(proxy.clone());
     let mut app = App::new(opts, proxy)?;
     let result = event_loop.run_app(&mut app).map_err(|e| e.to_string());
     // Normally already done in `exiting()`; harmless if so.
@@ -742,7 +756,11 @@ impl ApplicationHandler<UserEvent> for App {
         self.window = Some(window);
     }
 
-    fn user_event(&mut self, _el: &ActiveEventLoop, _e: UserEvent) {
+    fn user_event(&mut self, el: &ActiveEventLoop, e: UserEvent) {
+        if matches!(e, UserEvent::Exit) {
+            el.exit();
+            return;
+        }
         self.poll_gamepads();
         if let Some(w) = &self.window {
             w.request_redraw();
