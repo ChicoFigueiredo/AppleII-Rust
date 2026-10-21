@@ -327,7 +327,7 @@ impl Debugger {
             CursorPageDown256 => self.cursor_page(m, false, 256),
             CursorPageDown4k => self.cursor_page(m, false, 4096),
             // Cycles
-            CyclesInfo => self.cmd_cycles_info(a),
+            CyclesInfo => self.cmd_cycles_info(m, a),
             CyclesReset => self.cmd_cycles_reset(m),
             // Disassembler data
             DisasmData | DefineDataByte1 => self.cmd_define_data(m, a, crate::disasm::Nop::Byte1),
