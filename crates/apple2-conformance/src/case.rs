@@ -208,6 +208,9 @@ pub enum OracleKind {
     Trace,
     /// Expressions over registers and memory, all of which must hold.
     Expr,
+    /// A disk boot compared in lock step with an oracle run through a checkpoint file
+    /// (`oracle.trace`, see `disk.rs`); needs a `fixture` holding the disk image.
+    TraceCheckpoints,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -268,7 +271,12 @@ impl Case {
         self.card_slots()?;
         let o = &self.oracle;
         match o.kind {
-            OracleKind::Trace if o.trace.is_none() => return Err("oracle.trace required".into()),
+            OracleKind::Trace | OracleKind::TraceCheckpoints if o.trace.is_none() => {
+                return Err("oracle.trace required".into())
+            }
+            OracleKind::TraceCheckpoints if self.fixture.is_none() => {
+                return Err("fixture (the disk image) required".into())
+            }
             OracleKind::Expr if o.expect.is_empty() => return Err("oracle.expect required".into()),
             OracleKind::Expr => {
                 for e in &o.expect {
@@ -276,6 +284,7 @@ impl Case {
                 }
             }
             OracleKind::Trace
+            | OracleKind::TraceCheckpoints
             | OracleKind::TextHash
             | OracleKind::MemoryHash
             | OracleKind::FramebufferHash

@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 pub mod case;
+pub mod disk;
 pub mod manifest;
 pub mod report;
 pub mod runner;
