@@ -42,6 +42,45 @@ A simulação analógica de vídeo e a síntese de áudio não têm igualdade bi
 - O limiar não é ajustado depois para fazer um teste passar. Fora do limiar é FAIL, e o julgamento visual ou auditivo não o transforma em PASS. Mudar um limiar exige um novo registro com justificativa e vale só para as execuções seguintes.
 - Todo diff gera um artefato (imagem de diferença, histograma, trecho de áudio) guardado em `tests/conformance/reports/`.
 
+### Áudio: Mockingboard, Phasor, SSI263 e alto-falante (HU-0501, HU-0502)
+
+Registrada **antes** da primeira comparação Rust × oráculo (a calibração entra em `audit/audio-differential.md` antes do primeiro resultado). O Oráculo é o fork Linux do AppleWin (`tools/conformance/oracle/`, `audetto-oracle`) com o gancho de áudio `audetto-audio.patch` e um "DirectSound virtual" determinístico (relógio = Ciclos emulados). Os dois lados partem do mesmo estado inicial (RAM + registradores de CPU, ou o mesmo `.aws.yaml`) e rodam o mesmo número de Ciclos.
+
+**Eventos, igualdade exata.** O log de eventos de áudio (formato `audio-events v1`, uma linha `cycle,KIND,campos`) é comparado linha a linha, sem tolerância. Qualquer linha diferente (ciclo, tipo ou valor) é FAIL, e o relatório mostra a primeira diferença.
+
+| `KIND` | Campos | O que é |
+|---|---|---|
+| `IOW` / `IOR` | `slot,addr_lo,valor` | Escrita/leitura na página `$Cs00-$CsFF` da carta (registradores do 6522 e do SSI263 por endereço). Leituras com o valor devolvido; a falsa leitura do 6502 (GH#52) não gera linha |
+| `AYW` / `AYR` | `slot,unidade,ay,reg,valor` | Escrita/leitura num registrador do AY (`_AYWriteReg` / `AYReadReg`) |
+| `IRQ` | `fonte,nivel` | Transição da linha de IRQ de uma fonte (`6522`, `SPEECH`), somente quando o nível muda |
+| `SPK` | (nenhum) | Toque do alto-falante (`$C030-$C03F`) |
+| `PHON` | `slot,unidade,fonema,amostras` | Início de um fonema (`SSI263::Play`); `amostras` é o comprimento da forma de onda em amostras de 22,05 kHz |
+| `PHEND` | `slot,unidade` | Fim do fonema (IRQ de "fonema completo", `SSI263::UpdateIRQ`) |
+
+`cycle` é o contador acumulado de Ciclos do 6502 no momento do acesso (o mesmo de `UpdateCycles`/`CpuCalcCycles` no AppleWin e de `CardCtx::cycles` no Rust). Exceção declarada para SSI263: o AppleWin só detecta o fim do fonema em `PeriodicUpdate` (a cada 1000 Ciclos, com o buffer circular do DirectSound), e o port Rust agenda o fim exatamente em `início + comprimento` (decisão de projeto em `ssi263.rs`, sem laço de realimentação). Por isso, para `PHEND` (e para o `IRQ SPEECH` e o `IOR` de IFR que dependem dele) a comparação é: mesma **sequência** de fonemas e IRQs; a diferença `(PHEND − PHON)` do Rust contra a do oráculo deve ficar dentro de `J_ssi`, definido abaixo. As linhas que **não** dependem do fim do fonema continuam exatas.
+
+**PCM, mesma taxa interna.** O PCM do Mockingboard é comparado na taxa interna (44 100 Hz, estéreo, 16 bits, antes de qualquer reamostragem do host). O AY8910 do port traduz `AY8910.cpp`, então a expectativa é de amostras **idênticas**. Duas diferenças de estrutura são conhecidas e declaradas aqui, antes de medir:
+
+1. O AppleWin gera o PCM em blocos (`MB_Update`, a cada interrupção do Timer 1 ou 1000 Ciclos) com `nNumSamples` truncado e corrigido pela posição do buffer circular; o Rust gera cada amostra no seu Ciclo exato. O DirectSound virtual do oráculo começa com o buffer circular pré-carregado em 3/8 (dentro da faixa 1/4-1/2 em que a correção é zero) e consome em tempo emulado; o oráculo antecede o fluxo com essa latência, que **não** entra no PCM gravado. O alinhamento temporal é o índice de amostra, com um desvio por janela (abaixo).
+2. Escritas no AY dentro de um bloco são aplicadas na amostra do deslocamento em Ciclos (`sound_ay_write(reg, val, offset)`); o Rust renderiza até o Ciclo da escrita e aplica. A mesma amostra de arredondamento pode cair numa amostra vizinha.
+
+Métricas (janelas de 4 410 amostras, 100 ms, por canal; só janelas em que o oráculo não é silêncio exato):
+
+| Métrica | Definição |
+|---|---|
+| M0 | **Igualdade exata** das amostras, com um único desvio global `L` (0 ≤ \|L\| ≤ 735, o de menor erro nos primeiros 4 410 amostras não nulas). Todas iguais: PASS exato |
+| M1 | Conjunto de valores distintos de amostra de cada canal igual nos dois lados (vêm da mesma tabela de níveis do AY) |
+| M2 | Por janela, com desvio local `l_w` (\|l_w\| ≤ 2 205): erro absoluto máximo `E_w` e erro quadrático médio `R_w` |
+| M3 | Por janela, a razão de cruzamentos de zero (frequência) e o RMS da janela, diferença relativa |
+
+Limiares: `E_max`, `R_max`, `f_tol` e `rms_tol` são **2 vezes o máximo observado** de M2/M3 entre duas execuções do próprio oráculo no mesmo programa com fatiamento diferente (`--audio-slice 1000` contra `--audio-slice 250`: muda onde caem as fronteiras dos blocos de `MB_Update`), com pisos de `E_max ≥ 256`, `R_max ≥ 64`, `f_tol ≥ 1 %` e `rms_tol ≥ 2 %`. Decisão: M0 satisfeita = PASS (exato); senão M1 igual **e** M2 e M3 dentro dos limiares = PASS (tolerância); qualquer outro caso = FAIL. Nenhum limiar é alterado depois da primeira comparação; uma mudança é um novo registro, só para as execuções seguintes.
+
+**SSI263 (fala).** `J_ssi` = o maior `|(PHEND − PHON)| ` observado entre duas fases de partida do oráculo (o mesmo programa disparado em Ciclos defasados de 0 e 333, que mudam o alinhamento com o `PeriodicUpdate` de 1000 Ciclos), somado a 1000 Ciclos (uma granularidade do `PeriodicUpdate`). O PCM do SSI263 não é comparado amostra a amostra: o port renderiza a mesma forma de onda de fonema na taxa do host, e o AppleWin a grava em blocos; compara-se a **duração** (e o silêncio em power-down, #1412), nunca o timbre. O timbre fica para o roteiro manual (`manual-tests/audio.md`).
+
+**Alto-falante.** Os toques (`SPK`) são exatos. O PCM do alto-falante (44 100 Hz mono, `QueueOneFrame` com o filtro DC) usa as mesmas métricas M0-M3 com a mesma calibração.
+
+**Sem cache ou sem o executável do oráculo, o resultado é BLOCKED**, nunca PASS.
+
 ### Software de terceiros e testes instáveis
 
 Jogos e software de terceiros só entram com licença adequada e procedimento reproduzível para obtê-los. Resultados que dependem de firmware registram o SHA-256 da ROM. Teste instável não é removido por conveniência: investiga-se a causa, isola-se o ambiente e registra-se a evidência.
