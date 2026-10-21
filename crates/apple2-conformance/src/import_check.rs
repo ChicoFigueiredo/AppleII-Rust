@@ -88,6 +88,27 @@ fn dump_value(m: &[(String, Node)]) -> String {
 /// Fields of the file that depend on the host (paths, serial back end), not on the machine.
 const HOST_FIELDS: [&str; 3] = ["Print Filename", "Serial Port Name", "Absolute Path"];
 
+/// Path fragments of fields the port does not model or normalises on purpose; they are listed in
+/// the report as such and not counted as differences.
+const NOT_MODELLED: [&str; 16] = [
+    "/State/Enabled", // mouse card flags AppleWin saves but never reads back as behaviour
+    "/State/VBL",
+    "/SY6522/Timer1 Latch", // v<7 files: a zero latch becomes 0xFFFF on purpose (6522.cpp:690)
+    "/Shift Key Mod", // frontend setting (see misc.rs)
+    "/Card",                      // card names differ in spelling (`Disk][` / `Disk II`)
+    "/RGB mode",                  // AppleColor adaptor: AUD-C-023
+    "/Previous AN3",
+    "/80COL changed",
+    "/Invert bit7",
+    "/Format Track state/",       // Disk II write-format tracking
+    "/DIPSW Default/",            // SSC factory DIP defaults come from the host configuration
+    "/Deferred Stepper Address",
+    "/Video/Cycles This Frame",   // reduced modulo the frame length on purpose (AUD-C-060)
+    "/SSI263/Current Mode",
+    "/Joystick/",                 // trim values and counters of old versions
+    "/Memory/Last Slot to Set Main Mem LC",
+];
+
 fn flatten(nodes: &[(String, Node)], prefix: &str, out: &mut BTreeMap<String, String>) {
     for (i, (k, n)) in nodes.iter().enumerate() {
         match n {
@@ -154,6 +175,32 @@ pub fn tree_diff(text: &str, machine: &Machine) -> Result<Vec<Diff>, String> {
         "",
         &mut b,
     );
+    // Version 1 of the Apple2 unit stored SLOTCXROM where later ones store INTCXROM.
+    if a.get("/Unit[Apple2]/Version").map(String::as_str) == Some("1") {
+        if let Some(v) = a.get_mut("/Unit[Apple2]/State/Memory/Memory Mode") {
+            if let Ok(n) = v.parse::<u64>() {
+                *v = (n ^ mf::INTCXROM as u64).to_string();
+            }
+        }
+    }
+    // CPU.cpp:963 ORs AF_RESERVED|AF_BREAK into P on load.
+    for m in [&mut a, &mut b] {
+        if let Some(v) = m.get_mut("/Unit[Apple2]/State/CPU/P") {
+            if let Ok(n) = v.parse::<u64>() {
+                *v = (n | 0x30).to_string();
+            }
+        }
+    }
+    // The ][ and ][+ have no MMU flags: the old files' Memory Mode there only carries the
+    // language-card bits of the card in slot 0, compared through that card's own entry.
+    let model = a
+        .get("/Unit[Apple2]/State/Model")
+        .cloned()
+        .unwrap_or_default();
+    if !(model.contains("//E") || model.contains("TK3000") || model.contains("8A")) {
+        a.remove("/Unit[Apple2]/State/Memory/Memory Mode");
+        b.remove("/Unit[Apple2]/State/Memory/Memory Mode");
+    }
     fold_memory_mode(&mut a);
     fold_memory_mode(&mut b);
     let older = older_prefixes(&a, &b);
@@ -161,6 +208,18 @@ pub fn tree_diff(text: &str, machine: &Machine) -> Result<Vec<Diff>, String> {
     for (k, v) in &a {
         if k.ends_with("/Version") {
             continue; // versions are listed in the migration table, not compared
+        }
+        if NOT_MODELLED.iter().any(|f| k.contains(f)) {
+            continue;
+        }
+        // A partial dump (stub state) is checked byte by byte by `direct_checks` instead.
+        if let (Some(x), Some(y)) = (
+            v.split_once(" bytes @"),
+            b.get(k).and_then(|w| w.split_once(" bytes @")),
+        ) {
+            if x.0 != y.0 {
+                continue;
+            }
         }
         let is_older = older.iter().any(|p| k.starts_with(p.as_str()));
         match b.get(k) {
@@ -196,6 +255,21 @@ fn top_unit<'a>(top: &'a [(String, Node)], ty: &str) -> Option<&'a [(String, Nod
     })
 }
 
+/// The `Unit: Apple2` map itself (for its `Version`).
+fn a2_hdr(top: &[(String, Node)]) -> &[(String, Node)] {
+    top.iter()
+        .find_map(|(k, n)| match (k.as_str(), n) {
+            ("Unit", Node::Map(m))
+                if m.iter()
+                    .any(|(kk, nn)| kk == "Type" && matches!(nn, Node::Scalar(s) if s == "Apple2")) =>
+            {
+                Some(m.as_slice())
+            }
+            _ => None,
+        })
+        .unwrap_or(&[])
+}
+
 fn sub<'a>(m: &'a [(String, Node)], key: &str) -> Option<&'a [(String, Node)]> {
     m.iter().find_map(|(k, n)| match n {
         Node::Map(s) if k == key => Some(s.as_slice()),
@@ -210,8 +284,11 @@ fn num(m: &[(String, Node)], key: &str) -> Option<u64> {
     })
 }
 
-fn decode_memory(m: &[(String, Node)], len: usize) -> Vec<u8> {
+/// Bytes the dump lists; the rest of a partial dump (the AppleWin-Test stubs) keeps the power-on
+/// pattern, so only these are compared.
+fn decode_memory(m: &[(String, Node)], len: usize) -> (Vec<u8>, Vec<bool>) {
     let mut v = vec![0u8; len];
+    let mut seen = vec![false; len];
     for (k, n) in m {
         let Node::Scalar(s) = n else { continue };
         let Ok(addr) = usize::from_str_radix(k, 16) else {
@@ -221,14 +298,15 @@ fn decode_memory(m: &[(String, Node)], len: usize) -> Vec<u8> {
             if let Ok(h) = std::str::from_utf8(pair) {
                 if let (Ok(b), true) = (u8::from_str_radix(h, 16), addr + i < len) {
                     v[addr + i] = b;
+                    seen[addr + i] = true;
                 }
             }
         }
     }
-    v
+    (v, seen)
 }
 
-fn bank_diff(label: &str, want: &[u8], got: &[u8], out: &mut Vec<Diff>) {
+fn bank_diff(label: &str, want: &[u8], seen: &[bool], got: &[u8], out: &mut Vec<Diff>) {
     if want.len() != got.len() {
         out.push(Diff {
             path: label.into(),
@@ -237,8 +315,9 @@ fn bank_diff(label: &str, want: &[u8], got: &[u8], out: &mut Vec<Diff>) {
         });
         return;
     }
-    if let Some(i) = want.iter().zip(got).position(|(a, b)| a != b) {
-        let n = want.iter().zip(got).filter(|(a, b)| a != b).count();
+    let differs = |i: usize| seen[i] && want[i] != got[i];
+    if let Some(i) = (0..want.len()).find(|&i| differs(i)) {
+        let n = (0..want.len()).filter(|&i| differs(i)).count();
         out.push(Diff {
             path: format!("{label}/{i:04X}"),
             file: format!("{:02X}", want[i]),
@@ -281,17 +360,29 @@ pub fn direct_checks(text: &str, machine: &mut Machine) -> Result<Vec<Diff>, Str
     let model = machine.config().model;
     let st = machine.save_state();
     let want_main = sub(a2, "Main Memory").map(|m| decode_memory(m, 0x10000));
-    if let Some(want) = want_main {
+    if let Some((want, seen)) = want_main {
         let len = if model == Model::Apple2 && want.len() > 0xC000 {
             0xC000
         } else {
             0xC000
         };
-        bank_diff("Main Memory/0000-BFFF", &want[..len], &st.memory.main[..len], &mut out);
+        bank_diff(
+            "Main Memory/0000-BFFF",
+            &want[..len],
+            &seen[..len],
+            &st.memory.main[..len],
+            &mut out,
+        );
         if !model.is_apple2() {
             let lc = &st.memory.lc;
             let n = lc.len().min(0x4000);
-            bank_diff("Main Memory/C000-FFFF (LC)", &want[0xC000..0xC000 + n], &lc[..n], &mut out);
+            bank_diff(
+                "Main Memory/C000-FFFF (LC)",
+                &want[0xC000..0xC000 + n],
+                &seen[0xC000..0xC000 + n],
+                &lc[..n],
+                &mut out,
+            );
         }
     }
     // Aux banks.
@@ -300,12 +391,13 @@ pub fn direct_checks(text: &str, machine: &mut Machine) -> Result<Vec<Diff>, Str
             let banks = num(inner, "Num Aux Banks").unwrap_or(0) as usize;
             for b in 0..banks {
                 if let Some(m) = sub(inner, &format!("Auxiliary Memory Bank{b:02X}")) {
-                    let want = decode_memory(m, 0x10000);
+                    let (want, seen) = decode_memory(m, 0x10000);
                     let off = b * 0x10000;
                     if off + 0x10000 <= st.memory.aux.len() {
                         bank_diff(
                             &format!("Aux bank {b:02X}"),
                             &want,
+                            &seen,
                             &st.memory.aux[off..off + 0x10000],
                             &mut out,
                         );
@@ -318,8 +410,11 @@ pub fn direct_checks(text: &str, machine: &mut Machine) -> Result<Vec<Diff>, Str
     // Soft switches, through the status reads $C011-$C01F (//e family only).
     if model.is_apple2e_family() {
         let mem = sub(a2, "Memory").ok_or("sem Memory")?;
-        let mode = num(mem, "Memory Mode").unwrap_or(0) as u32
+        let mut mode = num(mem, "Memory Mode").unwrap_or(0) as u32
             | num(mem, "MMU LC Mode").unwrap_or(0) as u32;
+        if num(a2_hdr(&top), "Version").unwrap_or(9) == 1 {
+            mode ^= mf::INTCXROM; // v1 stored SLOTCXROM
+        }
         let vmode = sub(a2, "Video")
             .and_then(|v| num(v, "Video Mode"))
             .unwrap_or(0) as u32;

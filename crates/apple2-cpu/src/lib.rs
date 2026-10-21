@@ -134,6 +134,8 @@ pub struct Cpu {
     /// An NMOS HLT/KIL opcode was executed (AppleWin `regs.bJammed`): the PC is left on the
     /// opcode, so it re-executes (2 cycles) until reset; interrupts are still serviced.
     pub jammed: bool,
+    /// The last [`Cpu::step`] was an NMI/IRQ entry, not an instruction (no opcode was fetched).
+    pub interrupt_entered: bool,
 }
 
 impl Cpu {
@@ -154,6 +156,7 @@ impl Cpu {
             waiting: false,
             opcode: 0,
             jammed: false,
+            interrupt_entered: false,
         }
     }
 
@@ -736,6 +739,7 @@ impl Cpu {
     /// Executes one instruction (or services one interrupt); returns cycles used.
     pub fn step<B: Bus>(&mut self, bus: &mut B) -> u32 {
         let start = self.cycles;
+        self.interrupt_entered = false;
         if self.stopped {
             self.idle(bus);
             return 1;
@@ -746,6 +750,7 @@ impl Cpu {
             self.idle(bus);
             self.idle(bus);
             self.interrupt(bus, VEC_NMI, false);
+            self.interrupt_entered = true;
             return (self.cycles - start) as u32;
         }
         if self.irq {
@@ -754,6 +759,7 @@ impl Cpu {
                 self.idle(bus);
                 self.idle(bus);
                 self.interrupt(bus, VEC_IRQ, false);
+                self.interrupt_entered = true;
                 return (self.cycles - start) as u32;
             }
         }

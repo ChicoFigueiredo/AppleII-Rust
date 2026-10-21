@@ -203,12 +203,27 @@ impl<W: Write> TraceWriter<W> {
     /// "attached" to a [`Machine`] without any hook in the core.
     pub fn step(&mut self, m: &mut Machine) -> io::Result<u32> {
         let mut row = TraceRow::from_machine(m);
-        if (0xC100..0xD000).contains(&row.pc) {
-            // `peek` cannot read slot/internal Cx ROM; `peek_code` can, without side effects.
+        let in_cx = (0xC100..0xD000).contains(&row.pc);
+        if in_cx {
+            // `peek` cannot read the slot/internal Cx ROM; `peek_code` can, without side effects.
             row.op = m.peek_code(row.pc);
         }
+        let cycles = m.step();
+        if m.cpu().interrupt_entered {
+            // An IRQ/NMI entry fetches no opcode: like the oracle's hook (after the fetch), it
+            // gets no row of its own.
+            return Ok(cycles);
+        }
+        if in_cx {
+            // The byte the CPU really fetched; a card-firmware hook fetches nothing and keeps
+            // the ROM byte.
+            let (pc, op) = m.board().current_opcode();
+            if pc == row.pc {
+                row.op = op;
+            }
+        }
         self.record_row(&row)?;
-        Ok(m.step())
+        Ok(cycles)
     }
 
     /// Traced equivalent of `run_cycles`: until at least `n` more cycles have passed.

@@ -274,9 +274,56 @@ struct Observed {
     trace: Option<Vec<u8>>,
 }
 
-fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, String> {
-    let cfg = machine_config(case)?;
-    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+/// The machine a case starts from: power-on, or imported from its save-state fixture. The run is
+/// counted from the start state, so a state case's `cycles` become absolute here.
+fn start_machine(env: &Env, case: &Case) -> Result<(Machine, RunSpec), String> {
+    let mut run = case.run.clone();
+    match case.fixture.as_ref().filter(|f| f.save_state) {
+        None => {
+            let cfg = machine_config(case)?;
+            Ok((Machine::try_new(cfg).map_err(|e| e.to_string())?, run))
+        }
+        Some(fx) => {
+            let dirs = fixture_dirs(env, fx);
+            let imp = crate::state::import_file(&env.workspace.join(&fx.path), &dirs)?;
+            if !imp.missing.is_empty() {
+                return Err(format!("imagens ausentes: {}", imp.missing.join(", ")));
+            }
+            if run.frames.is_some() {
+                return Err("um caso com save-state conta em run.cycles, não em frames".into());
+            }
+            run.cycles = run.cycles.map(|c| c + imp.machine.cycles());
+            Ok((imp.machine, run))
+        }
+    }
+}
+
+fn fixture_dirs(env: &Env, fx: &crate::case::FixtureSpec) -> Vec<PathBuf> {
+    fx.image_dirs
+        .iter()
+        .map(|d| env.workspace.join(d))
+        .collect()
+}
+
+/// SHA-256 of the data rows of a trace given as text (header and `#` lines skipped).
+pub fn trace_rows_sha256(text: &str) -> String {
+    let mut rows = String::new();
+    for line in text.lines() {
+        if line.starts_with('#') || line.starts_with("cycle,") || line.is_empty() {
+            continue;
+        }
+        rows.push_str(line);
+        rows.push('\n');
+    }
+    sha256_hex(rows.as_bytes())
+}
+
+fn observe_once(
+    env: &Env,
+    case: &Case,
+    env_meta: &[(String, String)],
+) -> Result<Observed, String> {
+    let (mut m, run) = start_machine(env, case)?;
     let kind = case.oracle.kind;
     match kind {
         OracleKind::Trace => {
@@ -287,7 +334,7 @@ fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, 
             let mut w = TraceWriter::new(Vec::new(), &meta).map_err(|e| e.to_string())?;
             drive(
                 &mut m,
-                &case.run,
+                &run,
                 &case.input,
                 Hooks {
                     trace: Some(&mut w),
@@ -307,7 +354,7 @@ fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, 
             r.resync(m.cycles_in_frame());
             drive(
                 &mut m,
-                &case.run,
+                &run,
                 &case.input,
                 Hooks {
                     trace: None,
@@ -322,7 +369,7 @@ fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, 
             })
         }
         _ => {
-            drive(&mut m, &case.run, &case.input, Hooks::default())?;
+            drive(&mut m, &run, &case.input, Hooks::default())?;
             let value = match kind {
                 OracleKind::TextHash => sha256_hex(text_dump(&m).as_bytes()),
                 OracleKind::MemoryHash => sha256_hex(&memory_dump(&m)),
@@ -525,11 +572,25 @@ fn evaluate(
                     fx.path, fx.sha256
                 ))
             }
-            Ok(_) => {
+            Ok(_) if !fx.save_state => {
                 return Verdict::Blocked(format!(
                     "fixture {} presente e íntegra, mas o harness v1 ainda não carrega fixtures na Máquina",
                     fx.path
                 ))
+            }
+            Ok(_) => {
+                // A save-state: the images it names must exist, or the case cannot run.
+                let dirs = fixture_dirs(env, fx);
+                match crate::state::import_file(&env.workspace.join(&fx.path), &dirs) {
+                    Err(e) => return Verdict::Blocked(format!("save-state não importa: {e}")),
+                    Ok(i) if !i.missing.is_empty() => {
+                        return Verdict::Blocked(format!(
+                            "imagem de disco ausente: {}",
+                            i.missing.join(", ")
+                        ))
+                    }
+                    Ok(_) => {}
+                }
             }
         }
     }
@@ -566,7 +627,7 @@ fn evaluate(
     let mut first: Option<Observed> = None;
     let mut last: Option<Observed> = None;
     for run in 1..=case.run.repeat {
-        let obs = match observe_once(case, &meta) {
+        let obs = match observe_once(env, case, &meta) {
             Ok(o) => o,
             Err(e) => return Verdict::Fail(format!("erro na execução {run}: {e}"), None),
         };
@@ -614,8 +675,21 @@ fn evaluate(
             }
         }
         OracleKind::Trace => {
-            let reference = reference.expect("loaded");
             let actual_bytes = obs.trace.expect("trace case");
+            let Some(reference) = reference else {
+                let want = case.oracle.trace_rows_sha256.clone().unwrap_or_default();
+                let got = trace_rows_sha256(&String::from_utf8_lossy(&actual_bytes));
+                return if got == want {
+                    Verdict::Pass(format!("linhas do trace com sha256 {got}{rep}"))
+                } else {
+                    let name = format!("{}.actual.csv", case.id);
+                    artifacts.push((name.clone(), actual_bytes));
+                    Verdict::Fail(
+                        format!("sha256 das linhas do trace {got}, esperado {want}"),
+                        Some(name),
+                    )
+                };
+            };
             let actual = TraceReader::read(&actual_bytes[..]).expect("own trace parses");
             let opts = CompareOptions {
                 context_lines: case.oracle.context_lines.unwrap_or(8),

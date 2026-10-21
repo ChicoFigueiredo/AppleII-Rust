@@ -76,7 +76,9 @@ def run_one(args):
                 return state, "FAIL", cyc, f"linha {i}: oráculo {er[i]} / rust {rr[i]}"
         if len(er) != len(rr):
             return state, "FAIL", cycles, f"número de instruções: oráculo {len(er)}, rust {len(rr)}"
-        return state, "PASS", cycles, f"{len(er)} instruções idênticas"
+        import hashlib
+        digest = hashlib.sha256(("\n".join(er) + "\n").encode()).hexdigest()
+        return state, "PASS", cycles, f"{len(er)} instruções idênticas; rows_sha256={digest}"
 
 
 def main():
