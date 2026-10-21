@@ -309,13 +309,24 @@ impl Renderer {
 
     /// The visible area as tightly packed RGBA8 (for texture upload or screenshots).
     pub fn rgba8(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.vis_w * self.vis_h * 4);
-        for y in 0..self.vis_h {
-            for x in 0..self.vis_w {
-                out.extend_from_slice(&self.pixel(x, y));
+        let mut out = Vec::new();
+        self.rgba8_into(&mut out);
+        out
+    }
+
+    /// [`Renderer::rgba8`] into a buffer the caller keeps between frames: no allocation once
+    /// `out` has the right size, and one pass over each row of the framebuffer.
+    pub fn rgba8_into(&self, out: &mut Vec<u8>) {
+        let row_bytes = self.vis_w * 4;
+        out.resize(row_bytes * self.vis_h, 0);
+        for (y, dst) in out.chunks_exact_mut(row_bytes).enumerate() {
+            let start = (BORDER_H + y) * self.fb_w + BORDER_W;
+            let row = &self.fb[start..start + self.vis_w];
+            for (&c, d) in row.iter().zip(dst.chunks_exact_mut(4)) {
+                // 0xAARRGGBB -> [R, G, B, A]
+                d.copy_from_slice(&c.rotate_left(8).to_be_bytes());
             }
         }
-        out
     }
 
     /// `VideoResetState` + `RGB_ResetState`: call when the machine is reset.
