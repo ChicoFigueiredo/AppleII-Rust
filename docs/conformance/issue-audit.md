@@ -92,19 +92,19 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 | Valor | Quantidade | % |
 |---|---:|---:|
 | NOT_APPLICABLE | 489 | 43.9 |
-| PASS | 480 | 43.0 |
+| PASS | 486 | 43.6 |
 | BLOCKED | 133 | 11.9 |
-| FAIL | 13 | 1.2 |
+| FAIL | 7 | 0.6 |
 
 ## Taxas
 
-Taxa geral: PASS 480 / aplicáveis 626 = 76.7%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 486 / aplicáveis 626 = 77.6%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 545 | 407 | 11 | 0 | 74.7% |
+| todos | 1004 | 545 | 413 | 5 | 0 | 75.8% |
 | apple2e | 59 | 50 | 44 | 1 | 0 | 88.0% |
 | apple2e-enhanced | 59 | 45 | 40 | 0 | 0 | 88.9% |
 | apple2plus | 29 | 23 | 21 | 2 | 0 | 91.3% |
@@ -127,7 +127,7 @@ Taxa geral: PASS 480 / aplicáveis 626 = 76.7%. Aplicável = estado diferente de
 |---|---:|---:|---:|---:|---:|---:|
 | disco | 159 | 111 | 57 | 0 | 0 | 51.4% |
 | video | 137 | 75 | 59 | 0 | 0 | 78.7% |
-| debugger | 136 | 86 | 72 | 9 | 0 | 83.7% |
+| debugger | 136 | 86 | 78 | 3 | 0 | 90.7% |
 | outra | 120 | 11 | 9 | 0 | 0 | 81.8% |
 | ui | 83 | 29 | 29 | 0 | 0 | 100.0% |
 | config | 58 | 34 | 34 | 0 | 0 | 100.0% |
@@ -154,9 +154,9 @@ Taxa geral: PASS 480 / aplicáveis 626 = 76.7%. Aplicável = estado diferente de
 |---|---:|---:|---:|---:|---:|---:|
 | runtime | 388 | 339 | 245 | 0 | 0 | 72.3% |
 | feature-futura | 146 | 46 | 45 | 0 | 0 | 97.8% |
-| ui | 122 | 83 | 66 | 3 | 0 | 79.5% |
+| ui | 122 | 83 | 67 | 2 | 0 | 80.7% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
-| debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
+| debugger | 86 | 78 | 67 | 5 | 0 | 85.9% |
 | formato | 77 | 74 | 56 | 0 | 0 | 75.7% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
