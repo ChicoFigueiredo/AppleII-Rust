@@ -1,0 +1,22 @@
+id = "video-style0-hires-mixed-color-idealized"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena hires-mixed em color-idealized a 60 Hz com VideoStyle=0 (sem 50% scan lines), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 60
+rgb_card = "video7-sl7"
+style = 0
+region = "full"
+scene = "inputs/video/hires-mixed.scene"
+scene_sha256 = "fe19a228d51603b57b5323bf7772e93f0414faa8df5a515d1ff8afac363a0536"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "f166a1b7f694c47a75483ab98a1be41263c34f4b0d5404fb235609a25aac1078"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/hires-mixed.scene --video-type 1 --video-hz 60 --rgb-card 0 --video-style 0 => fb_sha256_full=f166a1b7f694c47a75483ab98a1be41263c34f4b0d5404fb235609a25aac1078 (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

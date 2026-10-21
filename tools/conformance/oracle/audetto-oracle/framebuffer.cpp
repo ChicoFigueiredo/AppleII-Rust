@@ -32,6 +32,8 @@ namespace
 {
     std::string g_outPrefix;
     std::string g_scenePath;
+    bool g_macLcDlgr = false; // --mac-lc-dlgr 1: RGB_SetMacLCCardDLGR(true) (GH#1258)
+    int g_videoStyle = -1; // -1: keep VS_DEFAULT (half scan lines); else VideoStyle_e bits
     int g_videoType = -1; // -1: keep the AppleWin default (VT_DEFAULT = colour TV)
     int g_videoHz = 0;    // 0: keep the default (60)
     int g_rgbCard = 0;
@@ -207,6 +209,10 @@ namespace fbdump
             g_scenePath = argv[++i];
         else if (arg == "--video-type")
             g_videoType = std::atoi(argv[++i]);
+        else if (arg == "--mac-lc-dlgr")
+            g_macLcDlgr = std::atoi(argv[++i]) != 0;
+        else if (arg == "--video-style")
+            g_videoStyle = std::atoi(argv[++i]);
         else if (arg == "--video-hz")
             g_videoHz = std::atoi(argv[++i]);
         else if (arg == "--rgb-card")
@@ -229,6 +235,8 @@ namespace fbdump
             RegSetConfigSlotNewCardType(static_cast<UINT>(g_vidhdSlot), CT_VidHD);
         if (g_videoType >= 0)
             registry.putDWord(REG_CONFIG, REGVALUE_VIDEO_MODE, static_cast<uint32_t>(g_videoType));
+        if (g_videoStyle >= 0)
+            registry.putDWord(REG_CONFIG, REGVALUE_VIDEO_STYLE, static_cast<uint32_t>(g_videoStyle));
         if (g_videoHz == 50)
             registry.putDWord(REG_CONFIG, REGVALUE_VIDEO_REFRESH_RATE, static_cast<uint32_t>(VR_50HZ));
         else if (g_videoHz == 60)
@@ -238,6 +246,7 @@ namespace fbdump
     int run(uint64_t frames)
     {
         RGB_SetVideocard(static_cast<RGB_Videocard_e>(g_rgbCard));
+        RGB_SetMacLCCardDLGR(g_macLcDlgr);
         // The card was chosen after the video type was loaded: rebuild the palette and the scanner tables.
         GetVideo().VideoReinitialize(false);
 

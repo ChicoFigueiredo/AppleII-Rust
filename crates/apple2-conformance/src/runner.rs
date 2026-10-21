@@ -383,6 +383,9 @@ pub fn render_config(case: &Case) -> Result<RenderConfig, String> {
     Ok(RenderConfig {
         video_type: v.video_type()?,
         rgb_card: v.rgb_card()?,
+        half_scanlines: v.style.unwrap_or(1) & 1 != 0,
+        vertical_blend: v.style.unwrap_or(1) & 2 != 0,
+        rgb_mac_lc_dlgr: v.mac_lc_dlgr,
         ..RenderConfig::default()
     })
 }

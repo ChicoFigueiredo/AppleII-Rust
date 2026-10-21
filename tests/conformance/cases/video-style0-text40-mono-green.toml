@@ -1,0 +1,22 @@
+id = "video-style0-text40-mono-green"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena text40 em mono-green a 60 Hz com VideoStyle=0 (sem 50% scan lines), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-green"
+hz = 60
+rgb_card = "video7-sl7"
+style = 0
+region = "full"
+scene = "inputs/video/text40.scene"
+scene_sha256 = "2e7a1d47b3d5e6cd561bf575d276d712cb9ac5c9814e070491674101e9dcbe3f"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "94b7fcfc4512898cc02b9c7a12811f32b38577bf969f0a0d634908ea275c5c9b"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/text40.scene --video-type 7 --video-hz 60 --rgb-card 0 --video-style 0 => fb_sha256_full=94b7fcfc4512898cc02b9c7a12811f32b38577bf969f0a0d634908ea275c5c9b (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

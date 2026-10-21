@@ -49,7 +49,7 @@ CASE_SELECTION = [
     (("rgb-*",), [2], [60], [1, 2], 0),  # the other RGB cards
     # one regression scene per upstream issue (docs/conformance/results/video.csv)
     (("issue-*",), [1, 3], [60], [0], 0),
-    (("issue-0636-*", "issue-0828-*", "issue-0850-*", "issue-0851-*", "issue-1018-*", "issue-1435-*"), [2], [60], [0, 1, 2], 0),
+    (("issue-0636-*", "issue-0643-*", "issue-0828-*", "issue-0850-*", "issue-0851-*", "issue-1018-*", "issue-1435-*"), [2], [60], [0, 1, 2], 0),
     (("issue-0082-*", "issue-0241-*", "issue-0516-*", "issue-1386-*"), [3, 4], [50], [0], 0),
     # VidHD (HU-0202): legacy modes centred in the 640x400 framebuffer, and Super Hi-Res
     (VIDHD_LEGACY, [1, 3, 4, 5, 8], [60], [0], 2),

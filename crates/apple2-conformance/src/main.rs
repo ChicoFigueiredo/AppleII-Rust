@@ -412,6 +412,8 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
     let (mut scene, mut model, mut frames, mut out) = (None, None, None, None);
     let (mut vt, mut hz, mut card) = ("color-tv", 60u32, "video7-sl7");
     let mut vidhd: Option<u8> = None;
+    let mut style = 1u32;
+    let mut mac_lc = false;
     let mut memclear: Option<i32> = None;
     let mut a = Args::new(rest);
     while let Some(arg) = a.next() {
@@ -422,6 +424,8 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
             "--type" => vt = a.value(arg)?,
             "--hz" => hz = a.value(arg)?.parse::<u32>().map_err(|e| e.to_string())?,
             "--rgb-card" => card = a.value(arg)?,
+            "--style" => style = a.value(arg)?.parse::<u32>().map_err(|e| e.to_string())?,
+            "--mac-lc-dlgr" => mac_lc = a.value(arg)? != "0",
             "--vidhd" => vidhd = Some(a.value(arg)?.parse::<u8>().map_err(|e| e.to_string())?),
             "--memclear" => {
                 memclear = Some(a.value(arg)?.parse::<i32>().map_err(|e| e.to_string())?)
@@ -448,6 +452,9 @@ fn cmd_scene_fb(rest: &[String]) -> Result<u8, String> {
             "le-chat-mauve-feline" | "2" => RgbCard::LeChatMauveFeline,
             o => return Err(format!("--rgb-card `{o}` desconhecido")),
         },
+        half_scanlines: style & 1 != 0,
+        vertical_blend: style & 2 != 0,
+        rgb_mac_lc_dlgr: mac_lc,
         ..RenderConfig::default()
     };
     let std = match hz {

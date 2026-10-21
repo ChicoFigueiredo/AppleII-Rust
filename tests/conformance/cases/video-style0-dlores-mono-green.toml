@@ -1,0 +1,22 @@
+id = "video-style0-dlores-mono-green"
+story = "HU-0201"
+criterion = "O framebuffer (600x420) da cena dlores em mono-green a 60 Hz com VideoStyle=0 (sem 50% scan lines), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-green"
+hz = 60
+rgb_card = "video7-sl7"
+style = 0
+region = "full"
+scene = "inputs/video/dlores.scene"
+scene_sha256 = "0ba9ecd0b665753e7218ceb5ca023acf17ada8120a3b74ea707b199ac856171b"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "ab4dadab64735582f21b6936b55c599e75f56acad856ba39bf2509fc6611cdd0"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/dlores.scene --video-type 7 --video-hz 60 --rgb-card 0 --video-style 0 => fb_sha256_full=ab4dadab64735582f21b6936b55c599e75f56acad856ba39bf2509fc6611cdd0 (fork audetto a1e20c0, AppleWin 3e8054b, -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-style-differential.py --write-cases)"

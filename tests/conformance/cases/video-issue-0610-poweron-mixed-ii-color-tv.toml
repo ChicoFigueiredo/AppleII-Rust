@@ -1,0 +1,21 @@
+id = "video-issue-0610-poweron-mixed-ii-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0610-poweron-mixed-ii em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0610-poweron-mixed-ii.scene"
+scene_sha256 = "20a3561f461e123afdf792d5559fffdc088efd91f27532f6eb8b34e19658109f"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "4297b45b2343e537c7aee7a5070db8e5110ead3d6b0f43aa33cae4cca8094323"
+source = "audetto-oracle --model apple2 --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0610-poweron-mixed-ii.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=4297b45b2343e537c7aee7a5070db8e5110ead3d6b0f43aa33cae4cca8094323 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"
