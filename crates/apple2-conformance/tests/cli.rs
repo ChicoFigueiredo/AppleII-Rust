@@ -108,7 +108,7 @@ fn run_all_writes_manifests_junit_and_summary() {
         .unwrap();
     // 0 = all PASS; 2 = some BLOCKED (third-party disk images missing from the corpus cache)
     assert!(
-        matches!(out.status.code(), Some(0 | 2)),
+        matches!(out.status.code(), Some(0 | 2)), // 2 = cached oracle traces absent (BLOCKED)
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)

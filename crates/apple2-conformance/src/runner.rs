@@ -40,6 +40,37 @@ impl Env {
     }
 }
 
+impl Env {
+    /// Where a reference file lives. Paths into `target/conformance-cache/` are not versioned and
+    /// a worktree has its own `target/`: when the file is not in this workspace, the cache of the
+    /// main checkout (the parent of the git common dir, where the oracle scripts put it) is tried;
+    /// `CONFORMANCE_CACHE` (the cache directory itself) takes precedence over both.
+    pub fn resolve_reference(&self, rel: &str) -> PathBuf {
+        const CACHE: &str = "target/conformance-cache/";
+        let local = self.root.join(rel);
+        let Some(at) = rel.find(CACHE) else {
+            return local;
+        };
+        let tail = &rel[at + CACHE.len()..];
+        if let Ok(dir) = std::env::var("CONFORMANCE_CACHE") {
+            return Path::new(&dir).join(tail);
+        }
+        if local.exists() {
+            return local;
+        }
+        command_line(Command::new("git").current_dir(&self.workspace).args([
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ]))
+        .and_then(|common| {
+            let p = Path::new(&common).parent()?.join(CACHE).join(tail);
+            p.exists().then_some(p)
+        })
+        .unwrap_or(local)
+    }
+}
+
 fn command_line(cmd: &mut Command) -> Option<String> {
     let out = cmd.output().ok()?;
     if !out.status.success() {
@@ -86,10 +117,40 @@ pub struct Outcome {
 pub fn machine_config(case: &Case) -> Result<MachineConfig, String> {
     let mut cfg = MachineConfig::for_model(case.model());
     cfg.cpu_cmos = case.cpu_override()?;
+    cfg.ram_init = apple2_core::RamInit::APPLEWIN_DETERMINISTIC;
+    if let Some(n) = case.memclear {
+        cfg.ram_init.pattern = n;
+    }
     if let Some(slots) = case.card_slots()? {
         cfg.slots = slots;
     }
     Ok(cfg)
+}
+
+/// A Disk II in `slot`, drive 1 loaded from `image` (opened write-protected: a trace never
+/// modifies the file).
+#[derive(Clone, Debug)]
+pub struct Disk2Setup {
+    pub slot: u8,
+    pub image: Option<PathBuf>,
+}
+
+/// Builds the machine of `cfg` and installs the Disk II, if any.
+pub fn build_machine(cfg: MachineConfig, disk2: Option<&Disk2Setup>) -> Result<Machine, String> {
+    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    if let Some(d) = disk2 {
+        let mut card = apple2_storage::disk2::Disk2Card::new();
+        if let Some(p) = &d.image {
+            card.insert_path(0, p, true)
+                .map_err(|e| format!("{}: {e:?}", p.display()))?;
+        }
+        if !m.insert_card(d.slot, Box::new(card)) {
+            return Err(format!("slot {} refused the Disk II", d.slot));
+        }
+        // The card is installed after power-on: redo it so it sees the reset.
+        m.power_cycle();
+    }
+    Ok(m)
 }
 
 pub fn cards_description(cfg: &MachineConfig) -> String {
@@ -214,8 +275,9 @@ pub fn generate_trace(
     run: &RunSpec,
     events: &[InputEvent],
     meta: &[(&str, &str)],
+    disk2: Option<&Disk2Setup>,
 ) -> Result<Vec<u8>, String> {
-    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let mut m = build_machine(cfg, disk2)?;
     let mut w = TraceWriter::new(Vec::new(), meta).map_err(|e| e.to_string())?;
     drive(
         &mut m,
@@ -263,9 +325,13 @@ struct Observed {
     trace: Option<Vec<u8>>,
 }
 
-fn observe_once(case: &Case, env_meta: &[(String, String)]) -> Result<Observed, String> {
+fn observe_once(
+    case: &Case,
+    env_meta: &[(String, String)],
+    disk2: Option<&Disk2Setup>,
+) -> Result<Observed, String> {
     let cfg = machine_config(case)?;
-    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let mut m = build_machine(cfg, disk2)?;
     let kind = case.oracle.kind;
     match kind {
         OracleKind::Trace => {
@@ -380,7 +446,7 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
         user_story: case.story.clone(),
         acceptance_criterion: case.criterion.clone(),
         applewin_sha: (o.authority == Authority::Applewin)
-            .then(|| std::env::var("CONFORMANCE_APPLEWIN_SHA").ok())
+            .then(|| reference_applewin_sha(env, case))
             .flatten(),
         rust_sha: env.rust_sha.clone(),
         fixture_sha256: case.fixture.as_ref().map(|f| f.sha256.clone()),
@@ -435,6 +501,35 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
         artifacts,
         seconds: started.elapsed().as_secs_f64(),
     }
+}
+
+/// `applewin_sha` of the manifest: the `#applewin_sha` of the reference trace header, else
+/// `CONFORMANCE_APPLEWIN_SHA`.
+fn reference_applewin_sha(env: &Env, case: &Case) -> Option<String> {
+    use std::io::BufRead;
+    let from_header = case.oracle.trace.as_ref().and_then(|rel| {
+        let f = std::fs::File::open(env.resolve_reference(rel)).ok()?;
+        std::io::BufReader::new(f)
+            .lines()
+            .map_while(Result::ok)
+            .take_while(|l| l.starts_with('#'))
+            .find_map(|l| {
+                let (k, v) = l.trim_start_matches('#').trim_start().split_once('=')?;
+                (k.trim() == "applewin_sha").then(|| v.trim().to_string())
+            })
+    });
+    from_header.or_else(|| std::env::var("CONFORMANCE_APPLEWIN_SHA").ok())
+}
+
+/// The Disk II of the case, with the fixture as drive 1.
+fn disk2_setup(env: &Env, case: &Case) -> Result<Option<Disk2Setup>, String> {
+    let Some(slot) = case.disk2_slot()? else {
+        return Ok(None);
+    };
+    Ok(Some(Disk2Setup {
+        slot,
+        image: case.fixture.as_ref().map(|f| env.workspace.join(&f.path)),
+    }))
 }
 
 fn expected_text(case: &Case) -> String {
@@ -523,9 +618,10 @@ fn evaluate(
                     fx.path, fx.sha256
                 ))
             }
+            Ok(_) if matches!(case.disk2_slot(), Ok(Some(_))) => {}
             Ok(_) => {
                 return Verdict::Blocked(format!(
-                    "fixture {} presente e íntegra, mas o harness v1 ainda não carrega fixtures na Máquina",
+                    "fixture {} presente e íntegra, mas o harness só a carrega como disco de um cartão `N:disk2`",
                     fx.path
                 ))
             }
@@ -533,12 +629,27 @@ fn evaluate(
     }
     let reference = match (&case.oracle.kind, &case.oracle.trace) {
         (OracleKind::Trace, Some(rel)) => {
-            let p = env.root.join(rel);
+            let p = env.resolve_reference(rel);
+            if !p.exists() {
+                return Verdict::Blocked(format!(
+                    "trace de referência ausente: {rel}. Para gerá-lo: {}",
+                    case.oracle.source
+                ));
+            }
+            if let Some(want) = &case.oracle.trace_sha256 {
+                match file_sha256(&p) {
+                    Ok(h) if h == *want => {}
+                    Ok(h) => {
+                        return Verdict::Blocked(format!(
+                            "trace de referência {rel} com sha256 {h}, esperado {want}. Para regenerar: {}",
+                            case.oracle.source
+                        ))
+                    }
+                    Err(e) => return Verdict::Blocked(e),
+                }
+            }
             match TraceReader::read_file(&p) {
                 Ok(t) => Some(t),
-                Err(e) if !p.exists() => {
-                    return Verdict::Blocked(format!("trace de referência ausente: {rel} ({e})"))
-                }
                 Err(e) => return Verdict::Blocked(format!("trace de referência ilegível: {e}")),
             }
         }
@@ -560,11 +671,15 @@ fn evaluate(
         ("cards".to_string(), mf.cards_slots.clone()),
     ];
     let _ = &cfg;
+    let disk2 = match disk2_setup(env, case) {
+        Ok(d) => d,
+        Err(e) => return Verdict::Blocked(e),
+    };
 
     let mut first: Option<Observed> = None;
     let mut last: Option<Observed> = None;
     for run in 1..=case.run.repeat {
-        let obs = match observe_once(case, &meta) {
+        let obs = match observe_once(case, &meta, disk2.as_ref()) {
             Ok(o) => o,
             Err(e) => return Verdict::Fail(format!("erro na execução {run}: {e}"), None),
         };

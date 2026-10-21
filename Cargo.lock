@@ -117,6 +117,8 @@ dependencies = [
  "apple2-cpu",
  "apple2-roms",
  "apple2-video",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -162,8 +164,11 @@ version = "0.1.0"
 name = "apple2-debugger"
 version = "0.1.0"
 dependencies = [
+ "apple2-cards",
  "apple2-core",
  "apple2-cpu",
+ "apple2-storage",
+ "apple2-video",
 ]
 
 [[package]]
@@ -173,6 +178,7 @@ dependencies = [
  "apple2-core",
  "apple2-cpu",
  "apple2-roms",
+ "if-addrs",
  "pcap",
  "serialport",
 ]
@@ -1690,6 +1696,16 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

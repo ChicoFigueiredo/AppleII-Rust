@@ -418,6 +418,9 @@ impl Uthernet2 {
 
     fn tx_data_size(&self, i: usize) -> u16 {
         let size = self.sockets[i].transmit_size;
+        if size == 0 {
+            return 0; // no memory assigned to this socket (Sn size registers): nothing queued
+        }
         let mask = size - 1;
         let rd = self.reg_word(i, SN_TX_RD0) & mask;
         let wr = self.reg_word(i, SN_TX_WR0) & mask;
@@ -431,6 +434,10 @@ impl Uthernet2 {
     /// `updateRSR` (:520-547): resynchronises the received size with the read pointer.
     fn update_rsr(&mut self, i: usize) {
         let size = self.sockets[i].receive_size;
+        if size == 0 {
+            self.sockets[i].rx_rsr = 0;
+            return;
+        }
         let mask = size - 1;
         let rd = self.reg_word(i, SN_RX_RD0) & mask;
         let wr = self.sockets[i].rx_wr & mask;
@@ -610,6 +617,9 @@ impl Uthernet2 {
     fn send_data(&mut self, i: usize) {
         let s = &self.sockets[i];
         let size = s.transmit_size;
+        if size == 0 {
+            return; // nothing can be queued without transmit memory
+        }
         let mask = size - 1;
         let rd = (self.reg_word(i, SN_TX_RD0) & mask) as usize;
         let wr = (self.reg_word(i, SN_TX_WR0) & mask) as usize;
@@ -704,7 +714,13 @@ impl Uthernet2 {
             }
             _ => {}
         }
-        if dns {
+        // Only TCP, UDP and IP RAW have a *_DNS mode (openSocket:988-995).
+        if dns
+            && matches!(
+                protocol & !SN_VIRTUAL_DNS,
+                SN_MR_IPRAW | SN_MR_TCP | SN_MR_UDP
+            )
+        {
             self.resolve_dns(i);
         }
         self.reset_rx_tx_buffers(i);
@@ -755,6 +771,12 @@ impl Uthernet2 {
         let port = self.reg_word(i, SN_PORT0);
         if let Ok(l) = TcpListener::bind(("0.0.0.0", port)) {
             if l.set_nonblocking(true).is_ok() {
+                // Port 0 lets the host pick; the chosen port is written back to `Sn_PORT` so
+                // the program (and the tests, which never use fixed ports) can find it.
+                if let Ok(a) = l.local_addr() {
+                    self.set_reg(i, SN_PORT0, (a.port() >> 8) as u8);
+                    self.set_reg(i, SN_PORT0 + 1, a.port() as u8);
+                }
                 self.sockets[i].host = HostSocket::Listener(l);
                 self.sockets[i].set_status(SR_LISTEN);
             }

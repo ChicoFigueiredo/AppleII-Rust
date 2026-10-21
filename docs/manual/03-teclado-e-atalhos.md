@@ -32,7 +32,7 @@ O teclado numérico só chega ao Apple se a emulação de joystick não estiver 
 | Ctrl+F3 / Ctrl+F4 | Menu do drive 1 / 2 (inserir ou ejetar) |
 | F5 | Troca os discos dos drives 1 e 2 |
 | F6 | Alterna janela e tela cheia |
-| Alt+Enter | Alterna janela e tela cheia |
+| Alt+Enter | Alterna janela e tela cheia (com `-alt-enter=open-apple-enter`, ou desligando "Alt+Enter toggles full-screen", vira Open Apple + Return no Apple) |
 | Ctrl+F6 | Alterna entre janela 1x e 2x |
 | F7 | Entra e sai do depurador |
 | Ctrl+F11 | No depurador: executa uma instrução (passo) |
@@ -50,7 +50,7 @@ O teclado numérico só chega ao Apple se a emulação de joystick não estiver 
 | Ctrl+3 | Velocidade máxima |
 | Print Screen | Salva a tela em um arquivo PNG de 560x384 |
 | Shift+Print Screen | Salva a imagem de 280x192 |
-| Ctrl+Print Screen | Copia o texto da tela (40 colunas) para a área de transferência |
+| Ctrl+Print Screen | Copia o texto da tela (40 ou 80 colunas, incluindo a memória auxiliar, e a página 2) para a área de transferência |
 | Shift+Insert ou Ctrl+Shift+V | Cola o texto da área de transferência (Ctrl+V sozinho envia ^V ao Apple) |
 
 Os atalhos F1 a F8 são os mesmos botões da barra. As teclas com auto-repetição do sistema não disparam o atalho de novo.

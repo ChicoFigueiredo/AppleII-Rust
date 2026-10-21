@@ -385,6 +385,13 @@ impl Settings {
     /// is used, `RomInfo::fallback` says why and `warnings` has the message.
     pub fn resolve_roms(&self) -> ResolvedRoms {
         let mut c = self.to_machine_config();
+        if self.machine.memory_seed.is_none() {
+            // Like AppleWin: `rand() ^ timeGetTime()`. The only place the clock enters.
+            let t = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(1, |d| d.subsec_nanos() ^ (d.as_secs() as u32));
+            c.ram_init.random = apple2_core::RandomSource::Seed(t);
+        }
         let mut report = Vec::new();
         let mut warnings = Vec::new();
         let model = self.machine.model;

@@ -8,6 +8,13 @@ use applewin_shell::emu::{Command, Emulator};
 fn settings_with(slot: usize, spec: SlotCardSpec) -> Settings {
     let mut s = Settings::default();
     s.slots.0[6] = SlotCardSpec::Empty;
+    // AppleWin keeps only the first of a single-instance card (the default SSC in slot 2), so
+    // move it to `slot`, as the slot dialog does (AUD-P-019).
+    for other in 0..8 {
+        if other != slot && s.slots.0[other].card_type() == spec.card_type() {
+            s.slots.0[other] = SlotCardSpec::Empty;
+        }
+    }
     s.slots.0[slot] = spec;
     s
 }
