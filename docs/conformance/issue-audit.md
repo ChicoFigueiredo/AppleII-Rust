@@ -91,21 +91,21 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| UNVERIFIED | 524 | 47.0 |
-| NOT_APPLICABLE | 286 | 25.7 |
-| PASS | 206 | 18.5 |
-| BLOCKED | 87 | 7.8 |
-| FAIL | 12 | 1.1 |
+| UNVERIFIED | 480 | 43.0 |
+| NOT_APPLICABLE | 317 | 28.4 |
+| PASS | 217 | 19.5 |
+| BLOCKED | 88 | 7.9 |
+| FAIL | 13 | 1.2 |
 
 ## Taxas
 
-Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 217 / aplicáveis 798 = 27.2%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 737 | 169 | 10 | 476 | 22.9% |
+| todos | 1004 | 706 | 180 | 11 | 432 | 25.5% |
 | apple2e | 59 | 51 | 30 | 1 | 16 | 58.8% |
 | apple2e-enhanced | 59 | 47 | 25 | 0 | 17 | 53.2% |
 | apple2plus | 29 | 27 | 11 | 2 | 14 | 40.7% |
@@ -128,7 +128,7 @@ Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de
 |---|---:|---:|---:|---:|---:|---:|
 | disco | 159 | 130 | 28 | 0 | 72 | 21.5% |
 | video | 137 | 101 | 28 | 1 | 60 | 27.7% |
-| debugger | 136 | 117 | 61 | 8 | 44 | 52.1% |
+| debugger | 136 | 86 | 72 | 9 | 0 | 83.7% |
 | outra | 120 | 35 | 1 | 0 | 33 | 2.9% |
 | ui | 83 | 49 | 0 | 0 | 49 | 0.0% |
 | config | 58 | 42 | 2 | 0 | 40 | 4.8% |
@@ -153,14 +153,14 @@ Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 376 | 124 | 1 | 181 | 33.0% |
-| feature-futura | 146 | 146 | 0 | 0 | 146 | 0.0% |
-| ui | 122 | 122 | 0 | 0 | 122 | 0.0% |
+| runtime | 388 | 376 | 125 | 1 | 180 | 33.2% |
+| feature-futura | 146 | 127 | 9 | 0 | 118 | 7.1% |
+| ui | 122 | 120 | 0 | 1 | 118 | 0.0% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
 | formato | 77 | 77 | 20 | 1 | 45 | 26.0% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
-| documentacao | 30 | 30 | 0 | 0 | 30 | 0.0% |
+| documentacao | 30 | 20 | 1 | 0 | 19 | 5.0% |
 | duplicada | 28 | 0 | 0 | 0 | 0 | n/a |
 | invalida | 26 | 0 | 0 | 0 | 0 | n/a |
