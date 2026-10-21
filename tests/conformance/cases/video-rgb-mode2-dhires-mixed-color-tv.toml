@@ -1,0 +1,21 @@
+id = "video-rgb-mode2-dhires-mixed-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena rgb-mode2-dhires-mixed em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/rgb-mode2-dhires-mixed.scene"
+scene_sha256 = "e3603255b40f822a167db7f8be882fad83d02b3fe0a585b1333cfc1cd3a0fd78"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "5fb97091b483d1bc1ced72f9f0224d18c4fefd233f57cb6c832140b4f1a228e5"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/rgb-mode2-dhires-mixed.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=5fb97091b483d1bc1ced72f9f0224d18c4fefd233f57cb6c832140b4f1a228e5 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"
