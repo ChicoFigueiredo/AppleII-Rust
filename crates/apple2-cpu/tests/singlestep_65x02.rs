@@ -185,8 +185,23 @@ struct Divergence {
     fields: &'static [&'static str],
     cycles: bool,
     bus: bool,
+    /// Extra condition on the vector (narrows the divergence to the inputs that cause it).
+    when: Option<fn(&Case) -> bool>,
     what: &'static str,
     cpp: &'static str,
+}
+
+/// ARR in decimal mode.
+fn decimal_set(c: &Case) -> bool {
+    c.initial.p & 0x08 != 0
+}
+
+/// A memory byte that was $FF before and $00 after (INC wrapping, the operand of ISC/INS).
+fn wraps_ff_to_00(c: &Case) -> bool {
+    c.fin
+        .ram
+        .iter()
+        .any(|&(a, v)| v == 0 && c.initial.ram.iter().any(|&(ia, iv)| ia == a && iv == 0xFF))
 }
 
 const HLT_OPS: &[u8] = &[
@@ -210,6 +225,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["pc"],
         cycles: true,
         bus: true,
+        when: None,
         what: "HLT/KIL: o AppleWin trava com PC sobre o opcode (bJammed, 2 ciclos); o hardware para com PC no byte seguinte",
         cpp: "CPU/cpu_instructions.inl:379-380 (`HLT`: bJammed = 1; --regs.pc), CPU/cpu6502.h:122",
     },
@@ -220,6 +236,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["a", "p"],
         cycles: false,
         bus: false,
+        when: None,
         what: "XAA/ANE ($8B): o AppleWin faz A = X & M; o hardware instavel faz A = (A | constante) & X & M",
         cpp: "CPU/cpu_instructions.inl:680-683 (`XAA`)",
     },
@@ -230,6 +247,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["a", "p"],
         cycles: false,
         bus: false,
+        when: Some(decimal_set),
         what: "ARR ($6B) com D=1: o ajuste BCD do AppleWin difere do hardware (a versao binaria passa)",
         cpp: "CPU/cpu_instructions.inl:246-264 (`ARR`, ramo `AF_DECIMAL`)",
     },
@@ -240,6 +258,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["a", "p"],
         cycles: false,
         bus: false,
+        when: Some(wraps_ff_to_00),
         what: "INS/ISC com o operando $FF: o AppleWin subtrai o WORD $100 (val = READ+1 sem truncar), o hardware subtrai $00 (o carry sai diferente)",
         cpp: "CPU/cpu_instructions.inl:387-393 (`INS`: `temp = val` com val WORD)",
     },
@@ -250,6 +269,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["pc", "ram"],
         cycles: true,
         bus: true,
+        when: None,
         what: "RMBn/SMBn ($x7): o AppleWin os trata como NOP de 1 byte e 1 ciclo; o hardware executa um RMB/SMB de 2 bytes e 3 a 5 ciclos (os vetores da Synertek tambem)",
         cpp: "CPU/cpu65C02.h:127,143,... (`case 0x07: NOP CYC(1)`; idem $17..$F7)",
     },
@@ -260,6 +280,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["pc"],
         cycles: true,
         bus: true,
+        when: None,
         what: "BBRn/BBSn ($xF): o AppleWin os trata como NOP de 1 byte e 1 ciclo; o hardware executa um desvio de 3 bytes",
         cpp: "CPU/cpu65C02.h:135,151,... (`case 0x0F: NOP CYC(1)`; idem $1F..$FF)",
     },
@@ -270,6 +291,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &[],
         cycles: true,
         bus: true,
+        when: None,
         what: "$5C (NOP absoluto): 8 ciclos no AppleWin (tabela do WDC), 4 nos vetores",
         cpp: "CPU/cpu65C02.h:212 (`case 0x5C: ABS NOP CYC(8)`)",
     },
@@ -280,6 +302,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &["pc"],
         cycles: true,
         bus: true,
+        when: None,
         what: "WAI ($CB) e STP ($DB): o AppleWin os trata como NOP de 1 ciclo; o hardware espera/para (os vetores do WDC omitem os dois)",
         cpp: "CPU/cpu65C02.h:323,339 (`case 0xCB/0xDB: NOP CYC(1)`)",
     },
@@ -290,6 +313,7 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &[],
         cycles: false,
         bus: true,
+        when: None,
         what: "$DC/$FC (NOP absoluto de 4 ciclos): o AppleWin le o endereco do operando (`LDD`); o hardware le outro endereco no 4o ciclo. Estado e ciclos iguais",
         cpp: "CPU/cpu65C02.h:340,372 (`ABS LDD CYC(4)`), CPU/cpu_instructions.inl:439-440",
     },
@@ -300,12 +324,13 @@ const DIVERGENCES: &[Divergence] = &[
         fields: &[],
         cycles: true,
         bus: true,
+        when: None,
         what: "JMP (abs) com o ponteiro em $xxFF: o AppleWin acrescenta 1 ciclo (7), o hardware gasta 6",
         cpp: "CPU/cpu_general.inl:200-208 (`_IABS_CMOS`: uExtraCycles=1 se (base & $FF) == $FF), CPU/cpu65C02.h:228",
     },
 ];
 
-fn covered(cpu: &str, op: u8, v: &Verdict) -> Option<&'static str> {
+fn covered(cpu: &str, op: u8, c: &Case, v: &Verdict) -> Option<&'static str> {
     if v.phantom_only() {
         return Some("D0");
     }
@@ -317,6 +342,7 @@ fn covered(cpu: &str, op: u8, v: &Verdict) -> Option<&'static str> {
                 && v.fields.iter().all(|f| d.fields.contains(f))
                 && (!v.cycles || d.cycles)
                 && (v.bus != BusKind::Mismatch || d.bus)
+                && d.when.is_none_or(|w| w(c))
         })
         .map(|d| d.id)
 }
@@ -406,7 +432,7 @@ fn singlestep_65x02_vectors() {
                         );
                     }
                 }
-                match covered(cpu_name, op, &v) {
+                match covered(cpu_name, op, c, &v) {
                     Some("D0") => r.phantom += 1,
                     Some(id) => *r.diverged.entry(id).or_default() += 1,
                     None => {
