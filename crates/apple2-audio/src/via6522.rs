@@ -155,6 +155,11 @@ impl Via {
         self.pcr = 0;
         self.update_ifr(0x7F, 0);
         self.ier = 0;
+        // `Write(rIER, 0x7f)` (cpp:50) also runs `m_canAssertIRQ = IER & IxR_TIMER1/2` on both
+        // timer events (cpp:217-220): after a reset no timer event can raise "IRQ on the last
+        // cycle of the opcode" until IER enables its bit (GH#1176).
+        self.t1_gated = true;
+        self.t2_gated = true;
         self.update_ifr(0, 0);
         self.t1_active = false;
         self.t2_active = false;
@@ -478,6 +483,19 @@ mod tests {
     }
 
     #[test]
+    fn reset_gates_both_timer_events_until_ier_enables_them() {
+        // GH#1176: Reset() runs Write(rIER, 0x7f), which sets m_canAssertIRQ = IER & timer bit.
+        let mut v = Via::new(false);
+        assert!(v.t1_gated && v.t2_gated);
+        v.write(reg::IER, 0xC0, 0); // enable T1
+        assert!(!v.t1_gated && v.t2_gated);
+        v.reset(false, 10);
+        assert!(v.t1_gated && v.t2_gated);
+        v.reset(true, 20);
+        assert!(v.t1_gated && v.t2_gated);
+    }
+
+    #[test]
     fn t1_write_schedules_latch_plus_two_after_the_write_cycle() {
         let mut v = Via::new(false);
         v.write(reg::T1LL, 0x10, 100);
@@ -488,7 +506,8 @@ mod tests {
             TimerSched {
                 timer: 0,
                 cycles: 19,
-                can_assert_irq: true
+                // the reset wrote IER = $7F: the event cannot raise "IRQ on the last cycle" (GH#1176)
+                can_assert_irq: false
             }
         );
     }
@@ -612,7 +631,7 @@ mod tests {
             TimerSched {
                 timer: 1,
                 cycles: 11,
-                can_assert_irq: true
+                can_assert_irq: false
             }
         );
         assert_eq!(v.on_timer2_event(21), 0);
