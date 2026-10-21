@@ -19,6 +19,7 @@ fi
 CLONE="$ORACLE_CACHE/oracle/audetto-AppleWin"
 BUILD="$ORACLE_CACHE/oracle/build"
 PATCH="$HERE/audetto-trace.patch"
+AUDIO_PATCH="$HERE/audetto-audio.patch"   # audio observation points (HU-0501/0502), applied after the trace patch
 JOBS="${JOBS:-$(nproc)}"
 
 mkdir -p "$ORACLE_CACHE/oracle"
@@ -37,6 +38,8 @@ git -C "$CLONE" submodule update --init --recursive -q
 
 # Apply the trace patch (the tree is pristine after the reset above, so this is a plain apply).
 patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$PATCH"
+patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$AUDIO_PATCH"
+cp "$HERE/audetto-oracle/audio_hook.h" "$CLONE/source/audio_hook.h"
 
 # The oracle frontend lives in Git here and is copied into the fork tree (untracked there).
 rm -rf "$CLONE/source/frontends/oracle"

@@ -1,0 +1,20 @@
+id = "audio-ay-noise"
+story = "HU-0501"
+criterion = "Ruído do AY (varredura de período, ruído com tom, três vozes de ruído, AY direito): eventos e PCM iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/ay-noise.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/ay-noise.bin"
+
+[run]
+cycles = 200000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-noise"
+events = "reference-audio/audio-ay-noise.events"

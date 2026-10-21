@@ -11,6 +11,8 @@ O harness é escrito no crate `crates/apple2-conformance`, binário `conformance
 | `manifests/` | Manifestos de execução e o esquema `manifests/schema.json` |
 | `inputs/` | Entradas pequenas e geradas por nós (sequências de teclas, configurações de Máquina), e o índice das Fixtures externas (caminho, SHA-256, modelo, finalidade). `inputs/video/*.scene`: cenas determinísticas do diferencial de vídeo, geradas por `crates/apple2-video/examples/gen_scenes.rs` |
 | `reference-traces/` | Traces de referência v1 (CSV) gerados pelo AppleWin, com a origem e o SHA nos metadados |
+| `audio/` | Programas 6502 de áudio (`programs/*.s` e os `.bin` montados) e os scripts do núcleo do AY (`ay-core/*.script`); ver [audit/audio-differential.md](../../docs/conformance/audit/audio-differential.md) |
+| `reference-audio/` | Eventos de áudio (`*.events`) e PCM (`*.pcm`, s16le) gravados pelo oráculo (fork do audetto com `audetto-audio.patch`) para os casos `audio-*` |
 | `reports/` | Relatórios das execuções (JUnit, diffs) |
 
 Em `reports/` ficam só relatórios de referência que valem a pena versionar. O relatório de uma execução comum vai para `target/conformance-report`, fora do controle de versão.

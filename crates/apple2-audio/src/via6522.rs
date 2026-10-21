@@ -72,6 +72,9 @@ pub struct Via {
     pub mega: bool,
     /// An AY8913 drives port A (`SetBusBeingDriven`).
     pub bus_driven: bool,
+    /// `m_bad6522` (`-sN 6522a-bad` / `6522b-bad`, `InitBadState`): a faulty chip whose DDRB reads
+    /// back with bit 0 clear (cpp:355). A hardware trait, so it survives `Reset`.
+    pub bad: bool,
 }
 
 /// A timer-event request produced by a register write.
@@ -110,6 +113,7 @@ impl Via {
             last: 0,
             mega,
             bus_driven: false,
+            bad: false,
         };
         v.reset(true, 0);
         v
@@ -142,6 +146,7 @@ impl Via {
                 last: now,
                 mega: self.mega,
                 bus_driven: false,
+                bad: self.bad,
             };
         }
         self.ddrb = 0;
@@ -240,14 +245,36 @@ impl Via {
         self.t2_irq_delay = d2;
     }
 
-    /// Would the timer have underflowed by the end of the reading opcode (`now + 1`)?
-    fn underflowed_next(&self, counter: u16, delay: bool) -> bool {
+    /// Would the timer have underflowed by the end of a reading opcode of `adj` cycles
+    /// (`IsTimer1Underflowed` / `IsTimer2Underflowed`)?
+    fn underflowed_in(&self, counter: u16, delay: bool, adj: u16) -> bool {
         let (mut c, mut d) = (counter, delay);
-        self.check_underflow(&mut c, &mut d, 1)
+        self.check_underflow(&mut c, &mut d, adj)
     }
 
-    /// Register read at `now` (cpp:338).
+    /// `GetTimer1Counter` (cpp:304): T1 as the reading opcode (`adj` cycles long) sees it, without
+    /// touching the real counter.
+    fn timer1_seen(&self, adj: u16) -> u16 {
+        let (mut c, mut d) = (self.t1_counter, self.t1_irq_delay);
+        if self.check_underflow(&mut c, &mut d, adj.saturating_sub(1)) {
+            self.on_t1_underflow(&mut c);
+        }
+        c
+    }
+
+    /// Register read at `now` (cpp:338), the access being the last cycle of a 1-cycle opcode
+    /// (see [`read_at`](Self::read_at)).
     pub fn read(&mut self, r: u8, now: u64) -> u8 {
+        self.read_at(r, now, 1)
+    }
+
+    /// Register read by an opcode that starts at `start` and takes `adj` cycles
+    /// (`GetOpcodeCyclesForRead`): AppleWin updates the 6522 to the opcode's first cycle (the
+    /// `g_nCumulativeCycles` its I/O handler sees) and then looks `adj` cycles ahead for timer
+    /// underflows. The IRQ-delay flag depends on the counter value at `start`, so a card must pass
+    /// `CardCtx::access_cycle` here, not the cycle of the bus access.
+    pub fn read_at(&mut self, r: u8, start: u64, adj: u16) -> u8 {
+        let now = start;
         self.update_to(now);
         match r & 0xF {
             reg::ORB => {
@@ -264,13 +291,19 @@ impl Via {
                     self.ora | if self.bus_driven { 0 } else { self.ddra ^ 0xFF }
                 }
             }
-            reg::DDRB => self.ddrb,
+            reg::DDRB => {
+                if self.bad {
+                    self.ddrb & !1 // DDRB.b0 = 0 (for testing mb-audit, 6522.cpp:355)
+                } else {
+                    self.ddrb
+                }
+            }
             reg::DDRA => self.ddra,
             reg::T1CL => {
                 self.update_ifr(IXR_TIMER1, 0);
-                self.t1_counter as u8
+                self.timer1_seen(adj) as u8
             }
-            reg::T1CH => (self.t1_counter >> 8) as u8,
+            reg::T1CH => (self.timer1_seen(adj) >> 8) as u8,
             reg::T1LL => self.t1_latch as u8,
             reg::T1LH => (self.t1_latch >> 8) as u8,
             reg::T2CL => {
@@ -278,14 +311,14 @@ impl Via {
                 if self.mega {
                     0xFF
                 } else {
-                    self.t2_counter as u8
+                    self.t2_counter.wrapping_sub(adj.saturating_sub(1)) as u8
                 }
             }
             reg::T2CH => {
                 if self.mega {
                     0
                 } else {
-                    (self.t2_counter >> 8) as u8
+                    (self.t2_counter.wrapping_sub(adj.saturating_sub(1)) >> 8) as u8
                 }
             }
             reg::SR => 0,
@@ -293,10 +326,10 @@ impl Via {
             reg::PCR => self.pcr,
             reg::IFR => {
                 let mut v = self.ifr;
-                if self.t1_active && self.underflowed_next(self.t1_counter, self.t1_irq_delay) {
+                if self.t1_active && self.underflowed_in(self.t1_counter, self.t1_irq_delay, adj) {
                     v |= IXR_TIMER1;
                 }
-                if self.t2_active && self.underflowed_next(self.t2_counter, self.t2_irq_delay) {
+                if self.t2_active && self.underflowed_in(self.t2_counter, self.t2_irq_delay, adj) {
                     v |= IXR_TIMER2;
                 }
                 v
@@ -311,8 +344,16 @@ impl Via {
         }
     }
 
-    /// Register write at `now` (cpp:147). Returns the timer event to schedule, if any.
+    /// Register write at `now` (cpp:147), the access being the last cycle of a 1-cycle opcode.
+    /// Returns the timer event to schedule, if any.
     pub fn write(&mut self, r: u8, v: u8, now: u64) -> Option<TimerSched> {
+        self.write_at(r, v, now, 1)
+    }
+
+    /// Register write by an opcode that starts at `start` and takes `adj` cycles
+    /// (`GetOpcodeCyclesForWrite`): the timer counts down from the end of the opcode.
+    pub fn write_at(&mut self, r: u8, v: u8, start: u64, adj: u16) -> Option<TimerSched> {
+        let now = start;
         self.update_to(now);
         match r & 0xF {
             reg::ORB => self.orb = v & self.ddrb,
@@ -324,7 +365,7 @@ impl Via {
                 self.update_ifr(IXR_TIMER1, 0);
                 self.t1_latch = self.t1_latch & 0x00FF | (v as u16) << 8;
                 self.t1_counter = self.t1_latch;
-                self.last = now + 1; // the write cycle itself is not counted
+                self.last = now + adj as u64; // the opcode's own cycles are not counted
                 self.t1_active = true;
                 let latch = if self.mega && self.t1_latch == 0 {
                     0xFFFF
@@ -351,7 +392,7 @@ impl Via {
                 self.update_ifr(IXR_TIMER2, 0);
                 self.t2_latch = self.t2_latch & 0x00FF | (v as u16) << 8;
                 self.t2_counter = self.t2_latch;
-                self.last = now + 1;
+                self.last = now + adj as u64;
                 self.t2_active = true;
                 let extra = if self.mega {
                     EXTRA_MEGA
@@ -507,6 +548,24 @@ mod tests {
             at += next;
             assert_eq!(v.on_timer1_event(at) as u64, 34);
         }
+    }
+
+    /// Regression for the divergence found against the AppleWin oracle (audio-via-timers-irq,
+    /// docs/conformance/audit/audio-differential.md, D-1): a `LDA IFR` poll loop saw the T2
+    /// underflow one iteration late because the 6522 was updated to the bus cycle of the read
+    /// (opcode start + 3) instead of the opcode's first cycle, which turned AppleWin's
+    /// "IRQ delay" case (counter = -1 at the first cycle) into an immediate underflow that the
+    /// IFR poll could no longer see.
+    #[test]
+    fn ifr_poll_sees_t2_underflow_in_the_same_opcode_as_applewin() {
+        let mut v = Via::new(false);
+        // STA $C489 (4 cycles) starting at 7214 loads T2 = $0200.
+        v.write_at(reg::T2CL, 0x00, 7210, 4);
+        v.write_at(reg::T2CH, 0x02, 7214, 4);
+        // LDA $C48D polls (4 cycles): 9-cycle loop; the oracle saw 0 at +508 and $20 at +517.
+        assert_eq!(v.read_at(reg::IFR, 7214 + 499, 4) & IXR_TIMER2, 0);
+        assert_eq!(v.read_at(reg::IFR, 7214 + 508, 4) & IXR_TIMER2, 0);
+        assert_eq!(v.read_at(reg::IFR, 7214 + 517, 4) & IXR_TIMER2, IXR_TIMER2);
     }
 
     #[test]

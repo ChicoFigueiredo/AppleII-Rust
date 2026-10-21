@@ -463,7 +463,9 @@ fn observe_once(
                 OracleKind::MemoryHash => sha256_hex(&memory_dump(&m)),
                 OracleKind::StateHash => sha256_hex(&state_dump(&m)),
                 OracleKind::Expr => String::new(),
-                OracleKind::Trace | OracleKind::FramebufferHash => unreachable!(),
+                OracleKind::Trace | OracleKind::FramebufferHash | OracleKind::AudioEvents => {
+                    unreachable!()
+                }
             };
             Ok(Observed {
                 value,
@@ -591,7 +593,10 @@ pub fn run_case(env: &Env, case: &Case) -> Outcome {
         }
         Verdict::Fail(actual, diff) => {
             mf.result = TestResult::Fail;
-            mf.actual = actual;
+            mf.actual = match &case.oracle.known_divergence {
+                Some(id) => format!("{actual} [divergência conhecida {id}]"),
+                None => actual,
+            };
             mf.diff_artifact = diff;
         }
         Verdict::Blocked(cause) => {
@@ -648,6 +653,14 @@ fn expected_text(case: &Case) -> String {
             }
         ),
         OracleKind::Expr => o.expect.join(" && "),
+        OracleKind::AudioEvents => format!(
+            "audio-events {} (timing {}){}",
+            o.events.as_deref().unwrap_or("?"),
+            o.timing.as_deref().unwrap_or("exact"),
+            o.pcm
+                .as_deref()
+                .map_or(String::new(), |p| format!(", PCM {p}"))
+        ),
         k => {
             let name = match k {
                 OracleKind::TextHash => "text-hash",
@@ -698,6 +711,9 @@ fn evaluate(
             "o modelo {} não tem ROM de sistema embutida",
             case.model
         ));
+    }
+    if case.oracle.kind == OracleKind::AudioEvents {
+        return audio_verdict(env, case, artifacts);
     }
     if let Some(fx) = &case.fixture {
         let p = env.workspace.join(&fx.path);
@@ -827,6 +843,10 @@ fn evaluate(
                 Verdict::Fail(format!("falharam: {}", bad.join("; ")), diff)
             }
         }
+        OracleKind::Trace if reference.is_none() => {
+            // Determinism case: no reference, the runs only had to agree (checked above).
+            Verdict::Pass(format!("trace sha256={}{rep}", obs.value))
+        }
         OracleKind::Trace => {
             let reference = reference.expect("loaded");
             let actual_bytes = obs.trace.expect("trace case");
@@ -888,7 +908,7 @@ fn dump_actual(
                 .is_some_and(|v| v.full_region() == Ok(true));
             (format!("{}.actual.png", case.id), png_bytes(r, full).ok()?)
         }
-        OracleKind::Trace => return None,
+        OracleKind::Trace | OracleKind::AudioEvents => return None,
     };
     artifacts.push((name.clone(), bytes));
     Some(name)
@@ -953,4 +973,133 @@ pub fn render_scene(
         rgba_full: framebuffer_rgba(&r, true),
         cycles: m.cycles(),
     })
+}
+
+/// `audio-events` cases: run the program (or save-state) and compare events and PCM with the
+/// oracle's recording. A missing fixture or reference is BLOCKED, never PASS.
+fn audio_verdict(env: &Env, case: &Case, artifacts: &mut Vec<(String, Vec<u8>)>) -> Verdict {
+    use crate::audio::{self, Timing};
+    if let Some(fx) = &case.fixture {
+        let p = env.workspace.join(&fx.path);
+        match file_sha256(&p) {
+            Err(_) => {
+                return Verdict::Blocked(format!(
+                    "fixture ausente: {} (esperada no cache de fixtures; veja docs/conformance)",
+                    fx.path
+                ))
+            }
+            Ok(h) if h != fx.sha256 => {
+                return Verdict::Blocked(format!(
+                    "fixture {} com sha256 {h}, esperado {}",
+                    fx.path, fx.sha256
+                ))
+            }
+            Ok(_) => {}
+        }
+    }
+    let o = &case.oracle;
+    let expected = match o.events.as_deref() {
+        None => String::new(),
+        Some(ev_rel) => match audio::read_reference(&env.root, ev_rel) {
+            Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+            Err(e) => {
+                return Verdict::Blocked(format!(
+                    "referência do oráculo ausente: {e} (gere com tools/conformance/audio/run-oracle-case.py)"
+                ))
+            }
+        },
+    };
+    let run = match audio::run(case, env, None) {
+        Ok(r) => r,
+        Err(e) => return Verdict::Fail(format!("erro na execução: {e}"), None),
+    };
+    let actual_lines: Vec<String> = run.events.iter().map(|(c, e)| e.line(*c)).collect();
+    artifacts.push((
+        format!("{}.actual.events", case.id),
+        audio::render_lines(&actual_lines).into_bytes(),
+    ));
+    let timing = match o.timing.as_deref() {
+        Some("ssi") => Timing::Ssi {
+            tolerance: o.ssi_tolerance.expect("validated"),
+        },
+        _ => Timing::Exact,
+    };
+    let mut summary = String::new();
+    if o.events.is_some() {
+        summary = match audio::compare_events(
+            &audio::lines_of(&expected),
+            &actual_lines,
+            timing,
+            run.final_cycle,
+        ) {
+            Ok(s) => s,
+            Err(report) => {
+                let name = format!("{}.events-diff.txt", case.id);
+                artifacts.push((name.clone(), report.clone().into_bytes()));
+                return Verdict::Fail(
+                    format!("eventos: {}", report.lines().next().unwrap_or("")),
+                    Some(name),
+                );
+            }
+        };
+    }
+    if let (Some(rel), Some(l)) = (&o.pcm, o.pcm_limits) {
+        let limits: crate::pcm::Limits = l.into();
+        let bytes = match audio::read_reference(&env.root, rel) {
+            Ok(b) => b,
+            Err(e) => return Verdict::Blocked(format!("PCM de referência ausente: {e}")),
+        };
+        let spec = case.audio.clone().unwrap_or_default();
+        let (verdict, m) = audio::compare_pcm(&bytes, &run, &spec, &limits);
+        let detail = audio::describe_measures(&m);
+        match verdict {
+            crate::pcm::Verdict::Exact => {
+                summary.push_str(&format!("; PCM idêntico ({detail})"));
+            }
+            crate::pcm::Verdict::Tolerance => {
+                summary.push_str(&format!("; PCM dentro da tolerância ({detail})"));
+            }
+            crate::pcm::Verdict::Fail(why) => {
+                let name = format!("{}.pcm-diff.txt", case.id);
+                artifacts.push((name.clone(), format!("{why}\n{detail}\n").into_bytes()));
+                return Verdict::Fail(format!("PCM fora do limiar: {why} ({detail})"), Some(name));
+            }
+        }
+    }
+    if let Some(pat) = &o.silent_after {
+        let exp = audio::lines_of(&expected);
+        let Some(line) = exp
+            .iter()
+            .rev()
+            .find(|l| l.split_once(',').is_some_and(|x| x.1 == pat))
+        else {
+            return Verdict::Fail(
+                format!("silent_after `{pat}`: o oráculo não tem esse evento"),
+                None,
+            );
+        };
+        let c: u64 = line
+            .split(',')
+            .next()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(0);
+        let clock = apple2_audio::SampleClock::new(44_100, apple2_core::VideoStandard::Ntsc);
+        let from = clock.frames_at(c) as usize + 2;
+        let tail = run.mb_pcm.get(from * 2..).unwrap_or(&[]);
+        let loud = tail.iter().filter(|&&s| s != 0).count();
+        if loud > 0 {
+            return Verdict::Fail(
+                format!("PCM não é silêncio depois de `{pat}` (ciclo {c}): {loud} amostras não nulas de {}", tail.len()),
+                None,
+            );
+        }
+        summary.push_str(&format!(
+            "; silêncio exato depois de `{pat}` (ciclo {c}, {} amostras)",
+            tail.len()
+        ));
+    }
+    for w in &run.warnings {
+        summary.push_str(&format!("; aviso: {w}"));
+    }
+    Verdict::Pass(summary)
 }

@@ -19,6 +19,8 @@ zip_dir() { # zip_dir <parent> <name> <out.zip>
 
 copy_common() { # copy_common <dir>
   cp LICENSE README.md "$1/"
+  # Licencas de terceiros (tools/package/licenses.sh); em dry-runs sem a ferramenta, segue sem elas.
+  if [ -n "${THIRD_PARTY_LICENSES:-}" ]; then cp "$THIRD_PARTY_LICENSES" "$1/THIRD-PARTY-LICENSES.html"; fi
   mkdir -p "$1/disks"
   cp assets/disks/* "$1/disks/"
 }

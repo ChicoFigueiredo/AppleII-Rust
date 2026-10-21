@@ -1,0 +1,15 @@
+id = "determinism-trace-iie-enhanced-2m-x10"
+story = "HU-0101"
+criterion = "O trace de instruções dos 2.000.000 primeiros ciclos do boot, repetido dez vezes a partir do power-on, dá o mesmo sha256 em todas as execuções"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+notes = "Autoconsistência (sem referência): cobre a CPU, o agendador, o floating bus e o Disk II sem disco. A concordância com o AppleWin é dos casos trace-applewin-*."
+
+[run]
+cycles = 2000000
+repeat = 10
+
+[oracle]
+kind = "trace"
+authority = "determinism"
+source = "As dez execuções a partir do power-on têm de gerar o mesmo trace (mesmo sha256 do CSV); sem hash fixo, só concordância entre elas"

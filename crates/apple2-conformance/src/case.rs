@@ -1,5 +1,6 @@
 //! Declarative conformance cases (`tests/conformance/cases/*.toml`).
 
+use crate::audio::{AudioSpec, PcmLimitsSpec};
 use apple2_core::{CardKind, Model};
 use serde::Deserialize;
 use std::path::Path;
@@ -32,6 +33,9 @@ pub struct Case {
     pub run: RunSpec,
     #[serde(default)]
     pub input: Vec<InputEvent>,
+    /// Sound card and 6502 program of `audio-events` cases.
+    #[serde(default)]
+    pub audio: Option<AudioSpec>,
     pub oracle: OracleSpec,
     /// Video options of `framebuffer-hash` cases.
     #[serde(default)]
@@ -308,6 +312,9 @@ pub enum OracleKind {
     Trace,
     /// Expressions over registers and memory, all of which must hold.
     Expr,
+    /// Audio events (and optionally PCM) recorded by the AppleWin oracle for the same program or
+    /// save-state; see `audio.rs` and docs/conformance/test-oracles.md ("Áudio").
+    AudioEvents,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -339,6 +346,31 @@ pub struct OracleSpec {
     /// Expressions for kind `expr`: `a == 0x00`, `mem[0x0400] >= 0xA0`, `pc != 0`.
     #[serde(default)]
     pub expect: Vec<String>,
+    /// Kind `audio-events`: reference event file, relative to `tests/conformance/`. A case needs
+    /// `events`, `pcm` or both.
+    #[serde(default)]
+    pub events: Option<String>,
+    /// Kind `audio-events`: `exact` (default) or `ssi` (phoneme end timing, see `ssi_tolerance`).
+    #[serde(default)]
+    pub timing: Option<String>,
+    /// Kind `audio-events`, timing `ssi`: tolerance in cycles of each phoneme duration.
+    #[serde(default)]
+    pub ssi_tolerance: Option<u64>,
+    /// Kind `audio-events`: reference PCM (raw s16le), relative to `tests/conformance/`.
+    #[serde(default)]
+    pub pcm: Option<String>,
+    #[serde(default)]
+    pub pcm_limits: Option<PcmLimitsSpec>,
+    /// Kind `audio-events`: an event line without its cycle (e.g. `IOW,4,43,80`, SSI263 CTL=1).
+    /// After the last such event of the oracle's log the Rust PCM must be exactly silent
+    /// (power-down silences the chip, GH#1412).
+    #[serde(default)]
+    pub silent_after: Option<String>,
+    /// A finding (e.g. `AUD-P-020`) that explains why this case is expected to FAIL: the result
+    /// stays FAIL in the manifest (never PASS), the id is added to `actual`, and the shipped-cases
+    /// test accepts the failure. Remove it when the divergence is fixed.
+    #[serde(default)]
+    pub known_divergence: Option<String>,
 }
 
 impl Case {
@@ -386,11 +418,38 @@ impl Case {
         }
         let o = &self.oracle;
         match o.kind {
-            OracleKind::Trace if o.trace.is_none() => return Err("oracle.trace required".into()),
+            OracleKind::Trace
+                if o.trace.is_none()
+                    && !(o.authority == Authority::Determinism && self.run.repeat >= 2) =>
+            {
+                return Err(
+                    "oracle.trace required (or authority = determinism with run.repeat >= 2 for self-consistency)"
+                        .into(),
+                );
+            }
             OracleKind::Expr if o.expect.is_empty() => return Err("oracle.expect required".into()),
             OracleKind::Expr => {
                 for e in &o.expect {
                     Expr::parse(e)?;
+                }
+            }
+            OracleKind::AudioEvents => {
+                if o.events.is_none() && o.pcm.is_none() {
+                    return Err("oracle.events or oracle.pcm required".into());
+                }
+                if let Some(a) = &self.audio {
+                    a.validate()?;
+                }
+                match o.timing.as_deref() {
+                    None | Some("exact") => {}
+                    Some("ssi") if o.ssi_tolerance.is_some() => {}
+                    Some("ssi") => {
+                        return Err("oracle.ssi_tolerance required with timing `ssi`".into())
+                    }
+                    Some(t) => return Err(format!("oracle.timing `{t}`: expected exact or ssi")),
+                }
+                if o.pcm.is_some() != o.pcm_limits.is_some() {
+                    return Err("oracle.pcm and oracle.pcm_limits go together".into());
                 }
             }
             OracleKind::Trace
@@ -721,6 +780,29 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
         )
         .contains("sha256 required"));
         assert!(toml::from_str::<Case>(&GOOD.replace("[run]", "[run]\nbogus = 1")).is_err());
+    }
+
+    #[test]
+    fn trace_without_reference_needs_a_determinism_case_with_repeats() {
+        let trace =
+            |authority: &str, repeat: u32| {
+                let t = GOOD
+                .replace("kind = \"text-hash\"", "kind = \"trace\"")
+                .replace("authority = \"regression\"", &format!("authority = \"{authority}\""))
+                .replace(
+                    "sha256 = \"0000000000000000000000000000000000000000000000000000000000000000\"",
+                    "",
+                )
+                .replace("frames = 3", &format!("frames = 3\nrepeat = {repeat}"));
+                toml::from_str::<Case>(&t).unwrap().validate()
+            };
+        assert!(trace("determinism", 10).is_ok());
+        assert!(trace("determinism", 1)
+            .unwrap_err()
+            .contains("oracle.trace"));
+        assert!(trace("regression", 10)
+            .unwrap_err()
+            .contains("oracle.trace"));
     }
 
     #[test]
