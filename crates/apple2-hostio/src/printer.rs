@@ -169,10 +169,7 @@ impl PrinterSink for FileSink {
             match f.flush() {
                 Ok(()) => self.last_error = None,
                 Err(e) => {
-                    let msg = format!(
-                        "printer file '{}': write failed: {e}",
-                        self.path.display()
-                    );
+                    let msg = format!("printer file '{}': write failed: {e}", self.path.display());
                     crate::diagnostics::report("printer-write", msg.clone());
                     self.last_error = Some(msg);
                 }
@@ -550,7 +547,10 @@ mod tests {
         }
         let sub = dir.join("sub");
         std::fs::create_dir(&sub).unwrap();
-        assert!(sanitize_printer_path(&sub, None).is_err(), "existing directory");
+        assert!(
+            sanitize_printer_path(&sub, None).is_err(),
+            "existing directory"
+        );
         assert!(sanitize_printer_path(Path::new("newdir/"), Some(&dir)).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -600,9 +600,18 @@ mod tests {
             Box::new(FileSink::new(dir.join("Printer.txt"))),
             PrinterOptions::default(),
         );
-        assert!(!card.check_print(), "emulation goes on, printer disconnected");
-        let err = card.last_error().expect("error kept for the frontend").to_string();
-        assert!(err.contains("Printer.txt") && err.to_lowercase().contains("permission"), "{err}");
+        assert!(
+            !card.check_print(),
+            "emulation goes on, printer disconnected"
+        );
+        let err = card
+            .last_error()
+            .expect("error kept for the frontend")
+            .to_string();
+        assert!(
+            err.contains("Printer.txt") && err.to_lowercase().contains("permission"),
+            "{err}"
+        );
         assert!(crate::diagnostics::peek().iter().any(|m| m == &err));
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
@@ -629,7 +638,11 @@ mod tests {
         assert!(!card.check_print());
         assert!(!card.check_print());
         let mine = |v: Vec<String>| v.into_iter().filter(|m| m.contains("recover")).count();
-        assert_eq!(mine(crate::diagnostics::peek()), 1, "same failure, one message");
+        assert_eq!(
+            mine(crate::diagnostics::peek()),
+            1,
+            "same failure, one message"
+        );
         std::fs::create_dir(dir.join("missing")).unwrap();
         assert!(card.check_print());
         assert!(card.last_error().is_none());
