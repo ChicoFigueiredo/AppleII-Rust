@@ -1,0 +1,103 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -11,7 +11,9 @@
+ option(BUILD_SA2      "build SDL2 frontend")
+ option(BUILD_LIBRETRO "build libretro core")
+ 
+-if (NOT (BUILD_APPLEN OR BUILD_QAPPLE OR BUILD_SA2 OR BUILD_LIBRETRO))
++option(BUILD_ORACLE   "build the headless conformance oracle (source/frontends/oracle)")
++
++if (NOT (BUILD_APPLEN OR BUILD_QAPPLE OR BUILD_SA2 OR BUILD_LIBRETRO OR BUILD_ORACLE))
+   message(NOTICE "Building everything by default")
+   set(BUILD_APPLEN ON)
+   set(BUILD_QAPPLE ON)
+@@ -58,10 +60,14 @@
+   add_subdirectory(source/linux/libwindows)
+ endif()
+ 
+-if (BUILD_LIBRETRO OR BUILD_APPLEN OR BUILD_SA2)
++if (BUILD_LIBRETRO OR BUILD_APPLEN OR BUILD_SA2 OR BUILD_ORACLE)
+   add_subdirectory(source/frontends/common2)
+ endif()
+ 
++if (BUILD_ORACLE)
++  add_subdirectory(source/frontends/oracle)
++endif()
++
+ if (BUILD_APPLEN)
+   add_subdirectory(source/frontends/ncurses)
+ endif()
+--- a/source/CPU.cpp
++++ b/source/CPU.cpp
+@@ -119,6 +119,8 @@
+ 
+ regsrec regs;
+ unsigned __int64 g_nCumulativeCycles = 0;
++CpuTraceHook_t g_pfnCpuTraceHook = NULL;
++bool g_bOracleDeterministic = false;
+ 
+ static ULONG g_nCyclesExecuted;	// # of cycles executed up to last IO access
+ //static signed long g_uInternalExecutedCycles;
+--- a/source/CPU.h
++++ b/source/CPU.h
+@@ -26,6 +26,12 @@
+ };
+ 
+ extern regsrec    regs;
++// Conformance oracle trace hook (tools/conformance/oracle/audetto-trace.patch).
++// Called once per instruction, after the opcode fetch and before execution. NULL = disabled.
++typedef void (*CpuTraceHook_t)(uint64_t cycle, uint16_t pc, uint8_t op, uint8_t a, uint8_t x, uint8_t y, uint8_t sp, uint8_t p);
++extern CpuTraceHook_t g_pfnCpuTraceHook;
++// Conformance oracle: when true, memory power-on init uses no wall-clock randomness (see Memory.cpp getRandomTime).
++extern bool g_bOracleDeterministic;
+ extern unsigned __int64 g_nCumulativeCycles;
+ 
+ void    CpuDestroy();
+--- a/source/Memory.cpp
++++ b/source/Memory.cpp
+@@ -2282,6 +2282,7 @@
+ 
+ inline uint32_t getRandomTime()
+ {
++	if (g_bOracleDeterministic) return 0;	// conformance oracle: reproducible power-on RAM
+ 	return rand() ^ timeGetTime(); // We can't use g_nCumulativeCycles as it will be zero on a fresh execution.
+ }
+ 
+--- a/source/CPU/cpu6502.h
++++ b/source/CPU/cpu6502.h
+@@ -113,6 +113,7 @@
+ 		{
+ 			HEATMAP_X( regs.pc );
+ 			Fetch(iOpcode, uExecutedCycles);
++			ORACLE_TRACE(iOpcode)
+ 
+ 			switch (iOpcode)
+ 			{
+--- a/source/CPU/cpu65C02.h
++++ b/source/CPU/cpu65C02.h
+@@ -113,6 +113,7 @@
+ 		{
+ 			HEATMAP_X( regs.pc );
+ 			Fetch(iOpcode, uExecutedCycles);
++			ORACLE_TRACE(iOpcode)
+ 
+ 			switch (iOpcode)
+ 			{
+--- a/source/CPU/cpu_general.inl
++++ b/source/CPU/cpu_general.inl
+@@ -46,6 +46,15 @@
+ 			      | (flagv ? AF_OVERFLOW : 0)		    \
+ 			      | (flagz ? AF_ZERO     : 0)		    \
+ 			      | AF_RESERVED | AF_BREAK;
++// Conformance oracle: g_nCumulativeCycles is only synced lazily (CpuCalcCycles), hence the correction below.
++// P is rebuilt from the split flags exactly as EF_TO_AF does (bits 5 and 4 always set).
++#define ORACLE_TRACE(op)															\
++		if (g_pfnCpuTraceHook)														\
++			g_pfnCpuTraceHook(g_nCumulativeCycles - g_nCyclesExecuted + uExecutedCycles,	\
++				(uint16_t)(regs.pc - 1), (op), regs.a, regs.x, regs.y, (uint8_t)regs.sp,	\
++				(uint8_t)((regs.ps & ~(AF_CARRY | AF_SIGN | AF_OVERFLOW | AF_ZERO))	\
++					| flagc | flagn | (flagv ? AF_OVERFLOW : 0) | (flagz ? AF_ZERO : 0)	\
++					| AF_RESERVED | AF_BREAK));
+ // CYC(a): This can be optimised, as only certain opcodes will affect uExtraCycles
+ #define CYC(a)	 uExecutedCycles += (a)+uExtraCycles;
+ 

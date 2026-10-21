@@ -1,0 +1,2 @@
+# o patch contém trechos com CRLF (arquivos do AppleWin): não normalizar finais de linha
+audetto-trace.patch -text
