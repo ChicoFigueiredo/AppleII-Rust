@@ -33,8 +33,13 @@ fn writes_a_valid_pdf_and_leaves_no_temporary_file() {
     let d = scratch("atomic_ok");
     let p = d.join("a.pdf");
     run(&p, false).unwrap();
-    assert!(tool_text("pdfinfo", &[p.to_str().unwrap()]).contains("Pages:"));
+    assert_eq!(structure(&std::fs::read(&p).unwrap()).len(), 1);
     assert_eq!(names(&d), ["a.pdf"]);
+    if poppler_present() {
+        assert!(tool_text("pdfinfo", &[p.to_str().unwrap()]).contains("Pages:"));
+    } else {
+        eprintln!("BLOCKED: poppler not available; pdfinfo cross-check skipped");
+    }
 }
 
 #[test]

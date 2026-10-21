@@ -21,6 +21,20 @@ fn export_file(
     p
 }
 
+/// Exact golden comparison only with the poppler version the goldens were made with.
+fn golden_version_matches() -> bool {
+    let want = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/pdf/POPPLER_VERSION"),
+    )
+    .unwrap_or_default();
+    let have = poppler_version().unwrap_or_default();
+    if want.trim() == have {
+        return true;
+    }
+    eprintln!("golden exato pulado: poppler {} != {}", have, want.trim());
+    false
+}
+
 fn golden(name: &str, img: &(usize, usize, usize, Vec<u8>)) {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/golden/pdf")
@@ -29,6 +43,11 @@ fn golden(name: &str, img: &(usize, usize, usize, Vec<u8>)) {
     bytes.extend_from_slice(&img.3);
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         std::fs::write(&path, &bytes).unwrap();
+        let v = poppler_version().unwrap();
+        std::fs::write(path.with_file_name("POPPLER_VERSION"), format!("{v}\n")).unwrap();
+        return;
+    }
+    if !golden_version_matches() {
         return;
     }
     let want = std::fs::read(&path)
@@ -45,6 +64,7 @@ fn doc() -> PageDocument {
 
 #[test]
 fn golden_plain_paper_72_and_150_dpi() {
+    need_poppler!();
     let o = opts_sized(PaperKind::A4, W, H, Ribbon::New, InkColor::Black);
     let p = export_file("g_plain", &doc(), &o, &PdfMeta::default());
     golden("plain_72", &raster(&p, 72, true));
@@ -53,6 +73,7 @@ fn golden_plain_paper_72_and_150_dpi() {
 
 #[test]
 fn golden_green_bar_72_dpi() {
+    need_poppler!();
     let o = opts_sized(PaperKind::GreenBar, W, H, Ribbon::New, InkColor::Black);
     let p = export_file("g_green", &doc(), &o, &PdfMeta::default());
     golden("greenbar_72", &raster(&p, 72, true));
@@ -60,6 +81,7 @@ fn golden_green_bar_72_dpi() {
 
 #[test]
 fn golden_worn_ribbon_150_dpi() {
+    need_poppler!();
     let o = opts_sized(PaperKind::A4, W, H, Ribbon::Worn, InkColor::Black);
     let p = export_file("g_worn", &doc(), &o, &PdfMeta::default());
     golden("worn_150", &raster(&p, 150, true));
@@ -67,6 +89,7 @@ fn golden_worn_ribbon_150_dpi() {
 
 #[test]
 fn dot_and_background_samples() {
+    need_poppler!();
     let mut page = blank_page(W, H);
     // Dot centred on pixel (150, 150) at 150 dpi.
     let (dx, dy) = (2167, 2167);
@@ -102,6 +125,7 @@ fn dot_and_background_samples() {
 
 #[test]
 fn dot_diameter_is_about_029_mm() {
+    need_poppler!();
     // A row of 600 dots 1/2160" apart makes a bar as thick as one dot: ~0.83 pt = 1.7 px at 150 dpi.
     // At 600 dpi it is 7 px, within one pixel of 25/2160*600.
     let mut page = blank_page(W, H);
@@ -125,6 +149,7 @@ fn dot_diameter_is_about_029_mm() {
 
 #[test]
 fn paper_decoration_never_moves_dots() {
+    need_poppler!();
     let d = doc();
     let gray = |kind| {
         let o = opts_sized(kind, W, H, Ribbon::New, InkColor::Black);
@@ -164,6 +189,7 @@ fn paper_decoration_never_moves_dots() {
 
 #[test]
 fn green_bar_pattern_holes_and_perforation() {
+    need_poppler!();
     let (w, h) = (9 * 2160 + 1080, 3 * 2160);
     let o = opts_sized(PaperKind::GreenBar, w, h, Ribbon::New, InkColor::Black);
     let img = raster(
@@ -226,6 +252,36 @@ fn worn_ribbon_is_deterministic_and_irregular() {
     let a = export(&d, &ow, &no_date, &PageSelection::All);
     let b = export(&d, &ow, &no_date, &PageSelection::All);
     assert_eq!(a, b, "two exports must be byte-identical");
+    // Dates change only the properties: the inflated page content is identical.
+    let dated = |s| PdfMeta {
+        date: Some(PdfDate {
+            year: 2026,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+            second: s,
+        }),
+        ..PdfMeta::default()
+    };
+    let pages = |m: &PdfMeta| {
+        let all = all_streams(&export(&d, &ow, m, &PageSelection::All));
+        let i = find(&all, b"0.03333333333333").unwrap();
+        all[i..].to_vec()
+    };
+    assert_eq!(pages(&dated(1)), pages(&dated(59)));
+    let seeded = |seed| PdfMeta {
+        ribbon_seed: Some(seed),
+        ..PdfMeta::default()
+    };
+    assert_eq!(pages(&seeded(7)), pages(&seeded(7)));
+    assert_ne!(pages(&seeded(7)), pages(&seeded(8)));
+    let on = opts_sized(PaperKind::A4, W, H, Ribbon::New, InkColor::Black);
+    assert_ne!(
+        all_streams(&export(&d, &on, &no_date, &PageSelection::All)),
+        all_streams(&a)
+    );
+    need_poppler!();
     // Different dates change only the properties, not the drawing.
     let dated = |s| PdfMeta {
         date: Some(PdfDate {
