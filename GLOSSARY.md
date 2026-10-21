@@ -208,6 +208,14 @@ _Avoid_: referência (sozinho), gabarito
 Um ponto em que o AppleII-Rust segue o hardware real em vez do AppleWin, aceito só com evidência de hardware e registrado na lista de limitações.
 _Avoid_: correção de bug do AppleWin, melhoria
 
+**Divergência aprovada**:
+Um ponto em que o AppleII-Rust se comporta diferente do AppleWin por decisão explícita do dono, sem prova de hardware: corrigir um defeito do AppleWin que prejudica o usuário. Fica registrado na lista de limitações com a decisão e a data.
+_Avoid_: divergência intencional (que exige prova de hardware), melhoria
+
+**Limitação aceita**:
+Um FAIL conhecido que o dono decidiu não bloquear a release; continua FAIL nos relatórios, com a causa e a decisão registradas.
+_Avoid_: PASS, ignorado
+
 **Fixture**:
 Uma entrada de teste com proveniência documentada (save-state, Imagem de disco, sequência de teclas), identificada pelo hash SHA-256.
 _Avoid_: arquivo de teste, mock
