@@ -11,7 +11,8 @@ A especificação [docs/prompts/AppleII_Rust_Prompt_Impressoras_Virtuais_LX310.m
 3. **A janela da Central de Impressoras abre sozinha no primeiro byte escrito**, sem tirar o foco da janela do Apple II, com opção para desligar. A especificação recomendava o contrário; o dono preferiu ver a impressão ao vivo.
 4. **O Arquivo de impressões é permanente.** Cada Trabalho de impressão fica na pasta de dados do usuário (`apple2-rust/impressoes`) com os bytes brutos, um manifesto versionado, uma miniatura, título e nota pessoal. Nada é apagado sem ordem do usuário; há só um aviso de tamanho. Reimprimir com outro Papel, Fita ou tabela gera uma nova versão; os bytes originais nunca mudam.
 5. **Fonte matricial própria.** A Epson não licencia a ROM de caracteres da LX-310. O projeto desenha suas matrizes Draft e NLQ (GPL) e as documenta como aproximação; a geometria (pitch, espaçamento, margens, gráficos) segue o manual.
-6. **O save-state `.aws.yaml` não muda.** Carregar um estado fecha o Trabalho em andamento com esse motivo; o estado da LX-310 (cabeça, modos) não entra no formato do AppleWin.
+6. **PDF e aparência.** O PDF desenha cada agulha como ponto vetorial e leva uma camada de texto invisível para busca e cópia; os metadados (título, data, Modelo do Apple II, impressora, nota) vão sempre, e a folha de rosto é opcional e vem desligada. O Papel de fábrica é o formulário contínuo zebrado com furos de trator e picote (A4 e Carta como opção); a Fita de fábrica é nova, com fita usada (determinística por Trabalho) e cores como opções, e preto e branco nos Perfis coloridos. Tabelas de caracteres desta entrega: variantes do ESC R, PC437, PC850, PC860, BRASCII e ABICOMP.
+7. **O save-state `.aws.yaml` não muda.** Carregar um estado fecha o Trabalho em andamento com esse motivo; o estado da LX-310 (cabeça, modos) não entra no formato do AppleWin.
 
 ## Consequências
 
