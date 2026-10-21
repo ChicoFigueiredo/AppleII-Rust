@@ -227,6 +227,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "apple2-printer"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "apple2-rewind"
 version = "0.1.0"
 dependencies = [

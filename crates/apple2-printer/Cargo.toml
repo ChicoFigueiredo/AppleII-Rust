@@ -1,0 +1,17 @@
+[package]
+name = "apple2-printer"
+description = "Virtual printers for the Apple II: Epson LX-310 ESC/P 9-pin engine, paper layout, PDF export and print archive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["pdf", "fs"]
+# PDF export of a PageDocument (pdf-writer).
+pdf = []
+# Arquivo de impressões on disk (raw bytes, manifest, versions). Without it the crate has no std::fs.
+fs = []
+
+[dependencies]
+serde = { workspace = true }
