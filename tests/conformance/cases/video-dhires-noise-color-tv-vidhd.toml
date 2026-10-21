@@ -1,0 +1,22 @@
+id = "video-dhires-noise-color-tv-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena dhires-noise em color-tv a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/dhires-noise.scene"
+scene_sha256 = "1155eb2e060fa69e71752162cc8af20a109146a01b17d7561c4fc975655ee759"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "8d20fde0b2ec95014fe08d4d1d82b3e56fd98b1d3d46cabf3d2c35246f3e16d6"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/dhires-noise.scene --video-type 4 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=8d20fde0b2ec95014fe08d4d1d82b3e56fd98b1d3d46cabf3d2c35246f3e16d6 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

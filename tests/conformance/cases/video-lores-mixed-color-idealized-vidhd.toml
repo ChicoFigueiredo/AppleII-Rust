@@ -1,0 +1,22 @@
+id = "video-lores-mixed-color-idealized-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena lores-mixed em color-idealized a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/lores-mixed.scene"
+scene_sha256 = "9156b18c5fc7033f609b965ffa332d877fc7c91047f0e2a6fe38998d7d030f29"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "d58c5a9163362c3a7ce4871bd55d8050d889950fa6ef9a9d36ae191f1ccac45a"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/lores-mixed.scene --video-type 1 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=d58c5a9163362c3a7ce4871bd55d8050d889950fa6ef9a9d36ae191f1ccac45a (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

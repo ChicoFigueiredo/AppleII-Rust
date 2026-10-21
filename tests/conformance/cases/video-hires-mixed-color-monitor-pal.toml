@@ -1,0 +1,21 @@
+id = "video-hires-mixed-color-monitor-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena hires-mixed em color-monitor a 50 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-monitor"
+hz = 50
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/hires-mixed.scene"
+scene_sha256 = "fe19a228d51603b57b5323bf7772e93f0414faa8df5a515d1ff8afac363a0536"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "0e1c90e2dc228e5060bf6c58e6b419f20e0db542ca11d7170aa3e6389f464465"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/hires-mixed.scene --video-type 3 --video-hz 50 --rgb-card 0 => fb_sha256_full=0e1c90e2dc228e5060bf6c58e6b419f20e0db542ca11d7170aa3e6389f464465 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

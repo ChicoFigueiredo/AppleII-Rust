@@ -1,0 +1,21 @@
+id = "video-text80-lores-midframe-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena text80-lores-midframe em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/text80-lores-midframe.scene"
+scene_sha256 = "f6ddcfb9fde419b9cffee207f647cc8ff0a0a3fd0665214261b7f04243c09af7"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "8a7f7d47a4c673bf367dbae0d1683f1c8961a673c6226ff6ef63228b467a391e"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/text80-lores-midframe.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=8a7f7d47a4c673bf367dbae0d1683f1c8961a673c6226ff6ef63228b467a391e (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

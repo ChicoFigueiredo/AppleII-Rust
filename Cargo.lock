@@ -138,6 +138,7 @@ name = "apple2-conformance"
 version = "0.1.0"
 dependencies = [
  "apple2-audio",
+ "apple2-cards",
  "apple2-core",
  "apple2-savestate",
  "apple2-storage",
@@ -256,8 +257,11 @@ dependencies = [
 name = "apple2-video"
 version = "0.1.0"
 dependencies = [
+ "apple2-cards",
  "apple2-core",
  "apple2-roms",
+ "apple2-savestate",
+ "apple2-storage",
 ]
 
 [[package]]

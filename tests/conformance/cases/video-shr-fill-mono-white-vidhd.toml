@@ -1,0 +1,22 @@
+id = "video-shr-fill-mono-white-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena shr-fill em mono-white a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-white"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/shr-fill.scene"
+scene_sha256 = "83c91ed64cd933bdd38974323f893abfdb479a46b14a550f1b72ca8ae7b047e8"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "c4680dbfe732a2ba02b8ada250c65b3f2b5be1d2f72da08931dd182944538f68"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/shr-fill.scene --video-type 8 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=c4680dbfe732a2ba02b8ada250c65b3f2b5be1d2f72da08931dd182944538f68 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

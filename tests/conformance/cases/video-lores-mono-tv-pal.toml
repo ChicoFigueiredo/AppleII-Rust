@@ -1,0 +1,21 @@
+id = "video-lores-mono-tv-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena lores em mono-tv a 50 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-tv"
+hz = 50
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/lores.scene"
+scene_sha256 = "8ef1845313c283b579d28b49d1209a91bdab0f7f2df1de144dd9df5bd0d27ff4"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "34d6fb707503b6da137759cf5f7bb59c528f0f7b77f383bab31e4fab9f579e9a"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/lores.scene --video-type 5 --video-hz 50 --rgb-card 0 => fb_sha256_full=34d6fb707503b6da137759cf5f7bb59c528f0f7b77f383bab31e4fab9f579e9a (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

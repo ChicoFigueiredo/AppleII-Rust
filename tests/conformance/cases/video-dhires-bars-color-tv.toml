@@ -1,0 +1,21 @@
+id = "video-dhires-bars-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena dhires-bars em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/dhires-bars.scene"
+scene_sha256 = "3d02934e25717338ab7728ab1c13273464cc40fc146998aa621a10698e0d32bb"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "c390de74cd7d9550a61e35f026edb054e9e851cc0e4ec5e16c7dd31be6d5ac7a"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/dhires-bars.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=c390de74cd7d9550a61e35f026edb054e9e851cc0e4ec5e16c7dd31be6d5ac7a (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

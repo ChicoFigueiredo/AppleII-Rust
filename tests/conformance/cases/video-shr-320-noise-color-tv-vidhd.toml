@@ -1,0 +1,22 @@
+id = "video-shr-320-noise-color-tv-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena shr-320-noise em color-tv a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/shr-320-noise.scene"
+scene_sha256 = "336c974570f5d09887bae3f16e2bbdc7d1429de599cebf78d1b68ccec073d686"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "f3d4b67e48340a6926ed2986b33db0eabef7681ce8b5f43749475c3698d937e0"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/shr-320-noise.scene --video-type 4 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=f3d4b67e48340a6926ed2986b33db0eabef7681ce8b5f43749475c3698d937e0 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

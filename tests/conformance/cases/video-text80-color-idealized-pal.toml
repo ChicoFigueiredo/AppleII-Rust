@@ -1,0 +1,21 @@
+id = "video-text80-color-idealized-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena text80 em color-idealized a 50 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 50
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/text80.scene"
+scene_sha256 = "592b36305f2029695fc6e06ea3bac7966fcfba30314fff136fb7b2ecb5655e43"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "792e1987dbcef9e274350e7f327fb39702f5b9555d8e34e3b8b036ba0bb38518"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/text80.scene --video-type 1 --video-hz 50 --rgb-card 0 => fb_sha256_full=792e1987dbcef9e274350e7f327fb39702f5b9555d8e34e3b8b036ba0bb38518 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

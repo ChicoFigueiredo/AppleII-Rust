@@ -41,6 +41,8 @@ fn main() {
         }
         if session.is_running() {
             session.run_slice();
+            // Give the reader thread a chance on a single core.
+            thread::yield_now();
         }
         for o in session.take_output() {
             if write_message(&mut out, &o).is_err() {

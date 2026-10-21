@@ -11,6 +11,7 @@ pub mod manifest;
 pub mod pcm;
 pub mod report;
 pub mod runner;
+pub mod scene;
 pub mod sha256;
 pub mod trace;
 
