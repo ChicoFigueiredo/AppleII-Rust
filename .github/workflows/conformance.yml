@@ -23,11 +23,28 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # O corpus do AppleWin-Test (sem licenca) fica fora do Git, em target/conformance-cache/.
-      # Sem rede, os testes que dependem dele terminam em BLOCKED, nunca pulados em silencio.
+      # Corpora de terceiros em SHA fixo, fora do Git (target/conformance-cache/). AppleWin-Test nao
+      # tem licenca: e baixado aqui e nunca redistribuido.
+      - name: Third-party corpora (pinned SHAs)
+        run: |
+          tools/conformance/fetch-applewin-test.sh
+          tools/conformance/fetch-65x02-tests.sh
+          tools/conformance/fetch-z80-tests.sh
+          tools/conformance/fetch-a2audit.sh
+
+      # Codigo de saida de `run`: 0 tudo PASS, 1 FAIL real, 2 BLOCKED, 3 so divergencias conhecidas.
+      # Os traces de referencia do oraculo (target/conformance-cache/reference-traces) so existem onde
+      # o fork do audetto foi compilado; aqui esses casos terminam em BLOCKED e aparecem no resumo.
+      # So FAIL real (1) ou erro de uso (64) reprovam o passo.
       - name: Conformance suite
-        # Comando provisorio: sera ajustado quando o harness (crates/apple2-conformance) estiver pronto.
-        run: cargo run --release -p apple2-conformance --bin conformance -- run --report target/conformance-report
+        run: |
+          set +e
+          cargo run --release -p apple2-conformance --bin conformance -- run --all --report target/conformance-report
+          code=$?
+          set -e
+          cat target/conformance-report/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+          echo "conformance run: codigo $code"
+          case $code in 0|2|3) exit 0 ;; *) exit "$code" ;; esac
 
       # HU-1001: regressao de desempenho. Falha se a mediana de MHz (tempo de CPU da thread) piorar
       # alem da margem do baseline (max(15 %, 3 x CV)) ou se ciclos/quadro/audio deixarem de ser
