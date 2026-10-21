@@ -7,11 +7,16 @@
 //! `custom_f8_rom`. Precedence, highest first: the command line / `[machine]` keys (`custom_rom`,
 //! `custom_f8_rom`, `video_rom`), then `[roms]`, then the ROM embedded in `apple2-roms`.
 //!
-//! Size rules, from AppleWin:
-//! * `-rom` (any model): 16K (`$C000-$FFFF`) or 12K (`$D000-$FFFF`), CmdLine.cpp:501.
-//! * `[roms].<model>`: exactly the size of that model's embedded ROM (Memory.cpp:2054-2063).
-//! * `-f8rom`: exactly 2K, CmdLine.cpp:489.
-//! * `-videorom`: 2K, 4K, 8K or 16K, Video.cpp:633.
+//! An invalid user ROM never stops the machine: as in AppleWin (Memory.cpp:2154-2159,
+//! 2206-2211) the embedded ROM is used, the provenance report says so and a warning is shown.
+//!
+//! Size rules, from AppleWin (the loaders of Memory.cpp, which are lenient):
+//! * `-rom` (any model): exactly 16K is Cx ROM (4K) + 12K; any other file gives its first 12K and
+//!   fails only if shorter (Memory.cpp:2182-2201). A 20K file works.
+//! * `[roms].<model>`: exactly the size of that model's embedded ROM (our extension,
+//!   Memory.cpp:2054-2063 for the sizes).
+//! * `-f8rom`: reads 2K, fails only if fewer come (Memory.cpp:2145-2149).
+//! * `-videorom`: exactly 2K, 4K, 8K or 16K (Video.cpp:633); a 16K ROM uses its top 8K.
 //!
 //! AppleWin offers no way to replace the firmware of slot cards, so none is offered here; the
 //! report still lists the (embedded) slot firmware in use.
@@ -125,6 +130,8 @@ pub struct RomInfo {
     pub size: usize,
     /// Lowercase hex SHA-256 of the bytes.
     pub sha256: String,
+    /// Set when this is the embedded ROM used because a user ROM failed: the reason.
+    pub fallback: Option<String>,
 }
 
 impl RomInfo {
@@ -134,6 +141,7 @@ impl RomInfo {
             source: RomSource::Embedded(name),
             size: bytes.len(),
             sha256: apple2_roms::sha256_hex(bytes),
+            fallback: None,
         }
     }
 
@@ -143,6 +151,7 @@ impl RomInfo {
             source: RomSource::File(path.to_path_buf()),
             size: bytes.len(),
             sha256: apple2_roms::sha256_hex(bytes),
+            fallback: None,
         }
     }
 }
@@ -151,7 +160,12 @@ impl std::fmt::Display for RomInfo {
     /// `system ROM: file /x/y.rom, 16384 bytes, sha256=...` (one log line).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.source {
-            RomSource::Embedded(n) => write!(f, "{}: embedded {n}", self.role)?,
+            RomSource::Embedded(n) => {
+                write!(f, "{}: embedded {n}", self.role)?;
+                if let Some(r) = &self.fallback {
+                    write!(f, " (fallback: {r})")?;
+                }
+            }
             RomSource::File(p) => write!(f, "{}: file {}", self.role, p.display())?,
         }
         write!(f, ", {} bytes, sha256={}", self.size, self.sha256)
@@ -206,9 +220,33 @@ fn describe_sizes(sizes: &[usize]) -> String {
         .join(" or ")
 }
 
-/// Reads `path`, accepting only the sizes in `allowed`. The size is checked on the metadata
-/// first, so a huge file is never read. Never panics.
-pub fn load_rom_file(role: RomRole, path: &Path, allowed: &[usize]) -> Result<Vec<u8>, RomError> {
+/// Which file sizes a ROM accepts.
+#[derive(Clone, Copy, Debug)]
+pub enum SizeRule<'a> {
+    /// Only these sizes (`-videorom`, Video.cpp:633; `[roms].<model>`, our extension).
+    Exact(&'a [usize]),
+    /// At least `min` bytes; only the first `max_read` are read (`ReadFile` of a fixed count,
+    /// Memory.cpp:2145, 2185, 2196): a larger file is accepted and its tail ignored.
+    AtLeast { min: usize, max_read: usize },
+}
+
+/// A ROM file read under a [`SizeRule`].
+#[derive(Clone, Debug)]
+pub struct LoadedRom {
+    /// Up to `max_read` bytes (the whole file for [`SizeRule::Exact`]).
+    pub bytes: Vec<u8>,
+    /// Size of the file on disk.
+    pub file_size: u64,
+}
+
+/// Reads `path` under `rule`. The size is checked on the metadata first and at most the bytes
+/// needed are read, so a huge file is cheap. Never panics.
+pub fn load_rom_file(
+    role: RomRole,
+    path: &Path,
+    rule: SizeRule<'_>,
+) -> Result<LoadedRom, RomError> {
+    use std::io::Read;
     let unreadable = |e: std::io::Error| RomError::Unreadable {
         role,
         path: path.to_path_buf(),
@@ -221,7 +259,14 @@ pub fn load_rom_file(role: RomRole, path: &Path, allowed: &[usize]) -> Result<Ve
         role,
         path: path.to_path_buf(),
         size,
-        expected: describe_sizes(allowed),
+        expected: match rule {
+            SizeRule::Exact(a) => describe_sizes(a),
+            SizeRule::AtLeast { min, .. } => format!("at least {min} ({}K)", min / 1024),
+        },
+    };
+    let accepts = |n: u64| match rule {
+        SizeRule::Exact(a) => a.iter().any(|&x| x as u64 == n),
+        SizeRule::AtLeast { min, .. } => n >= min as u64,
     };
     let meta = std::fs::metadata(path).map_err(unreadable)?;
     if !meta.is_file() {
@@ -231,22 +276,44 @@ pub fn load_rom_file(role: RomRole, path: &Path, allowed: &[usize]) -> Result<Ve
             reason: "not a regular file".into(),
         });
     }
-    if !allowed.iter().any(|&n| n as u64 == meta.len()) {
+    if !accepts(meta.len()) {
         return Err(bad_size(meta.len()));
     }
-    let bytes = std::fs::read(path).map_err(unreadable)?;
+    let limit = match rule {
+        SizeRule::Exact(_) => meta.len(),
+        SizeRule::AtLeast { max_read, .. } => max_read as u64,
+    };
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(limit).read_to_end(&mut bytes))
+        .map_err(unreadable)?;
     // The file may have changed between the metadata and the read.
-    if !allowed.contains(&bytes.len()) {
+    let enough = match rule {
+        SizeRule::Exact(a) => a.contains(&bytes.len()),
+        SizeRule::AtLeast { min, max_read } => bytes.len() >= min.min(max_read),
+    };
+    if !enough {
         return Err(bad_size(bytes.len() as u64));
     }
-    Ok(bytes)
+    Ok(LoadedRom {
+        bytes,
+        file_size: meta.len(),
+    })
 }
 
-/// Sizes accepted by `-rom` (CmdLine.cpp:501).
-pub const CUSTOM_ROM_SIZES: [usize; 2] = [0x3000, 0x4000];
-/// Size accepted by `-f8rom` (CmdLine.cpp:489).
-pub const F8_ROM_SIZES: [usize; 1] = [0x800];
-/// Sizes accepted by `-videorom` (Video.cpp:633).
+/// `-rom` (MemInitializeCustomROM, Memory.cpp:2173-2213): a file of exactly 16K is the 4K
+/// internal Cx ROM plus 12K; any other file gives its first 12K and fails if shorter. (The
+/// AppleWin command line additionally accepts only 12K and 16K files, CmdLine.cpp:501.)
+pub const SYSTEM_ROM_RULE: SizeRule<'static> = SizeRule::AtLeast {
+    min: 0x3000,
+    max_read: 0x4000,
+};
+/// `-f8rom` (Memory.cpp:2145): reads 2K, fails if fewer come (CmdLine.cpp:489 wants exactly 2K).
+pub const F8_ROM_RULE: SizeRule<'static> = SizeRule::AtLeast {
+    min: 0x800,
+    max_read: 0x800,
+};
+/// `-videorom` (Video.cpp:633): 2K, 4K, 8K or 16K.
 pub const VIDEO_ROM_SIZES: [usize; 4] = [0x800, 0x1000, 0x2000, 0x4000];
 
 /// Settings turned into what the machine and the renderer need, with the ROM provenance.
@@ -256,6 +323,9 @@ pub struct ResolvedRoms {
     /// User video ROM bytes for the renderer.
     pub video_rom: Option<Vec<u8>>,
     pub report: Vec<RomInfo>,
+    /// User ROMs that could not be used: the embedded ROM is used instead, as AppleWin does
+    /// (Memory.cpp:2154-2159, 2206-2211). Show these to the user.
+    pub warnings: Vec<String>,
 }
 
 /// File name of the embedded system ROM of `model`.
@@ -309,29 +379,57 @@ fn embedded_slot_rom(spec: &crate::card::SlotCardSpec) -> Option<(&'static str, 
 }
 
 impl Settings {
-    /// Reads and validates every ROM override and reports all the ROMs in use. The first
-    /// invalid file is returned as an error: the machine must not start with it.
-    pub fn resolve_roms(&self) -> Result<ResolvedRoms, RomError> {
+    /// Reads every ROM override and reports all the ROMs in use. Like AppleWin ("Failed to read
+    /// custom rom ... Failed, so use default rom", Memory.cpp:2154-2159, 2206-2211), an override
+    /// that is missing, unreadable or of a wrong size does not stop the machine: the embedded ROM
+    /// is used, `RomInfo::fallback` says why and `warnings` has the message.
+    pub fn resolve_roms(&self) -> ResolvedRoms {
         let mut c = self.to_machine_config();
         let mut report = Vec::new();
+        let mut warnings = Vec::new();
         let model = self.machine.model;
 
         // System ROM: `-rom` / [machine].custom_rom, else [roms].<model>, else embedded.
-        if let Some(p) = &self.machine.custom_rom {
-            let b = load_rom_file(RomRole::System, p, &CUSTOM_ROM_SIZES)?;
-            report.push(RomInfo::file(RomRole::System, p, &b));
-            c.custom_rom = Some(b);
-        } else if let (Some(p), Some(embedded)) = (self.roms.system_for(model), model.system_rom())
-        {
-            let b = load_rom_file(RomRole::System, p, &[embedded.len()])?;
-            report.push(RomInfo::file(RomRole::System, p, &b));
-            c.custom_rom = Some(b);
-        } else if let Some(embedded) = model.system_rom() {
-            report.push(RomInfo::embedded(
-                RomRole::System,
-                embedded_system_name(model),
-                embedded,
-            ));
+        let mut sys_fallback = None;
+        let loaded: Option<(&PathBuf, Result<Vec<u8>, RomError>)> =
+            match (&self.machine.custom_rom, model.system_rom()) {
+                (Some(p), _) => Some((
+                    p,
+                    load_rom_file(RomRole::System, p, SYSTEM_ROM_RULE).map(|l| {
+                        // 16K: Cx + 12K; otherwise the first 12K only (Memory.cpp:2182-2201).
+                        let n = if l.file_size == 0x4000 {
+                            0x4000
+                        } else {
+                            0x3000
+                        };
+                        l.bytes[..n].to_vec()
+                    }),
+                )),
+                (None, Some(embedded)) => self.roms.system_for(model).map(|p| {
+                    let exact = [embedded.len()];
+                    let r = load_rom_file(RomRole::System, p, SizeRule::Exact(&exact));
+                    (p, r.map(|l| l.bytes))
+                }),
+                (None, None) => None,
+            };
+        match loaded {
+            Some((p, Ok(b))) => {
+                report.push(RomInfo::file(RomRole::System, p, &b));
+                c.custom_rom = Some(b);
+            }
+            Some((_, Err(e))) => {
+                warnings.push(format!("{e}; using the embedded ROM"));
+                sys_fallback = Some(e.to_string());
+            }
+            None => {}
+        }
+        if c.custom_rom.is_none() {
+            if let Some(embedded) = model.system_rom() {
+                let mut i =
+                    RomInfo::embedded(RomRole::System, embedded_system_name(model), embedded);
+                i.fallback = sys_fallback;
+                report.push(i);
+            }
         }
 
         // F8 ROM.
@@ -341,9 +439,15 @@ impl Settings {
             .as_ref()
             .or(self.roms.f8.as_ref())
         {
-            let b = load_rom_file(RomRole::F8, p, &F8_ROM_SIZES)?;
-            report.push(RomInfo::file(RomRole::F8, p, &b));
-            c.custom_f8_rom = Some(b);
+            // Only 2K are read (a longer file is accepted); on failure the F8 of the system ROM
+            // listed above stays in use.
+            match load_rom_file(RomRole::F8, p, F8_ROM_RULE) {
+                Ok(l) => {
+                    report.push(RomInfo::file(RomRole::F8, p, &l.bytes));
+                    c.custom_f8_rom = Some(l.bytes);
+                }
+                Err(e) => warnings.push(format!("{e}; using the F8 of the system ROM")),
+            }
         }
         // Embedded overlay applied by the core after the above (Memory.cpp:2163).
         if self.machine.freeze_f8_rom && model.is_apple2() {
@@ -356,18 +460,32 @@ impl Settings {
 
         // Video ROM.
         let user_video = self.machine.video_rom.as_ref().or(self.roms.video.as_ref());
-        let video_rom = match user_video {
-            Some(p) => {
-                let b = load_rom_file(RomRole::Video, p, &VIDEO_ROM_SIZES)?;
-                report.push(RomInfo::file(RomRole::Video, p, &b));
-                Some(b)
+        let mut video_rom = None;
+        let mut video_fallback = None;
+        if let Some(p) = user_video {
+            match load_rom_file(RomRole::Video, p, SizeRule::Exact(&VIDEO_ROM_SIZES)) {
+                Ok(l) => {
+                    // A 16K ROM: the top 8K is used (Video.cpp:640-645).
+                    let b = if l.bytes.len() == 0x4000 {
+                        l.bytes[0x2000..].to_vec()
+                    } else {
+                        l.bytes
+                    };
+                    report.push(RomInfo::file(RomRole::Video, p, &b));
+                    video_rom = Some(b);
+                }
+                Err(e) => {
+                    warnings.push(format!("{e}; using the embedded ROM"));
+                    video_fallback = Some(e.to_string());
+                }
             }
-            None => {
-                let (n, b) = embedded_video(model);
-                report.push(RomInfo::embedded(RomRole::Video, n, b));
-                None
-            }
-        };
+        }
+        if video_rom.is_none() {
+            let (n, b) = embedded_video(model);
+            let mut i = RomInfo::embedded(RomRole::Video, n, b);
+            i.fallback = video_fallback;
+            report.push(i);
+        }
 
         // Firmware of the slot cards (always embedded).
         for (i, spec) in self.slots.0.iter().enumerate() {
@@ -376,19 +494,24 @@ impl Settings {
             }
         }
 
-        Ok(ResolvedRoms {
+        ResolvedRoms {
             machine: c,
             video_rom,
             report,
-        })
+            warnings,
+        }
     }
 
-    /// The ROMs in use, one log line each; the error text when an override is invalid.
+    /// Entry validation for the settings screen: the user ROMs that would fall back to the
+    /// embedded ROM at start-up. Whether to block OK/Apply on them is the screen's choice.
+    pub fn rom_problems(&self) -> Vec<String> {
+        self.resolve_roms().warnings
+    }
+
+    /// The ROMs in use, one log line each.
     pub fn rom_report_lines(&self) -> Vec<String> {
-        match self.resolve_roms() {
-            Ok(r) => r.report.iter().map(ToString::to_string).collect(),
-            Err(e) => vec![e.to_string()],
-        }
+        let r = self.resolve_roms();
+        r.report.iter().map(ToString::to_string).collect()
     }
 }
 
@@ -420,7 +543,8 @@ mod tests {
         let mut s = Settings::default();
         s.roms.apple2e_enhanced = Some(sys.clone());
         s.roms.f8 = Some(f8);
-        let r = s.resolve_roms().unwrap();
+        let r = s.resolve_roms();
+        assert!(r.warnings.is_empty());
         assert_eq!(r.machine.custom_rom.as_deref(), Some(&rom[..]));
         assert_eq!(
             r.machine.custom_f8_rom.as_deref().map(<[u8]>::len),
@@ -445,59 +569,114 @@ mod tests {
         let mut s = Settings::default();
         s.roms.apple2e_enhanced = Some(b);
         s.machine.custom_rom = Some(a.clone());
-        let r = s.resolve_roms().unwrap();
+        let r = s.resolve_roms();
         assert_eq!(r.report[0].source, RomSource::File(a));
         assert_eq!(r.report[0].size, 0x3000);
         let _ = std::fs::remove_dir_all(d);
     }
 
+    fn is_embedded_fallback(r: &ResolvedRoms, role: RomRole, reason: &str) -> bool {
+        r.report.iter().any(|i| {
+            i.role == role
+                && matches!(i.source, RomSource::Embedded(_))
+                && i.fallback.as_deref().is_some_and(|f| f.contains(reason))
+        }) && r.warnings.iter().any(|w| w.contains(reason))
+    }
+
     #[test]
-    fn bad_size_is_an_error() {
+    fn bad_size_falls_back_to_the_embedded_rom_with_a_warning() {
         let d = tmpdir("size");
         let f = d.join("x.rom");
         std::fs::write(&f, vec![0u8; 1000]).unwrap();
-        // -rom: 12K or 16K only
+        // -rom: fewer than 12K fails
         let mut s = Settings::default();
         s.machine.custom_rom = Some(f.clone());
-        let e = s.resolve_roms().unwrap_err();
-        assert!(matches!(e, RomError::BadSize { size: 1000, .. }), "{e}");
-        assert!(e.to_string().contains("12288 (12K) or 16384 (16K)"));
-        // [roms].<model> must match the model's size: 12K on an //e is wrong
+        let r = s.resolve_roms();
+        assert!(r.machine.custom_rom.is_none());
+        assert!(is_embedded_fallback(&r, RomRole::System, "1000 bytes"));
+        assert_eq!(
+            r.report[0].sha256,
+            apple2_roms::sha256_hex(apple2_roms::APPLE2E_ENHANCED)
+        );
+        assert!(r.report[0].to_string().contains("(fallback: "));
+        // [roms].<model> is exact: 12K on an //e is wrong
         std::fs::write(&f, vec![0u8; 0x3000]).unwrap();
         let mut s = Settings::default();
         s.roms.apple2e_enhanced = Some(f.clone());
-        assert!(matches!(
-            s.resolve_roms(),
-            Err(RomError::BadSize { size: 0x3000, .. })
-        ));
-        // -f8rom: exactly 2K
+        let r = s.resolve_roms();
+        assert!(is_embedded_fallback(&r, RomRole::System, "12288 bytes"));
+        // -f8rom: fewer than 2K fails, the system ROM's F8 stays
+        std::fs::write(&f, vec![0u8; 0x7FF]).unwrap();
         let mut s = Settings::default();
         s.machine.custom_f8_rom = Some(f.clone());
-        assert!(matches!(s.resolve_roms(), Err(RomError::BadSize { .. })));
-        // -videorom: 2/4/8/16K
+        let r = s.resolve_roms();
+        assert!(r.machine.custom_f8_rom.is_none() && r.warnings.len() == 1);
+        // -videorom: 2/4/8/16K exactly
         std::fs::write(&f, vec![0u8; 3000]).unwrap();
         let mut s = Settings::default();
         s.machine.video_rom = Some(f.clone());
-        assert!(matches!(s.resolve_roms(), Err(RomError::BadSize { .. })));
+        let r = s.resolve_roms();
+        assert!(r.video_rom.is_none());
+        assert!(is_embedded_fallback(&r, RomRole::Video, "3000 bytes"));
         for n in VIDEO_ROM_SIZES {
             std::fs::write(&f, vec![0u8; n]).unwrap();
-            assert!(s.resolve_roms().unwrap().video_rom.is_some());
+            assert!(s.resolve_roms().video_rom.is_some());
         }
+        // a 16K video ROM uses its top 8K (Video.cpp:640-645)
+        let mut v = vec![0xFFu8; 0x2000];
+        v.extend(synthetic(0x2000, 3));
+        std::fs::write(&f, &v).unwrap();
+        assert_eq!(s.resolve_roms().video_rom.as_deref(), Some(&v[0x2000..]));
         let _ = std::fs::remove_dir_all(d);
     }
 
     #[test]
-    fn missing_file_is_an_error_not_a_panic() {
+    fn oversized_rom_is_accepted_and_the_tail_ignored() {
+        // Memory.cpp:2196 reads 12K and fails only if fewer come: a 20K file works.
+        let d = tmpdir("big");
+        let f = d.join("big.rom");
+        let big = synthetic(20 * 1024, 5);
+        std::fs::write(&f, &big).unwrap();
+        let mut s = Settings::default();
+        s.machine.custom_rom = Some(f.clone());
+        let r = s.resolve_roms();
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+        assert_eq!(r.machine.custom_rom.as_deref(), Some(&big[..0x3000]));
+        assert_eq!(r.report[0].size, 0x3000);
+        assert!(apple2_core::Machine::try_new(r.machine).is_ok());
+        // exactly 16K is Cx + 12K
+        std::fs::write(&f, &big[..0x4000]).unwrap();
+        let r = s.resolve_roms();
+        assert_eq!(r.machine.custom_rom.as_deref(), Some(&big[..0x4000]));
+        // 14K: not 16K, so the first 12K
+        std::fs::write(&f, &big[..14 * 1024]).unwrap();
+        let r = s.resolve_roms();
+        assert_eq!(r.machine.custom_rom.as_deref(), Some(&big[..0x3000]));
+        // F8: the first 2K of a longer file
+        s.machine.custom_f8_rom = Some(f.clone());
+        let r = s.resolve_roms();
+        assert_eq!(r.machine.custom_f8_rom.as_deref(), Some(&big[..0x800]));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn missing_file_falls_back_and_never_panics() {
         let mut s = Settings::default();
         s.roms.video = Some(PathBuf::from("/nonexistent/dir/video.rom"));
-        let e = s.resolve_roms().unwrap_err();
-        assert!(matches!(e, RomError::Unreadable { .. }));
-        assert!(e.to_string().contains("file not found"), "{e}");
+        let r = s.resolve_roms();
+        assert!(r.video_rom.is_none());
+        assert!(is_embedded_fallback(&r, RomRole::Video, "file not found"));
         // a directory is not a ROM either
         let d = tmpdir("dir");
         let mut s = Settings::default();
         s.machine.custom_rom = Some(d.clone());
-        assert!(matches!(s.resolve_roms(), Err(RomError::Unreadable { .. })));
+        let r = s.resolve_roms();
+        assert!(is_embedded_fallback(
+            &r,
+            RomRole::System,
+            "not a regular file"
+        ));
+        assert_eq!(s.rom_problems().len(), 1);
         let _ = std::fs::remove_dir_all(d);
     }
 
@@ -518,7 +697,8 @@ mod tests {
         for m in models {
             let mut s = Settings::default();
             s.machine.model = m;
-            let r = s.resolve_roms().unwrap();
+            let r = s.resolve_roms();
+            assert!(r.warnings.is_empty());
             assert!(r.machine.custom_rom.is_none() && r.video_rom.is_none());
             let sys = &r.report[0];
             assert_eq!(sys.role, RomRole::System);

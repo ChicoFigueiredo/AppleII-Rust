@@ -18,11 +18,11 @@ Um argumento desconhecido é guardado na lista de "comandos não suportados" e n
 | `-50hz`, `-60hz` | Vídeo PAL de 50 Hz ou NTSC de 60 Hz |
 | `-clock-multiplier N` | Multiplicador de velocidade (decimal) |
 | `-memclear N` | Padrão de memória ao ligar, 0 a 7 |
-| `-rom arquivo` | ROM de sistema própria: 16K em $C000-$FFFF ou 12K em $D000-$FFFF. Qualquer outro tamanho é erro |
-| `-f8rom arquivo` | ROM própria de exatamente 2K em $F800-$FFFF |
+| `-rom arquivo` | ROM de sistema própria: 16K em $C000-$FFFF, ou os primeiros 12K em $D000-$FFFF |
+| `-f8rom arquivo` | ROM própria de 2K em $F800-$FFFF |
 | `-videorom arquivo` | ROM de vídeo própria de 2K, 4K, 8K ou 16K |
 
-Um arquivo inexistente ou de tamanho inválido em `-rom`, `-f8rom` ou `-videorom` impede a Máquina de iniciar e o programa mostra o erro. Veja "Usar ROMs próprias" no capítulo de configuração.
+Como no AppleWin, um arquivo inexistente, ilegível ou de tamanho que a leitura não aceita em `-rom`, `-f8rom` ou `-videorom` não impede a Máquina de iniciar: ela usa a ROM embutida, o programa mostra o aviso na janela e o registra no log. Os tamanhos exatos aceitos (por exemplo, 20K em `-rom` vale pelos primeiros 12K) estão em "Usar ROMs próprias", no capítulo de configuração.
 | `-bootsector arquivo` | Setor de boot customizado |
 | `-no-nsc` | Remove o No-Slot Clock |
 | `-alt-cpu-emu` | CPU alternativa (testes) |

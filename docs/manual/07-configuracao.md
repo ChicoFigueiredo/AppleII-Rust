@@ -134,7 +134,7 @@ Se a seção `[roms]` não existe, tudo continua como antes.
 
 ### Chaves de `[roms]` e tamanhos aceitos
 
-| Chave | ROM | Tamanho exato |
+| Chave | ROM | Tamanho |
 |---|---|---|
 | `apple2` | Sistema do Apple ][ | 12288 bytes (12K) |
 | `apple2_plus` | Sistema do Apple ][+ | 12288 bytes (12K) |
@@ -146,20 +146,29 @@ Se a seção `[roms]` não existe, tudo continua como antes.
 | `pravets8a` | Sistema do Pravets 8A | 16384 bytes (16K) |
 | `tk3000e` | Sistema do TK3000 //e | 16384 bytes (16K) |
 | `base64a` | Sistema do Base64A | 49152 bytes (48K) |
-| `f8` | 2K em $F800 a $FFFF (como `-f8rom`) | 2048 bytes (2K) |
+| `f8` | 2K em $F800 a $FFFF (como `-f8rom`) | 2048 bytes (2K) ou mais; usa os primeiros 2K |
 | `video` | Gerador de caracteres (como `-videorom`) | 2K, 4K, 8K ou 16K |
 
-Só a ROM do Modelo escolhido é lida; as demais chaves ficam guardadas. Uma ROM de 16K para o //e contém os 4K internos de $C000 seguidos dos 12K de $D000; uma de 12K cobre apenas $D000 a $FFFF. O `-rom` da linha de comando, como no AppleWin, aceita 12K ou 16K para qualquer Modelo. O AppleWin não permite trocar as ROMs das cartas de slot (Disk II, SSC, impressora, disco rígido, mouse), então este programa também não.
+Só a ROM do Modelo escolhido é lida; as demais chaves ficam guardadas. Uma ROM de 16K para o //e contém os 4K internos de $C000 seguidos dos 12K de $D000; uma de 12K cobre apenas $D000 a $FFFF. O `-rom` da linha de comando vale para qualquer Modelo, como no AppleWin, e vence a tabela `[roms]`. O AppleWin não permite trocar as ROMs das cartas de slot (Disk II, SSC, impressora, disco rígido, mouse), então este programa também não.
 
 ### Validação
 
-Ao iniciar (e ao clicar em OK ou Apply), o programa confere cada ROM do usuário. Se o arquivo não existe, não é um arquivo comum, não pode ser lido ou tem um tamanho que a regra acima não aceita, a Máquina não inicia e aparece uma mensagem descritiva, por exemplo:
+Ao iniciar, o programa confere cada ROM do usuário. Se o arquivo não existe, não é um arquivo comum, não pode ser lido ou tem um tamanho que a regra aceita, a Máquina **inicia mesmo assim com a ROM embutida**, como faz o AppleWin ("Failed to read custom rom"). O motivo aparece como mensagem na janela e no log, por exemplo:
 
 ```
-custom system ROM /home/eu/roms/minha-iie.rom: 100 bytes, expected 16384 (16K)
+custom system ROM /home/eu/roms/minha-iie.rom: 100 bytes, expected at least 12288 (12K); using the embedded ROM
 ```
 
-Na janela de configuração a mensagem aparece como problema e bloqueia OK/Apply; na linha de comando o programa imprime o erro e termina. Diferente do AppleWin, que avisa e cai de volta para a ROM embutida, aqui um arquivo errado nunca é substituído em silêncio.
+O relatório de ROMs (veja abaixo) marca essa ROM como `embedded ... (fallback: motivo)`.
+
+Os tamanhos seguem as rotinas de leitura do AppleWin, que são tolerantes:
+
+- `-rom` (e a chave `custom_rom`): um arquivo de exatamente 16K vale como 4K de $C000 mais 12K de $D000; qualquer outro arquivo fornece os primeiros 12K e só falha se tiver menos de 12K. Um arquivo de 20K, por exemplo, é aceito e só os primeiros 12K são usados.
+- `-f8rom` (e a chave `f8`): lê os primeiros 2K; falha se o arquivo tiver menos.
+- `-videorom` (e a chave `video`): exatamente 2K, 4K, 8K ou 16K (com 16K vale a metade de cima, 8K).
+- Chaves de Modelo de `[roms]`: tamanho exato da tabela acima. Isso é uma extensão deste programa; o AppleWin não tem essa tabela.
+
+Na janela de configuração a regra é mais rígida, porque é validação na entrada: um arquivo que cairia na ROM embutida aparece como problema e bloqueia OK/Apply.
 
 ### Escolher o arquivo na janela de configuração
 

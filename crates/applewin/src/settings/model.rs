@@ -691,9 +691,10 @@ pub fn validate(s: &Settings) -> Vec<Problem> {
     if s.video.window_scale == 0 || s.video.window_scale > 8 {
         bad(&mut v, "Window scale must be 1-8");
     }
-    // A user ROM that is missing or has the wrong size: the machine would not start.
-    if let Err(e) = s.resolve_roms() {
-        bad(&mut v, e.to_string());
+    // A user ROM that is missing or has the wrong size: at start-up the embedded ROM would be
+    // used (AppleWin's behaviour), but the form refuses it on entry.
+    for e in s.rom_problems() {
+        bad(&mut v, e);
     }
     v
 }

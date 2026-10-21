@@ -80,11 +80,9 @@ impl VideoRenderer {
 
     pub fn from_settings(s: &apple2_config::Settings) -> Self {
         let mut cfg = render_config(&s.video);
-        // `-videorom`: a file that cannot be read keeps the built-in character generator.
-        match s.read_video_rom() {
-            Ok(rom) => cfg.user_video_rom = rom.map(std::sync::Arc::new),
-            Err(e) => eprintln!("video ROM: {e}"),
-        }
+        // `-videorom`: a file that cannot be used keeps the built-in character generator (the
+        // warning is reported by the emulator).
+        cfg.user_video_rom = s.read_video_rom().map(std::sync::Arc::new);
         Self::new(cfg)
     }
 

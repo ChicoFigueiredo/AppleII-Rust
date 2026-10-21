@@ -7,17 +7,15 @@ use apple2_core::{AuxCardKind, CardKind, MachineConfig, VideoStandard};
 impl Settings {
     /// [`Settings::to_machine_config`] plus the ROM files named by `-rom`, `-f8rom` and `[roms]`,
     /// validated (see [`crate::roms`]).
-    pub fn to_machine_config_with_roms(&self) -> Result<MachineConfig, String> {
-        self.resolve_roms()
-            .map(|r| r.machine)
-            .map_err(|e| e.to_string())
+    /// An invalid ROM file falls back to the embedded ROM (AppleWin's behaviour); the reasons are
+    /// in [`Settings::resolve_roms`]'s `warnings`.
+    pub fn to_machine_config_with_roms(&self) -> MachineConfig {
+        self.resolve_roms().machine
     }
 
-    /// The `-videorom` / `[roms].video` file (for the renderer), if one was given.
-    pub fn read_video_rom(&self) -> Result<Option<Vec<u8>>, String> {
-        self.resolve_roms()
-            .map(|r| r.video_rom)
-            .map_err(|e| e.to_string())
+    /// The `-videorom` / `[roms].video` bytes (for the renderer), if given and valid.
+    pub fn read_video_rom(&self) -> Option<Vec<u8>> {
+        self.resolve_roms().video_rom
     }
 
     /// The part of the settings the core models: model, video standard, aux card and the RAM cards
@@ -88,10 +86,11 @@ mod tests {
         let f8 = dir.join("f8.rom");
         std::fs::write(&f8, vec![1u8; 0x800]).unwrap();
         s.machine.custom_f8_rom = Some(f8);
-        let c = s.to_machine_config_with_roms().unwrap();
+        let c = s.to_machine_config_with_roms();
         assert_eq!(c.custom_f8_rom.as_deref().map(<[u8]>::len), Some(0x800));
         s.machine.video_rom = Some(dir.join("missing.rom"));
-        assert!(s.read_video_rom().is_err());
+        assert!(s.read_video_rom().is_none());
+        assert_eq!(s.rom_problems().len(), 1);
         let _ = std::fs::remove_dir_all(dir);
     }
 

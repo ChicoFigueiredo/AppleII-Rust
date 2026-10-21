@@ -247,19 +247,16 @@ pub struct Emulator {
 }
 
 /// Writes the ROMs in use to the start-up log (stderr) and returns them.
-fn log_roms(settings: &Settings) -> Vec<apple2_config::roms::RomInfo> {
-    match settings.resolve_roms() {
-        Ok(r) => {
-            for i in &r.report {
-                eprintln!("rom: {i}");
-            }
-            r.report
-        }
-        Err(e) => {
-            eprintln!("rom: {e}");
-            Vec::new()
-        }
+/// Invalid user ROMs fell back to the embedded ones: those warnings are logged and returned too.
+fn log_roms(settings: &Settings) -> (Vec<apple2_config::roms::RomInfo>, Vec<String>) {
+    let r = settings.resolve_roms();
+    for w in &r.warnings {
+        eprintln!("warning: {w}");
     }
+    for i in &r.report {
+        eprintln!("rom: {i}");
+    }
+    (r.report, r.warnings)
 }
 
 impl Emulator {
@@ -275,11 +272,11 @@ impl Emulator {
         let disks = backend.disks_for(&machine, &settings);
         let mouse = backend.mouse_for(&machine, &settings);
         let debugger = new_debugger(&mut machine, settings.debugger.auto_run_script.as_deref());
-        let rom_report = log_roms(&settings);
+        let (rom_report, rom_warnings) = log_roms(&settings);
         let speed = speed_from_settings(&settings);
         let settings_caps = settings.keyboard.caps_lock; // `-capslock=off`
         machine.set_caps_lock(settings_caps);
-        Ok(Emulator {
+        let mut emu = Emulator {
             settings,
             backend,
             machine,
@@ -306,7 +303,11 @@ impl Emulator {
             mhz: 0.0,
             underruns: 0,
             rom_report,
-        })
+        };
+        if !rom_warnings.is_empty() {
+            emu.say(rom_warnings.join("; "));
+        }
+        Ok(emu)
     }
 
     /// The ROMs in use (embedded or file, size, SHA-256), for the conformance manifest.
@@ -435,9 +436,14 @@ impl Emulator {
                 if let Speed::Multiplier(_) = sp {
                     self.speed = sp;
                 }
-                self.rom_report = log_roms(&settings);
+                let (report, warnings) = log_roms(&settings);
+                self.rom_report = report;
                 self.settings = settings;
-                self.say("Settings applied");
+                if warnings.is_empty() {
+                    self.say("Settings applied");
+                } else {
+                    self.say(warnings.join("; "));
+                }
             }
             Err(e) => self.say(format!("Cannot apply settings: {e}")),
         }
