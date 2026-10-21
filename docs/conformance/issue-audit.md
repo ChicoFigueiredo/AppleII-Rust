@@ -91,14 +91,14 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| NOT_APPLICABLE | 489 | 43.9 |
-| PASS | 486 | 43.6 |
-| BLOCKED | 134 | 12.0 |
+| PASS | 489 | 43.9 |
+| NOT_APPLICABLE | 488 | 43.8 |
+| BLOCKED | 132 | 11.8 |
 | FAIL | 6 | 0.5 |
 
 ## Taxas
 
-Taxa geral: PASS 486 / aplicáveis 626 = 77.6%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 489 / aplicáveis 627 = 78.0%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### PASS por tipo de oráculo
 
@@ -106,25 +106,25 @@ Só o tipo `executavel` é "concorda com o AppleWin rodando" (README de conformi
 
 | Tipo | Significado | PASS | % dos PASS |
 |---|---|---:|---:|
-| executavel | comparação com o AppleWin rodando (fork do audetto ou Wine) | 147 | 30.2 |
-| cpp-transcrito | teste Rust que reproduz o C++ do a8f0d1d citando arquivo:linha | 199 | 40.9 |
+| executavel | comparação com o AppleWin rodando (fork do audetto ou Wine) | 147 | 30.1 |
+| cpp-transcrito | teste Rust que reproduz o C++ do a8f0d1d citando arquivo:linha | 202 | 41.3 |
 | especificacao | hardware, a2audit ou vetores públicos | 5 | 1.0 |
 | fixture-real | fixture real, sem comparação com o AppleWin | 7 | 1.4 |
-| regressao | teste do próprio port, sem fonte externa (inclui Divergência aprovada) | 128 | 26.3 |
-| **total** | | **486** | |
+| regressao | teste do próprio port, sem fonte externa (inclui Divergência aprovada) | 128 | 26.2 |
+| **total** | | **489** | |
 
 | Prioridade | PASS | executavel | cpp-transcrito | especificacao | fixture-real | regressao |
 |---|---:|---:|---:|---:|---:|---:|
-| P0 | 23 | 8 | 5 | 2 | 0 | 8 |
+| P0 | 24 | 8 | 6 | 2 | 0 | 8 |
 | P1 | 130 | 86 | 28 | 2 | 1 | 13 |
-| P2 | 189 | 47 | 94 | 0 | 0 | 48 |
+| P2 | 191 | 47 | 96 | 0 | 0 | 48 |
 | P3 | 144 | 6 | 72 | 1 | 6 | 59 |
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 545 | 413 | 4 | 0 | 75.8% |
+| todos | 1004 | 546 | 416 | 4 | 0 | 76.2% |
 | apple2e | 59 | 50 | 44 | 1 | 0 | 88.0% |
 | apple2e-enhanced | 59 | 45 | 40 | 0 | 0 | 88.9% |
 | apple2plus | 29 | 23 | 21 | 2 | 0 | 91.3% |
@@ -145,7 +145,7 @@ Só o tipo `executavel` é "concorda com o AppleWin rodando" (README de conformi
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| disco | 159 | 111 | 57 | 0 | 0 | 51.4% |
+| disco | 159 | 111 | 58 | 0 | 0 | 52.3% |
 | video | 137 | 75 | 59 | 0 | 0 | 78.7% |
 | debugger | 136 | 86 | 78 | 3 | 0 | 90.7% |
 | outra | 120 | 11 | 9 | 0 | 0 | 81.8% |
@@ -157,8 +157,8 @@ Só o tipo `executavel` é "concorda com o AppleWin rodando" (README de conformi
 | mockingboard | 47 | 41 | 29 | 0 | 0 | 70.7% |
 | joystick | 41 | 24 | 23 | 0 | 0 | 95.8% |
 | audio | 32 | 16 | 7 | 0 | 0 | 43.8% |
-| savestate | 32 | 25 | 22 | 1 | 0 | 88.0% |
-| hdd | 28 | 19 | 16 | 0 | 0 | 84.2% |
+| savestate | 32 | 25 | 23 | 1 | 0 | 92.0% |
+| hdd | 28 | 20 | 17 | 0 | 0 | 85.0% |
 | serial | 20 | 14 | 10 | 0 | 0 | 71.4% |
 | mouse | 16 | 9 | 9 | 0 | 0 | 100.0% |
 | rede | 12 | 6 | 4 | 0 | 0 | 66.7% |
@@ -172,12 +172,12 @@ Só o tipo `executavel` é "concorda com o AppleWin rodando" (README de conformi
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 339 | 245 | 0 | 0 | 72.3% |
+| runtime | 388 | 340 | 247 | 0 | 0 | 72.6% |
 | feature-futura | 146 | 46 | 45 | 0 | 0 | 97.8% |
 | ui | 122 | 83 | 67 | 1 | 0 | 80.7% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 67 | 5 | 0 | 85.9% |
-| formato | 77 | 74 | 56 | 0 | 0 | 75.7% |
+| formato | 77 | 74 | 57 | 0 | 0 | 77.0% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
 | documentacao | 30 | 6 | 6 | 0 | 0 | 100.0% |

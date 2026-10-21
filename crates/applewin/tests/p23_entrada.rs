@@ -1722,18 +1722,25 @@ fn gh749_altgr_digit_does_not_trigger_the_speed_hotkeys() {
         let hot = matches!(c, '0' | '1' | '3');
         assert_eq!(ctrl_only.is_some(), hot, "Ctrl+{c}");
     }
-    // e o '#' (AltGr+3) chega ao Apple com o caractere do layout
-    let (mut e, mut r) = rig(Model::Apple2eEnhanced, |_| {});
+    // e o '#' (AltGr+3) chega ao Apple com o caractere do layout, com `-altgr-sends-wmchar`
+    let (mut e, mut r) = rig(Model::Apple2eEnhanced, |s| {
+        s.keyboard.altgr_sends_char = true
+    });
     press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALTGR);
     press(&mut e, &mut r, kb('#'), ALTGR);
     assert_eq!(rd(&mut e, 0xC000), 0xA3, "'#' com strobe");
 }
 
 /// #583 e #625: caracteres que exigem o AltGr (`[`, `{`, `@`, `#` do teclado italiano/francês/
-/// belga) chegam ao Apple, e o Alt direito (Closed Apple, botão 1) vem junto; com `-no-hook-alt`
-/// (CmdLine.cpp:552, Joystick.cpp:373) o Alt deixa de ser botão e fica só o caractere.
+/// belga). O AppleWin a8f0d1d só os entrega com `-altgr-sends-wmchar` (`g_bAltGrSendsWM_CHAR`,
+/// Keyboard.cpp:55,231); por padrão a tecla com o Alt direito apertado é descartada, mas o Alt
+/// direito segue sendo o Closed Apple (botão 1). Com `-no-hook-alt` (CmdLine.cpp:552,
+/// Joystick.cpp:373) o Alt deixa de ser botão.
 #[test]
 fn gh583_gh625_altgr_characters_type_and_no_hook_alt_frees_the_button() {
+    assert!(!parse(&[]).keyboard.altgr_sends_char, "padrão: descartar");
+    let on = parse(&["-altgr-sends-wmchar"]);
+    assert!(on.keyboard.altgr_sends_char);
     for (c, code) in [
         ('[', 0x5B),
         (']', 0x5D),
@@ -1742,14 +1749,31 @@ fn gh583_gh625_altgr_characters_type_and_no_hook_alt_frees_the_button() {
         ('@', 0x40),
         ('#', 0x23),
     ] {
+        // padrão do AppleWin: a tecla some, o botão 1 fica
         let (mut e, mut r) = rig(Model::Apple2eEnhanced, |_| {});
+        press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALTGR);
+        press(&mut e, &mut r, kb(c), ALTGR);
+        assert_eq!(rd(&mut e, 0xC000) & 0x80, 0, "padrão: AltGr+{c} descartado");
+        assert!(pb(&mut e, 1), "AltGr é também o Closed Apple");
+        // `-altgr-sends-wmchar`: a tecla chega
+        let (mut e, mut r) = rig(Model::Apple2eEnhanced, |s| s.keyboard = on.keyboard.clone());
         press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALTGR);
         press(&mut e, &mut r, kb(c), ALTGR);
         assert_eq!(rd(&mut e, 0xC000), 0x80 | code, "AltGr+{c}");
         assert!(pb(&mut e, 1), "AltGr é também o Closed Apple");
-        let a = parse(&["-no-hook-alt"]);
+        // soltar o Alt direito volta ao normal (nada de estado preso), mesmo no modo padrão
+        let (mut e, mut r) = rig(Model::Apple2eEnhanced, |_| {});
+        press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALTGR);
+        release(&mut e, &mut r, KeyInput::new(HostKey::AltRight), NONE);
+        press(&mut e, &mut r, kb(c), NONE);
+        assert_eq!(rd(&mut e, 0xC000), 0x80 | code, "sem AltGr: {c} normal");
+        // `-no-hook-alt` + `-altgr-sends-wmchar`
+        let a = parse(&["-no-hook-alt", "-altgr-sends-wmchar"]);
         assert!(!a.joystick.hook_alt_keys);
-        let (mut e, mut r) = rig(Model::Apple2eEnhanced, |s| s.joystick = a.joystick);
+        let (mut e, mut r) = rig(Model::Apple2eEnhanced, |s| {
+            s.joystick = a.joystick;
+            s.keyboard = a.keyboard.clone();
+        });
         press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALTGR);
         press(&mut e, &mut r, kb(c), ALTGR);
         assert_eq!(rd(&mut e, 0xC000), 0x80 | code, "-no-hook-alt: AltGr+{c}");
@@ -1757,9 +1781,10 @@ fn gh583_gh625_altgr_characters_type_and_no_hook_alt_frees_the_button() {
     }
 }
 
-/// #558: Closed Apple (Alt direito) + tecla entrega a tecla ao $C000. É o caminho que o AppleWin
-/// liga com `-altgr-sends-wmchar` (Keyboard.cpp:231-252: a letra vira minúscula sem Shift e sem
-/// Caps Lock, senão fica maiúscula; depois :142-145 maiúscula com Caps Lock na //e).
+/// #558: Closed Apple (Alt direito) + tecla. Por padrão o AppleWin descarta a tecla
+/// (`g_bAltGrSendsWM_CHAR = false`, Keyboard.cpp:55,231); com `-altgr-sends-wmchar` a entrega
+/// (Keyboard.cpp:231-252: a letra vira minúscula sem Shift e sem Caps Lock, senão fica
+/// maiúscula; depois :142-145 maiúscula com Caps Lock na //e). Os dois modos são testados.
 #[test]
 fn gh558_closed_apple_plus_key_delivers_the_key() {
     for caps in [false, true] {
@@ -1776,15 +1801,25 @@ fn gh558_closed_apple_plus_key_delivers_the_key() {
                 } else {
                     key
                 };
-                let (mut e, mut r) = rig(Model::Apple2eEnhanced, |_| {});
-                e.machine.set_caps_lock(caps);
-                press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALT);
                 let mods = Mods {
                     shift,
                     ctrl: false,
                     alt: true,
                 };
                 let c = if shift { upper } else { letter };
+                // padrão: descartada
+                let (mut e, mut r) = rig(Model::Apple2eEnhanced, |_| {});
+                e.machine.set_caps_lock(caps);
+                press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALT);
+                press(&mut e, &mut r, kb(c), mods);
+                assert_eq!(rd(&mut e, 0xC000) & 0x80, 0, "padrão: {letter} descartada");
+                assert!(pb(&mut e, 1), "Closed Apple apertado");
+                // -altgr-sends-wmchar: entregue
+                let (mut e, mut r) = rig(Model::Apple2eEnhanced, |s| {
+                    s.keyboard.altgr_sends_char = true
+                });
+                e.machine.set_caps_lock(caps);
+                press(&mut e, &mut r, KeyInput::new(HostKey::AltRight), ALT);
                 press(&mut e, &mut r, kb(c), mods);
                 assert_eq!(
                     rd(&mut e, 0xC000),

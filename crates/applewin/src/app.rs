@@ -624,6 +624,9 @@ impl App {
                     self.input
                         .joy
                         .set_config(JoyConfig::from_settings(&self.settings));
+                    self.input
+                        .kbd
+                        .set_altgr_sends_char(self.settings.keyboard.altgr_sends_char);
                     self.input.resend(); // the machine is rebuilt: it knows no input
                     if !self.input.joy.using_mouse() {
                         self.set_joy_cursor(false);

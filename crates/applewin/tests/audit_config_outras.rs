@@ -12,9 +12,19 @@ use egui::{Context, Event, PointerButton, Pos2, RawInput, Rect, Shape, Vec2};
 
 /// Runs one frame with `events`; returns every text drawn, with its screen rectangle, in paint
 /// order (windows drawn later come later).
-fn frame(ctx: &Context, events: Vec<Event>, mut ui: impl FnMut(&Context)) -> Vec<(String, Rect)> {
+fn frame(ctx: &Context, events: Vec<Event>, ui: impl FnMut(&Context)) -> Vec<(String, Rect)> {
+    frame_sized(ctx, events, 900.0, ui)
+}
+
+/// [`frame`] on a screen of the given height (a tall one shows the whole page, no scrolling).
+fn frame_sized(
+    ctx: &Context,
+    events: Vec<Event>,
+    height: f32,
+    mut ui: impl FnMut(&Context),
+) -> Vec<(String, Rect)> {
     let input = RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 900.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, height))),
         events,
         ..Default::default()
     };
@@ -197,6 +207,78 @@ fn gh1502_cancel_in_the_ssc_dialog_restores_the_previous_options() {
     // ... and cancels the sub-dialog: the card is back as it was (PageSlots.cpp, GH#1502)
     click_last(&ctx, &t, "Cancel", &mut draw);
     assert_eq!(dlg.draft.slots.0[2], before);
+}
+
+// ---- #853: "Improve the Configuration GUI" (AppleWin 1.32.0.0) ---------------------------------
+
+/// A lista exata do History.txt da 1.32.0.0 para a #853, uma linha por item:
+/// página "Slots" com qualquer carta em cada slot; "Reset to Default" só dos slots; "Reset all to
+/// Default" na página principal; caixa "No-Slot clock" na página Advanced; páginas "Sound" e
+/// "Disk" removidas (a janela do a8f0d1d tem PageConfig, PageInput, PageSlots, PageAdvanced).
+/// O port acrescenta uma aba Sound com os interruptores de som que o AppleWin só tem na linha de
+/// comando; é uma extensão do hospedeiro documentada em docs/manual/12-diferencas-...md.
+#[test]
+fn gh853_configuration_gui_has_the_1_32_0_0_changes() {
+    use applewin_shell::settings::model::{reset_slots_to_default, set_slot_card};
+    use applewin_shell::settings::Page;
+    let s = Settings::default();
+    let mut scale = false;
+    let mut ev = Vec::new();
+    let mut page_text = |spec: &str| {
+        let mut dlg = SettingsDialog::new(&s);
+        dlg.open_at(&s, spec);
+        let mut draw = |c: &Context| dlg.show(c, &mut scale, &mut ev);
+        let ctx = Context::default();
+        let mut t = Vec::new();
+        for _ in 0..12 {
+            t = frame_sized(&ctx, vec![], 3000.0, &mut draw);
+        }
+        t
+    };
+    // páginas: as quatro do AppleWin, nenhuma "Disk"
+    let titles: Vec<&str> = Page::ALL.iter().map(|p| p.title()).collect();
+    for want in ["Configuration", "Input", "Slots", "Advanced"] {
+        assert!(titles.contains(&want), "{titles:?}");
+    }
+    assert!(!titles.contains(&"Disk"), "{titles:?}");
+    // "Reset all to Default" na página principal
+    let t = page_text("Configuration");
+    assert!(has(&t, "Reset all to Default"), "{t:?}");
+    // página Slots: os 8 slots e o "Reset to Default" próprio
+    let t = page_text("Slots");
+    for slot in 0..8 {
+        assert!(has(&t, &format!("Slot {slot}:")), "slot {slot}: {t:?}");
+    }
+    assert!(has(&t, "Reset to Default"), "{t:?}");
+    // "No-Slot clock" na página Advanced
+    let t = page_text("Advanced");
+    assert!(has(&t, "No-Slot clock"), "{t:?}");
+    // qualquer carta em qualquer slot que o CardManager aceita, e o Reset to Default dos slots
+    // volta às cartas de uma instalação nova sem tocar no resto da configuração
+    let mut edited = Settings::default();
+    edited.machine.no_slot_clock = true;
+    let cur = applewin_shell::settings::model::current_types(&edited);
+    for slot in 0..8 {
+        if let Some(choices) = slot_choices(slot, edited.machine.model, &cur) {
+            for ty in choices {
+                let mut x = edited.clone();
+                set_slot_card(&mut x, slot, ty);
+                assert_eq!(
+                    applewin_shell::settings::model::current_types(&x)[slot],
+                    ty,
+                    "slot {slot}"
+                );
+            }
+        }
+    }
+    set_slot_card(&mut edited, 4, CardType::Empty);
+    set_slot_card(&mut edited, 6, CardType::Empty);
+    reset_slots_to_default(&mut edited);
+    assert_eq!(
+        applewin_shell::settings::model::current_types(&edited),
+        applewin_shell::settings::model::current_types(&Settings::default())
+    );
+    assert!(edited.machine.no_slot_clock, "só os slots voltam ao padrão");
 }
 
 // ---- #975 #155: slot 5 can hold a Disk II from the configuration UI ----------------------------

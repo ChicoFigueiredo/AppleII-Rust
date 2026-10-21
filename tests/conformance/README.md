@@ -61,6 +61,23 @@ cargo run --release -p apple2-bench -- --check tests/conformance/perf-baseline.j
 - A impressão digital precisa ser idêntica: uma otimização que mude timing, vídeo ou áudio falha o `--check` antes de qualquer discussão de velocidade.
 - Meça em máquina ociosa. Um vizinho no mesmo núcleo físico custou ~30 % nos cenários Color TV; veja a nota em `reports/performance.md`.
 
+## Traces de referência grandes (cache) e como regenerá-los
+
+Os Traces de 500.000 ciclos (`reference-traces/*.csv`) estão no Git. Os de 2 e 5 milhões de ciclos (`trace-applewin-ii-boot-2m`, `-iiplus-boot-2m`, `-iie-boot-2m`, `-iie-enhanced-boot-2m`, `-iie-enhanced-dos33-5m`) ficam em `target/conformance-cache/reference-traces/`, fora do Git, porque pesam dezenas de MB. Isso é aceito, com duas garantias:
+
+- Cada caso carrega `oracle.trace_sha256`, o SHA-256 do CSV de referência. O harness confere o arquivo antes de comparar; hash diferente ou arquivo ausente termina em BLOCKED com a causa e o comando de regeneração, nunca em PASS por falta de entrada.
+- O campo `source` de cada caso traz o comando exato que regenera o CSV, e o resultado tem de bater com o `trace_sha256` (o Oráculo é determinístico). Pré-requisito: o fork compilado.
+
+```sh
+tools/conformance/oracle/build-audetto-oracle.sh        # uma vez; compila o fork no cache
+# exemplo: Trace de 2M ciclos do //e; o comando de cada caso está no campo `source` do .toml
+tools/conformance/oracle/run-audetto-oracle.sh --model apple2e --cycles 2000000 \
+  --out target/conformance-cache/reference-traces/applewin-apple2e-boot-2m.csv
+sha256sum target/conformance-cache/reference-traces/applewin-apple2e-boot-2m.csv   # = trace_sha256 do caso
+```
+
+O caso do DOS 3.3 (`-dos33-5m`) usa `--disk` com a Fixture de `assets/disks`; o comando completo está no `source` dele. O SHA do fork e o do AppleWin vão no cabeçalho do CSV (`fork_sha`, `applewin_sha`, `port_base_applewin_sha`).
+
 ## Política de cache e Fixtures
 
 - O repositório `AppleWin/AppleWin-Test` não tem licença. Ele **não** é copiado para o repositório nem redistribuído.
