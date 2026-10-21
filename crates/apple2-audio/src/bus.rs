@@ -72,6 +72,9 @@ struct Inner {
     /// Conformance event log (`None` = not recording) and the last logged level of each IRQ line.
     events: Mutex<Option<Vec<(u64, AudioEvent)>>>,
     irq_logged: AtomicU32,
+    /// IRQ lines asserted while not recording (a save-state load): the oracle's hook only sees
+    /// transitions after its log starts, so it never logs the assertion nor the first deassertion.
+    irq_hidden: AtomicU32,
 }
 
 /// Cheap-to-clone handle; create one per machine and pass it to every audio card and the mixer.
@@ -91,6 +94,7 @@ impl AudioBus {
             irq: AtomicU32::new(0),
             events: Mutex::new(None),
             irq_logged: AtomicU32::new(0),
+            irq_hidden: AtomicU32::new(0),
         }))
     }
 
@@ -123,6 +127,9 @@ impl AudioBus {
     pub fn record_events(&self, on: bool) {
         *lock(&self.0.events) = on.then(Vec::new);
         self.0.irq_logged.store(0, Ordering::SeqCst);
+        if !on {
+            self.0.irq_hidden.store(0, Ordering::SeqCst);
+        }
     }
 
     /// Recorded events since the last call, oldest first (empty when not recording).
@@ -145,13 +152,24 @@ impl AudioBus {
 
     /// Logs an IRQ line level only when it differs from the last logged one.
     pub(crate) fn log_irq(&self, cycle: u64, line: IrqLine, level: bool) {
-        if !self.recording() {
-            return;
-        }
         let bit = match line {
             IrqLine::Via6522 => 1,
             IrqLine::Speech => 2,
         };
+        if !self.recording() {
+            if level {
+                self.0.irq_hidden.fetch_or(bit, Ordering::SeqCst);
+            } else {
+                self.0.irq_hidden.fetch_and(!bit, Ordering::SeqCst);
+            }
+            return;
+        }
+        if self.0.irq_hidden.load(Ordering::SeqCst) & bit != 0 {
+            if !level {
+                self.0.irq_hidden.fetch_and(!bit, Ordering::SeqCst);
+            }
+            return;
+        }
         let was = self.0.irq_logged.load(Ordering::SeqCst) & bit != 0;
         if was != level {
             if level {

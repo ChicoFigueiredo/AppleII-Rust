@@ -95,6 +95,15 @@ def main():
                 "--audio-ssi-pcm", os.path.join(out_dir, name + ".ssi")]
     print(" ".join(cmd))
     r = subprocess.run(cmd)
+    if r.returncode == 0 and "cycles" in run:
+        # The oracle runs whole slices (--audio-slice, default 1000 Ciclos), so it overshoots the
+        # requested count; events at or after the end are not part of the Rust run.
+        ev = os.path.join(out_dir, name + ".events")
+        with open(ev) as f:
+            lines = f.read().splitlines()
+        keep = [l for l in lines if l.startswith("#") or int(l.split(",", 1)[0]) < run["cycles"]]
+        with open(ev, "w") as f:
+            f.write("\n".join(keep) + "\n")
     if r.returncode == 0 and not ns.keep_all:
         # Only the events and the PCM are references; the CPU trace and the SSI263 PCM are large.
         # Keep a PCM file only if some case refers to it (the oracle always records both streams).

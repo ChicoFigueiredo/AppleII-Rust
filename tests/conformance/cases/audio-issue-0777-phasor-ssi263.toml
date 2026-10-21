@@ -1,0 +1,20 @@
+id = "audio-issue-0777-phasor-ssi263"
+story = "HU-0502"
+criterion = "GH#777: SSI263 em modo Mockingboard e Phasor (fixture SSI263-test): eventos e fonemas iguais ao AppleWin"
+model = "apple2e-enhanced"
+notes = "Fixture real do AppleWin-Test (corpus nao redistribuido); sem o cache o resultado e BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/SSI263-test.aws.yaml"
+sha256 = "4c637e00e1125373eb2b3ad3ab0269dd242b03d0380949731945522720b5c77f"
+
+[run]
+cycles = 200000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0777-phasor-ssi263"
+events = "reference-audio/audio-issue-0777-phasor-ssi263.events"
+timing = "ssi"
+ssi_tolerance = 2621  # J_ssi = 1621 (oraculo a 1000 contra 250 Ciclos de fatia) + 1000

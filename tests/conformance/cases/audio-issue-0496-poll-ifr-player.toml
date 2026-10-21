@@ -1,0 +1,18 @@
+id = "audio-issue-0496-poll-ifr-player"
+story = "HU-0501"
+criterion = "GH#496: player do dschmenk com polling de IFR.T1 (fixture): eventos iguais ao AppleWin"
+model = "apple2e-enhanced"
+notes = "Fixture real do AppleWin-Test (corpus nao redistribuido); sem o cache o resultado e BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/MB-Poll-IFR-Test2.aws.yaml"
+sha256 = "c87204ec0e5a290d500f6252c79e7d4e4d46bc39a8fe0b389737a5bf55d23e0e"
+
+[run]
+cycles = 60000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0496-poll-ifr-player"
+events = "reference-audio/audio-issue-0496-poll-ifr-player.events"

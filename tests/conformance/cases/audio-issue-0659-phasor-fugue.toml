@@ -1,0 +1,18 @@
+id = "audio-issue-0659-phasor-fugue"
+story = "HU-0501"
+criterion = "GH#659: Phasor Music Player (Toccata e Fuga): escritas 6522/AY iguais ao AppleWin"
+model = "apple2e-enhanced"
+notes = "Fixture real do AppleWin-Test (corpus nao redistribuido); sem o cache o resultado e BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/phasor-fugue.aws.yaml"
+sha256 = "9776518fe87c9a76d912e6f421158120f36da7482d4c058fcc560d7273001267"
+
+[run]
+cycles = 60000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0659-phasor-fugue"
+events = "reference-audio/audio-issue-0659-phasor-fugue.events"

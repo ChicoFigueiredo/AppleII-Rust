@@ -1,0 +1,20 @@
+id = "audio-issue-0753-via-irq-phasor"
+story = "HU-0501"
+criterion = "O mesmo, com o Phasor (GH#753/#698/#765)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-via-irq.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "phasor"
+slot = 4
+program = "audio/programs/issue-via-irq.bin"
+
+[run]
+cycles = 80000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0753-via-irq-phasor"
+events = "reference-audio/audio-issue-0753-via-irq-phasor.events"

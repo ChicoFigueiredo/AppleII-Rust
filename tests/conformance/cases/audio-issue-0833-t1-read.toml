@@ -1,0 +1,20 @@
+id = "audio-issue-0833-t1-read"
+story = "HU-0501"
+criterion = "6522: leitura de T1C-L logo apos escrever T1C-H (STA abs, LDA abs, LDA abs,X): valores do contador iguais ao AppleWin (GH#833, GH#701)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-t1-read.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/issue-t1-read.bin"
+
+[run]
+cycles = 2000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0833-t1-read"
+events = "reference-audio/audio-issue-0833-t1-read.events"

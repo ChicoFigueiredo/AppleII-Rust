@@ -1,0 +1,20 @@
+id = "audio-issue-0567-via-regs"
+story = "HU-0501"
+criterion = "6522: IRB com DDRB, DDRB=$BF, leitura de IER, T1 por polling com IER.T1=0 e leitura do contador T1 por outros modos de enderecamento (GH#567/#496/#833/#1260/#952)"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 proprio (audio/programs/issue-via-regs.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/issue-via-regs.bin"
+
+[run]
+cycles = 30000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0567-via-regs"
+events = "reference-audio/audio-issue-0567-via-regs.events"

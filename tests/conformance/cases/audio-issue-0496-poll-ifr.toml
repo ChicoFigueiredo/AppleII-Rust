@@ -1,0 +1,18 @@
+id = "audio-issue-0496-poll-ifr"
+story = "HU-0501"
+criterion = "GH#496: IFR.T1 por polling com IER.T1=0 (fixture): eventos iguais ao AppleWin"
+model = "apple2e-enhanced"
+notes = "Fixture real do AppleWin-Test (corpus nao redistribuido); sem o cache o resultado e BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/MB-Poll-IFR-Test.aws.yaml"
+sha256 = "a0218cd1749a8b6eda64823f10085742f5699f92a3ce3815da61124a7ef1e541"
+
+[run]
+cycles = 60000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-issue-0496-poll-ifr"
+events = "reference-audio/audio-issue-0496-poll-ifr.events"
