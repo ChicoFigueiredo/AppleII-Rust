@@ -11,6 +11,13 @@ impl Settings {
     /// [`Settings::to_machine_config`] plus the ROM files named by `-rom` and `-f8rom`.
     pub fn to_machine_config_with_roms(&self) -> Result<MachineConfig, String> {
         let mut c = self.to_machine_config();
+        if self.machine.memory_seed.is_none() {
+            // Like AppleWin: `rand() ^ timeGetTime()`. The only place the clock enters.
+            let t = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(1, |d| d.subsec_nanos() ^ (d.as_secs() as u32));
+            c.ram_init.random = apple2_core::RandomSource::Seed(t);
+        }
         let read =
             |p: &std::path::Path| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()));
         if let Some(p) = &self.machine.custom_rom {
@@ -38,6 +45,13 @@ impl Settings {
             RefreshRate::Hz60 => VideoStandard::Ntsc,
         };
         c.use_freeze_f8 = self.machine.freeze_f8_rom;
+        c.ram_init = apple2_core::RamInit {
+            pattern: self.machine.memory_clear_type.min(7) as i32,
+            random: self.machine.memory_seed.map_or(
+                apple2_core::RandomSource::Zero,
+                apple2_core::RandomSource::Seed,
+            ),
+        };
         c.cpu_cmos = match self.machine.cpu {
             CpuType::Auto => None,
             CpuType::Cpu6502 => Some(false),
@@ -76,10 +90,29 @@ mod tests {
 
     #[test]
     fn default_equals_core_default() {
+        let expected = MachineConfig {
+            ram_init: apple2_core::RamInit::APPLEWIN_DETERMINISTIC, // `-memclear` default 2
+            ..MachineConfig::default()
+        };
+        assert_eq!(Settings::default().to_machine_config(), expected);
+    }
+
+    #[test]
+    fn memclear_and_seed_reach_the_core_config() {
+        use apple2_core::{RamInit, RandomSource};
+        let mut s = Settings::default();
         assert_eq!(
-            Settings::default().to_machine_config(),
-            MachineConfig::default()
+            s.to_machine_config().ram_init,
+            RamInit::APPLEWIN_DETERMINISTIC
         );
+        s.machine.memory_clear_type = 7;
+        s.machine.memory_seed = Some(42);
+        let r = s.to_machine_config().ram_init;
+        assert_eq!((r.pattern, r.random), (7, RandomSource::Seed(42)));
+        // Without a seed the host adds one from the clock; the machine itself stays deterministic.
+        s.machine.memory_seed = None;
+        let r = s.to_machine_config_with_roms().unwrap().ram_init;
+        assert!(matches!(r.random, RandomSource::Seed(_)));
     }
 
     #[test]
@@ -113,6 +146,7 @@ mod tests {
         assert_eq!(c, {
             let mut x = MachineConfig::for_model(Model::Apple2Plus);
             x.video_standard = VideoStandard::Pal;
+            x.ram_init = apple2_core::RamInit::APPLEWIN_DETERMINISTIC;
             x
         });
         let mut e = Settings::default();
