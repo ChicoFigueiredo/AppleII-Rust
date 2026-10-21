@@ -1812,18 +1812,19 @@ fn gh817_ctrl_f3_f4_open_the_drive_menus() {
     );
 }
 
-/// #1396 (aberta no AppleWin): segurar o Alt esquerdo e apertar F2 não entrega o Open Apple ao
-/// firmware. O F2 do AppleWin é `ResetMachineState`, que chama `JoyReset()` (Utilities.cpp:555) e
-/// apaga `keydown[JK_OPENAPPLE]`; Ctrl+F2 (`CtrlReset`) não. O port deixa o Open Apple apertado
-/// depois do F2 (o botão 0 segue nos botões da porta de jogos), então o Alt+F2 funciona aqui e
-/// não no AppleWin: FAIL por divergência (a favor do usuário), sem correção no port por ser uma
-/// escolha de produto (registrar como Divergência intencional ou replicar o defeito).
+/// #1396 (aberta no AppleWin): segurar o Alt esquerdo e apertar F2 deve entregar o Open Apple ao
+/// firmware. O F2 do AppleWin `a8f0d1d` é `ResetMachineState`, que chama `JoyReset()`
+/// (Utilities.cpp:554-555, Joystick.cpp:703) e apaga o Open Apple; Ctrl+F2 (`CtrlReset`) não. O
+/// port mantém o Open Apple apertado depois do F2 (`Command::PowerCycle` não toca os botões da
+/// porta de jogos), então Alt+F2 funciona. Divergência aprovada pelo dono (ADR 0006, 21/10/2026).
 #[test]
-#[ignore = "FAIL conhecido #1396: o AppleWin zera o Open Apple no F2 (JoyReset), o port não"]
-fn gh1396_alt_f2_clears_open_apple_like_joyreset() {
+fn gh1396_alt_f2_keeps_open_apple_pressed_approved_divergence() {
     let (mut e, mut r) = rig(Model::Apple2eEnhanced, |_| {});
     press(&mut e, &mut r, KeyInput::new(HostKey::AltLeft), ALT);
     assert!(pb(&mut e, 0));
     e.apply(Command::PowerCycle); // F2
-    assert!(!pb(&mut e, 0), "AppleWin: JoyReset() apagou o Open Apple");
+    assert!(
+        pb(&mut e, 0),
+        "Divergência aprovada (ADR 0006): o Open Apple segue apertado depois do F2"
+    );
 }

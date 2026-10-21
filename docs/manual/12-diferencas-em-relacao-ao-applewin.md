@@ -1,33 +1,50 @@
 # Diferenças em relação ao AppleWin
 
-O objetivo do projeto é a paridade com o AppleWin atual nas três plataformas. Esta página é a lista honesta do que ainda falta ou é diferente. Ela descreve o estado deste código na versão 0.2.0-alpha.1. Os números e as provas estão na pasta `docs/conformance` do repositório (veja `relatorio-final.md` e `gaps-and-known-limitations.md`); aqui fica o que importa para quem usa o programa.
+O objetivo do projeto é a paridade com o AppleWin atual nas três plataformas. Esta página é a lista honesta do que ainda falta ou é diferente. Ela descreve o estado deste código na versão 0.2.0-rc.1 (pré-lançamento para Linux). Os números e as provas estão na pasta `docs/conformance` do repositório (veja `relatorio-final.md` e `gaps-and-known-limitations.md`); aqui fica o que importa para quem usa o programa.
 
 ## O que foi medido contra o AppleWin
 
-"Medido" quer dizer que um teste automático rodou o AppleWin (um Oráculo executável, baseado no fork Linux do audetto) e o AppleII-Rust com a mesma configuração e comparou o resultado. Windows nativo e macOS ainda **não** foram testados com um programa instalado.
+"Medido" quer dizer que um teste automático rodou o AppleWin (um Oráculo executável, baseado no fork Linux do audetto) e o AppleII-Rust com a mesma configuração e comparou o resultado. Windows nativo e macOS ainda **não** foram testados com um programa instalado (o teste nativo no Windows está em andamento).
 
 - **CPU e temporização.** Trace instrução a instrução idêntico (ciclo, PC, registradores e flags) em 2 a 5 milhões de ciclos nos Modelos ][, ][+, //e e //e Enhanced, inclusive o boot do DOS 3.3; mais de 10 milhões de vetores de hardware do 6502 e do 65C02.
-- **Vídeo.** 1.573 telas completas comparadas pixel a pixel (todos os modos, os 9 tipos de vídeo, NTSC e PAL, cartas RGB e VidHD). A exceção é o Color Monitor PAL em uma cena específica de floating bus (veja abaixo).
+- **Vídeo.** 1.573 telas completas comparadas pixel a pixel (todos os modos, os 9 tipos de vídeo, NTSC e PAL, cartas RGB e VidHD). Isso inclui a cena de floating bus do Ansi Story no Color Monitor PAL (AppleWin #241), que antes diferia em 1 pixel.
 - **Disco.** 56 casos de Disk II e disco rígido, mais de 103 milhões de instruções comparadas, com a imagem final conferida. Inclui WOZ reais do corpus do AppleWin.
-- **Save-states.** 79 de 115 arquivos `.aws.yaml` reais (do AppleWin 1.32.1.0 e do corpus AppleWin-Test) importam e rodam 100.000 ciclos com o mesmo trace do AppleWin. Os que não batem estão listados abaixo.
-- **Áudio.** As escritas nos chips, os timers e as interrupções do Mockingboard, do Phasor e do SSI263 têm eventos idênticos aos do AppleWin, ciclo a ciclo. A forma de onda (PCM) não é idêntica (veja abaixo).
+- **Save-states.** 88 de 115 arquivos `.aws.yaml` reais (do AppleWin 1.32.1.0 e do corpus AppleWin-Test) importam e rodam 100.000 ciclos com o mesmo trace do AppleWin; nenhum diverge. Os outros 27 não puderam ser comparados (imagem de disco ausente do corpus, rede ou serial reais, hora real, Shift Key Mod, Z80).
+- **Áudio.** As escritas nos chips, os timers e as interrupções do Mockingboard, do Phasor e do SSI263 têm eventos idênticos aos do AppleWin, ciclo a ciclo. A forma de onda (PCM) não é idêntica (veja "Limitações aceitas"). O IRQ do 6522 no último ciclo do opcode (AppleWin #1176) é tratado como no AppleWin.
 - **Z80.** O núcleo passa nos 1.604.000 vetores do SingleStepTests e nos testes ZEXDOC e ZEXALL. Não foi comparado com o Z80 do AppleWin.
-- **Depurador.** 62 das 86 issues do AppleWin sobre o depurador têm teste que passa; 10 pedem uma mudança que o AppleWin também não faz (veja abaixo).
+- **Depurador.** Das 91 issues do AppleWin sobre o depurador que se aplicam, 79 têm teste que passa (inclusive as seis Divergências aprovadas), 7 dependem de janela e de entrada e não têm Oráculo, e 5 ficam como no AppleWin (veja abaixo).
 
 O que continua sem comparação: linha de comando, janela de configuração, atalhos F1 a F12 e menus (só testes do próprio projeto); vídeo dos clones (Pravets, TK3000, Base64A, J-Plus); jogos de terceiros; hardware físico (gamepad, serial, rede real, som que se escuta).
 
-## Diferenças medidas (FAIL)
+## Divergências aprovadas pelo dono
 
-- **PCM do Mockingboard/Phasor e do alto-falante.** Os eventos são idênticos, mas a forma de onda gerada pelo AppleWin tem blocos truncados (cerca de 0,4 % mais curtos) e o alto-falante é amostrado a cada 23 ciclos; o AppleII-Rust gera cada amostra no ciclo exato. Fora dos limiares de comparação definidos antes do teste (quatro casos). Na prática, o som é igual ao ouvido, mas não é bit a bit.
-- **Primeiro fonema do SSI263** pode terminar 13 ciclos além da tolerância em uma das fases de teste.
-- **IRQ do 6522 no último ciclo do opcode (AppleWin #1176).** O AppleWin trata a interrupção logo depois de `CLI`; o AppleII-Rust a adia por uma instrução nesse caso específico (dois 6522 com T1 contínuo).
-- **Color Monitor PAL com floating bus (AppleWin #241).** Em uma cena do Ansi Story (texto e DLORES alternados por linha, página 2), 1 pixel de borda difere.
-- **Nove save-states reais não batem:** `SNES_MAX-slot4`, os três `dazzledraw1` (a interrupção de VBL do mouse chega 7 ciclos antes depois de carregar), `SmartPort-firmware`, `Saturn64`, `Saturn128`, `6522-one-shot` e `SSI263-test`.
-- **Depurador.** Dez comportamentos que as issues do AppleWin pedem para mudar são iguais aos do AppleWin: `SYMUSER LOAD` sem aspas, `SYMUSER SAVE` sem efeito, nomes de símbolo com `#`, `CD ..`, aspas simples e duplas na busca, ordem de `APPLE2E.SYM`, só 4 tabelas de símbolos na partida, `DA` com símbolo exato, e o mini dump `M` do Language Card por banco ou slot.
+Em alguns pontos o AppleII-Rust faz de propósito algo diferente do AppleWin (commit `a8f0d1d`), porque o AppleWin tem ali um defeito que só atrapalha o usuário. Cada ponto foi aprovado pelo dono do projeto em 21/10/2026 ([ADR 0006](../adr/0006-divergencias-aprovadas-pelo-dono.md)). Nenhum deles toca a emulação do hardware (CPU, memória, vídeo, disco, áudio, cartas). A tabela técnica, com o código do AppleWin e o teste de cada um, está em `docs/conformance/gaps-and-known-limitations.md`.
+
+- **Impressora Pravets (#916).** A conversão de latim para cirílico sai correta (CP-1251). No AppleWin as tabelas foram gravadas com o encoding errado e o texto sai quebrado.
+- **`DebuggerAutoRun.txt` (#855).** O script roda com a máquina já pronta: `bsave` e `bpx` do script funcionam. No AppleWin o script roda antes da memória existir e esses comandos não têm efeito.
+- **Alt+F2 (#1396).** Alt+F2 mantém o Open Apple apertado depois do reinício, o que permite, por exemplo, pular o boot do disco rígido. No AppleWin o F2 solta o Open Apple.
+- **Tela cheia (#280, #358, #1374, #117, #932, #1448).** A tela ocupa toda a altura do monitor, mantém a proporção 4:3 (nunca estica em tela larga) e fica centralizada; a escala usa o monitor onde a janela está, e a velocidade "Fastest" funciona em todos os Modelos. A opção "Integer scaling" devolve a escala inteira do AppleWin.
+- **Depurador (#114, #245, #458, #466, #468, #1381).**
+  - `SYMUSER LOAD arquivo.sym` carrega o arquivo mesmo sem aspas, e `SYMUSER SAVE` grava o arquivo e mostra mensagem.
+  - `SYM` aceita nomes com `#` (como `CMDNTB.PR#`), e `CD ..` volta ao diretório pai de verdade.
+  - Ctrl+Print Screen copia as 48 linhas do console, não só 43.
+  - `DA` com um símbolo exato não mostra mais `da A_2101-1` quando existe `B_2100`.
+
+## Limitações aceitas
+
+Estes pontos continuam diferentes do AppleWin e o dono decidiu que eles não impedem a versão (ADR 0006). Eles seguem como FAIL nos relatórios; nunca são contados como PASS.
+
+- **PCM do Mockingboard/Phasor e do alto-falante, e o primeiro fonema do SSI263 (5 casos).** Os eventos dos chips são idênticos aos do AppleWin, ciclo a ciclo, mas as amostras diferem, porque o AppleWin gera o som em fatias de tempo do computador onde roda (blocos de amostras cerca de 0,4 % mais curtos, alto-falante amostrado a cada 23 ciclos, fim do fonema visto só a cada ~1000 ciclos). O AppleII-Rust gera cada amostra no ciclo exato. Na prática, o som é igual ao ouvido, mas não é bit a bit. Os casos: `audio-ay-tone-pcm`, `audio-ay-envelope-pcm`, `audio-ay-noise-pcm`, `audio-speaker-clicks-pcm` e `audio-ssi263-phonemes-p333`.
+
+## Diferenças que ainda existem
+
+- **Depurador, igual ao AppleWin de propósito.** O dono manteve a paridade em: aspas simples (bit alto ligado) e duplas (bit alto desligado) na busca (#713), a ordem e os nomes repetidos de `APPLE2E.SYM` (#1145) e só 4 das 9 tabelas de símbolos carregadas na partida (#1377).
+- **Depurador, adiado.** O mini dump `M` do Language Card por banco ou slot (#1426 e #1431) não mostra o banco 2 com o LC desligado, como no AppleWin; a correção exige expor o LC por banco no núcleo e ficou para depois.
+- **Cursor de espera (AppleWin #781).** O AppleWin mostra o cursor de espera ao carregar um save-state grande; o AppleII-Rust não muda o cursor.
 
 ## Onde o AppleWin difere do hardware e o AppleII-Rust copia o AppleWin
 
-O AppleII-Rust segue o AppleWin onde ele difere do hardware real (ADR 0004). Nenhum desvio foi aprovado como Divergência intencional.
+O AppleII-Rust segue o AppleWin onde ele difere do hardware real (ADR 0004). Nenhum desvio do hardware foi aprovado como Divergência intencional (as Divergências aprovadas acima não são sobre o hardware).
 
 - O 65C02 não tem as instruções Rockwell/WDC `BBR`, `BBS`, `RMB`, `SMB`, `WAI` e `STP`: são NOP de 1 ciclo.
 - Os ciclos "fantasma" (leituras e escritas espúrias de alguns modos de endereçamento, que no hardware real podem tocar `$C0xx`) não são feitos.
