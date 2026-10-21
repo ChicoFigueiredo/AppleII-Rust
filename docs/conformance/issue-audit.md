@@ -92,19 +92,39 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 | Valor | Quantidade | % |
 |---|---:|---:|
 | NOT_APPLICABLE | 489 | 43.9 |
-| PASS | 487 | 43.7 |
-| BLOCKED | 133 | 11.9 |
+| PASS | 486 | 43.6 |
+| BLOCKED | 134 | 12.0 |
 | FAIL | 6 | 0.5 |
 
 ## Taxas
 
-Taxa geral: PASS 487 / aplicáveis 626 = 77.8%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 486 / aplicáveis 626 = 77.6%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+
+### PASS por tipo de oráculo
+
+Só o tipo `executavel` é "concorda com o AppleWin rodando" (README de conformidade). Os demais são evidência de natureza diferente e não se somam a ele sem dizer o tipo.
+
+| Tipo | Significado | PASS | % dos PASS |
+|---|---|---:|---:|
+| executavel | comparação com o AppleWin rodando (fork do audetto ou Wine) | 147 | 30.2 |
+| cpp-transcrito | teste Rust que reproduz o C++ do a8f0d1d citando arquivo:linha | 199 | 40.9 |
+| especificacao | hardware, a2audit ou vetores públicos | 5 | 1.0 |
+| fixture-real | fixture real, sem comparação com o AppleWin | 7 | 1.4 |
+| regressao | teste do próprio port, sem fonte externa (inclui Divergência aprovada) | 128 | 26.3 |
+| **total** | | **486** | |
+
+| Prioridade | PASS | executavel | cpp-transcrito | especificacao | fixture-real | regressao |
+|---|---:|---:|---:|---:|---:|---:|
+| P0 | 23 | 8 | 5 | 2 | 0 | 8 |
+| P1 | 130 | 86 | 28 | 2 | 1 | 13 |
+| P2 | 189 | 47 | 94 | 0 | 0 | 48 |
+| P3 | 144 | 6 | 72 | 1 | 6 | 59 |
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 545 | 414 | 4 | 0 | 76.0% |
+| todos | 1004 | 545 | 413 | 4 | 0 | 75.8% |
 | apple2e | 59 | 50 | 44 | 1 | 0 | 88.0% |
 | apple2e-enhanced | 59 | 45 | 40 | 0 | 0 | 88.9% |
 | apple2plus | 29 | 23 | 21 | 2 | 0 | 91.3% |
@@ -130,7 +150,7 @@ Taxa geral: PASS 487 / aplicáveis 626 = 77.8%. Aplicável = estado diferente de
 | debugger | 136 | 86 | 78 | 3 | 0 | 90.7% |
 | outra | 120 | 11 | 9 | 0 | 0 | 81.8% |
 | ui | 83 | 29 | 29 | 0 | 0 | 100.0% |
-| config | 58 | 34 | 34 | 0 | 0 | 100.0% |
+| config | 58 | 34 | 33 | 0 | 0 | 97.1% |
 | cpu | 55 | 38 | 29 | 0 | 0 | 76.3% |
 | teclado | 53 | 25 | 22 | 0 | 0 | 88.0% |
 | memoria | 48 | 40 | 32 | 2 | 0 | 80.0% |
@@ -154,7 +174,7 @@ Taxa geral: PASS 487 / aplicáveis 626 = 77.8%. Aplicável = estado diferente de
 |---|---:|---:|---:|---:|---:|---:|
 | runtime | 388 | 339 | 245 | 0 | 0 | 72.3% |
 | feature-futura | 146 | 46 | 45 | 0 | 0 | 97.8% |
-| ui | 122 | 83 | 68 | 1 | 0 | 81.9% |
+| ui | 122 | 83 | 67 | 1 | 0 | 80.7% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 67 | 5 | 0 | 85.9% |
 | formato | 77 | 74 | 56 | 0 | 0 | 75.7% |

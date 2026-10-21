@@ -7,7 +7,7 @@ Como ler:
 - **FAIL**: um teste executado discorda do Oráculo. Cada FAIL tem o caso ou o teste que o mostra.
 - **BLOCKED**: o teste não pôde ser executado, com a causa. Não é PASS nem teste pulado.
 - **UNVERIFIED**: ninguém comparou. `IMPLEMENTED` nunca vale PASS.
-- O Oráculo é o fork Linux do audetto (`a1e20c0`) rodando headless; o AppleWin de referência é o `a8f0d1d` (ADR 0004: onde o AppleWin diverge do hardware, o AppleWin vence enquanto não houver Divergência intencional aprovada).
+- O Oráculo executável é o fork Linux do audetto (`a1e20c0`) rodando headless, com núcleo AppleWin `3e8054b` (22 commits antes do `a8f0d1d`) e os patches `audetto-trace`, `audetto-audio`, `audetto-snesmax`, `audetto-ssc-rom` e `audetto-version`; o AppleWin de referência de código é o `a8f0d1d` (ADR 0004: onde o AppleWin diverge do hardware, o AppleWin vence enquanto não houver Divergência intencional aprovada). Cada PASS por issue tem um tipo de oráculo (`executavel`, `cpp-transcrito`, `especificacao`, `fixture-real`, `regressao`); dos 486 PASS, só 147 (30,2 %) comparam com o AppleWin rodando.
 
 ## 1. FAIL vigentes
 
@@ -29,7 +29,7 @@ Fonte: [savestate-import.md](../../tests/conformance/reports/savestate-import.md
 |---|---|---|
 | `v2/dazzledraw1-mouse-rom-page0`, `...-page6`, `RGB card/dazzledraw1` | O primeiro evento de VBL do mouse vem 12.480 ciclos (192 linhas) depois do carregamento, e o evento recalculava a posição do quadro somando de novo os ciclos do opcode (7 ciclos antes) | port |
 | `v2/SmartPort-firmware/SmartPort-firmware` | O DIB devolvia a versão do firmware 130.0; o `version.h` do `a8f0d1d` dá 132.1 (o Oráculo ganhou `audetto-version.patch`) | port |
-| `v2/Memory/Saturn64`, `Saturn128` | O fork aloca os bancos com `new BYTE[16K]` sem zerar e o YAML só lista `0000: 00`; o Oráculo lia lixo de heap (`$E000` = `$46`/`$32`). `MALLOC_PERTURB_=255` no `run-audetto-oracle.sh` | Oráculo |
+| `v2/Memory/Saturn64`, `Saturn128` | O YAML só lista `0000: 00` e o resto do banco é indefinido no próprio AppleWin a8f0d1d (`new BYTE[kMemBankSize]` sem zerar, `LanguageCard.cpp:345,533`); o Oráculo lia lixo de heap (`$E000` = `$46`/`$32`). Comportamento indefinido do AppleWin, fixado em zero no Oráculo (`MALLOC_PERTURB_=255` no `run-audetto-oracle.sh`) e no port; não é defeito do fork | indefinido no AppleWin (convenção do instrumento) |
 | `v2/SNES_MAX-slot4` | O `SNESMAX.cpp` do fork é um esqueleto sem tratador de E/S (`audetto-snesmax.patch`) | Oráculo |
 | `v2/Mockingboard/6522-one-shot`, `SSI263-test` | A ROM do SSC não existia no fork (varredura de slots lia `$C204`); `audetto-ssc-rom.patch` a instala. Não era o reset do 6522 | Oráculo |
 
@@ -73,20 +73,20 @@ A #1396 (Alt+F2 e o Open Apple) deixou de ser FAIL: virou Divergência aprovada 
 
 ### 2.2 Falta de fixture ou de Oráculo
 
-Os BLOCKED por issue na matriz são **133** (40 abertas, 93 fechadas), sem mudança desde a onda final (eram 87 antes dela, porque issues UNVERIFIED que dependem de software de terceiros, de janela ou de hardware passaram a BLOCKED com causa). Por categoria: disco 54, vídeo 16, Mockingboard 12, CPU 9, áudio 9, memória 6, depurador 5, serial 4, teclado 3, HDD 3, e 12 em parcelas de 1 a 2 (outra, relógio, save-state, rede, SSI263, Z80, joystick). Por causa, a contagem da versão anterior (87 issues; a divisão das 46 novas não foi refeita) foi:
+Os BLOCKED por issue na matriz são **134** (41 abertas, 93 fechadas); mudou 1 desde a onda final: a #1490 (config, P3) passou de PASS a BLOCKED na revisão do parecer independente, porque o port tirou do diálogo do Disk II uma caixa que o `a8f0d1d` mantém (`resource/Applewin.rc:234`) e não há Divergência aprovada para isso; depende do dono (eram 87 antes da onda final, porque issues UNVERIFIED que dependem de software de terceiros, de janela ou de hardware passaram a BLOCKED com causa). Por categoria: disco 54, vídeo 16, Mockingboard 12, CPU 9, áudio 9, memória 6, depurador 5, serial 4, teclado 3, HDD 3, e 13 em parcelas de 1 a 2 (outra, relógio, save-state, rede, SSI263, Z80, joystick, config). Por causa, a contagem da versão anterior (87 issues; a divisão das 46 novas não foi refeita) foi:
 
 | Causa | Quantidade | Exemplos |
 |---|---:|---|
 | Software de terceiros sem fixture licenciada e com proveniência | 60 | disco 28 (#29 Ultima I, #51, #125...), áudio 11 (#19 Merlin, #72, #608, #647, #699...), vídeo 6 (#6 Karateka, #37, #371, #409, #680, #711), CPU 5 (#133 Chessmaster, #204, #206, #290, #1126), memória 6 (#222, #225, #297, #400, #422, #1126), entrada/cartas 5 (#70 UCSD Pascal, #71 Drol, #103, #127, #707) |
-| Comportamento do frontend sem Oráculo headless (pacing, janela, DirectSound, cliques de UI) | 24 | áudio 7 (#95, #240, #456, #813, #1159, #1172, #1173), depurador 6, vídeo 5 (#352, #363, #397, #405, #722), disco 3 (#640, #831, #1078), CPU #4, save-state #564 e #486 |
+| Comportamento do frontend sem Oráculo headless (pacing, janela, DirectSound, cliques de UI; inclui a #1490, que espera decisão do dono) | 25 | áudio 7 (#95, #240, #456, #813, #1159, #1172, #1173), depurador 6, vídeo 5 (#352, #363, #397, #405, #722), disco 3 (#640, #831, #1078), CPU #4, save-state #564 e #486 |
 | Outros | 3 | #100, #1104 (áudio), #372 (vídeo) |
 
-(#1126 aparece nos resultados de CPU e de memória com o mesmo estado. Por heurística de palavras-chave sobre a evidência das 133, cerca de três quintos são software de terceiros sem fixture; o resto é comportamento de frontend ou de plataforma sem Oráculo headless e hardware físico.) Para o G2 os BLOCKED P0 importam: **#4, #70, #400, #422, #564, #640, #1126** (7 issues P0 BLOCKED, todas fechadas upstream). Os mecanismos sintéticos de #400, #422, #564 e #640 passam em testes Rust; faltam o Oráculo ou a fixture.
+(#1126 aparece nos resultados de CPU e de memória com o mesmo estado. Por heurística de palavras-chave sobre a evidência das 133 originais, cerca de três quintos são software de terceiros sem fixture; o resto é comportamento de frontend ou de plataforma sem Oráculo headless e hardware físico.) Para o G2 os BLOCKED P0 importam: **#4, #70, #400, #422, #564, #640, #1126** (7 issues P0 BLOCKED, todas fechadas upstream). Os mecanismos sintéticos de #400, #422, #564 e #640 passam em testes Rust; faltam o Oráculo ou a fixture.
 
 Também BLOCKED, fora da contagem por issue:
 
 - 27 estados reais do AppleWin-Test (seção 1.3), dos quais 18 por imagens ausentes do corpus (`DiskFormat/*` e `AZTEC`).
-- Nenhum dos 133 BLOCKED tem aceite formal do dono; para os 7 P0 a decisão está na seção 11 do [relatório final](relatorio-final.md) (decisão 5, ainda pendente).
+- Nenhum dos 134 BLOCKED tem aceite formal do dono; para os 7 P0 a decisão está na seção 11 do [relatório final](relatorio-final.md) (decisão 5, ainda pendente).
 - HDC no ][+ contra o Oráculo: o fork é 22 commits mais antigo e não tem o patch de Shift do GH#1234 (disk-differential.md, L1). O modo bloco no //e está comparado.
 - Z80 SoftCard (CP/M) no sistema contra o Oráculo: o trace do Oráculo cobre só a CPU 6502 e não existe fixture com SoftCard e Phasor juntos (#72).
 - Uthernet I/II e SSC em rede/serial reais; estados com TCP.
@@ -94,7 +94,7 @@ Também BLOCKED, fora da contagem por issue:
 
 ## 3. UNVERIFIED
 
-- **Issues upstream**: nenhuma das 1.115 está UNVERIFIED na matriz (eram 524, P2 e P3, antes da onda final). Os 849 resultados individuais estão em [results/](results/); a [triagem](upstream-open-issues-triage.md) escolheu 36 das 358 abertas para histórias (#45 a #80). Esses resultados são autoavaliação e não têm amostra independente.
+- **Issues upstream**: nenhuma das 1.115 está UNVERIFIED na matriz (eram 524, P2 e P3, antes da onda final). Os 849 resultados individuais estão em [results/](results/); a [triagem](upstream-open-issues-triage.md) escolheu 36 das 358 abertas para histórias (#45 a #80). Esses resultados são autoavaliação; o parecer independente amostrou 80 (92,5 % de concordância, 87,2 % na classe PASS) e a classe "PASS apoiada só em teste Rust" foi reexaminada (relatório final, seção 12). Cada PASS tem o tipo de oráculo na matriz: 147 `executavel`, 199 `cpp-transcrito`, 5 `especificacao`, 7 `fixture-real`, 128 `regressao`.
 - **Componentes**: vídeo dos clones (Pravets, TK3000, Base64A, J-Plus) além do trace de CPU; interface (janela de configuração página a página, menu do drive, status de trilha e setor, Ctrl+Shift+V): testes Rust e leitura do C++, sem Oráculo de janela; Disk II em outro slot que não o 6 e mais de uma carta; INIT/FORMAT e firmware de 13 setores; Mockingboard com SSI263 somado (`Mixer`), MEGA Audio e SD Music, SSI263 em modo Phasor e Echo+; VidHD em ][/][+ e SHR em PAL; Uthernet II com sessões múltiplas e servidor TCP.
 - As afirmações "O que já é igual" do manual 12 estavam todas UNVERIFIED na versão anterior desta página. Hoje: CPU, memória, vídeo NTSC/PAL, Disk II/HDD, eventos do Mockingboard/Phasor/SSI263 e o formato YAML (via importação) têm comparação (seção 1 e matriz); linha de comando, janela de configuração e atalhos F1 a F12 só têm testes próprios.
 - Desempenho: ~12 MHz em Color TV na máquina de desenvolvimento ([performance.md](../../tests/conformance/reports/performance.md)), sem hardware nem compilação fixos; não é comparação com o AppleWin.
@@ -197,5 +197,7 @@ Efeito para o usuário: o som é igual ao ouvido, mas não é bit a bit idêntic
 ## 9. Limites do Oráculo
 
 - O Oráculo executável é o fork do audetto (22 commits antes do `a8f0d1d`); não é o AppleWin do Windows. Os arquivos de vídeo do fork e do clone de referência são idênticos (`NTSC.cpp`, `RGBMonitor.cpp` e outros), então a defasagem não afeta o vídeo. O executável oficial 1.32.1.0 (Wine) serve só para gerar save-states.
+- Faltam ao fork os commits do `a8f0d1d` posteriores a `3e8054b`, por exemplo `d9b2bf67` (Language Card com Saturn em slot diferente de 0, #1520) e as mudanças de Shift Key Mod e do firmware do HDC (#1234): os estados `skm-*` e o HDC no ][+ ficam sem comparação executável.
+- Os testes Rust que rodam o Oráculo (`p23_oracle.rs`, `oracle_roundtrip.rs`) imprimem BLOCKED e saem sem falhar quando o binário do Oráculo não está compilado; o tipo `executavel` de uma issue só vale para uma execução com o Oráculo no cache.
 - Sem entrada de teclado nem troca de disco em execução; um só cartão de áudio por execução (`--audio-slot`); CPU a 1 MHz; sem relógio real (o No-Slot Clock devolve a hora do hospedeiro); `g_bFullSpeed` nunca roda; sem janela, DirectSound nem diálogos.
 - O PCM do AY do próprio Oráculo não é reprodutível entre fatiamentos (calibração em audio-differential.md).

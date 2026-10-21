@@ -9,10 +9,12 @@
 # Without --out the CSV goes to stdout. Run build-audetto-oracle.sh first.
 set -euo pipefail
 
-# Determinism: the fork allocates the Saturn/LC banks with `new BYTE[16K]` and never clears them;
-# a partial `Memory BankNN` dump in a save-state (e.g. "0000: 00") leaves the rest as heap garbage
-# (it differs between runs of different states). glibc fills every malloc with the complement of
-# this byte, i.e. zeros, which is what the Rust port (and a fresh Windows heap) holds.
+# Determinism: AppleWin itself (a8f0d1d too, LanguageCard.cpp:345,533) allocates the Saturn banks
+# with `new BYTE[kMemBankSize]` and never clears them; a partial `Memory BankNN` dump in a
+# save-state (e.g. "0000: 00") leaves the rest undefined (heap garbage on Linux, different between
+# states). This is undefined behaviour of AppleWin, not a fork defect. glibc fills every malloc with
+# the complement of this byte, i.e. zeros, which fixes the undefined bytes at the value the Rust port
+# (and a fresh Windows heap) holds.
 export MALLOC_PERTURB_=255
 
 FORK_SHA="a1e20c0362f392dc25f1a3b218d2f84d4f1a25da"

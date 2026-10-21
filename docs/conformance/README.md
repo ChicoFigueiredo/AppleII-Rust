@@ -19,6 +19,20 @@ Cada Critério de aceite recebe um destes estados, por Modelo e por configuraç�
 
 Um item só muda para PASS com evidência. Dúvida ou falta de teste é UNVERIFIED, nunca PASS.
 
+## Tipo de oráculo
+
+Todo PASS por issue declara em que se apoia, na coluna `tipo_oraculo` de `results/*.csv` e da matriz. Só `executavel` é "concorda com o AppleWin rodando"; os outros são evidência de outra natureza e não se somam a ele sem dizer o tipo.
+
+| Tipo | Significado |
+|---|---|
+| `executavel` | comparação com o AppleWin rodando: o fork do audetto ou o Wine. O fork tem núcleo AppleWin `3e8054b`, 22 commits antes do `a8f0d1d`, com os patches de `tools/conformance/oracle/` |
+| `cpp-transcrito` | teste Rust que reproduz o C++ do `a8f0d1d` citando arquivo:linha |
+| `especificacao` | hardware, a2audit ou vetores públicos |
+| `fixture-real` | fixture real de terceiros, sem comparação com o AppleWin |
+| `regressao` | teste do próprio port, sem fonte externa; inclui o teste do comportamento de uma Divergência aprovada (ADR 0006) |
+
+`tools/conformance/apply_results.py` recusa um PASS sem tipo válido e `summarize_issue_matrix.py` conta os PASS por tipo e por prioridade em [issue-audit.md](issue-audit.md). O `a8f0d1d` é a referência de código; o binário comparado é o fork.
+
 ## Arquivos desta pasta
 
 | Arquivo | Conteúdo |

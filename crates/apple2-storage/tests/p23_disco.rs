@@ -480,6 +480,32 @@ fn gh452_unmounted_hard_disk_reports_no_device_connected() {
     assert_eq!(st >> 1 & 0x3F, 0x28);
 }
 
+/// GH#452 (reforço): o controlador sem NENHUMA imagem montada (o cenário "unmounted HD" da
+/// issue) também responde "não conectado" ($28), nos dois modos de comando e na unidade 1 do
+/// slot 7 (`CmdExecute`: `!m_imageloaded` → `DEVICE_NOT_CONNECTED`, Harddisk.cpp:694-698).
+#[test]
+fn gh452_controller_with_no_image_at_all_reports_no_device_connected() {
+    let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
+    let c = HardDiskCard::new(7, Model::Apple2eEnhanced, HdcMode::SmartPort);
+    assert!(m.insert_card(7, Box::new(c)));
+    m.power_cycle();
+    for (i, b) in [0x4C, 0x00, 0x03].iter().enumerate() {
+        m.poke(0x300 + i as u16, *b);
+    }
+    m.cpu_mut().pc = 0x300;
+    m.run_cycles(10);
+    // Leitura (cmd 1) e escrita (cmd 2) de bloco na unidade 1 ($70), sem imagem.
+    for cmd in [1u8, 2u8] {
+        let st = blk_at(&mut m, 0xC0F0, cmd, 0x70, 0x4000, 0);
+        assert_eq!(st & 1, 1, "cmd {cmd}: erro sinalizado");
+        assert_eq!(
+            st >> 1 & 0x3F,
+            0x28,
+            "cmd {cmd}: não conectado, não I/O error"
+        );
+    }
+}
+
 /// GH#1264: a chamada de status do driver ProDOS devolve o número de blocos em X (baixo) e Y
 /// (alto). O firmware e os registradores são os do AppleWin (Harddisk.cpp registradores $C0n9/A).
 #[test]
