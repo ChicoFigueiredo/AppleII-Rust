@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod diagnostics;
 pub mod network;
 #[cfg(feature = "pcap")]
 pub mod pcap_backend;

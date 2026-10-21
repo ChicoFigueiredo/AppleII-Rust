@@ -4,7 +4,7 @@
 use apple2_core::{Card, Machine, MachineConfig, Model};
 use apple2_hostio::network::MockNetwork;
 use apple2_hostio::printer::{
-    MemorySink, ParallelPrinterCard, PrinterEncoding, PrinterOptions, PrinterSnapshot,
+    FileSink, MemorySink, ParallelPrinterCard, PrinterEncoding, PrinterOptions, PrinterSnapshot,
 };
 use apple2_hostio::serial::{Parity, StopBits};
 use apple2_hostio::ssc::{DipSwitches, FirmwareMode, SscSnapshot, SuperSerialCard};
@@ -22,6 +22,8 @@ use apple2_storage::image::DiskImage;
 #[derive(Default)]
 struct Host {
     sink: MemorySink,
+    /// Builds the printer with a file sink of this name instead of the memory sink.
+    file: Option<&'static str>,
 }
 
 impl LoadHost for Host {
@@ -35,7 +37,10 @@ impl LoadHost for Host {
                 LoopbackSerial::new().0,
             )))),
             "Generic Printer" => Some(Box::new(ParallelPrinterCard::new(
-                Box::new(self.sink.clone()),
+                match self.file {
+                    Some(f) => Box::new(FileSink::new(f)),
+                    None => Box::new(self.sink.clone()),
+                },
                 PrinterOptions::default(),
             ))),
             "Uthernet" => Some(Box::new(Uthernet1::new(Box::new(MockNetwork::new().0)))),
@@ -369,6 +374,42 @@ fn printer_write_matches_the_cpp_writer() {
     Enable Dump To Real Printer: false
 ";
     assert_eq!(save_entry(1, &*c), expected);
+}
+
+/// GH#1499 and GH#1510: a custom print file (spaces, backslashes) survives save and load.
+#[test]
+fn printer_custom_filename_survives_save_and_load() {
+    const NAME: &str = r"C:\Users\Ana Maria\print outs\job #1.txt";
+    let card = ParallelPrinterCard::new(Box::new(FileSink::new(NAME)), PrinterOptions::default());
+    let text = save_entry(1, &card);
+    assert!(
+        text.contains(r"C:\\Users\\Ana Maria"),
+        "backslashes doubled as AppleWin does:\n{text}"
+    );
+    // Loaded into a card configured with another file: the saved one wins, as in AppleWin.
+    let mut host = Host {
+        file: Some("other.txt"),
+        ..Host::default()
+    };
+    let c = load_entry_with(&mut host, &text, "Generic Printer");
+    let p = c.as_any().unwrap().downcast_ref::<ParallelPrinterCard>().unwrap();
+    assert_eq!(p.filename(), Some(std::path::Path::new(NAME)));
+}
+
+/// Older saves of this emulator always said `Printer.txt`; that must not undo a configured file.
+#[test]
+fn printer_default_name_in_a_save_keeps_the_configured_file() {
+    let text = PRINTER_OPEN
+        .replace("Is File Open: true", "Is File Open: false")
+        .replace("C:\\Temp\\Printer.txt", "Printer.txt");
+    assert!(text.contains("Print Filename: Printer.txt"));
+    let mut host = Host {
+        file: Some("custom.txt"),
+        ..Host::default()
+    };
+    let c = load_entry_with(&mut host, &text, "Generic Printer");
+    let p = c.as_any().unwrap().downcast_ref::<ParallelPrinterCard>().unwrap();
+    assert_eq!(p.filename(), Some(std::path::Path::new("custom.txt")));
 }
 
 #[test]
