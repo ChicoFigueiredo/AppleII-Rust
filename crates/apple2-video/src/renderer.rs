@@ -359,6 +359,13 @@ impl Renderer {
     /// Runs `m` for one frame, rendering after every instruction. Returns the cycles executed.
     pub fn run_frame(&mut self, m: &mut Machine) -> u64 {
         self.resync(m.cycles_in_frame());
+        // AppleWin configures its scanner from the power-on state (NTSC_VideoInit ->
+        // VideoReinitialize(true)) before the first opcode runs. Doing it lazily in the first
+        // `update` would see the mode changes of that first opcode and start line 0 of the first
+        // frame at the wrong offset.
+        if self.configured.is_none() {
+            self.sync(m);
+        }
         let target = m.frames() + 1;
         let mut done = 0u64;
         while m.frames() < target {
