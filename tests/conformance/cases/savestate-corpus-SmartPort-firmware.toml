@@ -16,5 +16,5 @@ cycles = 100000
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state SmartPort-firmware.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
-trace_rows_sha256 = "6d5b2f623065b07ef346e43b625b3d71abf1ca0fa520e8ffa9e6cb8d5ffa28ed"
+source = "AppleWin (fork audetto a1e20c0 + audetto-version.patch, version.h 1.32.1.0) --state SmartPort-firmware.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "b0fa59229742f2918229bb131e886b15e135535115356e7bbcc562e85c9df92f"

@@ -43,6 +43,8 @@ patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$AUDIO_PATCH"
 patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$HERE/audetto-snesmax.patch"
 # Super Serial Card: same story, the fork installs no firmware ROM ($Cn00 page and $C800 expansion).
 patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$HERE/audetto-ssc-rom.patch"
+# Version: the fork predates a8f0d1d (version.h 1.32.0.0); report 1.32.1.0 like the reference (HDC DIB firmware 132.1).
+patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$HERE/audetto-version.patch"
 cp "$HERE/audetto-oracle/audio_hook.h" "$CLONE/source/audio_hook.h"
 
 # The oracle frontend lives in Git here and is copied into the fork tree (untracked there).
