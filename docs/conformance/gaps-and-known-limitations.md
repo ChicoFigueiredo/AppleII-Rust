@@ -1,6 +1,6 @@
 # Lacunas e limitações conhecidas
 
-Estado medido na `main` `22dbf2b7a4c57d9b6ede7be39a577e93196c1a3f` (21/10/2026). Esta página lista tudo o que hoje está em FAIL ou BLOCKED, o que continua UNVERIFIED, as diferenças entre o AppleWin e o hardware que o AppleII-Rust copia do AppleWin, e as Divergências intencionais (nenhuma). A versão anterior desta página era um inventário de afirmações do manual, sem execução; esta é a que sucede às ondas de conformidade. Os números por componente estão na [matriz de capacidades](capability-matrix.md), e o panorama no [relatório final](relatorio-final.md).
+Estado medido na `main` `bb01e3415c45fcb3d7e1103e788cc6cec2279e5f` (21/10/2026, reavaliação depois da onda final do G0). Esta página lista tudo o que hoje está em FAIL ou BLOCKED, o que continua UNVERIFIED, as diferenças entre o AppleWin e o hardware que o AppleII-Rust copia do AppleWin, as Divergências intencionais (nenhuma) e as **Divergências do AppleWin pendentes de decisão** (seção 7), onde o port faz diferente do AppleWin sem que o dono tenha decidido. A versão anterior desta página era um inventário de afirmações do manual, sem execução; esta é a que sucede às ondas de conformidade. Os números por componente estão na [matriz de capacidades](capability-matrix.md), e o panorama no [relatório final](relatorio-final.md).
 
 Como ler:
 
@@ -11,18 +11,17 @@ Como ler:
 
 ## 1. FAIL vigentes
 
-### 1.1 Áudio: PCM do AY, PCM do alto-falante, SSI263 e o IRQ do 6522 (6 casos)
+### 1.1 Áudio: PCM do AY, PCM do alto-falante e SSI263 (5 casos)
 
-Rode `conformance run --case ID`. Todos têm `known_divergence` no caso e fazem o `conformance run --all` terminar com 6 FAIL.
+Rode `conformance run --case ID`. Todos têm `known_divergence` no caso e fazem o `conformance run --all` terminar com 5 FAIL. O sexto caso da versão anterior, `audio-issue-1176-last-cycle`, passa desde `2927c25` (o `Reset()` do 6522 passou a fechar o portão dos eventos de timer, como o `SY6522::Reset` do AppleWin).
 
 | Caso | Issue Rust | Diferença medida | Causa raiz | Estado |
 |---|---|---|---|---|
 | `audio-ay-tone-pcm` (D-2) | #27 | frequência 8,77 % > 4,00 %; RMS 4,45 % > 2,00 % | O AppleWin gera o PCM em blocos de `(int)(44100 / (clk/intervalo + 0.5))` amostras (43 onde seriam 43,2: -0,4 % de tempo de AY por bloco) e o primeiro bloco sai ~1000 ciclos depois do ciclo 0. O Rust gera cada amostra no ciclo exato. O próprio Oráculo muda de fase com o fatiamento (M0 falha entre `--audio-slice 1000` e `250`) | Aberto. Núcleo do AY idêntico amostra a amostra quando a linha do tempo é a mesma (`ay_core_oracle.rs`); eventos idênticos. Recomendação: janelas maiores ou contagem absoluta de cruzamentos, para execuções futuras (não aplicada para não ajustar o limiar depois de ver o resultado) |
 | `audio-ay-envelope-pcm` (D-2) | #27 | frequência 5,88 % > 1,00 % (16 contra 17 cruzamentos numa janela quase muda) | idem | idem |
 | `audio-ay-noise-pcm` (D-2) | #27 | frequência 58,33 % > 40,00 % | idem; o LFSR muda a taxa de cruzamentos com a fase | idem |
-| `audio-speaker-clicks-pcm` (D-3) | #7 | RMS 2,46 % > 2,00 %; 39.140 quadros no Oráculo contra 38.893 no Rust | `SetClksPerSpkrSample` (Speaker.cpp:221-229) usa 23 ciclos inteiros por amostra (clk/44100 = 23,14); o AppleWin compensa regulando a velocidade da CPU pelo buffer. O hardware não tem esse quantum | Aberto. Candidata a Divergência intencional (veja a seção 6), mas sem decisão do dono |
+| `audio-speaker-clicks-pcm` (D-3) | #7 | RMS 2,46 % > 2,00 %; 39.140 quadros no Oráculo contra 38.893 no Rust | `SetClksPerSpkrSample` (Speaker.cpp:221-229) usa 23 ciclos inteiros por amostra (clk/44100 = 23,14); o AppleWin compensa regulando a velocidade da CPU pelo buffer. O hardware não tem esse quantum | Aberto. Candidata a Divergência (veja as seções 6 e 7), mas sem decisão do dono (decisão 4) |
 | `audio-ssi263-phonemes-p333` (D-4) | #28 | primeiro fonema 1.683 ciclos > limiar 1.670 (13 ciclos, 0,8 %) | O fim do fonema só é visto pelo AppleWin em `PeriodicUpdate` (~1000 ciclos) e o primeiro `Update` pré-carrega 25 % do buffer; o Rust agenda `início + comprimento` | Aberto. Na fase 0 o caso PASS; nos 12 fonemas seguintes e nas fixtures o Rust fica dentro da tolerância |
-| `audio-issue-1176-last-cycle` (#1176) | #7 | primeira diferença na linha 17: IOR `0D` em 160 contra 162 | 6522 #1 em T1 contínuo com latch 0 e IRQ pendente do 6522 #0: o AppleWin toma o IRQ logo após o CLI (CLI em 932, entrada em 934); o Rust adia um opcode (o evento é marcado "último ciclo do opcode") | Aberto. Duas hipóteses sem êxito (fase dos eventos de 2 ciclos). O limite de esforço do trabalho foi atingido. Vira PASS quando a correção entrar na `main` |
 
 ### 1.2 Vídeo: #241, pixel do Color Monitor PAL (1 caso de cena)
 
@@ -30,27 +29,25 @@ Rode `conformance run --case ID`. Todos têm `known_divergence` no caso e fazem 
 |---|---|---|---|
 | #241 "Emulator's floating bus is ahead by 2 cycles" | #46 | Cena `tests/conformance/inputs/video/issue-0241-floatbus-dlores-text80.scene` (Ansi Story: `DLORES -> TEXT80 -> DLORES` por linha com o floating bus amostrado em `LDA $C0A0`). PASS em NTSC e em Color TV PAL (casos `video-issue-0241-*`). **Color Monitor a 50 Hz difere em 1 pixel de borda** (x=18, y=18; 3 pixels no quadro 1; Oráculo (225,239,255), Rust preto). Só ocorre com PAL + monitor + `TEXT/GR` por linha + conteúdo de texto na página 2 | Aberto (P1). Não é um caso do harness com `known_divergence`: está em `results/video.csv` e na matriz como FAIL |
 
-### 1.3 Importação de save-states reais do AppleWin: 9 FAIL medidos (o relatório anterior dizia 12)
+### 1.3 Importação de save-states reais do AppleWin: 0 FAIL (os 9 da versão anterior foram resolvidos)
 
-Fonte: [savestate-import.md](../../tests/conformance/reports/savestate-import.md), regenerado nesta entrega com `tools/conformance/savestate-compare.py` e `savestate-report.py` sobre os 112 estados do AppleWin-Test (SHA `4b113ce`) e os 3 estados do AppleWin 1.32.1.0 sob Wine: **79 PASS, 9 FAIL, 27 BLOCKED (115 arquivos)**. A versão anterior do relatório tinha 76 PASS, 12 FAIL, 27 BLOCKED. Os três que mudaram são os `Mockingboard/Cybernoid.aws.yaml`, `Cybernoid-TimerAtC480.aws.yaml` e `Cybernoid2-Phasor.aws.yaml`: passaram a bater no trace com a correção do 6522 (`3552588`, D-1 do diferencial de áudio) e viraram casos `savestate-corpus-*`. O número "12" do pedido refere-se à versão anterior do relatório.
+Fonte: [savestate-import.md](../../tests/conformance/reports/savestate-import.md), medido de novo em 21/10/2026 com `tools/conformance/savestate-compare.py` sobre os 112 estados do AppleWin-Test (SHA `4b113ce`) e os 3 estados do AppleWin 1.32.1.0 sob Wine: **88 PASS, 0 FAIL, 27 BLOCKED (115 arquivos)**. A versão anterior desta página listava 9 FAIL; a causa de cada um:
 
-| Arquivo | Ciclos até divergir | Diferença | Causa conhecida | Issue Rust |
-|---|---:|---|---|---|
-| `v2/SNES_MAX-slot4.aws.yaml` | 6 | bit de dados do controle lido no meio da leitura (A `A0` no Oráculo, `E0` no Rust) | Temporização da leitura serial do SNES MAX; não investigada | #30 |
-| `v2/dazzledraw1-mouse-rom-page0.aws.yaml` | 12.489 | IRQ do evento de VBL do mouse 7 ciclos adiantada | Fase do evento de VBL reagendada no carregamento (#381) | #6 |
-| `v2/dazzledraw1-mouse-rom-page6.aws.yaml` | 12.489 | idem | idem | #6 |
-| `v2/RGB card/dazzledraw1.aws.yaml` | 7.260 | idem | idem | #6 |
-| `v2/SmartPort-firmware/SmartPort-firmware.aws.yaml` | 4.373 | valor de status lido de `$C0nX` difere (`84` contra `82`) | Não investigada | #24 |
-| `v2/Memory/Saturn64.aws.yaml` | 406 | `LDA` lê `$46` no Oráculo e `$00` no Rust depois de restaurar um banco do estado | Causa não investigada. A contagem de bancos (AUD-C-001) já foi corrigida; a atribuição que o relatório anterior fazia a ela está obsoleta | #18, #25 |
-| `v2/Memory/Saturn128.aws.yaml` | 406 | idem (`$32` contra `$00`) | idem | #18, #25 |
-| `v2/Mockingboard/6522-one-shot.aws.yaml` | 115 | A `00` no Oráculo, `0C` no Rust | Temporização do 6522 após o carregamento; mesma família de #1176 | #27 |
-| `v2/Mockingboard/SSI263-test.aws.yaml` | 109 | idem | idem | #28 |
+| Arquivo | Causa | De quem era |
+|---|---|---|
+| `v2/dazzledraw1-mouse-rom-page0`, `...-page6`, `RGB card/dazzledraw1` | O primeiro evento de VBL do mouse vem 12.480 ciclos (192 linhas) depois do carregamento, e o evento recalculava a posição do quadro somando de novo os ciclos do opcode (7 ciclos antes) | port |
+| `v2/SmartPort-firmware/SmartPort-firmware` | O DIB devolvia a versão do firmware 130.0; o `version.h` do `a8f0d1d` dá 132.1 (o Oráculo ganhou `audetto-version.patch`) | port |
+| `v2/Memory/Saturn64`, `Saturn128` | O fork aloca os bancos com `new BYTE[16K]` sem zerar e o YAML só lista `0000: 00`; o Oráculo lia lixo de heap (`$E000` = `$46`/`$32`). `MALLOC_PERTURB_=255` no `run-audetto-oracle.sh` | Oráculo |
+| `v2/SNES_MAX-slot4` | O `SNESMAX.cpp` do fork é um esqueleto sem tratador de E/S (`audetto-snesmax.patch`) | Oráculo |
+| `v2/Mockingboard/6522-one-shot`, `SSI263-test` | A ROM do SSC não existia no fork (varredura de slots lia `$C204`); `audetto-ssc-rom.patch` a instala. Não era o reset do 6522 | Oráculo |
 
-Os 27 BLOCKED do mesmo relatório (17 `DiskFormat/*` e `AZTEC` por imagem ausente; 3 SSC por TCP/serial do hospedeiro; 2 No-Slot Clock por hora real; 2 `skm-*` porque o Oráculo não tem o Shift Key Mod; `CPM2.2(56k)-3` por Z80 ativo; `contiki` por Uthernet recusado pelo Oráculo) estão listados na seção 2.
+O teste de formato (`conformance check-import`, segunda coluna do relatório) continua acusando 1 a 8 campos em quase todos os arquivos; o mais comum é o bit B do registrador P (`0x37` no arquivo contra `0x27` na máquina), normalizado de propósito. Não afeta o trace e não foi investigado campo a campo nesta rodada.
 
-### 1.4 Depurador: 10 FAIL, todos bugs do próprio AppleWin que o Rust reproduz
+Os 27 BLOCKED do mesmo relatório (18 `DiskFormat/*` e `AZTEC` por imagem ausente; 3 SSC por TCP/serial do hospedeiro; 2 No-Slot Clock por hora real; 2 `skm-*` porque o Oráculo não tem o Shift Key Mod; `CPM2.2(56k)-3` por Z80 ativo; `contiki` por Uthernet recusado pelo Oráculo) estão listados na seção 2. Na leitura crua do `savestate-compare.py`, 8 desses 27 aparecem como FAIL do trace; o `savestate-report.py` os reclassifica como BLOCKED por causa conhecida.
 
-Fonte: [results/depurador.csv](results/depurador.csv), testes `crates/apple2-debugger/tests/matriz_depurador_b.rs`. A matriz marca FAIL porque a issue pede um comportamento diferente do que o AppleWin `a8f0d1d` tem; o Rust faz o mesmo que o AppleWin. Corrigir qualquer um seria Divergência intencional (ADR 0004) e não foi feito.
+### 1.4 Depurador: 11 FAIL (10 mais a #458), todos bugs do próprio AppleWin que o Rust reproduz
+
+Fonte: [results/depurador.csv](results/depurador.csv), testes `crates/apple2-debugger/tests/matriz_depurador_b.rs`. A matriz marca FAIL porque a issue pede um comportamento diferente do que o AppleWin `a8f0d1d` tem; o Rust faz o mesmo que o AppleWin. Corrigir qualquer um seria uma Divergência (ADR 0004) e não foi feito; a decisão é do dono (decisão 1 do [relatório final](relatorio-final.md)). Os testes `#[ignore = "FAIL ..."]` reproduzem cada um com `cargo test -p apple2-debugger --release -- --ignored`.
 
 | Issue upstream | Comportamento (igual no AppleWin e no Rust) | Issue Rust |
 |---:|---|---|
@@ -62,10 +59,18 @@ Fonte: [results/depurador.csv](results/depurador.csv), testes `crates/apple2-deb
 | #1145 | `APPLE2E.SYM` é idêntico ao do AppleWin: fora de ordem e com nomes repetidos | #34 |
 | #1377 | O startup carrega só 4 das 9 tabelas de símbolos | #34 |
 | #1381 | `DA 2004` com `B_2100` existente mostra `da A_2101-1`, como o AppleWin (`|| pData`, Debugger_Disassembler.cpp:318) | #34, #76 |
+| #458 | A cópia de texto (Ctrl+PrintScreen) só tem `DEBUG_VIRTUAL_TEXT_HEIGHT` = 43 das 48 linhas (Debugger_Display.h:64, Debugger_Display.cpp:728); as 5 últimas do console se perdem. `Debugger::screen_text` reproduz | #34 |
 | #1426 | `M1 L2/D000` com o LC desligado não mostra o banco 2 do LC (`read_prefixed` só distingue main/aux); o núcleo não expõe o backing do LC por banco/slot | #34 |
 | #1431 | Mesma causa de #1426, para LC/Saturn por prefixo de slot/banco | #34 |
 
-Os 6 BLOCKED do depurador (#269 Esc, #345 GR2, #483 clique no P, #740 modo misto, #746 repintura ao arrastar a janela, #974 teclado UK) pertencem ao frontend e não têm Oráculo headless. Os 8 NOT_APPLICABLE são pedidos futuros sem comportamento de referência.
+Os 7 BLOCKED do depurador (#269 Esc, #345 GR2, #483 clique no P, #740 modo misto, #746 repintura ao arrastar a janela, #974 teclado UK, mais 1 da onda final) pertencem ao frontend e não têm Oráculo headless. Os 39 NOT_APPLICABLE são pedidos futuros sem comportamento de referência ou defeitos do Win32. Total: 130 issues, 73 PASS.
+
+### 1.5 Outros FAIL da matriz
+
+| Issue | Estado | O que acontece | Teste |
+|---:|---|---|---|
+| #1396 (P2, aberta) | FAIL | O F2 do AppleWin é `ResetMachineState`, que chama `JoyReset()` e apaga o Open Apple (Utilities.cpp:554-555, Joystick.cpp:703). O port mantém o Alt apertado depois do F2 (`Command::PowerCycle` não toca os botões); Alt+F2 funciona no port e não no AppleWin. Decisão do dono (seção 7) | `crates/applewin/tests/p23_entrada.rs::gh1396_alt_f2_clears_open_apple_like_joyreset` (`#[ignore]`) |
+| #781 (P3, fechada) | FAIL | O AppleWin mostra o cursor de espera ao carregar um save-state grande (SaveState.cpp:394); o port não muda o cursor: a carga roda na thread de emulação sem sinal para a interface. Sem efeito na emulação; corrigir exige canal da emulação para a interface e não é testável sem janela | sem teste (causa documentada em `results/p23-nucleo.csv`) |
 
 ## 2. BLOCKED vigentes
 
@@ -81,7 +86,7 @@ Os 6 BLOCKED do depurador (#269 Esc, #345 GR2, #483 clique no P, #740 modo misto
 
 ### 2.2 Falta de fixture ou de Oráculo
 
-Os BLOCKED por issue na matriz são **87** (26 abertas, 61 fechadas). Por causa:
+Os BLOCKED por issue na matriz são **133** (40 abertas, 93 fechadas); eram 87 antes da onda final, porque issues UNVERIFIED que dependem de software de terceiros, de janela ou de hardware passaram a BLOCKED com causa. Por categoria: disco 54, vídeo 16, Mockingboard 12, CPU 9, áudio 9, memória 6, depurador 5, serial 4, teclado 3, HDD 3, e 12 em parcelas de 1 a 2 (outra, relógio, save-state, rede, SSI263, Z80, joystick). Por causa, a contagem da versão anterior (87 issues; a divisão das 46 novas não foi refeita) foi:
 
 | Causa | Quantidade | Exemplos |
 |---|---:|---|
@@ -89,11 +94,12 @@ Os BLOCKED por issue na matriz são **87** (26 abertas, 61 fechadas). Por causa:
 | Comportamento do frontend sem Oráculo headless (pacing, janela, DirectSound, cliques de UI) | 24 | áudio 7 (#95, #240, #456, #813, #1159, #1172, #1173), depurador 6, vídeo 5 (#352, #363, #397, #405, #722), disco 3 (#640, #831, #1078), CPU #4, save-state #564 e #486 |
 | Outros | 3 | #100, #1104 (áudio), #372 (vídeo) |
 
-(#1126 aparece nos resultados de CPU e de memória com o mesmo estado: 61 linhas, 60 issues; 60 + 24 + 3 = 87.) Para o G2 os BLOCKED P0 importam: **#4, #70, #400, #422, #564, #640, #1126** (7 issues P0 BLOCKED, todas fechadas upstream). Os mecanismos sintéticos de #400, #422, #564 e #640 passam em testes Rust; faltam o Oráculo ou a fixture.
+(#1126 aparece nos resultados de CPU e de memória com o mesmo estado. Por heurística de palavras-chave sobre a evidência das 133, cerca de três quintos são software de terceiros sem fixture; o resto é comportamento de frontend ou de plataforma sem Oráculo headless e hardware físico.) Para o G2 os BLOCKED P0 importam: **#4, #70, #400, #422, #564, #640, #1126** (7 issues P0 BLOCKED, todas fechadas upstream). Os mecanismos sintéticos de #400, #422, #564 e #640 passam em testes Rust; faltam o Oráculo ou a fixture.
 
 Também BLOCKED, fora da contagem por issue:
 
 - 27 estados reais do AppleWin-Test (seção 1.3), dos quais 18 por imagens ausentes do corpus (`DiskFormat/*` e `AZTEC`).
+- Nenhum dos 133 BLOCKED tem aceite formal do dono; para os 7 P0 a decisão está na seção 7 do [relatório final](relatorio-final.md) (decisão 5).
 - HDC no ][+ contra o Oráculo: o fork é 22 commits mais antigo e não tem o patch de Shift do GH#1234 (disk-differential.md, L1). O modo bloco no //e está comparado.
 - Z80 SoftCard (CP/M) no sistema contra o Oráculo: o trace do Oráculo cobre só a CPU 6502 e não existe fixture com SoftCard e Phasor juntos (#72).
 - Uthernet I/II e SSC em rede/serial reais; estados com TCP.
@@ -101,8 +107,8 @@ Também BLOCKED, fora da contagem por issue:
 
 ## 3. UNVERIFIED
 
-- **524 issues upstream** (de 1.115) estão UNVERIFIED na matriz: **278 P3 e 246 P2**. Não há P0 nem P1 UNVERIFIED. Distribuição (CSV): interface 122, feature-futura 146, runtime 181, formato 45, documentação 30, o resto em pequenas parcelas. O plano de teste delas não foi executado; a [triagem](upstream-open-issues-triage.md) escolheu 36 das 358 abertas para histórias (#45 a #80).
-- **Componentes**: vídeo dos clones (Pravets, TK3000, Base64A, J-Plus) além do trace de CPU; interface (janela de configuração página a página, menu do drive, status de trilha e setor, Ctrl+Shift+V): testes Rust, sem comparação; Disk II em outro slot que não o 6 e mais de uma carta; INIT/FORMAT e firmware de 13 setores; Mockingboard com SSI263 somado (`Mixer`), MEGA Audio e SD Music, SSI263 em modo Phasor e Echo+; VidHD em ][/][+ e SHR em PAL; Uthernet II com sessões múltiplas e servidor TCP.
+- **Issues upstream**: nenhuma das 1.115 está UNVERIFIED na matriz (eram 524, P2 e P3, antes da onda final). Os 849 resultados individuais estão em [results/](results/); a [triagem](upstream-open-issues-triage.md) escolheu 36 das 358 abertas para histórias (#45 a #80). Esses resultados são autoavaliação e não têm amostra independente.
+- **Componentes**: vídeo dos clones (Pravets, TK3000, Base64A, J-Plus) além do trace de CPU; interface (janela de configuração página a página, menu do drive, status de trilha e setor, Ctrl+Shift+V): testes Rust e leitura do C++, sem Oráculo de janela; Disk II em outro slot que não o 6 e mais de uma carta; INIT/FORMAT e firmware de 13 setores; Mockingboard com SSI263 somado (`Mixer`), MEGA Audio e SD Music, SSI263 em modo Phasor e Echo+; VidHD em ][/][+ e SHR em PAL; Uthernet II com sessões múltiplas e servidor TCP.
 - As afirmações "O que já é igual" do manual 12 estavam todas UNVERIFIED na versão anterior desta página. Hoje: CPU, memória, vídeo NTSC/PAL, Disk II/HDD, eventos do Mockingboard/Phasor/SSI263 e o formato YAML (via importação) têm comparação (seção 1 e matriz); linha de comando, janela de configuração e atalhos F1 a F12 só têm testes próprios.
 - Desempenho: ~12 MHz em Color TV na máquina de desenvolvimento ([performance.md](../../tests/conformance/reports/performance.md)), sem hardware nem compilação fixos; não é comparação com o AppleWin.
 
@@ -160,11 +166,29 @@ Um bug do AppleWin não é, por si só, uma Divergência intencional, e uma exte
 |---|---|---|
 | Z80: F3/F5 de LDIR/CPIR/INIR/OTIR quando repetem vêm do byte alto do PC, com os ajustes de PF/HF (AUD-P-014) | A prova é de terceiros (vetores SingleStepTests/z80, 1.604.000 de 1.604.000, e ZEXALL 65/65), não uma medição própria em hardware. Não houve execução do `Z80VICE` do AppleWin para mostrar o desvio. Sem decisão do dono | A SoftCard roda o Z80 do Rust; o comportamento é observável em CP/M |
 | Quantum de 23 ciclos do alto-falante (D-3) | O Rust já usa clk/44100 exato e por isso é um FAIL contra o Oráculo; não há medição em hardware, e o dono não decidiu | Hoje está em FAIL, não em divergência intencional |
-| Os 10 FAIL do depurador (seção 1.4) | São pedidos de melhoria em cima de bugs do AppleWin; exigiriam decisão do dono | O Rust reproduz o AppleWin |
+| Os 11 FAIL do depurador (seção 1.4) | São pedidos de melhoria em cima de bugs do AppleWin; exigiriam decisão do dono | O Rust reproduz o AppleWin |
+| As divergências a favor do usuário da seção 7 | Sem prova de hardware (o AppleWin tem um defeito de software, não uma diferença de hardware) e sem decisão do dono | Já presentes no código; ver a seção 7 |
 
 As melhorias de qualidade que não alteram o comportamento comparável (gravação atômica de disco e de save-state, recusa de arquivos hostis, erros visíveis de E/S, ROM do usuário inválida com fallback) não são Divergências intencionais: o AppleWin não tem o mesmo comportamento a comparar. Elas têm testes próprios.
 
-## 7. Limites do Oráculo
+## 7. Divergências do AppleWin pendentes de decisão
+
+Pontos em que o AppleII-Rust **já faz diferente do AppleWin `a8f0d1d`**, quase sempre onde o AppleWin tem um defeito de software que a issue upstream pede para corrigir. Todos passam nos testes do port. **Nenhum é uma "Divergência intencional"**: isso exige prova de hardware ou decisão do dono (seção 6), e a ADR 0004 diz que o AppleWin vence enquanto não houver essa decisão. Eles estão aqui para ficarem visíveis, não para serem aceitos por omissão. A decisão (registrar como divergência a favor do usuário, ou reverter para o comportamento do AppleWin) está nas decisões 2 e 3 do [relatório final](relatorio-final.md).
+
+| Issue | O que faz o AppleWin `a8f0d1d` | O que faz o AppleII-Rust | Teste e evidência | Falta para virar Divergência intencional | Recomendação |
+|---|---|---|---|---|---|
+| #855 (P2) `DebuggerAutoRun` | `DebugInitialize` roda antes de `MemInitialize` (AppleWin.cpp:921-924); `bsave` e `bpx` do `DebuggerAutoRun.txt` não surtem efeito | O depurador é inicializado com a máquina pronta; o script grava os 256 bytes e registra o breakpoint | `crates/apple2-debugger/tests/p23_depurador.rs::gh855_autorun_script_can_bsave_and_set_breakpoints` | Decisão do dono (não há hardware envolvido) | Registrar |
+| #916 (P2) conversão Pravets na impressora | As tabelas de conversão de latim para cirílico estão em UTF-8 (Pravets.cpp:210-214, bytes `C3 80`); a conversão sai quebrada | Converte para CP-1251 (Pravets82 `a` = `$C0`; Pravets8A minúsculas e maiúsculas), como a issue pede | `crates/apple2-hostio/tests/audit_perifericos.rs::gh916_pravets_conversion_maps_latin_to_cp1251_cyrillic` | Decisão do dono | Registrar; considerar enviar a correção ao AppleWin |
+| #280, #358, #1374 (P2/P3) tela cheia | Usa só a escala inteira e deixa bordas; em #358 a imagem era a de 640x480 | A tela Apple ocupa toda a altura (1080 de 1080), mantém 560:384 e fica centralizada; "Integer scaling" reproduz a escala do AppleWin | `crates/applewin/tests/p23_ui.rs::p23_fullscreen_fills_the_display` | Decisão do dono (preferência de produto) | Registrar; a opção "Integer scaling" já devolve o comportamento do AppleWin |
+| #117 (P3) widescreen | Tem um defeito aberto na tela cheia widescreen (a issue #117), que o port não herda | Nunca estica: `min(largura/560, altura/384)` com barras laterais | `crates/applewin/src/ui.rs::fit_tests::widescreen_keeps_the_4_3_ratio_and_centres_with_side_bars` | Decisão do dono | Registrar |
+| #932 (P3) escala da janela | `fit_scale` usa só o monitor primário (`SM_CXSCREEN`) | Usa o monitor onde a janela está (`window.current_monitor`) | `p23_ui.rs::p23_window_scale_and_small_screens` | Decisão do dono | Registrar |
+| #1448 (P2) "Fastest" em ][ e ][+ | A issue aberta relata defeito do "Fastest" no ][ e no ][+ | Converte 40 em `Speed::Max` em qualquer Modelo | `p23_ui.rs::p23_fastest_speed_on_every_model` | Decisão do dono | Registrar |
+| #1396 (P2) Alt+F2 e o Open Apple | O F2 chama `JoyReset()` e apaga o Open Apple | Mantém o Alt apertado depois do F2 (Alt+F2 funciona) | `crates/applewin/tests/p23_entrada.rs::gh1396_alt_f2_clears_open_apple_like_joyreset` (`#[ignore]`) | Decisão do dono; hoje está em FAIL na matriz | Manter e registrar |
+| Cópia do texto do depurador (Ctrl+PrintScreen; #458, #829, #113) | Copia só 43 das 48 linhas (`DEBUG_VIRTUAL_TEXT_HEIGHT`); a #113 pede um espelho externo, que o AppleWin não tem | **Paridade mantida**: o port reproduz as 43 linhas (`Debugger::screen_text`). A biblioteca expõe o texto inteiro a quem a usar, o que o AppleWin não faz | `p23_depurador.rs::gh458_ctrl_prtscn_text_drops_the_last_console_rows` e o `#[ignore]` `gh458_ctrl_prtscn_text_has_the_whole_screen` | Decisão do dono (decisão 1: é um dos 11 FAIL do depurador) | Corrigir a cópia para as 48 linhas, registrando |
+
+Outras issues em que o port segue o AppleWin apesar de a issue pedir diferente (**não** são divergências): #520 (reset do RamWorks mantém o banco), #1313 (ruído do AY), #967 (ciclo fantasma), #961 (HLT/KIL), #266 (HOMEMOUSE). Estão na seção 4 ou nos CSV de resultados.
+
+## 8. Limites do Oráculo
 
 - O Oráculo executável é o fork do audetto (22 commits antes do `a8f0d1d`); não é o AppleWin do Windows. Os arquivos de vídeo do fork e do clone de referência são idênticos (`NTSC.cpp`, `RGBMonitor.cpp` e outros), então a defasagem não afeta o vídeo. O executável oficial 1.32.1.0 (Wine) serve só para gerar save-states.
 - Sem entrada de teclado nem troca de disco em execução; um só cartão de áudio por execução (`--audio-slot`); CPU a 1 MHz; sem relógio real (o No-Slot Clock devolve a hora do hospedeiro); `g_bFullSpeed` nunca roda; sem janela, DirectSound nem diálogos.
