@@ -1,6 +1,6 @@
 //! TOML persistence in the platform config directory.
 
-use crate::Settings;
+use crate::{Settings, SlotCardSpec};
 use std::path::{Path, PathBuf};
 
 /// Config file name inside the config directory.
@@ -64,6 +64,17 @@ impl Settings {
         toml::to_string_pretty(self).map_err(StoreError::Serialize)
     }
 
+    /// What reaches the disk. `-s7-empty-on-exit` (AppleWin.cpp:1042, GH#790) leaves slot 7 empty
+    /// in the saved configuration; the switch itself is per run and is never saved.
+    fn persisted(&self) -> Settings {
+        let mut s = self.clone();
+        if s.storage.slot7_empty_on_exit {
+            s.slots.0[7] = SlotCardSpec::Empty;
+            s.storage.slot7_empty_on_exit = false;
+        }
+        s
+    }
+
     /// Loads `path`; a missing file yields the defaults.
     pub fn load(path: &Path) -> Result<Settings, StoreError> {
         match std::fs::read_to_string(path) {
@@ -75,7 +86,7 @@ impl Settings {
 
     /// Saves atomically (temp file + rename), creating parent directories.
     pub fn save(&self, path: &Path) -> Result<(), StoreError> {
-        let text = self.to_toml()?;
+        let text = self.persisted().to_toml()?;
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }

@@ -152,3 +152,34 @@ fn save_and_load_roundtrip() {
     let mut c = MouseCard::new();
     assert!(!c.load(&[1, 2, 3]));
 }
+
+/// GH#1138 (Jeeves): "A mode byte of $08 (mouse off but VBL interrupt on) will generate VBL
+/// interrupts" (MouseInterface.cpp:120, :471-473). Movement and buttons stay silent while off.
+#[test]
+fn gh1138_vbl_interrupt_fires_with_the_mouse_off() {
+    let mut m = machine();
+    call(&mut m, 0x19, 0);
+    call(&mut m, 0x12, 0x08); // mouse off, VBL interrupt on
+    assert_eq!(card(&mut m).2 & 0x09, 0x08);
+    assert!(!m.board().interrupts.irq_line());
+    mouse_move(&mut m, SLOT, 3, 2);
+    mouse_button(&mut m, SLOT, 0, true);
+    assert!(
+        !m.board().interrupts.irq_line(),
+        "no movement/button IRQ while off"
+    );
+    m.run_frame();
+    m.run_frame();
+    assert!(
+        m.board().interrupts.irq_line(),
+        "VBL asserted IRQ with the mouse off"
+    );
+    assert_ne!(card(&mut m).3 & 0x08, 0, "VBL status bit");
+    call(&mut m, 0x13, 0); // SERVEMOUSE
+    assert!(!m.board().interrupts.irq_line());
+    // mode $00: nothing at all
+    call(&mut m, 0x12, 0x00);
+    m.run_frame();
+    m.run_frame();
+    assert!(!m.board().interrupts.irq_line());
+}

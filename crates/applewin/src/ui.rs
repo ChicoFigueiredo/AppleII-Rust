@@ -39,6 +39,8 @@ pub enum UiEvent {
     Benchmark,
     /// "Paste From Clipboard" button of the Input page.
     Paste,
+    /// "Yes" on the reboot confirmation (`Win32Frame::ConfirmReboot`).
+    RebootConfirmed,
 }
 
 pub struct UiState {
@@ -55,6 +57,8 @@ pub struct UiState {
     pub drive_rects: [Option<Rect>; 2],
     pub message: String,
     pub drive_menu: Option<usize>,
+    /// The "Are you sure you want to reboot?" box is open (GH#183).
+    pub confirm_reboot: bool,
     /// "Benchmark Emulator": the report once it is done (shown in a window).
     pub benchmark_report: Option<String>,
     pub benchmark_running: bool,
@@ -92,6 +96,7 @@ impl UiState {
             drive_rects: [None; 2],
             message: String::new(),
             drive_menu: None,
+            confirm_reboot: false,
             benchmark_report: None,
             benchmark_running: false,
             mouse: Default::default(),
@@ -184,6 +189,7 @@ impl UiState {
             &mut ev,
         );
         self.settings.show(ctx, &mut self.integer_scale, &mut ev);
+        self.reboot_window(ctx, &mut ev);
         self.benchmark_window(ctx);
         for e in &ev {
             if let UiEvent::Apply(s) | UiEvent::ApplyLive(s) = e {
@@ -245,6 +251,35 @@ impl UiState {
                 });
             });
         });
+    }
+
+    /// F2 / the Run button (WinFrame.cpp:1440, 1997-2010): unless "Confirm reboot" is off, ask
+    /// first. `true` = reboot at once; `false` = the question is now on screen (GH#183).
+    pub fn request_reboot(&mut self, confirm_reboot: bool) -> bool {
+        self.confirm_reboot = confirm_reboot;
+        !confirm_reboot
+    }
+
+    fn reboot_window(&mut self, ctx: &Context, ev: &mut Vec<UiEvent>) {
+        if !self.confirm_reboot {
+            return;
+        }
+        egui::Window::new("Reboot")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label("Are you sure you want to reboot?\n(All data will be lost!)\n\nYou can skip this dialog by unchecking \"Confirm reboot\" in the Configuration dialog.");
+                ui.horizontal(|ui| {
+                    if ui.button("Yes").clicked() {
+                        self.confirm_reboot = false;
+                        ev.push(UiEvent::RebootConfirmed);
+                    }
+                    if ui.button("No").clicked() {
+                        self.confirm_reboot = false;
+                    }
+                });
+            });
     }
 
     fn benchmark_window(&mut self, ctx: &Context) {

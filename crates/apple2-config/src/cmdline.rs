@@ -9,7 +9,7 @@ use crate::card::*;
 use crate::settings::*;
 use crate::Settings;
 use apple2_core::Model;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CmdLineError {
@@ -669,6 +669,11 @@ impl CmdLine {
     }
 }
 
+/// The absolute pathname of an image given on the command line (`GetFullPathName`).
+fn full_path(p: &Path) -> PathBuf {
+    std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
 fn sound_sockets(c: &mut SlotCardSpec) -> Option<&mut SoundSockets> {
     match c {
         SlotCardSpec::MockingboardC(k)
@@ -686,15 +691,26 @@ fn apply_one(o: &Opt, s: &mut Settings) {
         Opt::InsertCard { slot, card } => s.slots.0[*slot] = card.clone(),
         Opt::Aux(c) => s.aux.card = c.clone(),
         Opt::DiskImage { slot, drive, path } => {
-            s.disk_drives_mut(*slot)[*drive].image = Some(path.clone())
+            // AppleWin keeps the full pathname (GH#108, GH#960: `DiskGetFullPathName`), and
+            // the 'Starting Directory' follows slot 6 drive 1 only (Disk.cpp:249-257, GH#790).
+            let full = full_path(path);
+            if *slot == 6 && *drive == 0 {
+                s.storage.disk_dir = full.parent().map(Path::to_path_buf);
+            }
+            s.disk_drives_mut(*slot)[*drive].image = Some(full)
         }
         Opt::DriveDisconnected { drive } => s.disk_drives_mut(6)[*drive].connected = false,
         Opt::HdImage { slot, unit, path } => {
             if !matches!(s.slots.0[*slot], SlotCardSpec::GenericHdd { .. }) {
                 s.slots.0[*slot] = SlotCardSpec::new(CardType::GenericHdd);
             }
+            let full = full_path(path);
+            // 'HDV Starting Directory' follows slot 7 hard disk 1 only (Harddisk.cpp:370-378).
+            if *slot == 7 && *unit == 0 {
+                s.storage.hdv_dir = full.parent().map(Path::to_path_buf);
+            }
             if let SlotCardSpec::GenericHdd { images, .. } = &mut s.slots.0[*slot] {
-                images[*unit] = Some(path.clone());
+                images[*unit] = Some(full);
             }
         }
         Opt::HdcFirmware { slot, mode } => {
@@ -937,14 +953,16 @@ mod tests {
                 drives,
             } => {
                 assert!(*firmware_13_sector);
-                assert_eq!(drives[0].image, Some("a.dsk".into()));
-                assert_eq!(drives[1].image, Some("b.dsk".into()));
+                // images are kept by their full pathname (GetFullPathName)
+                let abs = |n: &str| Some(std::path::absolute(n).unwrap());
+                assert_eq!(drives[0].image, abs("a.dsk"));
+                assert_eq!(drives[1].image, abs("b.dsk"));
                 assert!(drives[0].connected && !drives[1].connected);
             }
             x => panic!("{x:?}"),
         }
         assert!(
-            matches!(s.slot(7), SlotCardSpec::GenericHdd { images, .. } if images[0] == Some("h.hdv".into()))
+            matches!(s.slot(7), SlotCardSpec::GenericHdd { images, .. } if images[0] == Some(std::path::absolute("h.hdv").unwrap()))
         );
     }
 

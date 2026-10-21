@@ -523,7 +523,12 @@ fn gh1491_disk_image_in_an_empty_slot_inserts_the_card() {
         let slot = if args.contains(&"-s5") { 5 } else { 6 };
         let imgs = disk_of(&s, slot);
         let want = if slot == 5 { 1 } else { 0 };
-        assert_eq!(imgs[want], Some("demo.dsk".into()), "{args:?}");
+        // o AppleWin guarda o caminho completo (GetFullPathName; Disk.cpp:241)
+        assert_eq!(
+            imgs[want],
+            Some(std::path::absolute("demo.dsk").unwrap()),
+            "{args:?}"
+        );
     }
     for args in [
         &["-s7", "empty", "-h1", "demo.hdv"][..],
@@ -531,7 +536,7 @@ fn gh1491_disk_image_in_an_empty_slot_inserts_the_card() {
     ] {
         let s = parse(args);
         assert!(
-            matches!(&s.slots.0[7], SlotCardSpec::GenericHdd { images, .. } if images[0] == Some("demo.hdv".into())),
+            matches!(&s.slots.0[7], SlotCardSpec::GenericHdd { images, .. } if images[0] == Some(std::path::absolute("demo.hdv").unwrap())),
             "{args:?}"
         );
     }
