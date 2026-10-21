@@ -37,9 +37,104 @@ pub struct Case {
     #[serde(default)]
     pub audio: Option<AudioSpec>,
     pub oracle: OracleSpec,
+    /// Video options of `framebuffer-hash` cases.
+    #[serde(default)]
+    pub video: Option<VideoSpec>,
     /// Free text kept in the report.
     #[serde(default)]
     pub notes: Option<String>,
+}
+
+/// Rendering options and starting scene of a `framebuffer-hash` case (HU-0201/HU-0202).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VideoSpec {
+    /// `Tipo de vídeo`: `mono-custom`, `color-idealized`, `color-rgb`, `color-monitor`,
+    /// `color-tv` (default), `mono-tv`, `mono-amber`, `mono-green` or `mono-white`.
+    #[serde(default, rename = "type")]
+    pub video_type: Option<String>,
+    /// 60 (NTSC, default) or 50 (PAL).
+    #[serde(default)]
+    pub hz: Option<u32>,
+    /// `video7-sl7` (default), `le-chat-mauve-eve` or `le-chat-mauve-feline`.
+    #[serde(default)]
+    pub rgb_card: Option<String>,
+    /// `visible` (560x384, default) or `full` (600x420 with the 20/18-pixel borders).
+    #[serde(default)]
+    pub region: Option<String>,
+    /// Scene file relative to `tests/conformance` (see `scene.rs`); absent: the ROM boots.
+    #[serde(default)]
+    pub scene: Option<String>,
+    /// SHA-256 of the scene file.
+    #[serde(default)]
+    pub scene_sha256: Option<String>,
+    /// Slot (1-7) of a VidHD card: 640x400 framebuffer and Super Hi-Res (HU-0202).
+    #[serde(default)]
+    pub vidhd_slot: Option<u8>,
+}
+
+impl VideoSpec {
+    pub fn video_type(&self) -> Result<apple2_video::VideoType, String> {
+        parse_video_type(self.video_type.as_deref().unwrap_or("color-tv"))
+    }
+
+    pub fn standard(&self) -> Result<apple2_core::VideoStandard, String> {
+        match self.hz.unwrap_or(60) {
+            60 => Ok(apple2_core::VideoStandard::Ntsc),
+            50 => Ok(apple2_core::VideoStandard::Pal),
+            h => Err(format!("video.hz {h}: use 50 or 60")),
+        }
+    }
+
+    pub fn rgb_card(&self) -> Result<apple2_video::RgbCard, String> {
+        match self.rgb_card.as_deref().unwrap_or("video7-sl7") {
+            "video7-sl7" => Ok(apple2_video::RgbCard::Video7Sl7),
+            "le-chat-mauve-eve" => Ok(apple2_video::RgbCard::LeChatMauveEve),
+            "le-chat-mauve-feline" => Ok(apple2_video::RgbCard::LeChatMauveFeline),
+            o => Err(format!("video.rgb_card `{o}` unknown")),
+        }
+    }
+
+    pub fn full_region(&self) -> Result<bool, String> {
+        match self.region.as_deref().unwrap_or("visible") {
+            "visible" => Ok(false),
+            "full" => Ok(true),
+            o => Err(format!("video.region `{o}`: use visible or full")),
+        }
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if self.vidhd_slot.is_some_and(|s| !(1..=7).contains(&s)) {
+            return Err("video.vidhd_slot: use 1-7".into());
+        }
+        self.video_type()?;
+        self.standard()?;
+        self.rgb_card()?;
+        self.full_region()?;
+        if let Some(h) = &self.scene_sha256 {
+            if !is_sha256_hex(h) {
+                return Err("video.scene_sha256 is not 64 lowercase hex digits".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `VideoType` by kebab-case name or AppleWin number (0-8).
+pub fn parse_video_type(s: &str) -> Result<apple2_video::VideoType, String> {
+    use apple2_video::VideoType as V;
+    Ok(match s {
+        "mono-custom" | "0" => V::MonoCustom,
+        "color-idealized" | "1" => V::ColorIdealized,
+        "color-rgb" | "2" => V::ColorVideocardRgb,
+        "color-monitor" | "3" => V::ColorMonitorNtsc,
+        "color-tv" | "4" => V::ColorTv,
+        "mono-tv" | "5" => V::MonoTv,
+        "mono-amber" | "6" => V::MonoAmber,
+        "mono-green" | "7" => V::MonoGreen,
+        "mono-white" | "8" => V::MonoWhite,
+        o => return Err(format!("video.type `{o}` unknown")),
+    })
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -307,6 +402,12 @@ impl Case {
             ev.validate()?;
         }
         parse_model(&self.model)?;
+        if let Some(v) = &self.video {
+            v.validate()?;
+            if self.oracle.kind != OracleKind::FramebufferHash {
+                return Err("`video` only applies to framebuffer-hash cases".into());
+            }
+        }
         self.cpu_override()?;
         self.card_slots()?;
         self.disk2_slot()?;

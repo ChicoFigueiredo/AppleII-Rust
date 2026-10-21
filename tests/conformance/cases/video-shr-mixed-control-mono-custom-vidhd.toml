@@ -1,0 +1,22 @@
+id = "video-shr-mixed-control-mono-custom-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena shr-mixed-control em mono-custom a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-custom"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/shr-mixed-control.scene"
+scene_sha256 = "cd0a8d550b755da04fbb4eed6bf283d48fba60f5983434b3504337b25a636358"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "204874e4b0ef073d76c47d1c337e5e39ea726335e87dccfbe3c1e0722c0d02d6"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/shr-mixed-control.scene --video-type 0 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=204874e4b0ef073d76c47d1c337e5e39ea726335e87dccfbe3c1e0722c0d02d6 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

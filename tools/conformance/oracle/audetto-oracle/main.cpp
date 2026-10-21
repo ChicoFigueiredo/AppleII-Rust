@@ -41,6 +41,8 @@
 #include "frontends/common2/programoptions.h"
 #include "frontends/common2/ptreeregistry.h"
 
+#include "framebuffer.h"
+
 namespace
 {
     FILE *g_out = nullptr;
@@ -155,6 +157,8 @@ int main(int argc, char **argv)
             cards = argv[++i];
         else if (arg == "--meta" && hasValue)
             meta.emplace_back(argv[++i]);
+        else if (fbdump::parseArg(argc, argv, i))
+            ;
         else if (audio_oracle::parseArg(i, argc, argv))
         {
         }
@@ -207,6 +211,8 @@ int main(int argc, char **argv)
             RegSetConfigSlotNewCardType(slot, audio_oracle::cardTypeFor(slot, type));
         }
 
+        fbdump::configureRegistry(*registry);
+
         const LoggerContext loggerContext(false);
         const auto frame = std::make_shared<OracleFrame>(options);
         // The default Paddle reports a centred, button-less joystick (no real device).
@@ -215,6 +221,9 @@ int main(int argc, char **argv)
         g_bDisableDirectSound = true;
         g_bDisableDirectSoundMockingboard = true;
         audio_oracle::begin();
+
+        if (fbdump::enabled())
+            return fbdump::run(frames);
 
         const uint64_t start = g_nCumulativeCycles;
         const uint64_t total = cycles ? cycles : frames * NTSC_GetCyclesPerFrame();

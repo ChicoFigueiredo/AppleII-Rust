@@ -1,0 +1,21 @@
+id = "video-midline-full-mixed-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena midline-full-mixed em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/midline-full-mixed.scene"
+scene_sha256 = "fda635eb3a0e709264bc07dc85acf8156c5a6ecb5213ff4e8d33ed5cb15f79b0"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "2ddd7ef06d5d46885c1b98f064f66c614693bd8bf7a46850e134a397585bcc54"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/midline-full-mixed.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=2ddd7ef06d5d46885c1b98f064f66c614693bd8bf7a46850e134a397585bcc54 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

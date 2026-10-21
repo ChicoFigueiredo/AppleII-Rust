@@ -1,0 +1,22 @@
+id = "video-text80-color-monitor-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena text80 em color-monitor a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-monitor"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/text80.scene"
+scene_sha256 = "592b36305f2029695fc6e06ea3bac7966fcfba30314fff136fb7b2ecb5655e43"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "94c05bfaac038a7441b8e9bbd4a6613c4cd1d4527fa5255bb83c7b39f00019b0"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/text80.scene --video-type 3 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=94c05bfaac038a7441b8e9bbd4a6613c4cd1d4527fa5255bb83c7b39f00019b0 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

@@ -78,6 +78,29 @@ Cache (fora do Git, compartilhado entre worktrees): `target/conformance-cache/or
 
 Linhas `#chave=valor` (UTF-8, antes do cabeçalho): `trace_format`, `oracle`, `model`, `cpu`, `frames` (se pedido), `cycles`, `start_cycle`, `memclear`, `cards`, `input`, `disk`, `state`, `rom_sha256`, `applewin_sha`, `port_base_applewin_sha`, `fork_sha`, `fork_url` (e `fixture_sha256` com disco/save-state). Depois `cycle,pc,op,a,x,y,sp,p` e uma linha por instrução: `cycle` decimal, `pc` com 4 dígitos hexa maiúsculos, os demais com 2. Finais de linha `\n`.
 
+## Framebuffer (HU-0201, HU-0202)
+
+Modo à parte do trace: com `--fb-out PREFIX` o oráculo roda `--frames N` com a atualização de vídeo por opcode ligada (`CpuExecute(.., true)`, como os frontends reais), para no fim do quadro N (primeira instrução que cruza `N x ciclos por quadro`) e grava `PREFIX.rgba` (framebuffer inteiro, RGBA8, de cima para baixo) e imprime, em linhas `chave=valor`, o tamanho, o SHA-256 da área visível (`fb_sha256_visible`) e do buffer inteiro com as bordas (`fb_sha256_full`), os ciclos finais e o PC. Nenhum trace é escrito (use `--out /dev/null`). O código está em `audetto-oracle/framebuffer.{h,cpp}`; `main.cpp` só repassa as opções.
+
+| Opção | Efeito |
+|---|---|
+| `--fb-out PREFIX` | seleciona o modo framebuffer |
+| `--scene FILE` | carrega uma cena ("scene v1", abaixo) logo após o power-on; sem ela a ROM dá o boot |
+| `--video-type N` | `VideoType_e`: 0 mono custom, 1 cor idealizada, 2 carta RGB, 3 monitor NTSC, 4 Color TV (padrão), 5 B&W TV, 6 âmbar, 7 verde, 8 branco |
+| `--video-hz 50\|60` | PAL ou NTSC |
+| `--rgb-card N` | 0 Video-7 SL7 (= Apple), 1 Le Chat Mauve EVE, 2 Feline |
+| `--vidhd SLOT` | VidHD no slot: framebuffer 680x436, Super Hi-Res |
+| `--state FILE.aws.yaml` | continua de um save-state (ver `aws-for-oracle.py`) |
+| `FB_DEBUG=1`, `FB_WATCH=x,y` | diagnóstico: modo de vídeo, memória, posição do scanner; endereço de um pixel e `SIGTRAP` para `gdb` |
+
+Cena "scene v1" (texto, `tests/conformance/inputs/video/*.scene`): linhas `main ADDR HEX...` e `aux ADDR HEX...` (RAM principal e auxiliar, escritas direto nos bancos), `entry ADDR` (o PC inicial, ciclo 0), `model` e `vidhd SLOT` informativos, `#` comentário. As cenas são geradas por `crates/apple2-video/examples/gen_scenes.rs`; o lado Rust as carrega com `conformance scene-fb` e com os casos `[video]` do harness. O lote completo é `video-differential.py` (ver [docs/conformance/audit/video-differential.md](../../../docs/conformance/audit/video-differential.md)).
+
+Três cuidados que o modo framebuffer exigiu:
+
+1. O framebuffer do AppleWin é um DIB bottom-up; as linhas são invertidas na saída.
+2. O build usa `-fno-strict-aliasing`: o código de vídeo do AppleWin lê `RGBQUAD` como `UINT32`, comportamento indefinido que o GCC `-O2` explora (texto da carta RGB saía com cores de lixo).
+3. `--state` com um save-state do port só carrega depois de `aws-for-oracle.py`: o fork (3e8054b) recusa a unidade "Game I/O Connector" versão 4 (Shift Key Mod, a8f0d1d), e sem a conversão o oráculo dá boot em vez de continuar o estado.
+
 ## Relógio de vídeo (alteração do frontend `main.cpp`, HU-0103)
 
 A primeira versão do oráculo chamava `CpuExecute(slice, false)` (como `CommonFrame::Execute` quando `noVideoUpdate`). Com `bVideoUpdate = false` o `g_nVideoClockHorz/Vert` do NTSC nunca avança e toda leitura do floating bus (`$C056`, `$C050`, `$C0xx` sem dono) devolve o byte de um único endereço do scanner. O AppleWin do Windows sempre atualiza o vídeo, então isto era um artefato do frontend headless do fork, não comportamento do AppleWin. `main.cpp` agora chama `CpuExecute(slice, true)`; o patch `audetto-trace.patch` e o código do AppleWin não mudaram. Os traces de referência foram regenerados (o cabeçalho ganhou `#video_clock=`). O Rust já avançava o scanner a cada opcode.
@@ -107,7 +130,7 @@ Os mesmos hashes estão em `tests/conformance/cases/trace-applewin-*.toml`.
 1. O oráculo é o upstream de 2026-07-26 + 22 commits a menos que o port (ver abaixo); divergência em área tocada por esses commits não prova bug do port.
 2. P tem os bits 4 e 5 forçados em 1 (comportamento do AppleWin); o RESET deixa A/X/Y em `FF`.
 3. Interrupções e Z80 não geram linhas de trace; só o 6502/65C02 principal.
-4. Só o fluxo de CPU é comparável: memória, framebuffer e áudio não são exportados ainda.
+4. O trace só tem o fluxo de CPU; o framebuffer é exportado pelo modo `--fb-out` (acima); memória e áudio não são exportados ainda.
 5. Teclado, joystick e rede não são simulados; `input=none`.
 6. Modelos suportados: Apple ][, ][+, ][ J-Plus, //e e //e Enhanced. O //c e os clones (Pravets, Base64A, TK3000) exigiriam acrescentar o nome em `main.cpp`/`run-audetto-oracle.sh`.
 7. O clone é recursivo (submódulos de imgui, ~100 MB) mesmo sem usá-los.

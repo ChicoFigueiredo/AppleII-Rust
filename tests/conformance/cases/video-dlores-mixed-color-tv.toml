@@ -1,0 +1,21 @@
+id = "video-dlores-mixed-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena dlores-mixed em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/dlores-mixed.scene"
+scene_sha256 = "105f02a9db554ca1f3f9da61702e1286b1a06f57e73c44d602d54925aa7feb76"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "d84e5eb24b47ca1fce6fd0374ae678ca270c682ad1532c910d89cb79332fae38"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/dlores-mixed.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=d84e5eb24b47ca1fce6fd0374ae678ca270c682ad1532c910d89cb79332fae38 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

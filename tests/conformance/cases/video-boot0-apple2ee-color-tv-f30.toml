@@ -1,0 +1,20 @@
+id = "video-boot0-apple2ee-color-tv-f30"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) do boot da ROM (apple2ee, sem disco, RAM zerada) em color-tv a 60 Hz, após 30 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+memclear = 0
+
+[run]
+frames = 30
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "cbaeda20d3d73875f35c2d51a3b4300e452a39119517df6efaff3fda6bee482e"
+source = "audetto-oracle --model apple2ee --frames 30 --out /dev/null --cards none --fb-out OUT --memclear 0 --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=cbaeda20d3d73875f35c2d51a3b4300e452a39119517df6efaff3fda6bee482e (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

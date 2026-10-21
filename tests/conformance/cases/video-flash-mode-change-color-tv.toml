@@ -1,0 +1,21 @@
+id = "video-flash-mode-change-color-tv"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena flash-mode-change em color-tv a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-tv"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/flash-mode-change.scene"
+scene_sha256 = "20e3562979eb3f2fe233a2101bcf766029637a9cb065c00b8a3687cc574203bc"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "ebe500b99a9acfc31f9360c73fc7030705f11503d3551edb749f205de32c2af5"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/flash-mode-change.scene --video-type 4 --video-hz 60 --rgb-card 0 => fb_sha256_full=ebe500b99a9acfc31f9360c73fc7030705f11503d3551edb749f205de32c2af5 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

@@ -1,0 +1,22 @@
+id = "video-shr-640-noise-mono-custom-vidhd"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena shr-640-noise em mono-custom a 60 Hz com um VidHD (framebuffer 640x400), após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "mono-custom"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+vidhd_slot = 2
+scene = "inputs/video/shr-640-noise.scene"
+scene_sha256 = "c7b57be872da383d05e11a30f72abf1eec8fed5b91d9051ff9ae396b589d10ab"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "a910394adf52321d9776651bed492947924df23d03f7e666f9d1abfec317c11d"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/shr-640-noise.scene --video-type 0 --video-hz 60 --rgb-card 0 --vidhd 2 => fb_sha256_full=a910394adf52321d9776651bed492947924df23d03f7e666f9d1abfec317c11d (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"
