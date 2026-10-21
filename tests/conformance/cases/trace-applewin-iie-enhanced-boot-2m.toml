@@ -1,0 +1,16 @@
+id = "trace-applewin-iie-enhanced-boot-2m"
+story = "HU-0101"
+criterion = "Os 2.000.000 primeiros ciclos do boot coincidem instrução a instrução (ciclo, PC, opcode, A, X, Y, SP, P) com o AppleWin (HU-0103: inclui o floating bus lido pelo boot)"
+model = "apple2e-enhanced"
+cards = ["6:disk2"]
+notes = "Convenções do Trace v1 em docs/conformance/test-oracles.md (P com bits 4 e 5, interrupções sem linha, RAM FF FF 00 00 determinística, relógio de vídeo avançando a cada opcode). Registro das divergências: docs/conformance/audit/cpu-trace-differential.md."
+
+[run]
+cycles = 2000000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "Oráculo audetto-oracle (fork audetto/AppleWin a1e20c0362f392dc25f1a3b218d2f84d4f1a25da, AppleWin upstream 3e8054b4627624398e4589f7f27b3d40a6b9718e, port base a8f0d1d40f551ad9e010522c29c2891e33c88275). Regenerar: tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 2000000 --out target/conformance-cache/reference-traces/applewin-apple2ee-boot-2m.csv"
+trace = "../../target/conformance-cache/reference-traces/applewin-apple2ee-boot-2m.csv"
+trace_sha256 = "a000df3a0f159f993aab254c692b2fbfd3ffc10a2942d116c5f8abe3d69f61d4"
