@@ -174,8 +174,12 @@ pub struct MachineSettings {
     pub custom_rom: Option<PathBuf>,
     pub custom_f8_rom: Option<PathBuf>,
     pub video_rom: Option<PathBuf>,
-    /// `-memclear` pattern index (`g_nMemoryClearType`).
+    /// `-memclear` pattern index (`g_nMemoryClearType`); AppleWin's default is 2 (`MIP_FF_FF_00_00`).
     pub memory_clear_type: u32,
+    /// Seed of the "random" power-on RAM bytes (`getRandomTime`). `None`: the host picks one from
+    /// the clock when it builds the machine (the core itself never reads the clock, ADR 0001);
+    /// `to_machine_config` alone then gives the oracle's deterministic draw.
+    pub memory_seed: Option<u32>,
     /// `-bootsector` custom boot sector file.
     pub boot_sector: Option<PathBuf>,
 }
@@ -193,7 +197,8 @@ impl Default for MachineSettings {
             custom_rom: None,
             custom_f8_rom: None,
             video_rom: None,
-            memory_clear_type: 0,
+            memory_clear_type: 2,
+            memory_seed: None,
             boot_sector: None,
         }
     }
@@ -545,6 +550,8 @@ impl<'de> Deserialize<'de> for Slots {
 #[serde(default)]
 pub struct Settings {
     pub machine: MachineSettings,
+    /// Optional `[roms]` table: user ROM files (see [`crate::roms`]).
+    pub roms: crate::roms::RomSettings,
     pub video: VideoSettings,
     pub sound: SoundSettings,
     pub joystick: JoystickSettings,

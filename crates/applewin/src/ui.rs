@@ -29,10 +29,14 @@ pub enum UiEvent {
         drive: usize,
         path: std::path::PathBuf,
     },
+    /// "Insert disk image (read only)...": pick a file and mount it write-protected.
+    PickDiskReadOnly(usize),
     SetWriteProtect {
         drive: usize,
         on: bool,
     },
+    /// "Benchmark Emulator" button of the Advanced page.
+    Benchmark,
     /// "Paste From Clipboard" button of the Input page.
     Paste,
 }
@@ -47,8 +51,13 @@ pub struct UiState {
     pub integer_scale: bool,
     /// Where the Apple screen was drawn last frame (for mouse-as-joystick mapping).
     pub screen_rect: Option<Rect>,
+    /// Where the Drive 1 / Drive 2 buttons were drawn (drag-and-drop targets).
+    pub drive_rects: [Option<Rect>; 2],
     pub message: String,
     pub drive_menu: Option<usize>,
+    /// "Benchmark Emulator": the report once it is done (shown in a window).
+    pub benchmark_report: Option<String>,
+    pub benchmark_running: bool,
     /// Mouse capture state for the overlay hint (set by the shell).
     pub mouse: crate::overlay::MouseState,
     /// Rasterised SVG toolbar icons, per pixel size.
@@ -80,8 +89,11 @@ impl UiState {
             show_toolbar: true,
             integer_scale: false,
             screen_rect: None,
+            drive_rects: [None; 2],
             message: String::new(),
             drive_menu: None,
+            benchmark_report: None,
+            benchmark_running: false,
             mouse: Default::default(),
             icons: IconCache::default(),
         }
@@ -105,6 +117,9 @@ impl UiState {
 
     pub fn draw(&mut self, ctx: &Context, status: &EmuStatus, fullscreen: bool) -> Vec<UiEvent> {
         let mut ev = Vec::new();
+        if fullscreen || !self.show_toolbar {
+            self.drive_rects = [None; 2];
+        }
         if !fullscreen && self.show_toolbar {
             egui::SidePanel::left("toolbar")
                 .exact_width(104.0)
@@ -127,7 +142,7 @@ impl UiState {
                     ui.label(toolbar::status_line(status));
                     for (i, d) in status.drives.iter().enumerate() {
                         ui.separator();
-                        ui.label(toolbar::drive_text(i, d));
+                        ui.label(toolbar::drive_text(i, d, status.sectors[i]));
                     }
                     if !self.message.is_empty() {
                         ui.separator();
@@ -172,6 +187,7 @@ impl UiState {
             &mut ev,
         );
         self.settings.show(ctx, &mut self.integer_scale, &mut ev);
+        self.benchmark_window(ctx);
         for e in &ev {
             if let UiEvent::Apply(s) | UiEvent::ApplyLive(s) = e {
                 self.applied = (**s).clone();
@@ -204,6 +220,9 @@ impl UiState {
                 None => ui.add_sized(Vec2::splat(ICON_POINTS), egui::Button::new(&label)),
             };
             let resp = resp.on_hover_text(format!("{label} (F{})", b.fkey()));
+            if let Some(d) = drive {
+                self.drive_rects[d] = Some(resp.rect);
+            }
             if resp.clicked() {
                 ev.push(UiEvent::Action(b.action()));
             }
@@ -229,6 +248,37 @@ impl UiState {
                 });
             });
         });
+    }
+
+    fn benchmark_window(&mut self, ctx: &Context) {
+        if self.benchmark_running {
+            egui::Window::new("Benchmarks")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.label("Running the benchmark (about 7 seconds)...");
+                    ui.spinner();
+                });
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
+        if let Some(text) = self.benchmark_report.clone() {
+            let mut open = true;
+            egui::Window::new("Benchmarks")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.monospace(&text);
+                    if ui.button("OK").clicked() {
+                        self.benchmark_report = None;
+                    }
+                });
+            if !open {
+                self.benchmark_report = None;
+            }
+        }
     }
 
     /// F8: opens the Settings dialog on the applied settings, or closes it.

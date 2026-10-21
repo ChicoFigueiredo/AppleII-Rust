@@ -9,10 +9,11 @@
 use apple2_audio::ay8910::AyType;
 use apple2_audio::ssi263::SsiType;
 use apple2_audio::{AudioBus, MockingboardCard, SamCard, Sockets, Variant};
+use apple2_cards::snesmax::ButtonMap;
 use apple2_cards::{DongleKind, HostClock, NoSlotClock, WallTime};
 use apple2_config::card::{AyChip, HdcFirmware, PrinterSpec, SoundSockets, Ssi263Chip};
 use apple2_config::settings::DongleType;
-use apple2_config::{Settings, SlotCardSpec};
+use apple2_config::{CardType, Settings, SlotCardSpec};
 use apple2_core::{Card, Machine, Model};
 use apple2_hostio::network::{NetworkBackend, NullNetwork};
 use apple2_hostio::printer::{PrinterEncoding, PrinterOptions};
@@ -290,10 +291,182 @@ pub fn build_card(
             *virtual_dns,
         ))),
         SlotCardSpec::FourPlay => Some(Box::new(apple2_cards::FourPlay::new())),
-        SlotCardSpec::SnesMax { .. } => Some(Box::new(apple2_cards::SnesMax::new())),
+        SlotCardSpec::SnesMax {
+            alt_controller,
+            user_mapping,
+        } => Some(Box::new(snes_max_card(
+            *alt_controller,
+            user_mapping,
+            warnings,
+        ))),
         SlotCardSpec::VidHd => Some(Box::new(apple2_cards::VidHd::new())),
         SlotCardSpec::BreakpointCard => Some(Box::new(apple2_cards::BreakpointCard::new())),
     }
+}
+
+/// The SNES MAX with the `-snes-max-alt-joy1/2` and `-snes-max-user-joy1/2` command-line options
+/// applied (`SNESMAXCard` constructor, SNESMAX.cpp / CmdLine.cpp:727-748). A user mapping file
+/// that parses enables the alternative controller for that joystick too
+/// (`ParseControllerMappingFile`); one that does not leaves the defaults and adds a warning with
+/// AppleWin's message (which shows it in a message box).
+pub fn snes_max_card(
+    alt_controller: [bool; 2],
+    user_mapping: &[Option<PathBuf>; 2],
+    warnings: &mut Vec<String>,
+) -> apple2_cards::SnesMax {
+    let mut c = apple2_cards::SnesMax::new();
+    for n in 0..2 {
+        c.set_alt_controller(n, alt_controller[n]);
+        if let Some(path) = &user_mapping[n] {
+            match parse_controller_mapping_file(path) {
+                Ok(map) => {
+                    c.set_alt_map(n, map);
+                    c.set_alt_controller(n, true);
+                }
+                Err(e) => warnings.push(format!("Error with yaml file: {}\n{e}", path.display())),
+            }
+        }
+    }
+    c
+}
+
+/// `SNESMAXCard::ParseControllerMappingFile` (SNESMAX.cpp): an `AppleWin Controller Button
+/// Remapping` v1 document whose first `Unit` has `HID`, `Description` and `1`..`16` giving the
+/// card button (`A B X Y LB RB SELECT START`, empty = unused) of each host button. Only the
+/// first unit is read (the source breaks out of its loop: "TODO: extend to support multiple
+/// controllers"). A file with no unit is accepted and keeps the default table. Unlike AppleWin,
+/// which edits its table while reading, a failure leaves the table untouched.
+pub fn parse_controller_mapping_file(path: &std::path::Path) -> Result<ButtonMap, String> {
+    use apple2_savestate::yaml::{self, Map, Node};
+    let text = std::fs::read_to_string(path)
+        .map_err(|_| "Controller mapping file: Failed to initialize parser or open file")?;
+    let top = yaml::parse(&text).map_err(|e| e.to_string())?;
+    let mut entries = top.iter();
+    let hdr = match entries.next() {
+        Some((k, Node::Map(m))) if k == "File_hdr" => Map {
+            name: "File_hdr",
+            entries: m,
+        },
+        Some(_) => return Err("Failed to find file header".into()),
+        None => return Err("File_hdr: Failed to find scalar".into()),
+    };
+    let tag = hdr.string("Tag").map_err(|e| e.to_string())?;
+    if tag != "AppleWin Controller Button Remapping" {
+        return Err("File_hdr: Bad tag".into());
+    }
+    if hdr.u32("Version").map_err(|e| e.to_string())? != 1 {
+        return Err("Controller mapping file: Version mismatch".into());
+    }
+    let mut map = ButtonMap::ALT_DEFAULT;
+    match entries.next() {
+        None => {}
+        Some((k, Node::Map(unit))) if k == "Unit" => {
+            let u = Map {
+                name: "Unit",
+                entries: unit,
+            };
+            u.string("HID").map_err(|e| e.to_string())?;
+            u.string("Description").map_err(|e| e.to_string())?;
+            for (i, slot) in map.0.iter_mut().enumerate() {
+                // A missing key is UNUSED (`LoadString_NoThrow` not found).
+                *slot = match u.str_opt(&(i + 1).to_string()) {
+                    Some(name) => ButtonMap::parse_name(name)?,
+                    None => None,
+                };
+            }
+        }
+        Some((k, _)) => return Err(format!("Unknown top-level scalar: {k}")),
+    }
+    Ok(map)
+}
+
+/// Slot configuration checks done before building, with AppleWin's behaviour (the oracle wins,
+/// ADR 0004): `CardManager::InsertInternal` (CardManager.cpp:52-131) takes the slots in ascending
+/// order and, for the cards it keeps a single pointer to (Mouse Interface, SSC, printer, Z80,
+/// VidHD), leaves a later duplicate's slot EMPTY (`_ASSERT` in debug builds). The first one stays.
+/// Uthernet, Uthernet II, 4Play and SNES MAX have no such check there (only the slot dialog
+/// refuses them), so they are built as configured. Returns the warnings (our extension, shown in
+/// the status line and on stderr; they do not change what is emulated) and the slots whose card
+/// must be left empty.
+pub fn check_slots(s: &Settings) -> (Vec<String>, [bool; 8]) {
+    let mut warnings = Vec::new();
+    let mut ignored = [false; 8];
+    let types: Vec<CardType> = s.slots.0.iter().map(SlotCardSpec::card_type).collect();
+    let slots_of = |ty: CardType| -> Vec<usize> { (1..8).filter(|&i| types[i] == ty).collect() };
+    let list = |v: &[usize]| {
+        v.iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    // The cards CardManager.cpp:64-117 refuses a second time.
+    for ty in [
+        CardType::MouseInterface,
+        CardType::Ssc,
+        CardType::GenericPrinter,
+        CardType::Z80,
+        CardType::VidHd,
+    ] {
+        let at = slots_of(ty);
+        if let Some((first, rest)) = at.split_first() {
+            for &n in rest {
+                ignored[n] = true;
+            }
+            if !rest.is_empty() {
+                warnings.push(format!(
+                    "{ty:?} can be plugged in only one slot: kept in slot {first}, slots {} left empty (as AppleWin)",
+                    list(rest)
+                ));
+            }
+        }
+    }
+    // Only the slot dialog prevents these in AppleWin; the card manager builds them all.
+    for ty in [
+        CardType::FourPlay,
+        CardType::SnesMax,
+        CardType::Uthernet,
+        CardType::Uthernet2,
+    ] {
+        let at = slots_of(ty);
+        if at.len() > 1 {
+            warnings.push(format!(
+                "{ty:?} is in several slots ({}); AppleWin's slot dialog would refuse this",
+                list(&at)
+            ));
+        }
+    }
+    let (u1, u2) = (slots_of(CardType::Uthernet), slots_of(CardType::Uthernet2));
+    if !u1.is_empty() && !u2.is_empty() {
+        warnings.push(format!(
+            "Uthernet (slot {}) and Uthernet II (slot {}) together: AppleWin's slot dialog would refuse this",
+            list(&u1),
+            list(&u2)
+        ));
+    }
+    let slot0 = types[0];
+    let ok0 = if s.machine.model.is_apple2() {
+        matches!(
+            slot0,
+            CardType::Empty | CardType::LanguageCard | CardType::Saturn128K
+        )
+    } else {
+        matches!(slot0, CardType::Empty | CardType::LanguageCardIIe)
+    };
+    if !ok0 {
+        warnings.push(format!(
+            "Slot 0: {slot0:?} is not valid in slot 0 of this model and was ignored"
+        ));
+    }
+    for ty in [CardType::LanguageCard, CardType::LanguageCardIIe] {
+        let at = slots_of(ty);
+        if !at.is_empty() {
+            warnings.push(format!(
+                "Slot {}: {ty:?} only works in slot 0 and was ignored",
+                list(&at)
+            ));
+        }
+    }
+    (warnings, ignored)
 }
 
 /// The machine for `settings`: core configuration (model, CPU, ROMs, RAM cards, aux card), the
@@ -307,11 +480,16 @@ pub fn build_machine_report(
     settings: &Settings,
     bus: &AudioBus,
 ) -> Result<(Machine, Vec<String>), String> {
-    let config = settings.to_machine_config_with_roms()?;
-    let mut m = Machine::try_new(config).map_err(|e| e.to_string())?;
-    let mut warnings = Vec::new();
+    let (slot_warnings, ignored) = check_slots(settings);
+    let roms = settings.resolve_roms();
+    let mut m = Machine::try_new(roms.machine).map_err(|e| e.to_string())?;
+    let mut warnings = roms.warnings;
+    warnings.extend(slot_warnings);
     let env = Env { settings, bus };
     for (slot, spec) in settings.slots.0.iter().enumerate().skip(1) {
+        if ignored[slot] {
+            continue;
+        }
         if let Some(card) = build_card(spec, slot as u8, &env, &mut warnings) {
             if !m.insert_card(slot as u8, card) {
                 warnings.push(format!("slot {slot}: card not accepted"));

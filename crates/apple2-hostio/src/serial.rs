@@ -81,6 +81,13 @@ pub trait SerialBackend: Send {
     fn mirrors_dsr_to_dcd(&self) -> bool {
         false
     }
+
+    /// Why the last [`open`](Self::open) failed, until one succeeds (AUD-P-030). AppleWin keeps
+    /// the card disconnected and only logs; we keep the emulation going the same way, but the
+    /// message is also queued in [`crate::diagnostics`] for the frontend.
+    fn last_error(&self) -> Option<&str> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -213,6 +220,7 @@ pub struct TcpServerSerial {
     port: u16,
     listener: Option<TcpListener>,
     client: Option<TcpStream>,
+    error: Option<String>,
 }
 
 impl TcpServerSerial {
@@ -221,6 +229,7 @@ impl TcpServerSerial {
             port,
             listener: None,
             client: None,
+            error: None,
         }
     }
 
@@ -256,12 +265,30 @@ impl Default for TcpServerSerial {
 impl SerialBackend for TcpServerSerial {
     fn open(&mut self) -> bool {
         if self.listener.is_none() {
-            match TcpListener::bind(("0.0.0.0", self.port)) {
-                Ok(l) if l.set_nonblocking(true).is_ok() => self.listener = Some(l),
-                _ => return false,
+            let r = TcpListener::bind(("0.0.0.0", self.port)).and_then(|l| {
+                l.set_nonblocking(true)?;
+                Ok(l)
+            });
+            let src = format!("serial-tcp:{}", self.port);
+            match r {
+                Ok(l) => {
+                    self.listener = Some(l);
+                    self.error = None;
+                    crate::diagnostics::resolved(&src);
+                }
+                Err(e) => {
+                    let msg = format!("SSC: cannot listen on TCP port {}: {e}", self.port);
+                    crate::diagnostics::report(&src, msg.clone());
+                    self.error = Some(msg);
+                    return false;
+                }
             }
         }
         true
+    }
+
+    fn last_error(&self) -> Option<&str> {
+        self.error.as_deref()
     }
 
     fn is_active(&self) -> bool {
@@ -332,15 +359,119 @@ impl SerialBackend for TcpServerSerial {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Host serial port (feature `serialport`)
+// Serial port discovery (AUD-P-031)
 
-/// Names of the serial ports the host reports (AppleWin `ScanCOMPorts`, SerialComms.cpp:1255).
-#[cfg(feature = "serialport")]
-pub fn list_serial_ports() -> Vec<String> {
-    serialport::available_ports()
-        .map(|p| p.into_iter().map(|i| i.port_name).collect())
-        .unwrap_or_default()
+/// Operating system families the heuristic scan tells apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostOs {
+    Linux,
+    MacOs,
+    Other,
 }
+
+impl HostOs {
+    pub const CURRENT: HostOs = if cfg!(target_os = "linux") {
+        HostOs::Linux
+    } else if cfg!(target_os = "macos") {
+        HostOs::MacOs
+    } else {
+        HostOs::Other
+    };
+}
+
+/// Picks serial devices out of the entries of `/dev` (Unix). Linux: USB adapters (`ttyUSB*`),
+/// CDC/ACM modems and boards (`ttyACM*`), on-board UARTs (`ttyS*`, `ttyAMA*`; only when the kernel
+/// says a device sits behind them, since `/dev` has 32 `ttyS` nodes on most systems) and
+/// Bluetooth RFCOMM links (`rfcomm*`). macOS: the callout devices (`cu.*`) and the USB `tty.*`.
+/// `has_device(name)` answers whether `/sys/class/tty/<name>/device` exists. Sorted.
+pub fn classify_dev_names<I, S>(
+    names: I,
+    os: HostOs,
+    has_device: &dyn Fn(&str) -> bool,
+) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut v: Vec<String> = names
+        .into_iter()
+        .filter_map(|n| {
+            let n = n.as_ref();
+            let keep = match os {
+                HostOs::Linux => {
+                    n.starts_with("ttyUSB")
+                        || n.starts_with("ttyACM")
+                        || n.starts_with("rfcomm")
+                        || ((n.starts_with("ttyS") || n.starts_with("ttyAMA")) && has_device(n))
+                }
+                HostOs::MacOs => n.starts_with("cu.") || n.starts_with("tty.usb"),
+                HostOs::Other => false,
+            };
+            keep.then(|| format!("/dev/{n}"))
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+/// Heuristic scan used besides (or instead of) the `serialport` crate: `/dev` on Unix, and on
+/// Windows the names `COM1`..`COM32` that exist (opening `\\.\COMn` fails with "not found" for a
+/// port that is not there, and with "access denied" for one another program holds).
+pub fn scan_serial_ports() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        (1..=32)
+            .map(|n| format!("COM{n}"))
+            .filter(|name| {
+                match std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(format!(r"\\.\{name}"))
+                {
+                    Ok(_) => true,
+                    Err(e) => e.kind() != std::io::ErrorKind::NotFound,
+                }
+            })
+            .collect()
+    }
+    #[cfg(not(windows))]
+    {
+        let names: Vec<String> = std::fs::read_dir("/dev")
+            .map(|d| {
+                d.filter_map(|e| e.ok())
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        classify_dev_names(names, HostOs::CURRENT, &|n| {
+            let dir = std::path::Path::new("/sys/class/tty").join(n);
+            // Without sysfs (a container, macOS) there is nothing to ask: trust `/dev`.
+            !std::path::Path::new("/sys/class/tty").is_dir() || dir.join("device").exists()
+        })
+    }
+}
+
+/// Serial ports to offer in the SSC options (AppleWin `ScanCOMPorts`, SerialComms.cpp:1255).
+/// With the `serialport` feature the crate's `available_ports()` comes first (it asks the OS:
+/// SetupAPI/registry on Windows, IOKit on macOS, udev or sysfs on Linux) and the heuristic scan
+/// adds what it missed; without the feature only the scan runs. No duplicates.
+pub fn list_serial_ports() -> Vec<String> {
+    let mut v: Vec<String> = Vec::new();
+    #[cfg(feature = "serialport")]
+    if let Ok(ports) = serialport::available_ports() {
+        v.extend(ports.into_iter().map(|p| p.port_name));
+    }
+    for p in scan_serial_ports() {
+        if !v.contains(&p) {
+            v.push(p);
+        }
+    }
+    v.sort();
+    v
+}
+
+// ---------------------------------------------------------------------------------------------
+// Host serial port (feature `serialport`)
 
 /// A real COM/tty port. Reads are non-blocking (`ReadIntervalTimeout=MAXDWORD`, :297-303).
 #[cfg(feature = "serialport")]
@@ -350,6 +481,7 @@ pub struct HostSerialPort {
     line: Option<LineConfig>,
     /// AppleWin mirrors DSR to DCD unless the user configured DCD support (GH#553).
     pub support_dcd: bool,
+    error: Option<String>,
 }
 
 #[cfg(feature = "serialport")]
@@ -360,6 +492,7 @@ impl HostSerialPort {
             port: None,
             line: None,
             support_dcd: false,
+            error: None,
         }
     }
 
@@ -398,10 +531,26 @@ impl SerialBackend for HostSerialPort {
             let r = serialport::new(&self.name, 9600)
                 .timeout(std::time::Duration::from_millis(0))
                 .open();
-            self.port = r.ok();
-            self.apply();
+            let src = format!("serial:{}", self.name);
+            match r {
+                Ok(p) => {
+                    self.port = Some(p);
+                    self.error = None;
+                    crate::diagnostics::resolved(&src);
+                    self.apply();
+                }
+                Err(e) => {
+                    let msg = format!("SSC: cannot open serial port '{}': {}", self.name, e);
+                    crate::diagnostics::report(&src, msg.clone());
+                    self.error = Some(msg);
+                }
+            }
         }
         self.port.is_some()
+    }
+
+    fn last_error(&self) -> Option<&str> {
+        self.error.as_deref()
     }
 
     fn is_active(&self) -> bool {
@@ -518,5 +667,119 @@ mod tests {
         l.poll_rx(&mut q);
         assert_eq!(q, [0x41]);
         assert_eq!(h.take_tx(), [0x41]);
+    }
+
+    #[test]
+    fn tcp_server_bind_failure_is_kept_and_reported() {
+        // Hold a port so the card cannot take it.
+        let held = TcpListener::bind(("0.0.0.0", 0)).unwrap();
+        let port = held.local_addr().unwrap().port();
+        let mut b = TcpServerSerial::new(port);
+        assert!(!b.open(), "the card stays disconnected");
+        assert!(!b.is_active());
+        let e = b.last_error().expect("error kept").to_string();
+        assert!(
+            e.contains(&port.to_string()) && e.starts_with("SSC:"),
+            "{e}"
+        );
+        assert!(crate::diagnostics::peek().contains(&e));
+        drop(held);
+        assert!(b.open(), "works once the port is free");
+        assert!(b.last_error().is_none());
+    }
+
+    #[cfg(feature = "serialport")]
+    #[test]
+    fn missing_host_serial_device_fails_with_a_description() {
+        let name = "/dev/apple2_hostio_no_such_tty";
+        let mut p = HostSerialPort::new(name);
+        assert!(!p.open());
+        assert!(!p.is_active() && !p.can_send());
+        let e = p.last_error().expect("error kept");
+        assert!(
+            e.contains(name) && e.contains("cannot open serial port"),
+            "{e}"
+        );
+        assert!(crate::diagnostics::peek().iter().any(|m| m == e));
+        // Every later access keeps failing without panicking or flooding the queue.
+        let mut rx = VecDeque::new();
+        p.poll_rx(&mut rx);
+        assert!(!p.write(1) && rx.is_empty());
+    }
+
+    #[cfg(all(feature = "serialport", unix))]
+    #[test]
+    fn host_serial_device_without_permission_fails_with_a_description() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("apple2_hostio_tty_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ttyNOPERM");
+        std::fs::write(&path, b"").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        // Root ignores the mode.
+        if std::fs::File::open(&path).is_err() {
+            let mut p = HostSerialPort::new(path.to_string_lossy());
+            assert!(!p.open());
+            let e = p.last_error().expect("error kept").to_string();
+            assert!(e.contains("ttyNOPERM"), "{e}");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn linux_scan_keeps_usb_acm_rfcomm_and_real_uarts() {
+        let dev = [
+            "null",
+            "tty0",
+            "ttyS0",
+            "ttyS1",
+            "ttyS2",
+            "ttyUSB1",
+            "ttyUSB0",
+            "ttyACM0",
+            "rfcomm0",
+            "ttyAMA0",
+            "cu.usbserial",
+            "tty.usbserial",
+        ];
+        let real_uarts = |n: &str| n == "ttyS0" || n == "ttyAMA0";
+        assert_eq!(
+            classify_dev_names(dev, HostOs::Linux, &real_uarts),
+            [
+                "/dev/rfcomm0",
+                "/dev/ttyACM0",
+                "/dev/ttyAMA0",
+                "/dev/ttyS0",
+                "/dev/ttyUSB0",
+                "/dev/ttyUSB1"
+            ]
+        );
+    }
+
+    #[test]
+    fn macos_scan_keeps_callout_and_usb_tty_devices() {
+        let dev = [
+            "cu.Bluetooth-Incoming-Port",
+            "cu.usbserial-1410",
+            "tty.usbserial-1410",
+            "ttyp0",
+        ];
+        assert_eq!(
+            classify_dev_names(dev, HostOs::MacOs, &|_| true),
+            [
+                "/dev/cu.Bluetooth-Incoming-Port",
+                "/dev/cu.usbserial-1410",
+                "/dev/tty.usbserial-1410"
+            ]
+        );
+        assert!(classify_dev_names(dev, HostOs::Other, &|_| true).is_empty());
+    }
+
+    #[test]
+    fn host_port_list_has_no_duplicates() {
+        let v = list_serial_ports();
+        let mut d = v.clone();
+        d.dedup();
+        assert_eq!(v, d);
     }
 }

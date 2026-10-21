@@ -18,24 +18,25 @@ O objetivo do projeto é a paridade com o AppleWin atual nas três plataformas. 
 
 O frontend cria, a partir da configuração, todas as cartas que o AppleWin aceita: Disk II (inclusive o firmware de 13 setores), controlador de disco rígido (imagens da configuração), Super Serial Card (TCP, porta COM com o recurso `serialport`, ou laço local), impressora paralela (arquivo `Printer.txt` ou o escolhido), Uthernet I e II (rede real exige o recurso `pcap`; sem ele a carta fica sem rede, mas o DNS virtual do Uthernet II funciona), Mockingboard C, Phasor, MegaAudio, SD Music, SAM, mouse, Z80 SoftCard, 4Play, SNES MAX, VidHD (a tela passa a 640x400 e o Super Hi-Res é desenhado), Breakpoint card, No-Slot Clock, dongles da porta de jogos, Language Card, Saturn, RamWorks e a carta AUX. Generic Clock e Echo são cartas "vazias" também no AppleWin.
 
-Limitações: a Breakpoint card existe, mas o depurador ainda não lhe entrega os breakpoints; o SNES MAX nasce sem controles ligados e os arquivos `-snes-max-user-joy` ainda não são lidos; o Mockingboard usa um só tipo de AY por carta (os soquetes 2 e 3 do Phasor e as chaves `6522a-bad` não são modelados); o ThunderClock Plus existe na biblioteca, mas não há como escolhê-lo na configuração.
+Limitações: a Breakpoint card existe, mas o depurador ainda não lhe entrega os breakpoints; no SNES MAX os controles do computador estão ligados, mas as opções `-snes-max-alt-joy*` e os arquivos `-snes-max-user-joy` ainda não valem; o Mockingboard usa um só tipo de AY por carta (os soquetes 2 e 3 do Phasor e as chaves `6522a-bad` não são modelados); o ThunderClock Plus existe na biblioteca, mas não há como escolhê-lo na configuração.
 
 ## Interface
 
-- **Janela de configuração.** Reproduz as páginas do AppleWin (Configuration, Input, Slots, Advanced e as opções de cada carta), mais uma aba Sound para os interruptores de som que o AppleWin só tem na linha de comando. Faltam o botão "Benchmark Emulator" (desativado), o volume separado do Mockingboard e a lista de interfaces do Npcap/libpcap (usa os nomes do sistema ou um nome digitado). A lista de portas seriais vem de /dev (ou COM1 a COM9).
+- **Janela de configuração.** Reproduz as páginas do AppleWin (Configuration, Input, Slots, Advanced e as opções de cada carta), mais uma aba Sound para os interruptores de som que o AppleWin só tem na linha de comando. O volume é um só, como no AppleWin atual. Sem o recurso `pcap`, a lista de interfaces de rede vem do sistema (`if-addrs`), descrita pelos endereços IP; a de portas seriais vem do `serialport` e de uma varredura por sistema.
 - **Janela única.** A tela, a barra e as janelas de ajuda e configuração são desenhadas dentro da mesma janela, com a biblioteca egui, e não por caixas de diálogo do sistema.
 - **Idioma.** Os textos da interface são em inglês; este manual está em português do Brasil.
 - **Ajuda.** F1 abre este manual dentro do emulador, no lugar do arquivo CHM do AppleWin.
-- **Discos.** O menu do drive (Ctrl+F3/F4 ou botão direito) tem inserir, ejetar, proteção contra escrita, imagens recentes, trocar drives e "Create new disk" (em branco, DOS 3.3 ou ProDOS). Os discos rígidos aparecem no mesmo menu, mas trocar uma imagem reinicia a Máquina. Não há a caixa "Open as Read Only", nem soltar uma imagem sobre o botão de um drive (um arquivo solto sempre vai ao drive 1 e reinicia), nem o menu "Send to CiderPress".
+- **Discos.** O menu do drive (Ctrl+F3/F4 ou botão direito) tem inserir, ejetar, proteção contra escrita, imagens recentes, trocar drives e "Create new disk" (em branco, DOS 3.3 ou ProDOS). Os discos rígidos aparecem no mesmo menu e a troca vale na hora. "Open as Read Only" é um botão do menu do drive (o seletor de arquivos do sistema não tem a caixa). Soltar um arquivo segue o AppleWin (drive 2 se solto sobre o botão do drive 2; reinicia, menos se solto sobre o botão do drive 1); no Windows o winit não informa a posição do arquivo solto, então vale a última posição do cursor. Não há o menu "Send to CiderPress". O que vale na hora e o que pede reinício está em "Imagens de disco".
 - **Registro de tipos de arquivo.** O AppleWin registra as extensões de disco no Windows; este programa não.
-- **Tela cheia.** Alt+Enter alterna a tela cheia (o `-alt-enter=open-apple-enter` é aceito mas não muda o comportamento nesta versão).
-- **Status de trilha e setor** dos drives (2x) é mostrado na linha de status, não numa dica sobre o LED.
+- **Tela cheia.** Alt+Enter alterna a tela cheia; com `-alt-enter=open-apple-enter` (ou desmarcando a opção) vira Open Apple + Return, como no AppleWin.
+- **Status de trilha e setor** dos drives (2x) é mostrado na linha de status, não numa dica sobre o LED. O setor (`S??`) é o da RWTS do DOS 3.3 ou do ProDOS, como no AppleWin.
+- **Volume.** Há um só volume ("Master volume"), que vale para o alto-falante e para o Mockingboard, como no AppleWin atual; o "Speaker Volume" antigo é lido como o mesmo valor.
 
 ## Teclado
 
 - **Ctrl+V** não cola (envia ^V ao Apple, como no AppleWin); a colagem extra é Ctrl+Shift+V. O AppleWin não toca sons de drive, e este programa também não.
-- A imagem de Print Screen vai para o diretório atual como `AppleWin_NNNN.png`. Ctrl+Print Screen copia só a página de texto de 40 colunas (80 colunas e página 2 ainda não).
-- O "SHIFT key mod" liga o Shift ao botão 2, mas a temporização dos paddles 2 e 3 é a de um joystick presente. A leitura do setor ("S??") ao lado da trilha dos drives não existe.
+- A imagem de Print Screen vai para o diretório atual como `AppleWin_NNNN.png`. Ctrl+Print Screen copia o texto de 40 ou 80 colunas e a página 2, como o AppleWin.
+- O "SHIFT key mod" liga o Shift ao botão 2 e, como no AppleWin, não conta como joystick 1: a temporização dos paddles 2 e 3 continua "sempre ativa".
 - As opções de captura de teclas do sistema (`-hook-alt-tab`, `-no-hook-system-key` e outras) são aceitas, mas só fazem sentido no AppleWin para Windows e não têm efeito aqui.
 
 ## Depurador

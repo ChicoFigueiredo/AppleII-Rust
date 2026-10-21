@@ -629,6 +629,22 @@ impl Debugger {
         self.switch_line(g, y + 9, "Col", "40", "80", "", !v.col80);
         self.switch_line(g, y + 10, "", "ASC", "MOUS", "", !v.altcharset);
         self.switch_line(g, y + 11, "LC", "2", "1", "", mm & mf::BANK2 != 0);
+        // GH#1393: the active RamWorks bank, two hex digits (`iActiveBank & 0xFF`), also > $7F.
+        if matches!(
+            b.memory.aux_kind(),
+            apple2_core::AuxCardKind::RamWorksIII { .. }
+        ) {
+            let c = |id: DebugColor| self.colors.get(id);
+            let bg = c(DebugColor::BG_INFO);
+            let x = g.put(INFO_COL_1 + 7, y + 11, "r", c(DebugColor::FG_INFO_REG), bg);
+            g.put(
+                x,
+                y + 11,
+                &format!("{:02X}", b.memory.aux_bank() & 0xFF),
+                c(DebugColor::FG_INFO_ADDRESS),
+                bg,
+            );
+        }
         self.switch_line(g, y + 12, "LCR", "RAM", "ROM", "", mm & mf::HIGHRAM != 0);
         self.switch_line(g, y + 13, "LCW", "RAM", "ROM", "", mm & mf::WRITERAM != 0);
     }

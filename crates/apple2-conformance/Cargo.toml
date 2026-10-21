@@ -18,7 +18,11 @@ path = "src/main.rs"
 apple2-core = { path = "../apple2-core" }
 apple2-video = { path = "../apple2-video" }
 apple2-cards = { path = "../apple2-cards" }
+apple2-storage = { path = "../apple2-storage" }
 serde.workspace = true
 serde_json = "1"
 toml = "0.8"
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+[dev-dependencies]
+apple2-storage = { path = "../apple2-storage" }

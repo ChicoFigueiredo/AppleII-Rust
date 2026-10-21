@@ -36,6 +36,26 @@ fn help_prints_usage_and_exits() {
 }
 
 #[test]
+fn bad_rom_options_exit_with_the_applewin_message_and_no_window() {
+    let run = |args: &[&str]| {
+        let o = Command::new(env!("CARGO_BIN_EXE_applewin"))
+            .args(args)
+            .output()
+            .expect("spawn applewin");
+        (
+            o.status.code(),
+            String::from_utf8_lossy(&o.stderr).into_owned(),
+        )
+    };
+    let (code, err) = run(&["-rom", "/nonexistent/x.rom"]);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("Failed to load custom rom (not found or not exactly 12KiB or 16KiB)"));
+    let (code, err) = run(&["-f8rom", "/nonexistent/f8.rom"]);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("Failed to load custom F8 rom (not found or not exactly 2KiB)"));
+}
+
+#[test]
 fn version_prints_and_exits() {
     for flag in ["--version", "-version", "-V"] {
         let (code, out) = run_with_timeout(&[flag]);

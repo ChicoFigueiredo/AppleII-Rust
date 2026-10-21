@@ -5,32 +5,22 @@ use crate::settings::{CpuType, RefreshRate, Settings};
 use apple2_core::{AuxCardKind, CardKind, MachineConfig, VideoStandard};
 
 impl Settings {
+    /// [`Settings::to_machine_config`] plus the ROM files named by `-rom`, `-f8rom` and `[roms]`,
+    /// validated (see [`crate::roms`]).
+    /// An invalid ROM file falls back to the embedded ROM (AppleWin's behaviour); the reasons are
+    /// in [`Settings::resolve_roms`]'s `warnings`.
+    pub fn to_machine_config_with_roms(&self) -> MachineConfig {
+        self.resolve_roms().machine
+    }
+
+    /// The `-videorom` / `[roms].video` bytes (for the renderer), if given and valid.
+    pub fn read_video_rom(&self) -> Option<Vec<u8>> {
+        self.resolve_roms().video_rom
+    }
+
     /// The part of the settings the core models: model, video standard, aux card and the RAM cards
-    /// (Language Card / Saturn). Other cards are the frontend's business. The custom ROM is read
-    /// by the frontend (`machine.custom_rom` is a path here, bytes in the core).
-    /// [`Settings::to_machine_config`] plus the ROM files named by `-rom` and `-f8rom`.
-    pub fn to_machine_config_with_roms(&self) -> Result<MachineConfig, String> {
-        let mut c = self.to_machine_config();
-        let read =
-            |p: &std::path::Path| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()));
-        if let Some(p) = &self.machine.custom_rom {
-            c.custom_rom = Some(read(p)?);
-        }
-        if let Some(p) = &self.machine.custom_f8_rom {
-            c.custom_f8_rom = Some(read(p)?);
-        }
-        Ok(c)
-    }
-
-    /// The `-videorom` file (for the renderer), if one was given.
-    pub fn read_video_rom(&self) -> Result<Option<Vec<u8>>, String> {
-        self.machine
-            .video_rom
-            .as_ref()
-            .map(|p| std::fs::read(p).map_err(|e| format!("{}: {e}", p.display())))
-            .transpose()
-    }
-
+    /// (Language Card / Saturn). Other cards are the frontend's business. ROM files are read by
+    /// [`Settings::resolve_roms`] (`machine.custom_rom` is a path here, bytes in the core).
     pub fn to_machine_config(&self) -> MachineConfig {
         let mut c = MachineConfig::for_model(self.machine.model);
         c.video_standard = match self.machine.refresh_rate {
@@ -38,6 +28,13 @@ impl Settings {
             RefreshRate::Hz60 => VideoStandard::Ntsc,
         };
         c.use_freeze_f8 = self.machine.freeze_f8_rom;
+        c.ram_init = apple2_core::RamInit {
+            pattern: self.machine.memory_clear_type.min(7) as i32,
+            random: self.machine.memory_seed.map_or(
+                apple2_core::RandomSource::Zero,
+                apple2_core::RandomSource::Seed,
+            ),
+        };
         c.cpu_cmos = match self.machine.cpu {
             CpuType::Auto => None,
             CpuType::Cpu6502 => Some(false),
@@ -57,11 +54,15 @@ impl Settings {
             AuxCardKind::Empty
         };
         c.slots = [None; 8];
+        c.saturn_banks = [8; 8];
         for (i, spec) in self.slots.0.iter().enumerate() {
             c.slots[i] = match spec {
                 // The //e's Language Card is built in; it is not a slot card.
                 SlotCardSpec::LanguageCard if !is_e => Some(CardKind::LanguageCard16K),
-                SlotCardSpec::Saturn128K { .. } => Some(CardKind::Saturn128K),
+                SlotCardSpec::Saturn128K { banks } => {
+                    c.saturn_banks[i] = (*banks).clamp(1, 8); // AUD-C-002: never beyond the card
+                    Some(CardKind::Saturn128K)
+                }
                 _ => None,
             };
         }
@@ -76,10 +77,29 @@ mod tests {
 
     #[test]
     fn default_equals_core_default() {
+        let expected = MachineConfig {
+            ram_init: apple2_core::RamInit::APPLEWIN_DETERMINISTIC, // `-memclear` default 2
+            ..MachineConfig::default()
+        };
+        assert_eq!(Settings::default().to_machine_config(), expected);
+    }
+
+    #[test]
+    fn memclear_and_seed_reach_the_core_config() {
+        use apple2_core::{RamInit, RandomSource};
+        let mut s = Settings::default();
         assert_eq!(
-            Settings::default().to_machine_config(),
-            MachineConfig::default()
+            s.to_machine_config().ram_init,
+            RamInit::APPLEWIN_DETERMINISTIC
         );
+        s.machine.memory_clear_type = 7;
+        s.machine.memory_seed = Some(42);
+        let r = s.to_machine_config().ram_init;
+        assert_eq!((r.pattern, r.random), (7, RandomSource::Seed(42)));
+        // Without a seed the host adds one from the clock; the machine itself stays deterministic.
+        s.machine.memory_seed = None;
+        let r = s.to_machine_config_with_roms().ram_init;
+        assert!(matches!(r.random, RandomSource::Seed(_)));
     }
 
     #[test]
@@ -96,10 +116,11 @@ mod tests {
         let f8 = dir.join("f8.rom");
         std::fs::write(&f8, vec![1u8; 0x800]).unwrap();
         s.machine.custom_f8_rom = Some(f8);
-        let c = s.to_machine_config_with_roms().unwrap();
+        let c = s.to_machine_config_with_roms();
         assert_eq!(c.custom_f8_rom.as_deref().map(<[u8]>::len), Some(0x800));
         s.machine.video_rom = Some(dir.join("missing.rom"));
-        assert!(s.read_video_rom().is_err());
+        assert!(s.read_video_rom().is_none());
+        assert_eq!(s.rom_problems().len(), 1);
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -113,6 +134,7 @@ mod tests {
         assert_eq!(c, {
             let mut x = MachineConfig::for_model(Model::Apple2Plus);
             x.video_standard = VideoStandard::Pal;
+            x.ram_init = apple2_core::RamInit::APPLEWIN_DETERMINISTIC;
             x
         });
         let mut e = Settings::default();

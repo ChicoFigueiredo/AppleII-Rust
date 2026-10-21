@@ -192,8 +192,41 @@ pub fn save_apple2(
     });
 }
 
+/// State of the RGB card behind the aux slot (AppleColor / Video-7 / Feline), as
+/// `RGB_SaveSnapshot` (RGBMonitor.cpp:1311) stores it. It lives in the video renderer, so the
+/// caller supplies it on save and gets it back on load ([`crate::Loaded::rgb`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RgbCardState {
+    /// `RGB mode flags` (`g_rgbFlags`): the two clocked-in !80COL bits.
+    pub flags: u8,
+    /// `RGB mode` (`g_rgbMode`): the latched F2,F1.
+    pub mode: u8,
+    /// `Previous AN3` (`g_rgbPrevAN3Addr`): last `$C05E`/`$C05F`.
+    pub prev_an3: u8,
+    /// `Invert bit7` (`g_rgbInvertBit7`).
+    pub invert_bit7: bool,
+}
+
+/// `RGB_LoadSnapshot`: the `AppleColor RGB Adaptor` map. `80COL changed` is obsolete; the
+/// invert flag exists from card version 3.
+fn parse_rgb(st: Map<'_>) -> Result<Option<RgbCardState>, Error> {
+    let Some(m) = st.sub("AppleColor RGB Adaptor") else {
+        return Ok(None);
+    };
+    Ok(Some(RgbCardState {
+        flags: m.u32("RGB mode flags")? as u8,
+        mode: m.u32("RGB mode")? as u8,
+        prev_an3: m.u32("Previous AN3")? as u8,
+        invert_bit7: if m.has("Invert bit7") {
+            m.bool("Invert bit7")?
+        } else {
+            false
+        },
+    }))
+}
+
 /// `MemSaveSnapshotAux` (Memory.cpp:2930). Nothing for the ][ family.
-pub fn save_aux(w: &mut Writer, st: &MachineState) {
+pub fn save_aux(w: &mut Writer, st: &MachineState, rgb: &RgbCardState) {
     if st.config.model.is_apple2() {
         return;
     }
@@ -228,13 +261,13 @@ pub fn save_aux(w: &mut Writer, st: &MachineState) {
                 for (b, bank) in aux.chunks(0x10000).enumerate() {
                     w.map(&format!("Auxiliary Memory Bank{b:02X}"), |w| w.memory(bank));
                 }
-                // RGBMonitor.cpp:1311 (state of the AppleColor RGB adaptor; not modelled)
+                // RGBMonitor.cpp:1311 `RGB_SaveSnapshot`
                 w.map("AppleColor RGB Adaptor", |w| {
-                    w.hex8("RGB mode flags", 0);
-                    w.hex8("RGB mode", 0);
-                    w.hex8("Previous AN3", 0);
-                    w.bool("80COL changed", false);
-                    w.bool("Invert bit7", false);
+                    w.hex8("RGB mode flags", u32::from(rgb.flags));
+                    w.hex8("RGB mode", u32::from(rgb.mode));
+                    w.hex8("Previous AN3", u32::from(rgb.prev_an3));
+                    w.bool("80COL changed", false); // unused in AppleWin too
+                    w.bool("Invert bit7", rgb.invert_bit7);
                 });
             }),
         }
@@ -283,6 +316,8 @@ pub struct AuxUnit<'a> {
     pub kind: AuxCardKind,
     pub active_bank: u16,
     pub state: Option<Map<'a>>,
+    /// RGB card registers (only the Extended 80 Column / RamWorks units carry them).
+    pub rgb: Option<RgbCardState>,
 }
 
 pub fn parse_aux<'a>(unit_version: u32, st: Map<'a>) -> Result<AuxUnit<'a>, Error> {
@@ -303,11 +338,13 @@ pub fn parse_aux<'a>(unit_version: u32, st: Map<'a>) -> Result<AuxUnit<'a>, Erro
             kind: AuxCardKind::Empty,
             active_bank: 0,
             state: None,
+            rgb: None,
         },
         "80 Column" => AuxUnit {
             kind: AuxCardKind::Col80_1K,
             active_bank: 0,
             state: Some(inner),
+            rgb: None,
         },
         "Extended 80 Column" | "RamWorks III" | "RamWorksIII" => {
             let banks = inner.u32("Num Aux Banks")?;
@@ -331,6 +368,7 @@ pub fn parse_aux<'a>(unit_version: u32, st: Map<'a>) -> Result<AuxUnit<'a>, Erro
                 kind,
                 active_bank: active as u16,
                 state: Some(inner),
+                rgb: parse_rgb(inner)?,
             }
         }
         other => {

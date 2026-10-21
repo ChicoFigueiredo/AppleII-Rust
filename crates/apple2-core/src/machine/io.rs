@@ -17,8 +17,8 @@ impl Board {
     }
 
     /// Value read from an address nobody drives: the byte the video generator is fetching from
-    /// main RAM (`MemReadFloatingBus`, Memory.cpp:2458-2476). AppleWin's special case for an empty
-    /// aux slot only matters because it reads `mem`, which may show aux; we always read main.
+    /// the CPU read image (`MemReadFloatingBus`, Memory.cpp:2458-2476), which is the auxiliary RAM
+    /// while RAMRD is on (AUD-C-050; see [`crate::memory::Memory::peek_floating_image`]).
     pub fn floating_bus(&self) -> u8 {
         let m = self.memory.memmode();
         let sw = Switches {
@@ -28,7 +28,7 @@ impl Board {
             page2: m & mf::PAGE2 != 0 && m & mf::STORE80 == 0,
         };
         self.memory
-            .peek_main(self.scanner.address(self.scan_cycle(), sw))
+            .peek_floating_image(self.scanner.address(self.scan_cycle(), sw))
     }
 
     // ---- Keyboard, speaker, game port. ----

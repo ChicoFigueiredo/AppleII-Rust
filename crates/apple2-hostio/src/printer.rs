@@ -8,7 +8,7 @@
 use apple2_core::card::CardCtx;
 use apple2_core::Card;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// Cycles AppleWin counts per idle-limit second (ParallelPrinter.cpp:105; not the real clock).
@@ -22,33 +22,137 @@ pub trait PrinterSink: Send {
     /// Ends the job. `dump_to_printer`: also copy it to the system printer (`copy file prn`, :81-86,
     /// Windows only).
     fn close(&mut self, dump_to_printer: bool);
+
+    /// Destination file, for sinks that have one. Saved in save-states (`Print Filename`).
+    fn path(&self) -> Option<&Path> {
+        None
+    }
+
+    /// Redirects the sink to another file (`LoadSnapshot` restores the saved name, :255).
+    fn set_path(&mut self, _path: PathBuf) {}
+}
+
+/// Why a printer file name was refused.
+fn invalid(msg: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, msg.into())
+}
+
+/// Canonical, safe form of a user-given printer file name (AUD-P-033).
+///
+/// AppleWin uses the registry string as is (relative to the current directory, which
+/// `-current-dir` can change). We resolve a relative name against `base` (the configuration
+/// directory) or, without one, the current directory, drop `.` and `..` components, and
+/// canonicalise the parent directory when it exists (so symbolic links and `..` through them
+/// cannot hide the real destination). The file itself need not exist.
+///
+/// Refused: empty names, names with a NUL, directories (existing, or ending in a separator) and
+/// names without a final component.
+pub fn sanitize_printer_path(raw: &Path, base: Option<&Path>) -> io::Result<PathBuf> {
+    let text = raw.to_string_lossy();
+    if text.trim().is_empty() {
+        return Err(invalid("the printer file name is empty"));
+    }
+    if text.contains('\0') {
+        return Err(invalid("the printer file name contains a NUL character"));
+    }
+    if text.ends_with('/') || (cfg!(windows) && text.ends_with('\\')) {
+        return Err(invalid(format!("'{text}' is a directory, not a file")));
+    }
+    let absolute = if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        match base {
+            Some(b) => b.join(raw),
+            None => std::env::current_dir()?.join(raw),
+        }
+    };
+    let mut clean = PathBuf::new();
+    for c in absolute.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                clean.pop();
+            }
+            other => clean.push(other.as_os_str()),
+        }
+    }
+    let Some(name) = clean.file_name().map(|n| n.to_os_string()) else {
+        return Err(invalid(format!("'{text}' has no file name")));
+    };
+    let parent = clean.parent().unwrap_or(Path::new("")).to_path_buf();
+    let mut resolved = std::fs::canonicalize(&parent).unwrap_or(parent);
+    resolved.push(name);
+    if resolved.is_dir() {
+        return Err(invalid(format!(
+            "'{}' is a directory, not a file",
+            resolved.display()
+        )));
+    }
+    Ok(resolved)
 }
 
 /// Writes to a file (the default `Printer.txt` of AppleWin, :162).
 pub struct FileSink {
+    /// As given by the user; resolved by [`sanitize_printer_path`] each time a job opens.
     path: PathBuf,
+    base_dir: Option<PathBuf>,
     file: Option<io::BufWriter<std::fs::File>>,
+    /// Error of the last flush at the end of a job.
+    last_error: Option<String>,
 }
 
 impl FileSink {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         FileSink {
             path: path.into(),
+            base_dir: None,
             file: None,
+            last_error: None,
         }
+    }
+
+    /// Resolves a relative name against `dir` (the configuration directory) instead of the
+    /// current directory.
+    pub fn with_base_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.base_dir = Some(dir.into());
+        self
+    }
+
+    /// The error of the last job that failed to flush to disk (disk full, device gone).
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+
+    fn resolved(&self) -> io::Result<PathBuf> {
+        sanitize_printer_path(&self.path, self.base_dir.as_deref())
     }
 }
 
 impl PrinterSink for FileSink {
     fn open(&mut self, append: bool) -> io::Result<()> {
+        let path = self.resolved()?;
         let f = std::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .append(append)
             .truncate(!append)
-            .open(&self.path)?;
+            .open(&path)
+            .map_err(|e| {
+                io::Error::new(
+                    e.kind(),
+                    format!("cannot open printer file '{}': {e}", path.display()),
+                )
+            })?;
         self.file = Some(io::BufWriter::new(f));
         Ok(())
+    }
+
+    fn path(&self) -> Option<&Path> {
+        Some(&self.path)
+    }
+
+    fn set_path(&mut self, path: PathBuf) {
+        self.path = path;
     }
 
     fn write(&mut self, byte: u8) -> io::Result<()> {
@@ -62,14 +166,21 @@ impl PrinterSink for FileSink {
     fn close(&mut self, dump_to_printer: bool) {
         use io::Write;
         if let Some(mut f) = self.file.take() {
-            let _ = f.flush();
+            match f.flush() {
+                Ok(()) => self.last_error = None,
+                Err(e) => {
+                    let msg = format!("printer file '{}': write failed: {e}", self.path.display());
+                    crate::diagnostics::report("printer-write", msg.clone());
+                    self.last_error = Some(msg);
+                }
+            }
             drop(f);
             #[cfg(windows)]
             if dump_to_printer {
                 let _ = std::process::Command::new("cmd")
                     .arg("/C")
                     .arg("copy")
-                    .arg(&self.path)
+                    .arg(self.resolved().unwrap_or_else(|_| self.path.clone()))
                     .arg("prn")
                     .status();
             }
@@ -217,6 +328,7 @@ pub struct ParallelPrinterCard {
     options: PrinterOptions,
     is_open: bool,
     inactivity: u64,
+    last_error: Option<String>,
 }
 
 impl ParallelPrinterCard {
@@ -226,7 +338,25 @@ impl ParallelPrinterCard {
             options,
             is_open: false,
             inactivity: 0,
+            last_error: None,
         }
+    }
+
+    /// Why the last attempt to open or write the print file failed, until one succeeds. The
+    /// emulation goes on with the printer "disconnected" (AppleWin ignores the failure silently;
+    /// we also report it through [`crate::diagnostics`]).
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+
+    /// The print file name as configured (saved in save-states).
+    pub fn filename(&self) -> Option<&Path> {
+        self.sink.path()
+    }
+
+    /// Redirects the output (`LoadSnapshot` restores the name saved by AppleWin, :255).
+    pub fn set_filename(&mut self, path: PathBuf) {
+        self.sink.set_path(path);
     }
 
     pub fn options(&self) -> &PrinterOptions {
@@ -267,7 +397,18 @@ impl ParallelPrinterCard {
     fn check_print(&mut self) -> bool {
         self.inactivity = 0;
         if !self.is_open {
-            self.is_open = self.sink.open(self.options.append).is_ok();
+            match self.sink.open(self.options.append) {
+                Ok(()) => {
+                    self.is_open = true;
+                    self.last_error = None;
+                    crate::diagnostics::resolved("printer");
+                }
+                Err(e) => {
+                    let msg = format!("Printer: {e}");
+                    crate::diagnostics::report("printer", msg.clone());
+                    self.last_error = Some(msg);
+                }
+            }
         }
         self.is_open
     }
@@ -314,7 +455,11 @@ impl Card for ParallelPrinterCard {
         }
         // `c > 0x7F` keeps Cyrillic output when conversion is on (:149).
         if !self.options.filter_unprintable || c > 31 || c == 13 || c == 10 {
-            let _ = self.sink.write(c);
+            if let Err(e) = self.sink.write(c) {
+                let msg = format!("Printer: write failed: {e}");
+                crate::diagnostics::report("printer-write", msg.clone());
+                self.last_error = Some(msg);
+            }
         }
     }
 
@@ -381,5 +526,139 @@ mod tests {
             assert_eq!(len, if append { 2 } else { 1 });
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "apple2_hostio_printer_{name}_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn sanitize_rejects_empty_nul_and_directories() {
+        let dir = scratch("sanitize_reject");
+        for bad in ["", "   ", "a\0b"] {
+            let e = sanitize_printer_path(Path::new(bad), Some(&dir)).unwrap_err();
+            assert_eq!(e.kind(), io::ErrorKind::InvalidInput, "{bad:?}");
+        }
+        let sub = dir.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        assert!(
+            sanitize_printer_path(&sub, None).is_err(),
+            "existing directory"
+        );
+        assert!(sanitize_printer_path(Path::new("newdir/"), Some(&dir)).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn sanitize_resolves_relative_names_against_the_base_directory() {
+        let dir = scratch("sanitize_rel");
+        let canon = std::fs::canonicalize(&dir).unwrap();
+        let got = sanitize_printer_path(Path::new("./a/../out.txt"), Some(&dir)).unwrap();
+        assert_eq!(got, canon.join("out.txt"));
+        // Without a base the current directory is used.
+        let got = sanitize_printer_path(Path::new("x.txt"), None).unwrap();
+        assert!(got.is_absolute());
+        assert_eq!(got.file_name().unwrap(), "x.txt");
+        // An absolute name is kept (AppleWin writes wherever it is told to).
+        let got = sanitize_printer_path(&dir.join("abs.txt"), None).unwrap();
+        assert_eq!(got, canon.join("abs.txt"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn file_sink_open_errors_name_the_file_and_the_cause() {
+        let dir = scratch("open_err");
+        let mut s = FileSink::new("no_such_dir/out.txt").with_base_dir(&dir);
+        let e = s.open(false).unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("cannot open printer file"), "{msg}");
+        assert!(msg.contains("out.txt"), "{msg}");
+        let mut s = FileSink::new(dir.clone());
+        assert!(s.open(false).unwrap_err().to_string().contains("directory"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_sink_in_a_directory_without_permission_fails_visibly() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("perm");
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root ignores the mode; nothing to check then.
+        if std::fs::File::create(dir.join("probe")).is_ok() {
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::remove_dir_all(dir).unwrap();
+            return;
+        }
+        let mut card = ParallelPrinterCard::new(
+            Box::new(FileSink::new(dir.join("Printer.txt"))),
+            PrinterOptions::default(),
+        );
+        assert!(
+            !card.check_print(),
+            "emulation goes on, printer disconnected"
+        );
+        let err = card
+            .last_error()
+            .expect("error kept for the frontend")
+            .to_string();
+        assert!(
+            err.contains("Printer.txt") && err.to_lowercase().contains("permission"),
+            "{err}"
+        );
+        assert!(crate::diagnostics::peek().iter().any(|m| m == &err));
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn write_failure_on_a_full_device_is_reported() {
+        let mut s = FileSink::new("/dev/full");
+        s.open(true).unwrap();
+        s.write(b'x').unwrap(); // buffered
+        s.close(false);
+        let e = s.last_error().expect("flush failure kept");
+        assert!(e.contains("/dev/full") && e.contains("write failed"), "{e}");
+    }
+
+    #[test]
+    fn card_reports_open_failures_once_and_recovers() {
+        let dir = scratch("recover");
+        let mut card = ParallelPrinterCard::new(
+            Box::new(FileSink::new("missing/Printer.txt").with_base_dir(&dir)),
+            PrinterOptions::default(),
+        );
+        assert!(!card.check_print());
+        assert!(!card.check_print());
+        let mine = |v: Vec<String>| v.into_iter().filter(|m| m.contains("recover")).count();
+        assert_eq!(
+            mine(crate::diagnostics::peek()),
+            1,
+            "same failure, one message"
+        );
+        std::fs::create_dir(dir.join("missing")).unwrap();
+        assert!(card.check_print());
+        assert!(card.last_error().is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_custom_file_name_can_be_read_and_replaced() {
+        let mut card = ParallelPrinterCard::new(
+            Box::new(FileSink::new("mine.txt")),
+            PrinterOptions::default(),
+        );
+        assert_eq!(card.filename(), Some(Path::new("mine.txt")));
+        card.set_filename(PathBuf::from("other.txt"));
+        assert_eq!(card.filename(), Some(Path::new("other.txt")));
+        let m = ParallelPrinterCard::new(Box::new(MemorySink::new()), PrinterOptions::default());
+        assert_eq!(m.filename(), None);
     }
 }

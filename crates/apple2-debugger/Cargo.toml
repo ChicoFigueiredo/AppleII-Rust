@@ -9,3 +9,6 @@ repository.workspace = true
 [dependencies]
 apple2-cpu = { path = "../apple2-cpu" }
 apple2-core = { path = "../apple2-core" }
+apple2-cards = { path = "../apple2-cards" }
+apple2-storage = { path = "../apple2-storage" }
+apple2-video = { path = "../apple2-video" }

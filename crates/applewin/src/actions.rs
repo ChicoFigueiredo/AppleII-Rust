@@ -59,6 +59,12 @@ pub enum Action {
 
 /// Returns the action bound to a key press, if any. Auto-repeat must be filtered by the caller.
 pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
+    action_for_with(key, mods, true)
+}
+
+/// As [`action_for`], with the "Alt+Enter toggles full-screen" preference (`-alt-enter=`,
+/// WinFrame.cpp:1854): off, Alt+Enter is no action and reaches the Apple as Open Apple + Return.
+pub fn action_for_with(key: HostKey, mods: Mods, alt_enter_fullscreen: bool) -> Option<Action> {
     Some(match key {
         HostKey::F(1) => Action::Help,
         HostKey::F(2) if mods.ctrl => Action::SoftReset,
@@ -68,7 +74,7 @@ pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
         HostKey::F(5) => Action::SwapDrives,
         HostKey::F(6) if mods.ctrl => Action::ToggleScale,
         HostKey::F(6) => Action::ToggleFullscreen,
-        HostKey::Enter if mods.alt => Action::ToggleFullscreen,
+        HostKey::Enter if mods.alt && alt_enter_fullscreen => Action::ToggleFullscreen,
         HostKey::F(7) => Action::ToggleDebugger,
         HostKey::F(8) => Action::Settings,
         HostKey::F(9) if mods.ctrl && mods.shift => Action::ToggleScanlines,
@@ -87,6 +93,31 @@ pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
         HostKey::Char('3') if mods.ctrl && !mods.alt => Action::SpeedMax,
         _ => return None,
     })
+}
+
+/// [`action_for`] as seen from the current mode. While the debugger is on screen AppleWin sends
+/// every key to `DebuggerProcessKey` and only handles the Ctrl+0/1/3 speed shortcuts when running
+/// (WinFrame.cpp:1336-1393), so there Ctrl+digit jumps to a bookmark instead.
+pub fn action_for_mode(key: HostKey, mods: Mods, debugger_active: bool) -> Option<Action> {
+    action_for_mode_with(key, mods, debugger_active, true)
+}
+
+/// [`action_for_mode`] with the "Alt+Enter toggles full-screen" preference of [`action_for_with`].
+pub fn action_for_mode_with(
+    key: HostKey,
+    mods: Mods,
+    debugger_active: bool,
+    alt_enter_fullscreen: bool,
+) -> Option<Action> {
+    let action = action_for_with(key, mods, alt_enter_fullscreen);
+    let speed = matches!(
+        action,
+        Some(Action::SpeedToggleMax | Action::Speed1Mhz | Action::SpeedMax)
+    );
+    if debugger_active && speed {
+        return None;
+    }
+    action
 }
 
 #[cfg(test)]
@@ -108,6 +139,18 @@ mod tests {
         ctrl: false,
         alt: false,
     };
+
+    #[test]
+    fn ctrl_digits_are_bookmarks_not_speed_shortcuts_in_the_debugger() {
+        let k = HostKey::Char('1');
+        assert_eq!(action_for_mode(k, CTRL, false), Some(Action::Speed1Mhz));
+        assert_eq!(action_for_mode(k, CTRL, true), None);
+        // the function keys keep working in the debugger
+        assert_eq!(
+            action_for_mode(HostKey::F(7), NONE, true),
+            Some(Action::ToggleDebugger)
+        );
+    }
 
     #[test]
     fn function_keys_follow_applewin() {
@@ -169,6 +212,21 @@ mod tests {
     fn ctrl_pause_is_reset_not_pause() {
         assert_eq!(action_for(HostKey::Pause, NONE), Some(Action::TogglePause));
         assert_eq!(action_for(HostKey::Pause, CTRL), None);
+    }
+
+    #[test]
+    fn alt_enter_follows_the_preference() {
+        let alt = Mods { alt: true, ..NONE };
+        assert_eq!(
+            action_for_with(HostKey::Enter, alt, true),
+            Some(Action::ToggleFullscreen)
+        );
+        assert_eq!(action_for_with(HostKey::Enter, alt, false), None);
+        // F6 is unaffected
+        assert_eq!(
+            action_for_with(HostKey::F(6), NONE, false),
+            Some(Action::ToggleFullscreen)
+        );
     }
 
     #[test]

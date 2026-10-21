@@ -392,7 +392,9 @@ pub fn range_end_len(r: RangeType, a1: u16, a2: u16) -> Option<(u16, u32)> {
             let end = (a1 as u32 + a2 as u32).saturating_sub(1).min(0xFFFF);
             Some((end as u16, a2 as u32))
         }
-        RangeType::HasEnd => Some((a2, a2 as u32 - a1 as u32 + 1)),
+        // GH#1397: an end below the start has a negative length (`nAddressLen > 0` fails in
+        // AppleWin); `a2 - a1 + 1` must not wrap into a four-billion-byte copy.
+        RangeType::HasEnd => Some((a2, (a2 as i64 - a1 as i64 + 1).max(0) as u32)),
         RangeType::MissingArg2 => None,
     }
 }

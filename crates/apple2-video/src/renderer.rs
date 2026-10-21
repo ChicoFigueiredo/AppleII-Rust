@@ -90,6 +90,9 @@ struct PixFn {
 pub(crate) struct RgbState {
     pub flags: u8,
     pub mode: u8,
+    /// `g_rgbPrevAN3Addr`: last `$C05E`/`$C05F` seen (0 after reset), the save-state's
+    /// `Previous AN3`.
+    pub prev_an3: u8,
     pub text_fb: bool,
     pub dhgr_last_cell_is_color: bool,
     pub dhgr_last_bit: u32,
@@ -244,6 +247,7 @@ impl Renderer {
             rgb: RgbState {
                 flags: 0,
                 mode: 0,
+                prev_an3: 0,
                 text_fb: false,
                 dhgr_last_cell_is_color: true,
                 dhgr_last_bit: 0,
@@ -318,8 +322,23 @@ impl Renderer {
     pub fn reset(&mut self) {
         self.rgb.flags = 0;
         self.rgb.mode = 0;
+        self.rgb.prev_an3 = 0;
         self.prev_dhires = false;
         self.col80_text = false;
+    }
+
+    /// RGB card registers as AppleWin saves them (`RGB_SaveSnapshot`): `(RGB mode flags,
+    /// RGB mode, Previous AN3)`. The invert-bit-7 option is part of [`RenderConfig`].
+    pub fn rgb_registers(&self) -> (u8, u8, u8) {
+        (self.rgb.flags, self.rgb.mode, self.rgb.prev_an3)
+    }
+
+    /// `RGB_LoadSnapshot`: restores the registers. Only the low two bits of flags/mode matter.
+    pub fn set_rgb_registers(&mut self, flags: u8, mode: u8, prev_an3: u8) {
+        self.rgb.flags = flags & 3;
+        self.rgb.mode = mode & 3;
+        self.rgb.prev_an3 = prev_an3;
+        self.prev_dhires = prev_an3 == 0x5E; // the next $C05F completes a clock pulse
     }
 
     /// `NTSC_VideoClockResync`: realign the scanner with the machine's cycle in the frame.
@@ -439,6 +458,7 @@ impl Renderer {
                 self.rgb.mode = self.rgb.flags;
             }
             self.prev_dhires = m.dhires;
+            self.rgb.prev_an3 = if m.dhires { 0x5E } else { 0x5F };
         }
         if snap.raw.col80 != self.col80_text {
             self.col80_text = snap.raw.col80;

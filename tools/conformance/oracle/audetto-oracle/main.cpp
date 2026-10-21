@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -84,7 +85,12 @@ namespace
             const uint32_t slice = static_cast<uint32_t>(g_fCurrentCLK6502 * (1.0 / 1000.0));
             while (g_nCumulativeCycles < endCycle)
             {
-                const uint32_t executed = CpuExecute(slice, false);
+                // bVideoUpdate = true keeps the NTSC video clock (g_nVideoClockHorz/Vert) running. With
+                // false (the headless frontends' choice) the clock stays at 0,0 forever and every
+                // floating-bus read ($C056, $C050, unclaimed $C0xx...) returns the byte of one fixed
+                // scanner address, which the real AppleWin never does. Rendering still goes to the
+                // (unused) framebuffer; nothing is presented.
+                const uint32_t executed = CpuExecute(slice, true);
                 GetCardMgr().Update(executed);
                 SpkrUpdate(executed);
                 g_dwCyclesThisFrame = (g_dwCyclesThisFrame + executed) % clksPerFrame;
@@ -236,10 +242,12 @@ int main(int argc, char **argv)
         std::fprintf(g_out, "#start_cycle=%" PRIu64 "\n", start);
         std::fprintf(g_out, "#memclear=%d\n", g_nMemoryClearType);
         std::fprintf(g_out, "#ram_init=deterministic (xx28,xx29,xx68,xx69 of pages 00-BF = 00; $4E,$4F = 20)\n");
+        std::fprintf(g_out, "#video_clock=advanced after every opcode (CpuExecute bVideoUpdate=true), as in the Windows AppleWin\n");
         std::fprintf(g_out, "#cards=%s\n", cards.c_str());
         std::fprintf(g_out, "#input=%s\n", input.c_str());
-        std::fprintf(g_out, "#disk=%s\n", disk.empty() ? "none" : disk.c_str());
-        std::fprintf(g_out, "#state=%s\n", state.empty() ? "none" : state.c_str());
+        // Only the file name: the full path depends on the machine that generated the trace.
+        std::fprintf(g_out, "#disk=%s\n", disk.empty() ? "none" : std::filesystem::path(disk).filename().string().c_str());
+        std::fprintf(g_out, "#state=%s\n", state.empty() ? "none" : std::filesystem::path(state).filename().string().c_str());
         for (const std::string &m : meta)
             std::fprintf(g_out, "#%s\n", m.c_str());
         std::fprintf(g_out, "cycle,pc,op,a,x,y,sp,p\n");
