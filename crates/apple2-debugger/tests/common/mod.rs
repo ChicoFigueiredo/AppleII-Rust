@@ -12,7 +12,7 @@ use apple2_debugger::{Debugger, Key, KeyMods, RunMode};
 
 pub type Files = Rc<RefCell<HashMap<String, Vec<u8>>>>;
 
-pub struct SharedHost(Files);
+pub struct SharedHost(pub Files);
 
 struct Sink(Files, String);
 

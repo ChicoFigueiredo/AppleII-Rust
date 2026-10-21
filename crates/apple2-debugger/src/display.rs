@@ -117,6 +117,35 @@ impl Debugger {
         self.disasm_cur_line = (self.disasm_height.saturating_sub(1)) / 2;
     }
 
+    /// `Util_GetDebuggerText` (Debug.cpp:5238): the debugger screen as text, the payload of
+    /// Ctrl+PrintScreen (WinFrame.cpp:1221-1231). Like the oracle it keeps only the first
+    /// `DEBUG_VIRTUAL_TEXT_HEIGHT` (43) rows, so the last console rows are lost (upstream #458),
+    /// shifts every cell right of `DISPLAY_DISASM_RIGHT` (pixel 353, column 51 on) one column
+    /// (`PrintGlyph`, Debugger_Display.cpp:725), blanks non-printable glyphs and ends each row with
+    /// LF (the CR is `_WIN32` only).
+    pub fn screen_text(&mut self, m: &Machine) -> String {
+        const TEXT_HEIGHT: usize = 43;
+        let g = self.render(m);
+        let mut out = String::new();
+        for y in 0..TEXT_HEIGHT {
+            let mut row = [' '; GRID_W];
+            for x in 0..GRID_W {
+                let col = if x * 7 > 353 { x + 1 } else { x };
+                let ch = g.cell(x, y).ch;
+                if col < GRID_W {
+                    row[col] = if ('\u{20}'..'\u{7F}').contains(&ch) {
+                        ch
+                    } else {
+                        ' '
+                    };
+                }
+            }
+            out.extend(row);
+            out.push('\n');
+        }
+        out
+    }
+
     /// `Debugger_Display.cpp:UpdateDisplay`: draws everything.
     pub fn render(&mut self, m: &Machine) -> Grid {
         let col = |c: DebugColor| self.colors.get(c);
