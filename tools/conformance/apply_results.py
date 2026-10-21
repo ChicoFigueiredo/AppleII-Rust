@@ -3,9 +3,19 @@
 docs/conformance/applewin-issue-matrix.csv e regenera o issue-audit.md.
 Só biblioteca padrão.
 
-Cabeçalho dos resultados: upstream_id,estado_verificacao,teste,evidencia
-Atualiza na matriz: estado_verificacao, teste, evidencia e revisado_por
+Cabeçalho dos resultados: upstream_id,estado_verificacao,teste,evidencia,tipo_oraculo
+Atualiza na matriz: estado_verificacao, teste, evidencia, tipo_oraculo e revisado_por
 (`resultado:<arquivo-sem-.csv>`; vários arquivos ficam separados por `;`).
+
+tipo_oraculo (obrigatório nas linhas PASS, vazio nas demais) diz em que o PASS se apoia:
+  executavel      comparação com o AppleWin rodando (fork do audetto ou Wine)
+  cpp-transcrito  teste Rust que reproduz o C++ do a8f0d1d citando arquivo:linha
+  especificacao   hardware, a2audit ou vetores públicos
+  fixture-real    fixture real (arquivo de terceiros) sem comparação com o AppleWin
+  regressao       teste do próprio port, sem fonte externa citada (inclui o comportamento
+                  de uma Divergência aprovada, ADR 0006)
+Numa issue com vários arquivos, vale o tipo mais forte entre as linhas PASS (ordem acima).
+Se a matriz ainda não tem a coluna, ela é acrescentada no fim, sem mexer nas outras.
 
 Uma issue em mais de um arquivo: estado por precedência FAIL > PASS > BLOCKED >
 NOT_APPLICABLE; teste e evidência são juntados com " | " na ordem dos arquivos.
@@ -28,7 +38,9 @@ MATRIX = ROOT / "docs" / "conformance" / "applewin-issue-matrix.csv"
 RESULTS_DIR = ROOT / "docs" / "conformance" / "results"
 SUMMARIZER = ROOT / "tools" / "conformance" / "summarize_issue_matrix.py"
 
-HEADER_RESULTS = ["upstream_id", "estado_verificacao", "teste", "evidencia"]
+HEADER_RESULTS = ["upstream_id", "estado_verificacao", "teste", "evidencia", "tipo_oraculo"]
+TIPOS = ["executavel", "cpp-transcrito", "especificacao", "fixture-real", "regressao"]
+TIPO_FORCA = ["executavel", "especificacao", "fixture-real", "cpp-transcrito", "regressao"]  # do mais forte ao mais fraco
 PRECEDENCE = ["FAIL", "PASS", "BLOCKED", "NOT_APPLICABLE"]  # do mais forte ao mais fraco
 VALID = set(PRECEDENCE)
 UNVERIFIED = "UNVERIFIED"  # estado vazio na matriz, mostrado como UNVERIFIED
@@ -50,7 +62,7 @@ def serialize(rows):
 
 
 def load_results():
-    """Devolve {upstream_id: [(arquivo, estado, teste, evidencia), ...]} e os erros."""
+    """Devolve {upstream_id: [(arquivo, estado, teste, evidencia, tipo), ...]} e os erros."""
     found = defaultdict(list)
     errors = []
     files = sorted(RESULTS_DIR.glob("*.csv"))
@@ -70,12 +82,18 @@ def load_results():
                 if len(row) != len(HEADER_RESULTS):
                     errors.append(f"{path.name}:{lineno}: esperadas {len(HEADER_RESULTS)} colunas, vieram {len(row)}")
                     continue
-                uid, estado, teste, evidencia = (c.strip() if i < 2 else c for i, c in enumerate(row))
-                uid = uid.strip()
+                uid, estado, teste, evidencia, tipo = (c.strip() if i in (0, 1, 4) else c for i, c in enumerate(row))
                 if estado not in VALID:
                     errors.append(f"{path.name}:{lineno}: estado inválido {estado!r} (id {uid})")
                     continue
-                found[uid].append((name, estado, teste, evidencia))
+                if estado == "PASS" and tipo not in TIPOS:
+                    errors.append(f"{path.name}:{lineno}: PASS sem tipo_oraculo válido ({tipo!r}; id {uid}); "
+                                  f"use um de {', '.join(TIPOS)}")
+                    continue
+                if estado != "PASS" and tipo:
+                    errors.append(f"{path.name}:{lineno}: tipo_oraculo {tipo!r} só vale em linhas PASS (id {uid})")
+                    continue
+                found[uid].append((name, estado, teste, evidencia, tipo))
     return found, errors
 
 
@@ -93,13 +111,17 @@ def apply(header, rows, results):
     for col in ("upstream_id", "estado_verificacao", "teste", "evidencia", "revisado_por"):
         if col not in idx:
             raise SystemExit(f"matriz sem a coluna {col!r}")
+    if "tipo_oraculo" not in idx:  # coluna nova, no fim: as outras não mudam de posição
+        header.append("tipo_oraculo")
+        idx["tipo_oraculo"] = len(header) - 1
+        rows = [r + [""] for r in rows]
     by_id = {}
     for i, r in enumerate(rows):
         by_id.setdefault(r[idx["upstream_id"]], i)
 
     unknown = sorted((u for u in results if u not in by_id), key=lambda u: (len(u), u))
     if unknown:
-        return None, [f"upstream_id inexistente na matriz: {u} (arquivos: "
+        return None, None, [f"upstream_id inexistente na matriz: {u} (arquivos: "
                       f"{', '.join(sorted({e[0] for e in results[u]}))})" for u in unknown], [], []
 
     conflicts, applied = [], []
@@ -122,8 +144,10 @@ def apply(header, rows, results):
         row[idx["teste"]] = teste
         row[idx["evidencia"]] = evidencia
         row[idx["revisado_por"]] = ";".join(f"resultado:{f}" for f in files)
+        tipos = {e[4] for e in entries if e[1] == "PASS" and e[4]} if estado == "PASS" else set()
+        row[idx["tipo_oraculo"]] = next((t for t in TIPO_FORCA if t in tipos), "")
         applied.append(uid)
-    return new_rows, [], conflicts, applied
+    return header, new_rows, [], conflicts, applied
 
 
 def state_counts(rows, idx):
@@ -153,23 +177,34 @@ def main():
 
     per_file = defaultdict(Counter)
     for uid, entries in results.items():
-        for name, estado, _, _ in entries:
+        for name, estado, _, _, _ in entries:
             per_file[name][estado] += 1
 
     before = state_counts(rows, idx)
-    new_rows, errors, conflicts, applied = apply(header, rows, results)
+    header, new_rows, errors, conflicts, applied = apply(header, rows, results)
     if errors:
         print("ERRO: ids inexistentes na matriz (nada foi gravado):", file=sys.stderr)
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         return 2
 
+    idx = {name: i for i, name in enumerate(header)}
+    sem_tipo = [r[idx["upstream_id"]] for r in new_rows
+                if r[idx["estado_verificacao"]] == "PASS" and not r[idx["tipo_oraculo"]]]
+    if sem_tipo:
+        print(f"ERRO: {len(sem_tipo)} PASS sem tipo_oraculo na matriz (ids: {', '.join(sem_tipo[:10])}...)",
+              file=sys.stderr)
+        return 2
     new_text = serialize([header] + new_rows)
     after = state_counts(new_rows, idx)
     changed = new_text != text
 
     print(f"Estados antes:  {fmt_counts(before)}")
     print(f"Estados depois: {fmt_counts(after)}")
+    print("PASS por tipo de oráculo: " + ", ".join(
+        f"{t}={c}" for t, c in sorted(Counter(r[idx['tipo_oraculo']] for r in new_rows
+                                              if r[idx['estado_verificacao']] == 'PASS').items(),
+                                      key=lambda kv: TIPOS.index(kv[0]))))
     print("Por arquivo de resultados (linhas lidas por estado):")
     for name in sorted(per_file):
         print(f"  {name}: {fmt_counts(per_file[name])} (total {sum(per_file[name].values())})")

@@ -204,6 +204,10 @@ _Avoid_: status, feito, OK, N/A sem justificativa
 A fonte do resultado esperado de um teste: o AppleWin no SHA congelado (padrão), a especificação de hardware, uma Fixture validada ou um resultado conhecido.
 _Avoid_: referência (sozinho), gabarito
 
+**Tipo de oráculo**:
+Em que um PASS se apoia, declarado em cada resultado (coluna `tipo_oraculo`): `executavel` (comparação com o AppleWin rodando, o fork do audetto ou o Wine), `cpp-transcrito` (teste Rust que reproduz o C++ do AppleWin a8f0d1d citando arquivo:linha), `especificacao` (hardware, a2audit ou vetores públicos), `fixture-real` (arquivo real de terceiros, sem comparação com o AppleWin) ou `regressao` (teste do próprio port, sem fonte externa). Só `executavel` é "concorda com o AppleWin rodando". O Oráculo executável é o fork do audetto, com núcleo AppleWin 3e8054b (22 commits antes do a8f0d1d); o a8f0d1d é a referência de código.
+_Avoid_: PASS sem tipo, "idêntico ao AppleWin" sem dizer o tipo
+
 **Divergência intencional**:
 Um ponto em que o AppleII-Rust segue o hardware real em vez do AppleWin, aceito só com evidência de hardware e registrado na lista de limitações.
 _Avoid_: correção de bug do AppleWin, melhoria

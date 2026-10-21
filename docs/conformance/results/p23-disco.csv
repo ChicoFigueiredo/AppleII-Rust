@@ -1,90 +1,90 @@
-upstream_id,estado_verificacao,teste,evidencia
-12,PASS,crates/apple2-storage/tests/p23_disco.rs::gh12_hard_disk_image_can_be_unplugged,"HardDiskCard::unplug devolve a imagem e deixa o drive sem imagem, como HarddiskInterfaceCard::Unplug (Harddisk.cpp:556); a opcao de menu ""Unplug Hard Disk Image"" existe em PageSlots.cpp:52"
-32,NOT_APPLICABLE,,pedido de gerenciador de imagens independente; o AppleWin a8f0d1d nao tem (so o seletor de arquivo e o Send to CiderPress)
-48,PASS,crates/apple2-storage/tests/p23_disco.rs::gh628_gz_and_zip_suffix_is_case_insensitive; crates/apple2-storage/tests/images.rs::gz_and_zip_wrappers_round_trip_with_write_back,"imagens dentro de .gz e .zip abrem e gravam de volta, como CheckGZipFile/CheckZipFile (DiskImageHelper.cpp:1625-1779); disk-ultima5-do-gz-boot e disk-woz-glutton-zip-boot comparam o boot com o oraculo"
-49,PASS,disk-micro-dual-2mg; crates/apple2-storage/tests/p23_disco.rs::gh317_two_img_version_zero_mounts,"parte de disco (.2mg): dois drives com 2MG identicos ao oraculo e versao 0/1 como DiskImageHelper.cpp:1440-1500; Mouse ][ e relogio sao cartoes (SlotCardSpec::MouseInterface e GenericClock em apple2-config/src/card.rs), verificados nas categorias mouse e relogio"
-57,BLOCKED,,indicador de drive em tela cheia e desenho da interface (FrameDrawDiskLEDS no Win32); o oraculo headless nao tem interface (disk-differential.md L4)
-61,PASS,crates/apple2-storage/tests/p23_disco.rs::gh61_gh88_gh152_gh563_gh1227_gh1331_hard_disk_detection_matches_applewin,CHDVImage::Detect aceita .po de 800K ou mais como disco rigido (DiskImageHelper.cpp:895-906): .po de 16 MB e 32 MB abrem no port; a imagem Asimov em si e de terceiros
-84,BLOCKED,,"nome do disco no botao do drive depois de mudar na janela de configuracao: interface Win32 (DrawButton/PageSlots), sem oraculo headless"
-87,PASS,crates/apple2-storage/tests/p23_disco.rs::gh87_gh387_gh568_images_of_up_to_forty_tracks_are_accepted,".dsk de 36 a 40 trilhas (140K + n*4K) aceito e 41 recusado, igual a IsValidImageSize (DiskImageHelper.cpp:590-600; TRACKS_EXTRA=5 em DiskImage.h:43)"
-88,BLOCKED,,"imagem OzDOS (.po de 800K, formato de terceiros do ftp asimov) sem fixture; a deteccao de .po de 800K como disco rigido bate com o AppleWin (gh61_gh88_... PASS), mas o boot nao pode ser comparado"
-104,NOT_APPLICABLE,,"controlador de disquete de 3,5"" selecionavel nao existe no AppleWin a8f0d1d (so Disk II e o HDC; 3,5"" entra como disco rigido de 800K)"
-141,PASS,crates/apple2-storage/tests/p23_disco.rs::gh141_gh726_a_second_disk_ii_gives_four_drives,"um segundo Disk II no slot 5 da quatro drives independentes, como o CardManager do AppleWin (Disk II em qualquer slot); comparar com o oraculo em outro slot e limite L4 do diferencial"
-152,BLOCKED,,imagem DOS Master do Apple Oasis (terceiros) sem fixture; a deteccao .po/.dsk e a mesma do AppleWin (DiskImageHelper.cpp:585-640 e testes de images.rs)
-163,BLOCKED,,"David-DOS II (DoubleDOS.dsk, terceiros, host externo) sem fixture com proveniencia; o comando HIDOS depende da imagem"
-201,BLOCKED,,"exibicao de trilha e setor e desenho da janela (FrameDrawDiskStatus, Win32); o oraculo headless nao tem interface (L4)"
-250,BLOCKED,,luz do drive acesa com breakpoint do depurador depende do redesenho Win32 (LEDs e titulo); sem oraculo headless
-273,PASS,crates/applewin/tests/p23_disco_ui.rs::gh273_gh690_f5_swaps_the_floppy_disks,"o AppleWin troca os discos por tecla (F5 = BTN_DRIVESWAP, WinFrame.cpp:2098-2103); o port liga F5 a Action::SwapDrives"
-281,NOT_APPLICABLE,,FDI e EDD nao existem no AppleWin a8f0d1d (issue Won't fix)
-312,PASS,crates/apple2-storage/tests/p23_disco.rs::gh312_gh641_gh1300_mounted_files_are_not_locked,"duas instancias abrem o mesmo arquivo somente leitura (o AppleWin usa FILE_SHARE_READ, DiskImageHelper.cpp:1848); o port nem mantem o arquivo aberto"
-317,PASS,crates/apple2-storage/tests/p23_disco.rs::gh317_two_img_version_zero_mounts,".2mg versao 0 monta; so Version > 1 e recusada (DiskImageHelper.cpp:1449), em disquete e em disco rigido"
-322,BLOCKED,,Copy II+ 5.5 (terceiros) sem fixture; a deteccao depende do programa sondar o drive 2
-323,NOT_APPLICABLE,,"o autostart varre do slot 7 para baixo no AppleWin e no hardware real; pular o boot e Ctrl-Reset/PR#6 igual nos dois, sem defeito"
-324,PASS,crates/apple2-storage/tests/p23_disco.rs::gh324_gh996_gh1033_hard_disk_boots_from_slot_5,"HDC no slot 5 inicia o ProDOS em S5,D1; o firmware independente de slot e do AppleWin (Harddisk.cpp:1271, GH#996)"
-334,BLOCKED,,combo de selecao de disco da pagina de configuracao (PageSlots.cpp): interface Win32 sem oraculo headless
-348,BLOCKED,,regressao da lista de HD na janela de configuracao Win32 (PageSlots); o port monta e le imagens de HD em hdd.rs (testes do crate) mas a janela nao tem oraculo
-360,NOT_APPLICABLE,,"escolher o numero de volume de um .dsk e pedido que o AppleWin a8f0d1d nao atende (usa 254 ou o volume do cabecalho 2MG, coberto por two_img_wrapper_gives_volume_number_and_lock); issue Won't fix"
-361,NOT_APPLICABLE,,"arrastar e soltar de imagens de 3,5""/HD e associacao de tipo de arquivo nao existem no AppleWin a8f0d1d (WM_DROPFILES so atende o Disk II do slot 6, WinFrame.cpp:1165-1197)"
-383,BLOCKED,,"velocidade do ""Enhanced disk speed"" com o depurador ativo depende do laco de execucao e do pacing do frontend (Win32 + relogio real); sem oraculo headless"
-387,PASS,crates/apple2-storage/tests/p23_disco.rs::gh87_gh387_gh568_images_of_up_to_forty_tracks_are_accepted,".nib de 35 a 40 trilhas abre (6656 bytes por trilha), 41 e tamanhos nao multiplos recusados, igual a DiskImageHelper.cpp:793"
-431,BLOCKED,,Conflict in Vietnam: jogo/imagem de terceiros sem fixture
-452,PASS,crates/apple2-storage/tests/p23_disco.rs::gh452_unmounted_hard_disk_reports_no_device_connected; crates/apple2-storage/tests/hdd.rs::errors_unknown_unit_write_protect_and_bad_destinations,"unidade sem imagem devolve $28 (nao conectado) e erro de I/O $27, como DEVICE_IO_ERROR em Harddisk.cpp:604; codigos transcritos com a correcao GH#452"
-453,BLOCKED,,"piscar do indicador ""S??"" e desenho Win32 (FrameDrawDiskStatus); sem oraculo headless"
-460,PASS,crates/apple2-storage/tests/p23_disco.rs::gh460_cold_start_stops_a_spinning_drive_and_warm_reset_keeps_it_spinning,Reset(bIsPowerCycle) zera o giro e o LED so na partida a frio (Disk.cpp:1797-1818); o port faz o mesmo no power_cycle e mantem no reset
-506,PASS,disk-micro-zero-length; crates/apple2-storage/tests/files.rs::zero_length_files_become_blank_images_of_the_extension_type,"arquivo de 0 bytes .dsk/.nib/.woz vira imagem em branco do tipo da extensao e o resultado final bate com o oraculo (GetImageForCreation, DiskImageHelper.cpp:2161)"
-512,BLOCKED,,"""Send to CiderPress"" e integracao so do Windows (CiderPress.exe, WinFrame.cpp:2163); sem equivalente headless"
-515,BLOCKED,crates/apple2-storage/tests/p23_disco.rs::gh515_plugging_a_hard_disk_then_cold_boot_boots_from_it,"o oraculo nao pluga imagem com a maquina rodando (L4); o teste do port, so Rust, mostra que o HD plugado inicia no primeiro boot a frio, como no precedente do GH#640"
-525,PASS,crates/apple2-storage/tests/p23_disco.rs::gh525_head_does_not_move_while_the_drive_is_off,"passo do braco ignorado com motor desligado e drive parado, permitido nos 1 s de giro residual (Disk.cpp:538-545); a parte de spin-up e a issue 526"
-526,NOT_APPLICABLE,,"spin-up/spin-down gradual nao existe no AppleWin a8f0d1d (o giro e um contador fixo de 1 s, Disk.cpp m_spinning/SPINNING_CYCLES); feature futura"
-529,BLOCKED,,RW18/Infocom (terceiros) sem fixture; a questao e como o formatador de trilha trata trilhas de 18 setores e INIT nao foi executado no oraculo (L4)
-533,BLOCKED,,"DOS 4.4 (terceiros, issue Won't fix): sem imagem no corpus e INIT/FORMAT nao executados no oraculo (L4)"
-537,BLOCKED,,DOS 3.2.1 (.nib de terceiros) sem fixture; INIT/FORMAT nao executados no oraculo (L4)
-543,PASS,crates/apple2-storage/tests/p23_disco.rs::gh543_swapping_disks_keeps_the_motor_state_with_the_drive,DriveSwap troca so m_disk e invalida o buffer de trilha; o giro continua no drive (Disk.cpp:2007-2051)
-544,PASS,disk-micro-read-t1-woz; disk-micro-write-sector-woz; disk-micro-quarter-woz; disk-woz-gruds-in-space-boot,WOZ lido e gravado: instrucoes e imagem final identicas ao oraculo (micro-programas WOZ; boots de WOZ reais no corpus AppleWin-Test)
-563,BLOCKED,,"UniDOS Plus (.2mg de 3,5"", terceiros) sem fixture; a deteccao de 2MG/800K como HD bate com o AppleWin (gh61_gh88_... PASS)"
-568,PASS,crates/apple2-storage/tests/p23_disco.rs::gh87_gh387_gh568_images_of_up_to_forty_tracks_are_accepted,"40 trilhas aceitas (36 a 40) e 41 recusada, igual ao AppleWin a8f0d1d (TRACKS_MAX=40, DiskImage.h:44)"
-601,PASS,disk-micro-latch-motor-off; disk-micro-even-latch-dsk,latch de dados em modo load com motor desligado: instrucoes e imagem final identicas ao oraculo
-628,PASS,crates/apple2-storage/tests/p23_disco.rs::gh628_gz_and_zip_suffix_is_case_insensitive,"sufixo .zip/.gz aceito em qualquer caixa, como _stricmp em DiskImageHelper.cpp:1990 e :1994"
-641,NOT_APPLICABLE,,"montar ""como temporario"" sem travar o arquivo e pedido que o AppleWin a8f0d1d nao tem (abre com FILE_SHARE_READ, DiskImageHelper.cpp:1862); o port nao trava o arquivo (gh312_gh641_gh1300_mounted_files_are_not_locked)"
-663,PASS,crates/apple2-config/tests/p23_disco.rs::gh663_d1_and_d2_insert_the_images_in_slot_6,-d1/-d2 guardam as imagens do Disk II do slot 6 como em CmdLine.cpp:140-151
-690,PASS,crates/applewin/tests/p23_disco_ui.rs::gh273_gh690_f5_swaps_the_floppy_disks,"F5 troca os discos e as teclas F funcionam em tela cheia (WinFrame.cpp:1238, :2098)"
-692,PASS,crates/apple2-config/tests/p23_disco.rs::gh692_hard_disk_from_command_line_can_be_dismounted,"-h1 monta no slot 7, -s7 empty esvazia o slot e -s7-empty-on-exit o remove ao sair (CmdLine.cpp:160, :344)"
-726,PASS,crates/apple2-storage/tests/p23_disco.rs::gh141_gh726_a_second_disk_ii_gives_four_drives,"quatro drives = dois cartoes Disk II (slots 5 e 6), como no AppleWin"
-729,NOT_APPLICABLE,,"avisos de WOZ nao suportado (13 setores, hardware incompativel, SSC no slot 2) nao existem no AppleWin a8f0d1d (DiskImageHelper.cpp so le bootSectorFormat); feature futura"
-734,PASS,crates/apple2-storage/tests/p23_disco.rs::gh734_gh767_gh1133_thirteen_sector_firmware_follows_the_woz_or_is_forced,"firmware de 13 setores escolhido pelo WOZ do drive 1 (bootSectorFormat) a cada reset, como InitFirmware (Disk.cpp:2084-2099)"
-748,BLOCKED,,Wizardry IV/V (terceiros) sem fixture; o defeito era do jogo que nunca habilita o drive 2 ($C0EB)
-754,NOT_APPLICABLE,,"converter .dsk para .woz internamente no modo ""authentic"" nao existe no AppleWin a8f0d1d (as imagens .dsk vao pelo nibblizador, DiskImageHelper.cpp); feature futura"
-758,BLOCKED,,Locksmith 6 copiando Lode Runner (terceiros) sem fixture; a gravacao de WOZ coincide com o oraculo (disk-micro-write-sector-woz)
-767,PASS,crates/apple2-storage/tests/p23_disco.rs::gh734_gh767_gh1133_thirteen_sector_firmware_follows_the_woz_or_is_forced,"autodeteccao so olha o drive 1 e so no reset; 13 setores tambem pode ser forcado (diskii13, CmdLine.cpp:212); com discos de 13 e 16 setores juntos vale o do drive 1"
-796,BLOCKED,,"MAD2.DSK (terceiros) sem fixture; a diferenca e no hardware real (byte $3318 1A/19), nao comparavel com o oraculo"
-824,PASS,crates/apple2-storage/tests/p23_disco.rs::gh824_zip_skips_macosx_metadata_entries,a entrada __MACOSX de tamanho invalido e ignorada e a primeira imagem valida e usada (DiskImageHelper.cpp:1703-1779); zip com varias entradas fica protegido (:1817)
-971,PASS,crates/apple2-storage/tests/p23_disco.rs::gh971_gh991_woz_write_protect_flag_can_be_cleared_by_the_user; disk-micro-write-sector-woz,WOZ grava (identico ao oraculo) e a protecao do INFO pode ser tirada no drive (Disk.cpp:1000)
-991,PASS,crates/apple2-storage/tests/p23_disco.rs::gh971_gh991_woz_write_protect_flag_can_be_cleared_by_the_user,o AppleWin ja desprotege o drive pelo menu (Disk.cpp:1000); o port tem set_write_protect para WOZ
-996,PASS,crates/apple2-storage/tests/p23_disco.rs::gh324_gh996_gh1033_hard_disk_boots_from_slot_5,"firmware do HDC independente de slot; ProDOS inicia de S5,D1 com a ROM do AppleWin"
-1024,NOT_APPLICABLE,,"botoes de 3,5""/HD e arrastar-e-soltar de 2mg/hdv nao existem no AppleWin a8f0d1d (WM_DROPFILES so atende o Disk II do slot 6, WinFrame.cpp:1165-1197)"
-1033,PASS,crates/apple2-storage/tests/p23_disco.rs::gh324_gh996_gh1033_hard_disk_boots_from_slot_5,o HDC em slot 5 (Pascal) inicia sem alterar o firmware
-1074,NOT_APPLICABLE,,"sandbox do macOS (bookmarks de seguranca) e problema do port macOS do AppleWin, nao do emulador; Disk2InterfaceCard::LoadLastDiskImage existe so no Win32"
-1086,BLOCKED,,"Passport 2022-02-04 (4am, terceiros) sobre WOZ vazio: sem fixture; a escrita em WOZ coincide com o oraculo"
-1133,PASS,crates/apple2-storage/tests/p23_disco.rs::gh734_gh767_gh1133_thirteen_sector_firmware_follows_the_woz_or_is_forced,-sN diskii13 forca o firmware de 13 setores (CmdLine.cpp:212; SlotCardSpec::Disk2 firmware_13_sector); ROM personalizada do Disk II nao existe no AppleWin
-1134,BLOCKED,,LEDs do slot 5 sao desenho da janela (FrameDrawDiskLEDS); o modelo de luz por cartao existe (light_status) mas sem oraculo headless (L4)
-1185,NOT_APPLICABLE,,A2R nao e suportado pelo AppleWin a8f0d1d (nenhuma referencia no codigo)
-1186,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1186_two_hard_disk_controllers_hold_independent_images,"dois HDC (slots 5 e 7) com imagens independentes, como CT_GenericHDD em qualquer slot (CardManager.cpp:79-80)"
-1201,NOT_APPLICABLE,,dispositivo SmartPort externo (FujiNet) nao tem API no AppleWin a8f0d1d (Harddisk.cpp tem 8 unidades fixas); feature futura
-1207,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1207_hdc_mode_selects_smartport_or_block_firmware,"$Cn07 = 0 (SmartPort) ou $3C (modo bloco com 2 ou 4 dispositivos), como no firmware do AppleWin"
-1215,BLOCKED,,"""S??"" no status de setor e desenho da janela (FrameDrawDiskStatus); sem oraculo headless"
-1219,NOT_APPLICABLE,,o AppleWin a8f0d1d sempre confirma o desplugar (PageSlots.cpp:993-997) e nao tem opcao; pedido de opcao e feature futura
-1224,NOT_APPLICABLE,crates/applewin/tests/p23_disco_ui.rs::gh1224_disk_hotkeys_address_only_slot_6_drives,"atalhos para os drives do slot 5 nao existem no AppleWin a8f0d1d (F3/F4 so atendem o slot 6, WinFrame.cpp:1426-1432); o port faz igual"
-1227,PASS,crates/apple2-storage/tests/p23_disco.rs::gh61_gh88_gh152_gh563_gh1227_gh1331_hard_disk_detection_matches_applewin,"800K como .po, .hdv e .2mg abrem como disco rigido, como no AppleWin (DiskImageHelper.cpp:895-906)"
-1240,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1240_big_woz_file_is_still_a_525_floppy,"WOZ de ~905 KB continua disquete de 5,25"" com 40 trilhas (MAX_TRACKS_5_25, DiskImageHelper.cpp:1176 e :2186)"
-1255,NOT_APPLICABLE,,"trilhas FLUX do WOZ 2.1 nao existem no AppleWin a8f0d1d (DiskImageHelper.cpp:1564 ""WOZ v3 (todo)""); o port tambem ignora o chunk"
-1264,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1264_prodos_status_returns_block_count_in_x_and_y,a chamada de status do driver de bloco devolve 280 blocos em X (baixo) e Y (alto) executando o firmware do AppleWin
-1277,PASS,crates/apple2-config/tests/p23_disco.rs::gh1277_hdc_firmware_v1_and_v2_switches; crates/apple2-storage/tests/p23_disco.rs::gh1277_old_hdc_firmware_differs_from_current,-hdc-firmware-v1/-v2 existem (CmdLine.cpp:769-776) e selecionam ROMs diferentes do SmartPort atual
-1300,NOT_APPLICABLE,,"montagem sem trava e pedido que o AppleWin a8f0d1d nao tem (FILE_SHARE_READ, DiskImageHelper.cpp:1862); o port nao trava o arquivo"
-1331,PASS,crates/apple2-storage/tests/p23_disco.rs::gh61_gh88_gh152_gh563_gh1227_gh1331_hard_disk_detection_matches_applewin,".po com menos de 1600 blocos e recusado no AppleWin tambem (CHDVImage::Detect, DiskImageHelper.cpp:895-906); .hdv de qualquer tamanho abre nos dois"
-1370,NOT_APPLICABLE,,"o AppleWin a8f0d1d para em 40 trilhas (TRACKS_MAX, DiskImage.h:44); pedido de mais de 40 e feature futura; o port recusa 41 igual"
-1433,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1433_eject_clears_write_protect; disk-micro-wp-sense,sensor de write-protect lido pelo programa (identico ao oraculo) e a ejecao limpa a protecao do drive (Disk.cpp:426)
-1469,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1469_new_32mb_prodos_volume_has_a_valid_block_count,volume ProDOS criado com 32 MB grava 65535 blocos e nao 0 (ProDOS_FileSystem.h:303-307)
-1473,NOT_APPLICABLE,,lista de usados recentemente nao existe no AppleWin a8f0d1d (nenhuma referencia no codigo)
-1476,NOT_APPLICABLE,,criar disco .woz pelo menu nao existe no AppleWin a8f0d1d (so um arquivo de 0 bytes .woz vira WOZ vazio); feature futura
-1482,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1482_raw_apl_binary_gives_a_boot_program; crates/apple2-storage/tests/images.rs::simsystem_iie_images_apl_and_prg_programs,"binario .apl/.prg montado como disco gera programa de boot, como CAplImage/CPrgImage do AppleWin"
-1507,BLOCKED,,"ordem de OK/aviso entre a janela de configuracao e o dialogo ""unplug"" e fluxo de dialogos Win32 (PageSlots.cpp:915-934); sem oraculo headless"
+upstream_id,estado_verificacao,teste,evidencia,tipo_oraculo
+12,PASS,crates/apple2-storage/tests/p23_disco.rs::gh12_hard_disk_image_can_be_unplugged,"HardDiskCard::unplug devolve a imagem e deixa o drive sem imagem, como HarddiskInterfaceCard::Unplug (Harddisk.cpp:556); a opcao de menu ""Unplug Hard Disk Image"" existe em PageSlots.cpp:52",cpp-transcrito
+32,NOT_APPLICABLE,,pedido de gerenciador de imagens independente; o AppleWin a8f0d1d nao tem (so o seletor de arquivo e o Send to CiderPress),
+48,PASS,crates/apple2-storage/tests/p23_disco.rs::gh628_gz_and_zip_suffix_is_case_insensitive; crates/apple2-storage/tests/images.rs::gz_and_zip_wrappers_round_trip_with_write_back,"imagens dentro de .gz e .zip abrem e gravam de volta, como CheckGZipFile/CheckZipFile (DiskImageHelper.cpp:1625-1779); disk-ultima5-do-gz-boot e disk-woz-glutton-zip-boot comparam o boot com o oraculo",cpp-transcrito
+49,PASS,disk-micro-dual-2mg; crates/apple2-storage/tests/p23_disco.rs::gh317_two_img_version_zero_mounts,"parte de disco (.2mg): dois drives com 2MG identicos ao oraculo e versao 0/1 como DiskImageHelper.cpp:1440-1500; Mouse ][ e relogio sao cartoes (SlotCardSpec::MouseInterface e GenericClock em apple2-config/src/card.rs), verificados nas categorias mouse e relogio",executavel
+57,BLOCKED,,indicador de drive em tela cheia e desenho da interface (FrameDrawDiskLEDS no Win32); o oraculo headless nao tem interface (disk-differential.md L4),
+61,PASS,crates/apple2-storage/tests/p23_disco.rs::gh61_gh88_gh152_gh563_gh1227_gh1331_hard_disk_detection_matches_applewin,CHDVImage::Detect aceita .po de 800K ou mais como disco rigido (DiskImageHelper.cpp:895-906): .po de 16 MB e 32 MB abrem no port; a imagem Asimov em si e de terceiros,cpp-transcrito
+84,BLOCKED,,"nome do disco no botao do drive depois de mudar na janela de configuracao: interface Win32 (DrawButton/PageSlots), sem oraculo headless",
+87,PASS,crates/apple2-storage/tests/p23_disco.rs::gh87_gh387_gh568_images_of_up_to_forty_tracks_are_accepted,".dsk de 36 a 40 trilhas (140K + n*4K) aceito e 41 recusado, igual a IsValidImageSize (DiskImageHelper.cpp:590-600; TRACKS_EXTRA=5 em DiskImage.h:43)",cpp-transcrito
+88,BLOCKED,,"imagem OzDOS (.po de 800K, formato de terceiros do ftp asimov) sem fixture; a deteccao de .po de 800K como disco rigido bate com o AppleWin (gh61_gh88_... PASS), mas o boot nao pode ser comparado",
+104,NOT_APPLICABLE,,"controlador de disquete de 3,5"" selecionavel nao existe no AppleWin a8f0d1d (so Disk II e o HDC; 3,5"" entra como disco rigido de 800K)",
+141,PASS,crates/apple2-storage/tests/p23_disco.rs::gh141_gh726_a_second_disk_ii_gives_four_drives,"um segundo Disk II no slot 5 da quatro drives independentes, como o CardManager do AppleWin (Disk II em qualquer slot); comparar com o oraculo em outro slot e limite L4 do diferencial (CardManager.cpp:61, CT_Disk2 em qualquer slot)",cpp-transcrito
+152,BLOCKED,,imagem DOS Master do Apple Oasis (terceiros) sem fixture; a deteccao .po/.dsk e a mesma do AppleWin (DiskImageHelper.cpp:585-640 e testes de images.rs),
+163,BLOCKED,,"David-DOS II (DoubleDOS.dsk, terceiros, host externo) sem fixture com proveniencia; o comando HIDOS depende da imagem",
+201,BLOCKED,,"exibicao de trilha e setor e desenho da janela (FrameDrawDiskStatus, Win32); o oraculo headless nao tem interface (L4)",
+250,BLOCKED,,luz do drive acesa com breakpoint do depurador depende do redesenho Win32 (LEDs e titulo); sem oraculo headless,
+273,PASS,crates/applewin/tests/p23_disco_ui.rs::gh273_gh690_f5_swaps_the_floppy_disks,"o AppleWin troca os discos por tecla (F5 = BTN_DRIVESWAP, WinFrame.cpp:2098-2103); o port liga F5 a Action::SwapDrives",cpp-transcrito
+281,NOT_APPLICABLE,,FDI e EDD nao existem no AppleWin a8f0d1d (issue Won't fix),
+312,PASS,crates/apple2-storage/tests/p23_disco.rs::gh312_gh641_gh1300_mounted_files_are_not_locked,"duas instancias abrem o mesmo arquivo somente leitura (o AppleWin usa FILE_SHARE_READ, DiskImageHelper.cpp:1848); o port nem mantem o arquivo aberto",cpp-transcrito
+317,PASS,crates/apple2-storage/tests/p23_disco.rs::gh317_two_img_version_zero_mounts,".2mg versao 0 monta; so Version > 1 e recusada (DiskImageHelper.cpp:1449), em disquete e em disco rigido",cpp-transcrito
+322,BLOCKED,,Copy II+ 5.5 (terceiros) sem fixture; a deteccao depende do programa sondar o drive 2,
+323,NOT_APPLICABLE,,"o autostart varre do slot 7 para baixo no AppleWin e no hardware real; pular o boot e Ctrl-Reset/PR#6 igual nos dois, sem defeito",
+324,PASS,crates/apple2-storage/tests/p23_disco.rs::gh324_gh996_gh1033_hard_disk_boots_from_slot_5,"HDC no slot 5 inicia o ProDOS em S5,D1; o firmware independente de slot e do AppleWin (Harddisk.cpp:1271, GH#996)",cpp-transcrito
+334,BLOCKED,,combo de selecao de disco da pagina de configuracao (PageSlots.cpp): interface Win32 sem oraculo headless,
+348,BLOCKED,,regressao da lista de HD na janela de configuracao Win32 (PageSlots); o port monta e le imagens de HD em hdd.rs (testes do crate) mas a janela nao tem oraculo,
+360,NOT_APPLICABLE,,"escolher o numero de volume de um .dsk e pedido que o AppleWin a8f0d1d nao atende (usa 254 ou o volume do cabecalho 2MG, coberto por two_img_wrapper_gives_volume_number_and_lock); issue Won't fix",
+361,NOT_APPLICABLE,,"arrastar e soltar de imagens de 3,5""/HD e associacao de tipo de arquivo nao existem no AppleWin a8f0d1d (WM_DROPFILES so atende o Disk II do slot 6, WinFrame.cpp:1165-1197)",
+383,BLOCKED,,"velocidade do ""Enhanced disk speed"" com o depurador ativo depende do laco de execucao e do pacing do frontend (Win32 + relogio real); sem oraculo headless",
+387,PASS,crates/apple2-storage/tests/p23_disco.rs::gh87_gh387_gh568_images_of_up_to_forty_tracks_are_accepted,".nib de 35 a 40 trilhas abre (6656 bytes por trilha), 41 e tamanhos nao multiplos recusados, igual a DiskImageHelper.cpp:793",cpp-transcrito
+431,BLOCKED,,Conflict in Vietnam: jogo/imagem de terceiros sem fixture,
+452,PASS,crates/apple2-storage/tests/p23_disco.rs::gh452_unmounted_hard_disk_reports_no_device_connected; crates/apple2-storage/tests/hdd.rs::errors_unknown_unit_write_protect_and_bad_destinations; apple2-storage/tests/p23_disco.rs::gh452_controller_with_no_image_at_all_reports_no_device_connected,"unidade sem imagem (drive 2 do slot 7) devolve $28 (nao conectado), como CmdExecute com !m_imageloaded (Harddisk.cpp:694-698, GH#452; DEVICE_NOT_CONNECTED em :605); e/S fora da imagem ou em I/O devolve $27 (DEVICE_IO_ERROR, :604) Reforco (revisao do parecer): teste novo com o controlador sem nenhuma imagem montada, leitura e escrita de bloco, $28 nos dois.",cpp-transcrito
+453,BLOCKED,,"piscar do indicador ""S??"" e desenho Win32 (FrameDrawDiskStatus); sem oraculo headless",
+460,PASS,crates/apple2-storage/tests/p23_disco.rs::gh460_cold_start_stops_a_spinning_drive_and_warm_reset_keeps_it_spinning,Reset(bIsPowerCycle) zera o giro e o LED so na partida a frio (Disk.cpp:1797-1818); o port faz o mesmo no power_cycle e mantem no reset,cpp-transcrito
+506,PASS,disk-micro-zero-length; crates/apple2-storage/tests/files.rs::zero_length_files_become_blank_images_of_the_extension_type,"arquivo de 0 bytes .dsk/.nib/.woz vira imagem em branco do tipo da extensao e o resultado final bate com o oraculo (GetImageForCreation, DiskImageHelper.cpp:2161)",executavel
+512,BLOCKED,,"""Send to CiderPress"" e integracao so do Windows (CiderPress.exe, WinFrame.cpp:2163); sem equivalente headless",
+515,BLOCKED,crates/apple2-storage/tests/p23_disco.rs::gh515_plugging_a_hard_disk_then_cold_boot_boots_from_it,"o oraculo nao pluga imagem com a maquina rodando (L4); o teste do port, so Rust, mostra que o HD plugado inicia no primeiro boot a frio, como no precedente do GH#640",
+525,PASS,crates/apple2-storage/tests/p23_disco.rs::gh525_head_does_not_move_while_the_drive_is_off,"passo do braco ignorado com motor desligado e drive parado, permitido nos 1 s de giro residual (Disk.cpp:538-545); a parte de spin-up e a issue 526",cpp-transcrito
+526,NOT_APPLICABLE,,"spin-up/spin-down gradual nao existe no AppleWin a8f0d1d (o giro e um contador fixo de 1 s, Disk.cpp m_spinning/SPINNING_CYCLES); feature futura",
+529,BLOCKED,,RW18/Infocom (terceiros) sem fixture; a questao e como o formatador de trilha trata trilhas de 18 setores e INIT nao foi executado no oraculo (L4),
+533,BLOCKED,,"DOS 4.4 (terceiros, issue Won't fix): sem imagem no corpus e INIT/FORMAT nao executados no oraculo (L4)",
+537,BLOCKED,,DOS 3.2.1 (.nib de terceiros) sem fixture; INIT/FORMAT nao executados no oraculo (L4),
+543,PASS,crates/apple2-storage/tests/p23_disco.rs::gh543_swapping_disks_keeps_the_motor_state_with_the_drive,DriveSwap troca so m_disk e invalida o buffer de trilha; o giro continua no drive (Disk.cpp:2007-2051),cpp-transcrito
+544,PASS,disk-micro-read-t1-woz; disk-micro-write-sector-woz; disk-micro-quarter-woz; disk-woz-gruds-in-space-boot,WOZ lido e gravado: instrucoes e imagem final identicas ao oraculo (micro-programas WOZ; boots de WOZ reais no corpus AppleWin-Test),executavel
+563,BLOCKED,,"UniDOS Plus (.2mg de 3,5"", terceiros) sem fixture; a deteccao de 2MG/800K como HD bate com o AppleWin (gh61_gh88_... PASS)",
+568,PASS,crates/apple2-storage/tests/p23_disco.rs::gh87_gh387_gh568_images_of_up_to_forty_tracks_are_accepted,"40 trilhas aceitas (36 a 40) e 41 recusada, igual ao AppleWin a8f0d1d (TRACKS_MAX=40, DiskImage.h:44)",cpp-transcrito
+601,PASS,disk-micro-latch-motor-off; disk-micro-even-latch-dsk,latch de dados em modo load com motor desligado: instrucoes e imagem final identicas ao oraculo,executavel
+628,PASS,crates/apple2-storage/tests/p23_disco.rs::gh628_gz_and_zip_suffix_is_case_insensitive,"sufixo .zip/.gz aceito em qualquer caixa, como _stricmp em DiskImageHelper.cpp:1990 e :1994",cpp-transcrito
+641,NOT_APPLICABLE,,"montar ""como temporario"" sem travar o arquivo e pedido que o AppleWin a8f0d1d nao tem (abre com FILE_SHARE_READ, DiskImageHelper.cpp:1862); o port nao trava o arquivo (gh312_gh641_gh1300_mounted_files_are_not_locked)",
+663,PASS,crates/apple2-config/tests/p23_disco.rs::gh663_d1_and_d2_insert_the_images_in_slot_6,-d1/-d2 guardam as imagens do Disk II do slot 6 como em CmdLine.cpp:140-151,cpp-transcrito
+690,PASS,crates/applewin/tests/p23_disco_ui.rs::gh273_gh690_f5_swaps_the_floppy_disks,"F5 troca os discos e as teclas F funcionam em tela cheia (WinFrame.cpp:1238, :2099)",cpp-transcrito
+692,PASS,crates/apple2-config/tests/p23_disco.rs::gh692_hard_disk_from_command_line_can_be_dismounted,"-h1 monta no slot 7, -s7 empty esvazia o slot e -s7-empty-on-exit o remove ao sair (CmdLine.cpp:160, :344)",cpp-transcrito
+726,PASS,crates/apple2-storage/tests/p23_disco.rs::gh141_gh726_a_second_disk_ii_gives_four_drives,"quatro drives = dois cartoes Disk II (slots 5 e 6), como no AppleWin (CardManager.cpp:61, CT_Disk2 em qualquer slot)",cpp-transcrito
+729,NOT_APPLICABLE,,"avisos de WOZ nao suportado (13 setores, hardware incompativel, SSC no slot 2) nao existem no AppleWin a8f0d1d (DiskImageHelper.cpp so le bootSectorFormat); feature futura",
+734,PASS,crates/apple2-storage/tests/p23_disco.rs::gh734_gh767_gh1133_thirteen_sector_firmware_follows_the_woz_or_is_forced,"firmware de 13 setores escolhido pelo WOZ do drive 1 (bootSectorFormat) a cada reset, como InitFirmware (Disk.cpp:2084-2099)",cpp-transcrito
+748,BLOCKED,,Wizardry IV/V (terceiros) sem fixture; o defeito era do jogo que nunca habilita o drive 2 ($C0EB),
+754,NOT_APPLICABLE,,"converter .dsk para .woz internamente no modo ""authentic"" nao existe no AppleWin a8f0d1d (as imagens .dsk vao pelo nibblizador, DiskImageHelper.cpp); feature futura",
+758,BLOCKED,,Locksmith 6 copiando Lode Runner (terceiros) sem fixture; a gravacao de WOZ coincide com o oraculo (disk-micro-write-sector-woz),
+767,PASS,crates/apple2-storage/tests/p23_disco.rs::gh734_gh767_gh1133_thirteen_sector_firmware_follows_the_woz_or_is_forced,"autodeteccao so olha o drive 1 e so no reset; 13 setores tambem pode ser forcado (diskii13, CmdLine.cpp:212); com discos de 13 e 16 setores juntos vale o do drive 1",cpp-transcrito
+796,BLOCKED,,"MAD2.DSK (terceiros) sem fixture; a diferenca e no hardware real (byte $3318 1A/19), nao comparavel com o oraculo",
+824,PASS,crates/apple2-storage/tests/p23_disco.rs::gh824_zip_skips_macosx_metadata_entries,a entrada __MACOSX de tamanho invalido e ignorada e a primeira imagem valida e usada (DiskImageHelper.cpp:1703-1779); zip com varias entradas fica protegido (:1817),cpp-transcrito
+971,PASS,crates/apple2-storage/tests/p23_disco.rs::gh971_gh991_woz_write_protect_flag_can_be_cleared_by_the_user; disk-micro-write-sector-woz,WOZ grava (identico ao oraculo) e a protecao do INFO pode ser tirada no drive (Disk.cpp:1000),executavel
+991,PASS,crates/apple2-storage/tests/p23_disco.rs::gh971_gh991_woz_write_protect_flag_can_be_cleared_by_the_user,o AppleWin ja desprotege o drive pelo menu (Disk.cpp:1000); o port tem set_write_protect para WOZ,cpp-transcrito
+996,PASS,crates/apple2-storage/tests/p23_disco.rs::gh324_gh996_gh1033_hard_disk_boots_from_slot_5,"firmware do HDC independente de slot; ProDOS inicia de S5,D1 com a ROM do AppleWin (Harddisk.cpp:1271).",cpp-transcrito
+1024,NOT_APPLICABLE,,"botoes de 3,5""/HD e arrastar-e-soltar de 2mg/hdv nao existem no AppleWin a8f0d1d (WM_DROPFILES so atende o Disk II do slot 6, WinFrame.cpp:1165-1197)",
+1033,PASS,crates/apple2-storage/tests/p23_disco.rs::gh324_gh996_gh1033_hard_disk_boots_from_slot_5,"HDC em slot 5 inicia o ProDOS (S5,D1) com o firmware independente de slot (Harddisk.cpp:1271, GH#996). Pascal/Apple Pascal nao foi testado: o teste boota o ProDOS 2.4.3.",cpp-transcrito
+1074,NOT_APPLICABLE,,"sandbox do macOS (bookmarks de seguranca) e problema do port macOS do AppleWin, nao do emulador; Disk2InterfaceCard::LoadLastDiskImage existe so no Win32",
+1086,BLOCKED,,"Passport 2022-02-04 (4am, terceiros) sobre WOZ vazio: sem fixture; a escrita em WOZ coincide com o oraculo",
+1133,PASS,crates/apple2-storage/tests/p23_disco.rs::gh734_gh767_gh1133_thirteen_sector_firmware_follows_the_woz_or_is_forced,-sN diskii13 forca o firmware de 13 setores (CmdLine.cpp:212; SlotCardSpec::Disk2 firmware_13_sector); ROM personalizada do Disk II nao existe no AppleWin,cpp-transcrito
+1134,BLOCKED,,LEDs do slot 5 sao desenho da janela (FrameDrawDiskLEDS); o modelo de luz por cartao existe (light_status) mas sem oraculo headless (L4),
+1185,NOT_APPLICABLE,,A2R nao e suportado pelo AppleWin a8f0d1d (nenhuma referencia no codigo),
+1186,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1186_two_hard_disk_controllers_hold_independent_images,"dois HDC (slots 5 e 7) com imagens independentes, como CT_GenericHDD em qualquer slot (CardManager.cpp:79-80)",cpp-transcrito
+1201,NOT_APPLICABLE,,dispositivo SmartPort externo (FujiNet) nao tem API no AppleWin a8f0d1d (Harddisk.cpp tem 8 unidades fixas); feature futura,
+1207,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1207_hdc_mode_selects_smartport_or_block_firmware; disk-hdd-smartport-page,"$Cn07 = 0 (SmartPort) ou $3C (modo bloco com 2 ou 4 dispositivos), como no firmware do AppleWin A execucao do firmware SmartPort pelo caso disk-hdd-smartport-page (JSR $C70D) e igual ao oraculo; o teste Rust confere so os bytes de modo $Cn07/$CnFE.",executavel
+1215,BLOCKED,,"""S??"" no status de setor e desenho da janela (FrameDrawDiskStatus); sem oraculo headless",
+1219,NOT_APPLICABLE,,o AppleWin a8f0d1d sempre confirma o desplugar (PageSlots.cpp:993-997) e nao tem opcao; pedido de opcao e feature futura,
+1224,NOT_APPLICABLE,crates/applewin/tests/p23_disco_ui.rs::gh1224_disk_hotkeys_address_only_slot_6_drives,"atalhos para os drives do slot 5 nao existem no AppleWin a8f0d1d (F3/F4 so atendem o slot 6, WinFrame.cpp:1426-1432); o port faz igual",
+1227,PASS,crates/apple2-storage/tests/p23_disco.rs::gh61_gh88_gh152_gh563_gh1227_gh1331_hard_disk_detection_matches_applewin,"800K como .po, .hdv e .2mg abrem como disco rigido, como no AppleWin (DiskImageHelper.cpp:895-906)",cpp-transcrito
+1240,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1240_big_woz_file_is_still_a_525_floppy,"WOZ de ~905 KB continua disquete de 5,25"" com 40 trilhas (MAX_TRACKS_5_25, DiskImageHelper.cpp:1176 e :2186)",cpp-transcrito
+1255,NOT_APPLICABLE,,"trilhas FLUX do WOZ 2.1 nao existem no AppleWin a8f0d1d (DiskImageHelper.cpp:1564 ""WOZ v3 (todo)""); o port tambem ignora o chunk",
+1264,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1264_prodos_status_returns_block_count_in_x_and_y,"a chamada de status do driver de bloco devolve 280 blocos em X (baixo) e Y (alto) executando o firmware do AppleWin C++ Harddisk.cpp:668-674 (X/Y recebem a contagem de blocos) e :1273 (firmware 4, fix GH#1264).",cpp-transcrito
+1277,PASS,crates/apple2-config/tests/p23_disco.rs::gh1277_hdc_firmware_v1_and_v2_switches; crates/apple2-storage/tests/p23_disco.rs::gh1277_old_hdc_firmware_differs_from_current,-hdc-firmware-v1/-v2 existem (CmdLine.cpp:769-776) e selecionam ROMs diferentes do SmartPort atual,cpp-transcrito
+1300,NOT_APPLICABLE,,"montagem sem trava e pedido que o AppleWin a8f0d1d nao tem (FILE_SHARE_READ, DiskImageHelper.cpp:1862); o port nao trava o arquivo",
+1331,PASS,crates/apple2-storage/tests/p23_disco.rs::gh61_gh88_gh152_gh563_gh1227_gh1331_hard_disk_detection_matches_applewin,".po com menos de 1600 blocos e recusado no AppleWin tambem (CHDVImage::Detect, DiskImageHelper.cpp:895-906); .hdv de qualquer tamanho abre nos dois",cpp-transcrito
+1370,NOT_APPLICABLE,,"o AppleWin a8f0d1d para em 40 trilhas (TRACKS_MAX, DiskImage.h:44); pedido de mais de 40 e feature futura; o port recusa 41 igual",
+1433,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1433_eject_clears_write_protect; disk-micro-wp-sense,sensor de write-protect lido pelo programa (identico ao oraculo) e a ejecao limpa a protecao do drive (Disk.cpp:426),executavel
+1469,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1469_new_32mb_prodos_volume_has_a_valid_block_count,volume ProDOS criado com 32 MB grava 65535 blocos e nao 0 (ProDOS_FileSystem.h:303-307),cpp-transcrito
+1473,NOT_APPLICABLE,,lista de usados recentemente nao existe no AppleWin a8f0d1d (nenhuma referencia no codigo),
+1476,NOT_APPLICABLE,,criar disco .woz pelo menu nao existe no AppleWin a8f0d1d (so um arquivo de 0 bytes .woz vira WOZ vazio); feature futura,
+1482,PASS,crates/apple2-storage/tests/p23_disco.rs::gh1482_raw_apl_binary_gives_a_boot_program; crates/apple2-storage/tests/images.rs::simsystem_iie_images_apl_and_prg_programs,"binario .apl/.prg montado como disco gera programa de boot, como CAplImage/CPrgImage do AppleWin",regressao
+1507,BLOCKED,,"ordem de OK/aviso entre a janela de configuracao e o dialogo ""unplug"" e fluxo de dialogos Win32 (PageSlots.cpp:915-934); sem oraculo headless",

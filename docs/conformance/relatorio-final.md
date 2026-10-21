@@ -1,6 +1,8 @@
 # Relatório final de conformidade
 
-Relatório do §21 do [plano de auditoria](../prompts/AppleII-Rust_Plano_Auditoria_Paridade_e_Evolucao.md), em português, com os 10 itens na ordem do plano. Esta é a **reavaliação final** depois de: a #241 corrigida (zero FAIL P1 em issue), as 6 Divergências aprovadas do depurador (#114, #245, #458, #466, #468, #1381), a [ADR 0006](../adr/0006-divergencias-aprovadas-pelo-dono.md) e as decisões do dono de 21/10/2026. Todos os números vêm de execuções feitas em 21/10/2026 sobre o SHA do item 1; nada vem de memória. Onde um número vem de um relatório gerado antes (vetores de CPU e Z80, smokes de plataforma, desempenho), a data do relatório é citada. A nota do item 9 é **autoavaliação; a revisão independente ainda falta e será feita por outro agente**.
+Relatório do §21 do [plano de auditoria](../prompts/AppleII-Rust_Plano_Auditoria_Paridade_e_Evolucao.md), em português, com os 10 itens na ordem do plano. Esta é a **reavaliação final** depois de: a #241 corrigida (zero FAIL P1 em issue), as 6 Divergências aprovadas do depurador (#114, #245, #458, #466, #468, #1381), a [ADR 0006](../adr/0006-divergencias-aprovadas-pelo-dono.md) e as decisões do dono de 21/10/2026. Todos os números vêm de execuções feitas em 21/10/2026 sobre o SHA do item 1; nada vem de memória. Onde um número vem de um relatório gerado antes (vetores de CPU e Z80, smokes de plataforma, desempenho), a data do relatório é citada. A nota do item 9 é **autoavaliação**; o [parecer independente](parecer-independente.md) de 21/10/2026 deu 77 de 100 e recomendou alpha técnica, e a seção 12 abaixo diz, achado por achado, o que foi feito.
+
+**O que "idêntico ao Oráculo" quer dizer neste relatório:** o oráculo executável é o **fork do audetto (`a1e20c0`), cujo núcleo AppleWin é o `3e8054b`, 22 commits antes do `a8f0d1d`**, com os patches `audetto-trace`, `audetto-audio`, `audetto-snesmax`, `audetto-ssc-rom` e `audetto-version` (mais `MALLOC_PERTURB_=255` no runner); o `a8f0d1d` é a **referência de código** (os testes Rust que citam arquivo:linha), não o binário comparado. Quando um número abaixo diz "idêntico ao Oráculo" ou "ao AppleWin", é a comparação com esse fork. Dos PASS por issue, só os de tipo `executavel` (147 de 486) são comparação com o AppleWin rodando; os outros 339 apoiam-se em C++ transcrito com arquivo:linha (199), especificação (5), fixture real (7) ou teste do próprio port (128). A distinção por tipo está no item 3.
 
 **Decisões do dono (21/10/2026, ADR 0006):** os 5 casos de PCM/SSI viram **Limitação aceita** (continuam FAIL nos relatórios); #916, #855, #1396 e a tela cheia (#280, #358, #1374, #117, #932, #1448) viram **Divergências aprovadas**; #713, #1145 e #1377 mantêm a paridade com o AppleWin; #1426 e #1431 ficam adiadas; a CI e o PR `[release]` são disparados pelo dono. A #1396 passou de FAIL a PASS nesta entrega (teste do comportamento aprovado no lugar do `#[ignore]`).
 
@@ -15,10 +17,10 @@ Relatório do §21 do [plano de auditoria](../prompts/AppleII-Rust_Plano_Auditor
 | AppleII-Rust (antes da onda final) | `main` | `22dbf2b7a4c57d9b6ede7be39a577e93196c1a3f` |
 | AppleII-Rust (ponto de partida da auditoria) | `main` de 20/10/2026 | `6da60488a2c61b82099d6a7aabece21125eb0963` |
 | AppleII-Rust (última versão publicada) | tag `v0.1.0` (workspace `0.1.0`) | `87110ff15ef35f58db882ab46c08f69296f7250d` |
-| AppleWin (Oráculo de código) | commit `a8f0d1d`, 17/10/2026 | `a8f0d1d40f551ad9e010522c29c2891e33c88275` |
+| AppleWin (referência de código; base do porte) | commit `a8f0d1d`, 17/10/2026 | `a8f0d1d40f551ad9e010522c29c2891e33c88275` |
 | AppleWin (release de referência) | tag `v1.32.1.0` (5 commits antes de `a8f0d1d`) | `daf813dcaced7469bbbc16f23905cfd75abe8496` |
 | AppleWin-Test (corpus, sem licença; cache local) | HEAD de `master` em 20/10/2026 | `4b113ce8cff1426bda5595cac9cb04776adfbb5d` |
-| audetto/AppleWin (Oráculo executável, Linux) | HEAD de `master` em 20/10/2026; núcleo AppleWin `3e8054b`; `audetto-version.patch` leva a versão a 1.32.1.0 | `a1e20c0362f392dc25f1a3b218d2f84d4f1a25da` |
+| audetto/AppleWin (**Oráculo executável**, Linux) | HEAD de `master` em 20/10/2026; núcleo AppleWin `3e8054b`, 22 commits antes do `a8f0d1d`; patches `audetto-trace`, `audetto-audio`, `audetto-snesmax`, `audetto-ssc-rom` e `audetto-version` (leva a versão a 1.32.1.0) | `a1e20c0362f392dc25f1a3b218d2f84d4f1a25da` |
 
 Versões: AppleII-Rust `0.1.0` (tag) e `0.2.0-rc.1` (preparada na branch local `release/v0.2.0-rc.1`, sem tag nem publicação). AppleWin `1.32.1.0` mais 5 commits. Detalhes e a comparação de commits: [baseline.md](baseline.md).
 
@@ -26,15 +28,15 @@ Ambiente de execução: Ubuntu 26.04.1 LTS, kernel 7.0.0-38, x86_64, AMD Ryzen 7
 
 ## 2. Tabela-resumo
 
-Versão condensada. A tabela completa, com uma linha por componente e Modelo, está em [capability-matrix.md](capability-matrix.md).
+Versão condensada. A tabela completa, com uma linha por componente e Modelo, está em [capability-matrix.md](capability-matrix.md). "Oráculo" e "AppleWin" nas células de comparação querem dizer o fork do audetto (núcleo `3e8054b`, 22 commits antes do `a8f0d1d`); o `a8f0d1d` é a referência de código. "PASS" numa linha de componente não vira "PASS contra o AppleWin" nas issues: veja o tipo de oráculo no item 3.
 
 | Componente | Modelo | Resultado | Evidência | Divergência | Issue Rust | Prioridade |
 |---|---|---|---|---|---|---|
-| CPU 6502 / 65C02 | ][, ][+, //e, //e Enhanced | PASS | 7 traces de 0,5 a 5 milhões de ciclos idênticos ao Oráculo; 10,22 milhões de vetores SingleStepTests; determinismo 10 x 2M | Diferenças AppleWin x hardware catalogadas (ciclo fantasma, RMB/SMB, WAI/STP) copiadas do AppleWin | #17 | P0 |
+| CPU 6502 / 65C02 | ][, ][+, //e, //e Enhanced | PASS | 7 traces de 0,5 a 5 milhões de ciclos idênticos ao fork do audetto (núcleo `3e8054b`); 10,22 milhões de vetores SingleStepTests; determinismo 10 x 2M | Diferenças AppleWin x hardware catalogadas (ciclo fantasma, RMB/SMB, WAI/STP) copiadas do AppleWin | #17 | P0 |
 | Memória (LC, Saturn, RamWorks, AUX, floating bus) | ][+, //e, //e Enhanced | PASS | `audit_memoria.rs`, a2audit, estados `LC-*`, `RamWorks_r4`, `Saturn64`, `Saturn128`, `Saturn128-Bank3-2` (todos PASS no trace de 100.000 ciclos) | Nenhuma medida | #18, #19 | P0 |
 | Vídeo | ][, ][+, //e, //e Enhanced | PASS (1.573 de 1.573 comparações pixel a pixel e a cena #241 no Color Monitor PAL) | 584 casos `video-*` | Nenhuma medida. Clones sem comparação de framebuffer | #20, #21, #46 | P0 |
 | Disco (Disk II, WOZ, 2MG, gz/zip, HDD/SmartPort) | ][+, //e, //e Enhanced | PASS | 56 casos `disk-*`, 103.146.754 instruções comparadas; firmware do HDD 132.1 | HDC no ][+ não comparável; NIB real e INIT/FORMAT sem Oráculo | #22, #23, #24 | P0 |
-| Save-state | vários | PASS (88 de 115 reais; atômico; fuzz); BLOCKED (27); **0 FAIL** | [savestate-import.md](../../tests/conformance/reports/savestate-import.md); 87 casos `savestate-*` | Nenhuma no trace. O teste de formato acusa 1 a 8 campos em quase todos os arquivos (o mais comum: bit B do P, normalizado de propósito) | #25, #26 | P0 |
+| Save-state | vários | PASS no **fluxo de CPU em 100.000 ciclos (0,1 s)** para 88 de 115 reais (76,5 %); BLOCKED 27 (23,5 %); **0 FAIL**. Memória e vídeo não entram na comparação; atômico; fuzz | [savestate-import.md](../../tests/conformance/reports/savestate-import.md); 87 casos `savestate-*` | Nenhuma no trace. O teste de formato acusa 1 a 8 campos em quase todos os arquivos (o mais comum: bit B do P, normalizado de propósito) | #25, #26 | P0 |
 | Áudio: eventos e IRQ do 6522 | ][+, //e | PASS | 34 casos `audio-*` PASS, inclusive `audio-issue-1176-last-cycle` (corrigido) | nenhuma | #27, #28 | P1 |
 | Áudio: PCM do AY e do alto-falante, SSI263 +666 | ][+, //e | FAIL (5 casos), **Limitação aceita** (ADR 0006) | `audio-ay-{tone,envelope,noise}-pcm`, `audio-speaker-clicks-pcm`, `audio-ssi263-phonemes-p333` | blocos e quantum de tempo do AppleWin; 23 ciclos por amostra | #7, #27, #28 | P1 |
 | Z80 SoftCard | ][+, //e | PASS (vetores de terceiros); BLOCKED (sistema/CP/M) | 1.604.000 vetores; ZEXDOC/ZEXALL 65/65 (relatório de 20/10/2026) | F3/F5 de blocos repetindo segue o hardware (candidata) | #29 | P1 |
@@ -52,14 +54,14 @@ Coleta de 21/10/2026 (00:47 UTC) no HEAD do AppleWin `a8f0d1d`: 1.516 itens (1.1
 
 | Estado de verificação | Abertas | Fechadas | Total |
 |---|---:|---:|---:|
-| PASS | 97 | 390 | **487** |
+| PASS | 96 | 390 | **486** |
 | FAIL | 5 | 1 | **6** |
-| BLOCKED | 40 | 93 | **133** |
+| BLOCKED | 41 | 93 | **134** |
 | NOT_APPLICABLE | 216 | 273 | **489** |
 | UNVERIFIED | 0 | 0 | **0** |
 | Total | 358 | 757 | **1.115** |
 
-Antes (relatório sobre `bb01e34`): 479 PASS, 14 FAIL, 133 BLOCKED, 489 NOT_APPLICABLE; antes da onda final (`22dbf2b`): 205 PASS, 13 FAIL, 87 BLOCKED, 286 NOT_APPLICABLE, 524 UNVERIFIED. Taxa de PASS sobre as aplicáveis (todas menos NOT_APPLICABLE): 487 de 626 = 77,8 % (antes 76,5 % e 24,7 %). Nenhuma issue fechada está em PASS sem teste (0 PASS sem teste na matriz).
+Antes (relatório sobre `469bf94`, antes da revisão do parecer): 487 PASS, 6 FAIL, 133 BLOCKED, 489 NOT_APPLICABLE; a diferença é a #1490, que passou de PASS a BLOCKED (seção 12, achado 1). Antes disso (`bb01e34`): 479 PASS, 14 FAIL, 133 BLOCKED, 489 NOT_APPLICABLE; antes da onda final (`22dbf2b`): 205 PASS, 13 FAIL, 87 BLOCKED, 286 NOT_APPLICABLE, 524 UNVERIFIED. Taxa de PASS sobre as aplicáveis (todas menos NOT_APPLICABLE): 486 de 626 = 77,6 % (antes 77,8 %, 76,5 % e 24,7 %). **Só com Oráculo executável: 147 de 626 = 23,5 %.** Nenhuma issue fechada está em PASS sem teste (0 PASS sem teste na matriz).
 
 Por prioridade:
 
@@ -68,12 +70,34 @@ Por prioridade:
 | P0 | 30 | 23 | 0 | 7 | 0 | 0 |
 | P1 | 216 | 130 | 0 | 74 | 12 | 0 |
 | P2 | 276 | 189 | 2 | 37 | 48 | 0 |
-| P3 | 327 | 145 | 4 | 15 | 163 | 0 |
+| P3 | 327 | 144 | 4 | 16 | 163 | 0 |
 | sem prioridade | 266 | 0 | 0 | 0 | 266 | 0 |
 
-Os 6 FAIL: **#713, #1145, #1377** (depurador, P3, paridade com o AppleWin mantida por decisão do dono), **#1426 e #1431** (depurador, P2, adiadas) e **#781** (P3, cursor de espera). Saíram dos FAIL desde o relatório anterior: **#241** (P1, histórico de sinal do primeiro quadro, `de3ac3b`), as seis Divergências aprovadas do depurador (**#114, #245, #458, #466, #468, #1381**) e **#1396** (Divergência aprovada, teste do comportamento aprovado). **Não há FAIL P0 nem P1 em issue.** Os 7 P0 BLOCKED não mudaram: **#4, #70, #400, #422, #564, #640, #1126**; todos fechados no AppleWin e todos dependentes de software de terceiros sem fixture ou de relógio e janela reais. BLOCKED por categoria (133): disco 54, vídeo 16, Mockingboard 12, CPU 9, áudio 9, memória 6, depurador 5, serial 4, teclado 3, HDD 3, e o resto em parcelas de 1 a 2 (outra, relógio, save-state, rede, SSI263, Z80, joystick). A maioria é software de terceiros sem fixture licenciada; o restante é comportamento de frontend sem Oráculo headless ou hardware.
+### PASS por tipo de oráculo
 
-Auditoria independente da triagem: [issue-audit-review.md](issue-audit-review.md) (amostra de 465 issues, concordância de 91 % em qualquer campo na parte aleatória; 168 correções; 334 linhas reexaminadas por classe). **Os 849 resultados da onda final são autoavaliação de quem os produziu e não têm amostra independente.**
+Cada resultado em [results/](results/) tem a coluna `tipo_oraculo`, e a matriz a repete (`tools/conformance/apply_results.py`; `summarize_issue_matrix.py` conta). O README de conformidade define PASS como "um teste executado concorda com o Oráculo"; só o primeiro tipo cumpre isso à letra. Os outros são evidência útil de natureza diferente e aparecem separados.
+
+| Tipo | O que é | PASS | % dos PASS |
+|---|---|---:|---:|
+| `executavel` | comparação com o AppleWin rodando (fork do audetto ou Wine): casos de conformidade e testes Rust que rodam o Oráculo | 147 | 30,2 |
+| `cpp-transcrito` | teste Rust que reproduz o C++ do `a8f0d1d` citando arquivo:linha | 199 | 40,9 |
+| `especificacao` | hardware, a2audit ou vetores públicos | 5 | 1,0 |
+| `fixture-real` | fixture real (arquivo de terceiros), sem comparação com o AppleWin | 7 | 1,4 |
+| `regressao` | teste do próprio port, sem fonte externa; inclui o comportamento de uma Divergência aprovada (ADR 0006) | 128 | 26,3 |
+| **Total** | | **486** | |
+
+| Prioridade | PASS | executavel | cpp-transcrito | especificacao | fixture-real | regressao |
+|---|---:|---:|---:|---:|---:|---:|
+| P0 | 23 | 8 | 5 | 2 | 0 | 8 |
+| P1 | 130 | 86 | 28 | 2 | 1 | 13 |
+| P2 | 189 | 47 | 94 | 0 | 0 | 48 |
+| P3 | 144 | 6 | 72 | 1 | 6 | 59 |
+
+Como o tipo foi atribuído: heurística (caso de conformidade com `authority = applewin` ou teste Rust que roda o Oráculo = `executavel`; teste cujo texto de evidência ou corpo cita `arquivo.cpp:linha` do a8f0d1d = `cpp-transcrito`; a2audit ou vetores = `especificacao`; o resto = `regressao`), conferida à mão: todas as linhas `regressao`, `especificacao` e `fixture-real` e todos os `executavel` sem caso no campo `teste` foram lidas; as citações `arquivo:linha` das 201 linhas que citam o C++ foram abertas no clone de referência `a8f0d1d` (nenhuma aponta para fora do arquivo; 6 estavam deslocadas de 1 a 7 linhas e foram corrigidas). Os P0 em `regressao` são quase todos "não derruba mais" (panic do depurador, entrada gigante), que não têm equivalente no AppleWin. Observação: os testes de `p23_oracle.rs` e `oracle_roundtrip.rs` rodam o Oráculo quando o binário está compilado e, sem ele, imprimem BLOCKED e saem sem falhar; a contagem `executavel` vale para a execução com o Oráculo no cache (como nesta entrega).
+
+Os 6 FAIL: **#713, #1145, #1377** (depurador, P3, paridade com o AppleWin mantida por decisão do dono), **#1426 e #1431** (depurador, P2, adiadas) e **#781** (P3, cursor de espera). Saíram dos FAIL desde o relatório anterior: **#241** (P1, histórico de sinal do primeiro quadro, `de3ac3b`), as seis Divergências aprovadas do depurador (**#114, #245, #458, #466, #468, #1381**) e **#1396** (Divergência aprovada, teste do comportamento aprovado). **Não há FAIL P0 nem P1 em issue.** Os 7 P0 BLOCKED não mudaram (7 de 30 = 23,3 % dos P0; 74 de 216 = 34,3 % dos P1 também estão BLOCKED): **#4, #70, #400, #422, #564, #640, #1126**; todos fechados no AppleWin e todos dependentes de software de terceiros sem fixture ou de relógio e janela reais. BLOCKED por categoria (134): disco 54, vídeo 16, Mockingboard 12, CPU 9, áudio 9, memória 6, depurador 5, serial 4, teclado 3, HDD 3, e o resto em parcelas de 1 a 2 (outra, relógio, save-state, rede, SSI263, Z80, joystick, config). A maioria é software de terceiros sem fixture licenciada; o restante é comportamento de frontend sem Oráculo headless ou hardware.
+
+Auditoria independente da triagem: [issue-audit-review.md](issue-audit-review.md) (amostra de 465 issues, concordância de 91 % em qualquer campo na parte aleatória; 168 correções; 334 linhas reexaminadas por classe). Os 849 resultados da onda final foram produzidos por quem implementou; o [parecer independente](parecer-independente.md) amostrou 80 deles (concordância de 92,5 %; 87,2 % na classe PASS, abaixo do limite de 90 %), e a classe "PASS apoiada só em teste Rust" foi reexaminada nesta entrega (seção 12, achado 1).
 
 ## 4. Top 10 problemas críticos
 
@@ -90,7 +114,7 @@ Cada um com passos para reproduzir, causa raiz e estado. SHA observado: `469bf94
 | 5 | **27 save-states reais BLOCKED** | `savestate-compare.py` sobre o corpus: 18 por imagem ausente (`DiskFormat/*`, `AZTEC`), 3 SSC por TCP/serial, 2 por hora real, 2 `skm-*`, 1 Z80, 1 Uthernet | Falta imagem no corpus, ou o Oráculo não tem o recurso (Shift Key Mod, SSC, hora real) | **Aberto**. Sem decisão pendente; precisa de fixtures |
 | 6 | **Risco de dados: HDD acima de 2 MiB gravado no lugar; imagens abertas por save-state de terceiros (AUD-C-037); duas instâncias na mesma imagem** | Interromper a escrita num HDD de 32 MB: o bloco pode ficar pela metade (não há renomeação atômica); abrir um `.aws.yaml` de terceiros que cita uma imagem local | Escolha de projeto (atualização bloco a bloco com `sync_data`); igual ao AppleWin; sem trava de arquivo | **Aberto** (risco médio; UNVERIFIED para as duas instâncias). Veja o item 8 |
 | 7 | **Pacotes sem assinatura nem notarização; `release.yml` nunca executou** | Instalar o pacote no Windows (SmartScreen) ou no macOS (Gatekeeper); [assinatura.md](platform/assinatura.md) | Sem certificado Authenticode nem Developer ID | **Aberto**. Decisão 8 |
-| 8 | **Parecer independente do conjunto e dos 849 resultados da onda final** | Não há o que reproduzir | Os resultados foram produzidos e aplicados por quem implementou | **Aberto**: outro agente fará a revisão independente depois desta entrega |
+| 8 | **Parecer independente do conjunto e dos 849 resultados da onda final** | Não há o que reproduzir | Os resultados foram produzidos e aplicados por quem implementou | **Entregue** em [parecer-independente.md](parecer-independente.md) (21/10/2026: nota 77, alpha técnica); a resposta está na seção 12. Falta a aprovação do dono |
 
 ### 4.2 Os corrigidos (achados da auditoria e fechados nas rodadas até esta)
 
@@ -98,7 +122,7 @@ Cada um com passos para reproduzir, causa raiz e estado. SHA observado: `469bf94
 |---|---|---|---|
 | a | **AUD-C-060 (P0)**: importar um save-state real do AppleWin (#1520, `Cycles This Frame: 26190`) travava a emulação (`run_frame()` não terminava) | O carregador copiava o contador cru (maior que 17.030) e `tick()` fechava o quadro com `==` | Reduzido módulo o quadro e `>=`; `audit_cycles_this_frame.rs` |
 | b | **AUD-C-010 (P0)**: save-state hostil (`Length: -1`, bomba zlib) derrubava o carregador | `Length` como `u64` sem teto; descompressão sem limite | Tetos de 64 MiB e 256 MiB; `fuzz_loader.rs`, `audit_robustness.rs` |
-| c | **Saturn (AUD-C-001/003, #1486, #1495, P0)**: a contagem de bancos configurada se perdia | `Saturn128K { banks }` virava tipo sem campo | `MachineConfig.saturn_banks` até a carta e o save-state (`7e5c46f`); `audit_saturn_banks.rs`. Os estados reais `Saturn64` e `Saturn128` passam hoje porque o Oráculo lia lixo de heap (`MALLOC_PERTURB_=255` no script); não era defeito do port |
+| c | **Saturn (AUD-C-001/003, #1486, #1495, P0)**: a contagem de bancos configurada se perdia | `Saturn128K { banks }` virava tipo sem campo | `MachineConfig.saturn_banks` até a carta e o save-state (`7e5c46f`); `audit_saturn_banks.rs`. Os estados reais `Saturn64` e `Saturn128` passam hoje porque o heap dos bancos é fixado em zero no Oráculo (`MALLOC_PERTURB_=255` no script) e no port: o conteúdo é indefinido no próprio AppleWin a8f0d1d (`new BYTE[]` sem zerar, `LanguageCard.cpp:345,533`); não era defeito do port nem do fork |
 | d | **Gravação não atômica de save-state e de imagens (AUD-C-022, AUD-C-033)** | `set_len(0)` e `write_all` no mesmo arquivo | Temporário, `sync_all`, `rename`, `fsync` do diretório; `atomic_write.rs`, `crash_safety.rs` |
 | e | **`write_block` de 2 TB (AUD-C-035)** | Um bloco após o fim crescia a imagem sem limite | Recusa blocos a partir de 65.536; `fuzz_parsers.rs` |
 | f | **Escrita pendente de disco perdida (AUD-C-030/031/034)** | `rebuild`/`load_machine` sem `disks.flush` | Flush antes de reconstruir, carregar e no SIGTERM; `audit_persistence.rs`, `sigterm.rs` |
@@ -110,7 +134,7 @@ Cada um com passos para reproduzir, causa raiz e estado. SHA observado: `469bf94
 | m | **Fechado nesta entrega, P2/P3: seis comandos do depurador (#114, #245, #458, #466, #468, #1381)** | Reproduziam defeitos do AppleWin | `6409ce9`; testes em `matriz_depurador_b.rs` e `p23_depurador.rs`; Divergências aprovadas (ADR 0006) |
 | k | **Fechado nesta rodada, P2: GH#1340, disco rápido acelerava com o som ativo** | `Emulator::effective_full_speed` ignorava `Spkr_IsActive` e o Mockingboard | `fe50e4b`; `gh1340_full_speed_sound.rs` (8 testes) |
 
-Dos 9 arquivos de save-state em FAIL no relatório anterior, **4 eram defeito do port** (VBL do mouse, 3 arquivos, e firmware do SmartPort, 1 arquivo; 2 causas) e **5 eram defeito do Oráculo** (heap sem zerar nos bancos Saturn, 2 arquivos; `SNESMAX.cpp` sem tratador de E/S, 1; ROM do SSC ausente, 2). As três correções do Oráculo (`MALLOC_PERTURB_`, `audetto-snesmax.patch`, `audetto-ssc-rom.patch`) corrigem o instrumento de medida e estão versionadas em `tools/conformance/oracle/`.
+Dos 9 arquivos de save-state em FAIL no relatório anterior, **4 eram defeito do port** (VBL do mouse, 3 arquivos, e firmware do SmartPort, 1 arquivo; 2 causas) e **5 eram defeito do instrumento de medida** (heap sem zerar nos bancos Saturn, 2 arquivos, que é comportamento indefinido do próprio AppleWin a8f0d1d, fixado em zero no Oráculo e no port; `SNESMAX.cpp` sem tratador de E/S, 1, defeito do fork; ROM do SSC ausente, 2, defeito do fork). As três correções (`MALLOC_PERTURB_`, `audetto-snesmax.patch`, `audetto-ssc-rom.patch`) ajustam o instrumento e estão versionadas em `tools/conformance/oracle/`.
 
 Risco que não é um defeito achado, mas pesa na recomendação: **Windows e macOS nativos nunca foram executados** (item 1 acima; o Windows 11 está em execução pelo dono).
 
@@ -128,9 +152,9 @@ Risco que não é um defeito achado, mas pesa na recomendação: **Windows e mac
 
 | Execução | Comando | Resultado |
 |---|---|---|
-| Testes do workspace | `cargo test --workspace --release --no-fail-fast` | **1.584 passam, 0 falham, 15 ignorados** (185 suítes: 168 executáveis de teste e 17 doctests; exit 0). Os 15 ignorados: vetores pesados que exigem download de 2,5 GB (65x02) e 1,3 GB (Z80 e ZEX), Klaus estendido, 4 testes do depurador que reproduzem FAIL (#713, #1145, #1377 e #1426/#1431; comportamento do AppleWin), 3 medidas de tempo (`emulated_speed`, `disk_boot_speed`, `frames_per_second`), a carga do corpus AppleWin-Test, um gerador manual, um reprodutor de SNES MAX e um doctest. Eram 22 na rodada anterior: saíram os 6 do depurador corrigidos e o `#[ignore]` da #1396 (agora um teste que passa) |
+| Testes do workspace | `cargo test --workspace --release --no-fail-fast` | **1.585 passam, 0 falham, 15 ignorados** (185 suítes: 168 executáveis de teste e 17 doctests; exit 0; mais um que na rodada anterior: `gh452_controller_with_no_image_at_all_reports_no_device_connected`). Os 15 ignorados: vetores pesados que exigem download de 2,5 GB (65x02) e 1,3 GB (Z80 e ZEX), Klaus estendido, 4 testes do depurador que reproduzem FAIL (#713, #1145, #1377 e #1426/#1431; comportamento do AppleWin), 3 medidas de tempo (`emulated_speed`, `disk_boot_speed`, `frames_per_second`), a carga do corpus AppleWin-Test, um gerador manual, um reprodutor de SNES MAX e um doctest. Eram 22 na rodada anterior: saíram os 6 do depurador corrigidos e o `#[ignore]` da #1396 (agora um teste que passa) |
 | Casos de conformidade | `cargo build --release -p apple2-conformance && ./target/release/conformance run --all --report target/conformance-report` | **779 casos: 774 PASS, 5 FAIL, 0 BLOCKED** (com o corpus AppleWin-Test no cache; sem ele, parte dos casos fica BLOCKED). Por área: vídeo 584, save-state 87, disco 56, áudio 39 (34 PASS e 5 FAIL), CPU/boot/determinismo/framebuffer 13. Os 5 FAIL são as **Limitações aceitas** (ADR 0006): `audio-ay-tone-pcm`, `audio-ay-envelope-pcm`, `audio-ay-noise-pcm`, `audio-speaker-clicks-pcm` e `audio-ssi263-phonemes-p333`. O comando sai com código 3 enquanto houver FAIL |
-| Matriz de issues | `python3 tools/conformance/apply_results.py --check` e `summarize_issue_matrix.py` | "Matriz em dia" depois de aplicar a conversão da #1396 (`apply_results.py` mudou 1 linha; antes, `--check` acusava a matriz desatualizada, como esperado): PASS 487, FAIL 6, BLOCKED 133, NOT_APPLICABLE 489, UNVERIFIED 0 (849 resultados aplicados). Por prioridade e por estado no item 3 |
+| Matriz de issues | `python3 tools/conformance/apply_results.py --check` e `summarize_issue_matrix.py` | "Matriz em dia" depois de aplicar a revisão do parecer (coluna `tipo_oraculo`, #1490 de PASS a BLOCKED): PASS 486, FAIL 6, BLOCKED 134, NOT_APPLICABLE 489, UNVERIFIED 0 (849 resultados aplicados). PASS por tipo de oráculo: `executavel` 147, `cpp-transcrito` 199, `especificacao` 5, `fixture-real` 7, `regressao` 128. Por prioridade e por estado no item 3 |
 | Importação de save-states reais | `tools/conformance/savestate-compare.py` sobre os 3 estados do Wine e os 112 do corpus (100.000 ciclos cada), agregado como em `savestate-report.py` | **88 PASS, 0 FAIL, 27 BLOCKED** (115 arquivos), igual ao [relatório versionado](../../tests/conformance/reports/savestate-import.md). Na leitura crua do `savestate-compare.py`: 88 PASS, 19 BLOCKED e 8 FAIL do trace (`NoSlotClockTest*`, `skm-*`, `SSC-*`, `CPM2.2(56k)-3`); o `savestate-report.py` reclassifica esses 8 como BLOCKED por causa conhecida (hora real, Shift Key Mod ausente no Oráculo, TCP/serial, Z80). O relatório e os casos TOML regerados foram descartados (caminhos absolutos estragam os casos) e o relatório versionado foi mantido |
 | Vetores 65x02 | `cargo test -p apple2-cpu --release --test singlestep_65x02 -- --ignored` | 10.220.000 de vetores, 0 inesperados (relatório versionado de 20/10/2026, [65x02-singlestep.md](../../tests/conformance/reports/65x02-singlestep.md)); **não refeito** nesta rodada (2,5 GB de download) |
 | Vetores Z80 e ZEXALL | `cargo test -p apple2-cards --release --test z80_singlestep -- --ignored` | 1.604.000 de 1.604.000; ZEXDOC e ZEXALL 65/65 (relatórios de 20/10/2026, [z80-singlestep.md](../../tests/conformance/reports/z80-singlestep.md), [z80-zex.md](../../tests/conformance/reports/z80-zex.md)); **não refeito** |
@@ -140,7 +164,7 @@ Risco que não é um defeito achado, mas pesa na recomendação: **Windows e mac
 | Pacote Linux do release candidate | `tools/package/linux.sh` (build release, smoke headless, licenças, `package.sh linux`, SBOM, SHA256SUMS) e `tools/package/test-package.sh` | **PASS**, 17 verificações (pacote extraído fora da árvore e rodado de dentro; 3 discos montam e bootam; manual embutido), gerado e testado de novo em 21/10/2026 sobre o commit da branch `release/v0.2.0-rc.1` (versão `0.2.0-rc.1`). Artefatos em `target/release-candidate/` da worktree de trabalho (fora do repositório); SBOM CycloneDX 1.5 com 452 componentes; 492 licenças de terceiros dentro do pacote. SHA-256: `applewin-0.2.0-rc.1-linux-x64.tar.gz` = `6b3b8ce5b298091e2cdb33aeb08a243088af8f23fdc4e30259d0e72bcb2f72a3`; `applewin-0.2.0-rc.1.cdx.json` = `41f1b7fc2b1631f7d366aaf5626a414395778505a6267f93bf6410a97fc367c6` (conferidos por `sha256sum --check` do `SHA256SUMS`). O SBOM é reprodutível com `SOURCE_DATE_EPOCH=1792589714` (o mesmo hash em duas gerações); o tarball não é bit a bit reprodutível (a primeira geração deu `ef4505d6...`, a segunda, a registrada aqui, sobre o mesmo conteúdo), então o hash vale para o arquivo em `target/release-candidate/`, que é o que foi testado. O hash do tarball muda se o pacote for refeito (o manual e o código vão dentro do binário); os hashes da rodada anterior (`3e93238a...` e `4e95cfc1...`) valiam para o pacote antigo |
 | Desempenho | `apple2-bench` | [performance.md](../../tests/conformance/reports/performance.md), em máquina compartilhada; não refeito |
 
-`cargo clippy --workspace --all-targets -- -D warnings`: sem avisos (exit 0). `cargo fmt --all -- --check`: sem diferenças (exit 0). Ambos em 21/10/2026 sobre o SHA do item 1 mais a conversão da #1396 e os documentos desta entrega, e de novo na branch `release/v0.2.0-rc.1` (versão `0.2.0-rc.1`). A suíte de testes completa foi rodada sobre o SHA do item 1 mais a conversão da #1396, não na branch de release (que só acrescenta versão, CHANGELOG e empacotamento).
+`cargo clippy --workspace --all-targets -- -D warnings`: sem avisos (exit 0). `cargo fmt --all -- --check`: sem diferenças (exit 0). Ambos em 21/10/2026 sobre o SHA do item 1 mais a conversão da #1396 e os documentos desta entrega, e de novo na branch `release/v0.2.0-rc.1` (versão `0.2.0-rc.1`), e outra vez sobre a revisão do parecer (21/10/2026). A suíte de testes completa foi rodada sobre o SHA do item 1 mais a conversão da #1396, não na branch de release (que só acrescenta versão, CHANGELOG e empacotamento).
 
 Relatórios por sistema operacional: Linux nativo, [relatorio-plataformas.md](platform/relatorio-plataformas.md); Windows (Wine), [windows-wine.md](platform/windows-wine.md); Windows nativo e macOS, roteiros em [manual-tests/plataformas.md](manual-tests/plataformas.md) (não executados). Os smokes de Linux e Wine são de 20/10/2026 (commit base `516c123`); os do SHA atual não foram refeitos, só as suítes de testes e de conformidade.
 
@@ -154,14 +178,14 @@ Uma sessão do dono num **Windows 11 nativo** está rodando o roteiro W1 a W10 d
 - **CI do GitHub e do GitLab**: nenhuma execução foi acionada (cota esgotada; só o dono dispara). `release.yml` nunca rodou.
 - **Hardware físico**: gamepad, captura de mouse, som audível, serial real, pcap/Npcap, impressora, teclado regional ([manual-tests/](manual-tests/)).
 - Fuzzing de longa duração (`cargo-fuzz`); queda real de energia; Wayland nativo.
-- Jogos e software de terceiros sem fixture (a maior parte das 133 issues BLOCKED).
+- Jogos e software de terceiros sem fixture (a maior parte das 134 issues BLOCKED).
 - 27 save-states do corpus (imagens ausentes, rede, hora real, Shift Key Mod, Z80).
-- Revisão independente dos 849 resultados da onda final.
+- Revisão independente dos 769 resultados da onda final que ficaram fora da amostra do parecer (a amostra tem 80).
 - Fixtures de AppleWin real em Windows (só o AppleWin 1.32.1.0 sob Wine gerou save-states).
 
 ## 7. Comparação diferencial AppleWin x Rust
 
-Oráculo executável: fork audetto no SHA `a1e20c0` (item 1). Política de comparação definida antes das execuções em [test-oracles.md](test-oracles.md): estado digital comparado de forma exata; áudio e vídeo analógicos com limiares registrados antes.
+Oráculo executável: fork audetto no SHA `a1e20c0` (item 1), núcleo AppleWin `3e8054b` (22 commits antes do `a8f0d1d`), com os patches `audetto-trace` (gancho de trace, RAM de power-on determinística, P normalizado), `audetto-audio`, `audetto-snesmax`, `audetto-ssc-rom` e `audetto-version`; o `a8f0d1d` é a referência de código. Faltam ao fork, por exemplo, `d9b2bf67` (Language Card com Saturn em slot diferente de 0, #1520) e as mudanças de Shift Key Mod e do firmware do HDC (#1234): os estados `skm-*` e o HDC no ][+ ficam sem comparação por isso. Política de comparação definida antes das execuções em [test-oracles.md](test-oracles.md): estado digital comparado de forma exata; áudio e vídeo analógicos com limiares registrados antes.
 
 | Área | Resultado | Registro |
 |---|---|---|
@@ -197,7 +221,7 @@ Impacto: perda ou corrupção de dados do usuário. Os riscos "residuais" são o
 
 ## 9. Nota e Gates
 
-**Autoavaliação; a revisão independente ainda falta (outro agente a fará).** Cálculo e justificativa por dimensão em [release-readiness.md](release-readiness.md).
+**Autoavaliação: 84.** O [parecer independente](parecer-independente.md) deu **77** e recomendou alpha técnica; a nota independente prevalece e a diferença (justificada na rubrica do parecer: PASS apoiado em teste Rust, Oráculo defasado, divergência não registrada) é tratada na seção 12. Cálculo e justificativa por dimensão em [release-readiness.md](release-readiness.md).
 
 | Dimensão | Pontos | Nota (antes) | Nota |
 |---|---:|---:|---:|
@@ -216,10 +240,10 @@ Gates do **projeto inteiro** (Linux, Windows e macOS; Windows e macOS contam com
 
 | Gate | Estado | Motivo |
 |---|---|---|
-| G0 Inventário | **PASS** (autoavaliação) | 1.115 de 1.115 issues coletadas, classificadas e com estado; 0 UNVERIFIED; todas com evidência ou justificativa; divergências registradas. Ressalva: os 849 resultados da onda final não têm amostra independente |
+| G0 Inventário | **PASS** (autoavaliação), com a ressalva do parecer | 1.115 de 1.115 issues coletadas, classificadas e com estado; 0 UNVERIFIED; todas com evidência ou justificativa; divergências registradas. A amostra independente achou 12,8 % de discordância na classe PASS; a classe "PASS apoiada só em teste Rust" foi reexaminada (seção 12) e cada PASS ganhou o tipo de oráculo |
 | G1 Alpha técnica | BLOCKED | Smoke em Windows nativo e macOS e CI nunca executados; o resto é PASS |
 | G2 Beta funcional | FAIL (e BLOCKED em parte) | Matriz de componentes incompleta (clones, VidHD em ][, SHR em PAL); 7 P0 BLOCKED sem aceite formal; evidência de áudio/entrada/GUI nos 3 SO BLOCKED (e 5 Limitações aceitas de PCM/SSI, que não contam como PASS). Zero FAIL P0 e fixtures reais críticas passam |
-| G3 Stable candidata | BLOCKED | Nenhum critério em FAIL (zero FAIL P0/P1 em issue; os 5 PCM/SSI são Limitação aceita). Faltam o pacote testado em Windows e macOS e o parecer independente; o G2 não foi atingido |
+| G3 Stable candidata | BLOCKED | Zero FAIL P0/P1 não aceito; 5 FAIL P1 aceitos pelo dono como Limitação aceita (ADR 0006), que continuam FAIL e não são PASS. Faltam o pacote testado em Windows e macOS e a aprovação do parecer independente pelo dono; o G2 não foi atingido |
 
 Gates no **escopo declarado, Linux x86_64** (Windows e macOS fora, BLOCKED, sem contar como FAIL). A #241 já passa, então não há mais variantes. Critério a critério em [release-readiness.md](release-readiness.md):
 
@@ -228,9 +252,9 @@ Gates no **escopo declarado, Linux x86_64** (Windows e macOS fora, BLOCKED, sem 
 | G0 | **PASS** | nada |
 | G1 | **BLOCKED** | só a CI do GitHub no Linux (nunca acionada; o dono a dispara). Smoke, `fmt`, `clippy`, testes e pacote estão em PASS |
 | G2 | **FAIL** | matriz incompleta (clones, VidHD em ][/][+, SHR em PAL), 7 P0 sem aceite, hardware (gamepad, teclado regional, Wayland, audição) |
-| G3 | **BLOCKED** | só o parecer independente. Zero FAIL P0/P1 passa, com 5 Limitações aceitas (FAIL aceito pelo dono, não PASS). Depende também do G2 |
+| G3 | **BLOCKED** | a aprovação do parecer independente pelo dono. Critério "zero FAIL P0/P1": zero FAIL P0/P1 não aceito; 5 FAIL P1 aceitos pelo dono como Limitação aceita (ADR 0006). Depende também do G2 |
 
-Não há FAIL P0 nem P1 em issue no escopo Linux. Os únicos FAIL P0/P1 no harness são as 5 Limitações aceitas de PCM/SSI.
+Não há FAIL P0 nem P1 em issue no escopo Linux. Os únicos FAIL P0/P1 no harness são as 5 Limitações aceitas de PCM/SSI: FAIL aceitos pelo dono (ADR 0006), nunca PASS.
 
 Todos os critérios de cada Gate, com PASS, FAIL ou BLOCKED e evidência: [release-readiness.md](release-readiness.md).
 
@@ -238,11 +262,11 @@ Todos os critérios de cada Gate, com PASS, FAIL ou BLOCKED e evidência: [relea
 
 **Objetiva pelo §18: alpha técnica.** O dono declarou a entrega como **release candidate para Linux x86_64** (`v0.2.0-rc.1`); isso é um rótulo dele, e o time o publica **só como pré-lançamento** (`prerelease: true`), sem chamá-lo de beta nem de stable candidate, com "Limitações conhecidas", "Limitações aceitas" e "Divergências aprovadas" no CHANGELOG e com os pacotes de Windows e macOS marcados como **não verificados nativamente**.
 
-O rótulo é mais sustentável que na rodada anterior, mas ainda não é sustentado pelos Gates: não há FAIL P0 nem P1 em issue, o G1 do Linux espera só a CI e o G3 do Linux espera só o parecer independente; o G2 do Linux segue em FAIL. **Critérios que faltam**:
+O rótulo é mais sustentável que na rodada anterior, mas ainda não é sustentado pelos Gates: não há FAIL P0 nem P1 em issue, o G1 do Linux espera só a CI e o G3 do Linux espera só a aprovação do parecer independente pelo dono; o G2 do Linux segue em FAIL. **Critérios que faltam**:
 
 - G1 (Linux): a CI do GitHub no Linux, disparada pelo dono.
 - G2 (Linux): matriz de componentes completa (clones, VidHD em ][/][+, SHR em PAL), aceite dos 7 P0 (decisão 5) e os roteiros de hardware.
-- G3 (Linux): parecer independente (outro agente o fará depois desta entrega) aprovado pelo dono.
+- G3 (Linux): aprovação do parecer independente pelo dono (o parecer foi entregue em 21/10/2026).
 - Windows nativo (execução do dono em andamento) e macOS: pendentes; o texto da release os marca como não verificados.
 
 O que mudou desde a rodada anterior: a #241 e seis comandos do depurador corrigidos, nove decisões do dono registradas (ADR 0006), nota de 81 para 84. Isso consolida o alpha e aproxima o Linux de beta, mas não o atinge. A versão `0.2.0-rc.1` está preparada na branch local `release/v0.2.0-rc.1`; nenhuma tag, PR, push ou CI foi feito ou disparado. O PR `[release]` e a CI são do dono.
@@ -262,3 +286,22 @@ Em 21/10/2026 o dono decidiu as de número 1 a 4 (registradas na [ADR 0006](../a
 | 7 | **Roteiros de Windows e macOS** | Windows 11 nativo em execução (W1 a W10, branch `test/windows-nativo`); macOS sem execução | **Em andamento** |
 | 8 | **Assinatura e notarização** dos pacotes | Recomendação: pré-lançamento sem assinatura e com aviso no CHANGELOG; Authenticode e Developer ID (ou programa gratuito de código aberto no Windows) antes do beta | **Pendente** |
 | 9 | **Abrir o PR `[release]` da v0.2.0-rc.1** | O dono dispara. Recomendação: depois da CI no Linux e da revisão independente; Windows e macOS entram marcados como não verificados; tag só depois do merge | **Pendente (dono)** |
+
+## 12. Resposta ao parecer independente
+
+O [parecer](parecer-independente.md) (21/10/2026, SHA `37bd9b2`) deu nota 77 e recomendou alpha técnica. Achado por achado, o que foi feito nesta entrega. Nenhuma tag, push, PR ou CI.
+
+| # | Achado (gravidade) | O que foi feito |
+|---|---|---|
+| 1 | **PASS esticado (alta)** | (a) Coluna `tipo_oraculo` em todos os `results/*.csv` e na matriz; `apply_results.py` rejeita PASS sem tipo e `summarize_issue_matrix.py` conta (item 3: 147 `executavel`, 199 `cpp-transcrito`, 5 `especificacao`, 7 `fixture-real`, 128 `regressao`). (b) Taxa dita por tipo: 486 de 626 = 77,6 % com todos os tipos; 147 de 626 = 23,5 % só com Oráculo executável. (c) Reexame da classe "PASS só em teste Rust": os 164 PASS de `p23-disco`, `p23-config-outras`, `p23-nucleo` e `p23-entrada` (6 deles são das issues entregues a outro agente, #312, #558, #583, #625, #74 e #853, e não foram alterados) e uma amostra de 52 linhas dos outros arquivos. Perguntas por PASS: o teste existe e passa (todos existem, nenhum com `#[ignore]`, 1.585 passam); testa o que a issue descreve; a citação do C++ é verdadeira. **1 reclassificação: #1490 PASS → BLOCKED** (o port tirou a caixa "Show status for slots 5 & 6" do diálogo do Disk II e o `a8f0d1d` a mantém em `Applewin.rc:234`; desvio de interface sem Divergência aprovada, aguarda o dono). **1 teste reforçado: #452** (`gh452_controller_with_no_image_at_all_reports_no_device_connected`: o teste antigo consultava uma unidade sem imagem num cartão com imagem; o novo usa o controlador sem nenhuma imagem). Citações corrigidas: #452 (`Harddisk.cpp:604` era a definição; o corpo é `:694-698`), #270, #579, #1075, #724, #690; evidências completadas em #1033 (testa ProDOS, não Pascal), #1207 (agora também o caso `disk-hdd-smartport-page`, que roda o firmware SmartPort contra o Oráculo), #141/#726, #996, #1264, #916 e #855 (agora registram a Divergência aprovada da ADR 0006) e SNES MAX (#1141, #1142, #1148, #1149, #1150: YAML do teste conferido igual aos `snesmax/controller_*.yaml` do `a8f0d1d`). Notas de dúvida sem reclassificar: #1121 e #136 (tela cheia fora da lista da ADR 0006). O critério desigual de #515 e #564 (BLOCKED com teste passando) fica com o agente que trata dessas issues. |
+| 2 | **Oráculo executável não é o declarado (média)** | A frase de destaque do relatório final (cabeçalho, itens 1, 2 e 7), do `release-readiness.md` e do README agora diz: oráculo executável = fork do audetto com núcleo `3e8054b`, 22 commits antes do `a8f0d1d`, com os patches listados; o `a8f0d1d` é a referência de código. Citada a ausência de `d9b2bf67` e das mudanças de Shift Key Mod/HDC. |
+| 3 | **`MALLOC_PERTURB_=255` (média)** | Texto corrigido no README do Oráculo, em `savestate-import.md` (e no `savestate-report.py` que o gera), nos `gaps`, no `capability-matrix.md` e aqui: heap dos bancos Saturn é comportamento indefinido do próprio `a8f0d1d` (`new BYTE[kMemBankSize]` sem zerar, `LanguageCard.cpp:345,533`), fixado em zero no Oráculo e no port; não é defeito do fork. O `source` dos casos `savestate-corpus-Saturn64` e `-Saturn128` registra isso. |
+| 4 | **G3 com 5 FAIL P1 marcado PASS (média)** | O critério "zero FAIL P0/P1" do G3 está escrito "zero FAIL P0/P1 não aceito; 5 FAIL P1 aceitos pelo dono como Limitação aceita (ADR 0006)" aqui e no `release-readiness.md`, sem PASS. |
+| 5 | **#558, #583, #625 (média)** | Fora do escopo desta entrega: outro agente trata dessas issues. |
+| 6 | **PASS fraco (#312, #821, #74, #853) (média)** | Fora do escopo: outro agente trata. Nos PASS revistos não apareceu outro caso da mesma classe, exceto a #1490. |
+| 7 | **#323 (baixa-média)** | Fora do escopo: outro agente trata. |
+| 8 | **Cobertura dos save-states reais (baixa-média)** | Registrada na tabela-resumo e abaixo. |
+| 9 | **Riscos de dados abertos (baixa)** | Sem mudança de código; já estão no item 8 do relatório e nos `gaps`. |
+| 10 | **Higiene da evidência (baixa)** | `trace-applewin-iiplus-boot-500k` e `trace-applewin-iie-enhanced-boot-500k` ganharam `trace_sha256` (o runner bloqueia se o CSV mudar; o hash do primeiro é o que o parecer regenerou no Oráculo). Os CSV grandes de 2M e 5M continuam no cache, regeneráveis com o fork (hashes nos casos). A RC não foi retestada em suíte completa e os 6 casos de regressão/determinismo/resultado conhecido continuam na contagem de 779 (a contagem dos 774 PASS não muda). |
+
+**Cobertura dos save-states reais (achado 8).** Os 88 estados reais em PASS (de 115: 112 do AppleWin-Test e 3 do AppleWin 1.32.1.0 sob Wine) comparam o **fluxo de CPU em 100.000 ciclos (0,1 s)** linha a linha com o Oráculo e o hash das linhas; **memória e vídeo não entram**. PASS = 88 (76,5 %), BLOCKED = 27 (23,5 %), FAIL = 0. Também BLOCKED na matriz de issues: **7 dos 30 P0 (23,3 %)** e **74 dos 216 P1 (34,3 %)**; os 7 P0 são #4, #70, #400, #422, #564, #640 e #1126.

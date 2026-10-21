@@ -1,45 +1,45 @@
-upstream_id,estado_verificacao,teste,evidencia
-35,NOT_APPLICABLE,,"pedido de janela de console separada; o oráculo a8f0d1d alterna emulação e depurador no mesmo quadro (g_nAppMode MODE_DEBUG, WinFrame.cpp:1646) e não tem janela separada"
-43,NOT_APPLICABLE,,"pedido futuro: SOURCE no oráculo lê só arquivo do diretório do programa (CmdSource, Debug.cpp:7022-7048); sem sintaxe de slot/disco/DSK/HDV"
-53,BLOCKED,,o esticamento do bitmap do depurador em tela cheia é GDI/DirectDraw do Win32 (Win32Frame); o port desenha a grade 80x48 como texto em wgpu e não há fixture de captura da tela cheia do Windows
-65,NOT_APPLICABLE,,"pedido futuro: ""source sym 7:1:/j/src/asdf.txt"" (slot:drive:caminho + tabela de símbolos) não existe no oráculo; CmdSource só lê arquivo do host (Debug.cpp:7037)"
-67,NOT_APPLICABLE,,pedido futuro de janelas separadas para vídeo e soft switches; o oráculo não tem (o painel de soft switches é o da tela do depurador)
-68,NOT_APPLICABLE,,pedido futuro: o oráculo só trata a roda do mouse como Up/Down do disassembly (WinFrame.cpp:1646-1659); não há janela source2 nem Shift+roda
-81,PASS,apple2-debugger/tests/p23_depurador.rs::gh81_breakpoints_survive_a_reset_and_stop_the_machine,depois de m.reset() o BPX continua na lista e o G para em $0302 (modo Debug); o oráculo entra no depurador quando há breakpoints (WinFrame.cpp:2067-2069) e DebugReset (Debug.cpp:9476) só zera o scanner e o LBR
-83,PASS,apple2-debugger/tests/p23_depurador.rs::gh83_symbol_names_up_to_50_chars_are_accepted,"MAX_SYMBOLS_LEN = 51 (Debugger_Types.h:135, o pedido era 30): nomes de 30 e 50 caracteres entram; 51 dá ""Symbol length"" (SymbolUpdate, Debugger_Symbols.cpp:898)"
-91,PASS,apple2-debugger/tests/p23_depurador.rs::gh91_symsrc_load_applies_the_symbol_offset,"SYMSRC LOAD ""rel.sym"",300 soma o deslocamento aos endereços (0010->0310, 0020->0320) e sem o argumento fica 0010; igual a Debugger_Symbols.cpp:840-868 e :621"
-93,NOT_APPLICABLE,,"pedido futuro: patch antigo de usuário (janela de memória completa, AppleWin 1.12.6) sem equivalente no oráculo a8f0d1d"
-118,NOT_APPLICABLE,,pedido futuro: informação de depuração do cc65 (nível de fonte); o oráculo só lê listagem do assembler (SOURCE) e não tem formato de debug info do cc65
-207,NOT_APPLICABLE,,documentação do AppleWin (CHM e help do comando COLOR/CONFIG); sem defeito de emulação
-239,PASS,apple2-debugger/tests/p23_depurador.rs::gh239_debugger_screen_text_has_the_disassembly_and_registers,"Debugger::screen_text (novo) devolve a tela do depurador como texto, 43 linhas de 80 colunas com LF, disassembly e registradores, como Util_GetDebuggerText (Debug.cpp:5238-5269); a hotkey e a área de transferência são do frontend (WinFrame.cpp:1221-1231). Correção: faltava o texto no port"
-242,NOT_APPLICABLE,,documentação do AppleWin (help/*.chm sobre Symbols); sem defeito
-243,NOT_APPLICABLE,,documentação do AppleWin (help/dbg-symbols.html); sem defeito
-246,PASS,apple2-debugger/tests/p23_depurador.rs::gh246_e_symbol_value_is_not_ambiguous,"""e LIFE 64"" não dá ""Ambiguous"": só ECHO começa com E (EXITBENCH tem função NULL, Debugger_Commands.cpp:400, e FindCommand ignora, Debug.cpp:8128-8160); o texto é ecoado, nada é gravado; MEB LIFE 64 grava"
-252,NOT_APPLICABLE,,"pedido de documentação: o oráculo não tem texto de ajuda para ASC (Debugger_Help.cpp não trata CMD_DEFINE_DATA_STR), o port mostra a mesma linha única"
-257,NOT_APPLICABLE,,pedido futuro: salvar/carregar o conjunto de caracteres no depurador; o oráculo só tem NTSC para a paleta (Debugger_Commands.cpp:215)
-325,NOT_APPLICABLE,,pergunta de uso sem defeito: o oráculo não tem segunda janela; HGR/TEXT/GR no depurador mostram a saída do Apple II
-326,NOT_APPLICABLE,,pedido futuro (mapa de bits da memória em tempo real); inexistente no oráculo
-327,PASS,apple2-debugger/tests/p23_depurador.rs::gh327_hgr_pages_0_to_8_are_view_commands,"HGR0..HGR8 existem como no oráculo (Debugger_Commands.cpp:267-276): 1 e 2 são as páginas reais e 0, 3 a 8 viram OutputView::HgrPseudo (Debug.cpp:7273-7310); a renderização das páginas pseudo está em apple2-video (source.rs hgr_pseudo_page)"
-336,NOT_APPLICABLE,,"pedido futuro: DISASM <faixa>,""arquivo""; o oráculo não tem comando que grave o disassembly em arquivo (TF grava o trace)"
-390,NOT_APPLICABLE,,pedido de ajuda/categoria do comando DISK; o oráculo também não tem texto de ajuda para CMD_DISK (Debugger_Help.cpp) e a categoria é interna
-394,NOT_APPLICABLE,,pedido futuro: ROM Extended Debugging Monitor (imagem de terceiros) que o AppleWin não traz nem suporta
-402,NOT_APPLICABLE,,"pedido futuro: breakpoint por valor de memória; o oráculo só tem BPR (registrador), BPM/BPMR/BPMW (acesso) e BPIO (Debugger_Commands.cpp:84-97), sem condição sobre o conteúdo"
-407,NOT_APPLICABLE,,pedido de documentação: o HELP BSAVE/BLOAD do oráculo também não cita o Language Card (Debugger_Help.cpp:1158-1186); o port tem o mesmo texto
-447,NOT_APPLICABLE,,"pedido futuro: o oráculo só alterna flags da CPU por clique (DebuggerMouseClick, Debugger_Win32.cpp:320-445); clicar em soft switch não faz nada"
-449,PASS,apple2-debugger/tests/p23_depurador.rs::gh449_db_equal_sign_is_optional,"""db TABLE = b64d:b65c"" e ""db TABLE b64d:b65c"" definem TABLE em $B64D sem mostrar o help, como o oráculo (2.9.1.1/2.9.2.2, Debugger_DisassemblerData.cpp:94-103 e :512); DW com ""="" e um endereço vale, com ""="" e faixa mostra o help nos dois"
-458,PASS,apple2-debugger/tests/p23_depurador.rs::gh458_ctrl_prtscn_text_has_the_whole_screen,"Divergência aprovada (ADR 0006): AppleWin a8f0d1d copia só 43 das 48 linhas (DEBUG_VIRTUAL_TEXT_HEIGHT, Debugger_Display.h:64); o port copia as 48 linhas"
-467,NOT_APPLICABLE,,documentação do AppleWin (CHM de PWD e CD); o HELP do console já descreve os dois (Debugger_Commands.cpp:114-115)
-475,PASS,apple2-debugger/tests/p23_depurador.rs::gh475_scrolling_up_from_f93d_matches_the_documented_sequence,"""u f93d"" e dois Up na ROM do Apple II+ dão top/cursor F93D/F961, F93A/F960, F95F/F95F, a sequência que os mantenedores mostram no #475 como inevitável (""as designed""); a mitigação pedida não existe no oráculo"
-481,PASS,apple2-debugger/tests/p23_depurador.rs::gh481_echo_shows_more_than_55_chars,"ECHO mostra 70 caracteres com e sem aspas (a linha do console tem CONSOLE_WIDTH = 80, Debugger_Console.h:14); o limite de 55 do relato não existe mais"
-482,NOT_APPLICABLE,,"pedido futuro: o oráculo não tem CLS/CLEAR (CmdMOTD não limpa o console); o port responde ""Illegal Command"" como ele"
-742,NOT_APPLICABLE,,"pedido futuro: validar periféricos e quebrar em uso inválido (Mockingboard, SSC); não há nada equivalente no oráculo (BreakpointCard.cpp é a intercepção de breakpoints de cartão)"
-808,NOT_APPLICABLE,,pedido futuro: monitorar páginas gráficas em tempo real dentro do depurador; o oráculo só mostra uma página por vez pausando a emulação
-844,PASS,apple2-debugger/tests/p23_depurador.rs::gh844_cl_and_se_flag_commands_exist,"o oráculo a8f0d1d ainda tem CL e SE com várias letras (""se n v c"", Debug.cpp:3840-3896, Debugger_Commands.cpp:160 e 172) além de CLC/SEC e RC/SC; o port tem todos e o teste confere os bits de P"
-855,PASS,apple2-debugger/tests/p23_depurador.rs::gh855_autorun_script_can_bsave_and_set_breakpoints,"DebuggerAutoRun.txt com bsave ""debug.0000.bin"",0:FF e bpx 2000 grava os 256 bytes e registra o breakpoint, porque o port inicializa o depurador com a máquina pronta; o oráculo ainda chama DebugInitialize antes de MemInitialize (AppleWin.cpp:921-924), então o defeito pedido para corrigir só existe lá"
-889,NOT_APPLICABLE,,"documentação do AppleWin (manual, memória auxiliar com OUT); sem defeito"
-890,NOT_APPLICABLE,,pedido futuro: Shift+clique em soft switch; o oráculo só trata clique no PC e nas flags (Debugger_Win32.cpp:395-445)
-976,NOT_APPLICABLE,,documentação do AppleWin (Ctrl+PrintScreen no help/CHM); sem defeito; o recurso em si está no #239
-987,NOT_APPLICABLE,,pedido futuro: comando de backtrace (BT/JT); o oráculo não tem
-1096,NOT_APPLICABLE,,"pedido futuro fechado como ""won't fix"" pelo mantenedor; o oráculo não tem comando de congelar memória"
-1228,NOT_APPLICABLE,,pedido futuro: concatenar arquivos no BSAVE; o oráculo grava uma faixa por arquivo (CmdMemorySave)
-1420,NOT_APPLICABLE,,documentação e distribuição do AppleWin (help\dbg-symbols.html e makeAppleWin.bat); o port já embute A2_DOS33.SYM2 como tabela DOS33
+upstream_id,estado_verificacao,teste,evidencia,tipo_oraculo
+35,NOT_APPLICABLE,,"pedido de janela de console separada; o oráculo a8f0d1d alterna emulação e depurador no mesmo quadro (g_nAppMode MODE_DEBUG, WinFrame.cpp:1646) e não tem janela separada",
+43,NOT_APPLICABLE,,"pedido futuro: SOURCE no oráculo lê só arquivo do diretório do programa (CmdSource, Debug.cpp:7022-7048); sem sintaxe de slot/disco/DSK/HDV",
+53,BLOCKED,,o esticamento do bitmap do depurador em tela cheia é GDI/DirectDraw do Win32 (Win32Frame); o port desenha a grade 80x48 como texto em wgpu e não há fixture de captura da tela cheia do Windows,
+65,NOT_APPLICABLE,,"pedido futuro: ""source sym 7:1:/j/src/asdf.txt"" (slot:drive:caminho + tabela de símbolos) não existe no oráculo; CmdSource só lê arquivo do host (Debug.cpp:7037)",
+67,NOT_APPLICABLE,,pedido futuro de janelas separadas para vídeo e soft switches; o oráculo não tem (o painel de soft switches é o da tela do depurador),
+68,NOT_APPLICABLE,,pedido futuro: o oráculo só trata a roda do mouse como Up/Down do disassembly (WinFrame.cpp:1646-1659); não há janela source2 nem Shift+roda,
+81,PASS,apple2-debugger/tests/p23_depurador.rs::gh81_breakpoints_survive_a_reset_and_stop_the_machine,depois de m.reset() o BPX continua na lista e o G para em $0302 (modo Debug); o oráculo entra no depurador quando há breakpoints (WinFrame.cpp:2067-2069) e DebugReset (Debug.cpp:9476) só zera o scanner e o LBR,cpp-transcrito
+83,PASS,apple2-debugger/tests/p23_depurador.rs::gh83_symbol_names_up_to_50_chars_are_accepted,"MAX_SYMBOLS_LEN = 51 (Debugger_Types.h:135, o pedido era 30): nomes de 30 e 50 caracteres entram; 51 dá ""Symbol length"" (SymbolUpdate, Debugger_Symbols.cpp:898)",cpp-transcrito
+91,PASS,apple2-debugger/tests/p23_depurador.rs::gh91_symsrc_load_applies_the_symbol_offset,"SYMSRC LOAD ""rel.sym"",300 soma o deslocamento aos endereços (0010->0310, 0020->0320) e sem o argumento fica 0010; igual a Debugger_Symbols.cpp:840-868 e :621",cpp-transcrito
+93,NOT_APPLICABLE,,"pedido futuro: patch antigo de usuário (janela de memória completa, AppleWin 1.12.6) sem equivalente no oráculo a8f0d1d",
+118,NOT_APPLICABLE,,pedido futuro: informação de depuração do cc65 (nível de fonte); o oráculo só lê listagem do assembler (SOURCE) e não tem formato de debug info do cc65,
+207,NOT_APPLICABLE,,documentação do AppleWin (CHM e help do comando COLOR/CONFIG); sem defeito de emulação,
+239,PASS,apple2-debugger/tests/p23_depurador.rs::gh239_debugger_screen_text_has_the_disassembly_and_registers,"Debugger::screen_text (novo) devolve a tela do depurador como texto, 43 linhas de 80 colunas com LF, disassembly e registradores, como Util_GetDebuggerText (Debug.cpp:5238-5269); a hotkey e a área de transferência são do frontend (WinFrame.cpp:1221-1231). Correção: faltava o texto no port",cpp-transcrito
+242,NOT_APPLICABLE,,documentação do AppleWin (help/*.chm sobre Symbols); sem defeito,
+243,NOT_APPLICABLE,,documentação do AppleWin (help/dbg-symbols.html); sem defeito,
+246,PASS,apple2-debugger/tests/p23_depurador.rs::gh246_e_symbol_value_is_not_ambiguous,"""e LIFE 64"" não dá ""Ambiguous"": só ECHO começa com E (EXITBENCH tem função NULL, Debugger_Commands.cpp:400, e FindCommand ignora, Debug.cpp:8128-8160); o texto é ecoado, nada é gravado; MEB LIFE 64 grava",cpp-transcrito
+252,NOT_APPLICABLE,,"pedido de documentação: o oráculo não tem texto de ajuda para ASC (Debugger_Help.cpp não trata CMD_DEFINE_DATA_STR), o port mostra a mesma linha única",
+257,NOT_APPLICABLE,,pedido futuro: salvar/carregar o conjunto de caracteres no depurador; o oráculo só tem NTSC para a paleta (Debugger_Commands.cpp:215),
+325,NOT_APPLICABLE,,pergunta de uso sem defeito: o oráculo não tem segunda janela; HGR/TEXT/GR no depurador mostram a saída do Apple II,
+326,NOT_APPLICABLE,,pedido futuro (mapa de bits da memória em tempo real); inexistente no oráculo,
+327,PASS,apple2-debugger/tests/p23_depurador.rs::gh327_hgr_pages_0_to_8_are_view_commands,"HGR0..HGR8 existem como no oráculo (Debugger_Commands.cpp:267-276): 1 e 2 são as páginas reais e 0, 3 a 8 viram OutputView::HgrPseudo (Debug.cpp:7273-7310); a renderização das páginas pseudo está em apple2-video (source.rs hgr_pseudo_page)",cpp-transcrito
+336,NOT_APPLICABLE,,"pedido futuro: DISASM <faixa>,""arquivo""; o oráculo não tem comando que grave o disassembly em arquivo (TF grava o trace)",
+390,NOT_APPLICABLE,,pedido de ajuda/categoria do comando DISK; o oráculo também não tem texto de ajuda para CMD_DISK (Debugger_Help.cpp) e a categoria é interna,
+394,NOT_APPLICABLE,,pedido futuro: ROM Extended Debugging Monitor (imagem de terceiros) que o AppleWin não traz nem suporta,
+402,NOT_APPLICABLE,,"pedido futuro: breakpoint por valor de memória; o oráculo só tem BPR (registrador), BPM/BPMR/BPMW (acesso) e BPIO (Debugger_Commands.cpp:84-97), sem condição sobre o conteúdo",
+407,NOT_APPLICABLE,,pedido de documentação: o HELP BSAVE/BLOAD do oráculo também não cita o Language Card (Debugger_Help.cpp:1158-1186); o port tem o mesmo texto,
+447,NOT_APPLICABLE,,"pedido futuro: o oráculo só alterna flags da CPU por clique (DebuggerMouseClick, Debugger_Win32.cpp:320-445); clicar em soft switch não faz nada",
+449,PASS,apple2-debugger/tests/p23_depurador.rs::gh449_db_equal_sign_is_optional,"""db TABLE = b64d:b65c"" e ""db TABLE b64d:b65c"" definem TABLE em $B64D sem mostrar o help, como o oráculo (2.9.1.1/2.9.2.2, Debugger_DisassemblerData.cpp:94-103 e :512); DW com ""="" e um endereço vale, com ""="" e faixa mostra o help nos dois",cpp-transcrito
+458,PASS,apple2-debugger/tests/p23_depurador.rs::gh458_ctrl_prtscn_text_has_the_whole_screen,"Divergência aprovada (ADR 0006): AppleWin a8f0d1d copia só 43 das 48 linhas (DEBUG_VIRTUAL_TEXT_HEIGHT, Debugger_Display.h:64); o port copia as 48 linhas",regressao
+467,NOT_APPLICABLE,,documentação do AppleWin (CHM de PWD e CD); o HELP do console já descreve os dois (Debugger_Commands.cpp:114-115),
+475,PASS,apple2-debugger/tests/p23_depurador.rs::gh475_scrolling_up_from_f93d_matches_the_documented_sequence,"""u f93d"" e dois Up na ROM do Apple II+ dão top/cursor F93D/F961, F93A/F960, F95F/F95F, a sequência que os mantenedores mostram no #475 como inevitável (""as designed""); a mitigação pedida não existe no oráculo",regressao
+481,PASS,apple2-debugger/tests/p23_depurador.rs::gh481_echo_shows_more_than_55_chars,"ECHO mostra 70 caracteres com e sem aspas (a linha do console tem CONSOLE_WIDTH = 80, Debugger_Console.h:14); o limite de 55 do relato não existe mais",cpp-transcrito
+482,NOT_APPLICABLE,,"pedido futuro: o oráculo não tem CLS/CLEAR (CmdMOTD não limpa o console); o port responde ""Illegal Command"" como ele",
+742,NOT_APPLICABLE,,"pedido futuro: validar periféricos e quebrar em uso inválido (Mockingboard, SSC); não há nada equivalente no oráculo (BreakpointCard.cpp é a intercepção de breakpoints de cartão)",
+808,NOT_APPLICABLE,,pedido futuro: monitorar páginas gráficas em tempo real dentro do depurador; o oráculo só mostra uma página por vez pausando a emulação,
+844,PASS,apple2-debugger/tests/p23_depurador.rs::gh844_cl_and_se_flag_commands_exist,"o oráculo a8f0d1d ainda tem CL e SE com várias letras (""se n v c"", Debug.cpp:3840-3896, Debugger_Commands.cpp:160 e 172) além de CLC/SEC e RC/SC; o port tem todos e o teste confere os bits de P",cpp-transcrito
+855,PASS,apple2-debugger/tests/p23_depurador.rs::gh855_autorun_script_can_bsave_and_set_breakpoints,"DebuggerAutoRun.txt com bsave ""debug.0000.bin"",0:FF e bpx 2000 grava os 256 bytes e registra o breakpoint, porque o port inicializa o depurador com a máquina pronta; o oráculo ainda chama DebugInitialize antes de MemInitialize (AppleWin.cpp:921-924), então o defeito pedido para corrigir só existe lá [Divergencia aprovada, ADR 0006, 21/10/2026]",regressao
+889,NOT_APPLICABLE,,"documentação do AppleWin (manual, memória auxiliar com OUT); sem defeito",
+890,NOT_APPLICABLE,,pedido futuro: Shift+clique em soft switch; o oráculo só trata clique no PC e nas flags (Debugger_Win32.cpp:395-445),
+976,NOT_APPLICABLE,,documentação do AppleWin (Ctrl+PrintScreen no help/CHM); sem defeito; o recurso em si está no #239,
+987,NOT_APPLICABLE,,pedido futuro: comando de backtrace (BT/JT); o oráculo não tem,
+1096,NOT_APPLICABLE,,"pedido futuro fechado como ""won't fix"" pelo mantenedor; o oráculo não tem comando de congelar memória",
+1228,NOT_APPLICABLE,,pedido futuro: concatenar arquivos no BSAVE; o oráculo grava uma faixa por arquivo (CmdMemorySave),
+1420,NOT_APPLICABLE,,documentação e distribuição do AppleWin (help\dbg-symbols.html e makeAppleWin.bat); o port já embute A2_DOS33.SYM2 como tabela DOS33,

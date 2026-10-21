@@ -16,5 +16,5 @@ cycles = 100000
 [oracle]
 kind = "trace"
 authority = "applewin"
-source = "AppleWin (fork audetto a1e20c0) --state Saturn128.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+source = "AppleWin (fork audetto a1e20c0) --state Saturn128.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py. O YAML só define o banco 0 (`0000: 00`) e o resto dos bancos Saturn é indefinido no próprio AppleWin a8f0d1d (`new BYTE[kMemBankSize]` sem zerar, LanguageCard.cpp:345,533); o oráculo roda com MALLOC_PERTURB_=255 e o port zera: comportamento indefinido do AppleWin fixado em zero nos dois lados (não é defeito do fork)"
 trace_rows_sha256 = "a8a047e460e5689829196e6c5a1b6e7fac66e4ee74d90fe8526540776ff30719"

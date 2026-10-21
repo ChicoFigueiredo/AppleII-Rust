@@ -154,7 +154,7 @@ O fork reimplementa para o Linux alguns arquivos de `source/linux/duplicates/` c
 
 - `audetto-version.patch`: o `resource/version.h` do fork diz `APPLEWIN_VERSION 1,32,0,0` (o fork é anterior ao a8f0d1d); o patch o muda para `1,32,1,0`, a versão da referência (ADR 0004). A versão aparece no DIB do SmartPort (`SmartPortCmdStatus`, `Harddisk.cpp:1095`: firmware 132.1) e em save-states. Quem tiver binário antigo no cache precisa reconstruir; os casos `savestate-corpus-SmartPort-firmware` e `disk-*hdd*` dependem disso.
 
-`run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255`: o fork aloca os bancos do Language Card/Saturn com `new BYTE[16K]` sem zerar, e um `Memory BankNN` parcial no YAML (por exemplo `0000: 00`) deixa o resto com lixo do heap, que mudava de arquivo para arquivo (Saturn64/Saturn128). Com o preenchimento, toda alocação sai zerada, como no porte.
+`run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255`. Não é correção de defeito do fork: é comportamento indefinido do próprio AppleWin a8f0d1d, que também aloca os bancos com `new BYTE[kMemBankSize]` sem zerar (`LanguageCard.cpp:345,533`); o Oráculo e o port fixam esses bytes em zero. Um `Memory BankNN` parcial no YAML (por exemplo `0000: 00`) deixa o resto do banco sem valor definido, e no AppleWin real o conteúdo depende do heap (no Windows costuma vir zerado, no Linux vinha lixo que mudava de arquivo para arquivo: Saturn64/Saturn128). Com o preenchimento, toda alocação sai zerada, igual ao port. A comparação vale só para os bytes que o estado define; o resto é indefinido no AppleWin e fixado em zero nos dois lados (a RAM de power-on determinística e `getRandomTime` = 0 seguem a mesma convenção).
 
 ## Diferenças conhecidas fork x upstream que afetam o núcleo
 

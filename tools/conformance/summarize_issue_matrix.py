@@ -17,6 +17,14 @@ OUT_TRIAGE = ROOT / "docs" / "conformance" / "upstream-open-issues-triage.md"
 JSON_PATH = ROOT / "target" / "conformance-cache" / "upstream" / "issues.json"
 NC = "(nao classificada)"
 STATES = ["PASS", "FAIL", "IMPLEMENTED", "UNVERIFIED", "BLOCKED", "NOT_APPLICABLE"]
+# Em que o PASS se apoia (coluna tipo_oraculo, ver tools/conformance/apply_results.py).
+TIPOS = [
+    ("executavel", "comparação com o AppleWin rodando (fork do audetto ou Wine)"),
+    ("cpp-transcrito", "teste Rust que reproduz o C++ do a8f0d1d citando arquivo:linha"),
+    ("especificacao", "hardware, a2audit ou vetores públicos"),
+    ("fixture-real", "fixture real, sem comparação com o AppleWin"),
+    ("regressao", "teste do próprio port, sem fonte externa (inclui Divergência aprovada)"),
+]
 
 
 def table(title, counter, total):
@@ -24,6 +32,29 @@ def table(title, counter, total):
     for k, v in sorted(counter.items(), key=lambda kv: (-kv[1], kv[0])):
         rows.append(f"| {k} | {v} | {100 * v / total:.1f} |")
     return rows + [""]
+
+
+def pass_by_tipo(rows):
+    """Tabela dos PASS por tipo de oráculo, geral e por prioridade."""
+    passes = [r for r in rows if r["estado_verificacao"] == "PASS"]
+    n = len(passes)
+    out = ["### PASS por tipo de oráculo", "",
+           "Só o tipo `executavel` é \"concorda com o AppleWin rodando\" (README de conformidade). "
+           "Os demais são evidência de natureza diferente e não se somam a ele sem dizer o tipo.", "",
+           "| Tipo | Significado | PASS | % dos PASS |", "|---|---|---:|---:|"]
+    c = Counter(r.get("tipo_oraculo") or "(sem tipo)" for r in passes)
+    for t, desc in TIPOS:
+        out.append(f"| {t} | {desc} | {c[t]} | {100 * c[t] / n:.1f} |" if n else f"| {t} | {desc} | 0 | 0.0 |")
+    if c["(sem tipo)"]:
+        out.append(f"| (sem tipo) | ERRO: PASS sem tipo_oraculo | {c['(sem tipo)']} | |")
+    out.append(f"| **total** | | **{n}** | |")
+    out += ["", "| Prioridade | PASS | " + " | ".join(t for t, _ in TIPOS) + " |",
+            "|---|---:|" + "---:|" * len(TIPOS)]
+    for pr in sorted({r["prioridade"] or "(sem)" for r in passes}):
+        rs = [r for r in passes if (r["prioridade"] or "(sem)") == pr]
+        cc = Counter(r.get("tipo_oraculo") for r in rs)
+        out.append(f"| {pr} | {len(rs)} | " + " | ".join(str(cc[t]) for t, _ in TIPOS) + " |")
+    return out + [""]
 
 
 def rates(title, dimension, rows_by_key):
@@ -93,6 +124,7 @@ def main():
           f"Taxa geral: PASS {st['PASS']} / aplicáveis {aplic} = "
           f"{(100 * st['PASS'] / aplic if aplic else 0):.1f}%. "
           "Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.", ""]
+    L += pass_by_tipo(rows)
     L += rates("Por modelo", "modelo", by_model)
     L += rates("Por categoria", "categoria", by_cat)
     L += rates("Por aplicabilidade", "aplicabilidade", by_app)

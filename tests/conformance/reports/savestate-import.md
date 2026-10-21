@@ -144,7 +144,7 @@ Duas verificações por arquivo:
 - Controlador de HDD de estados antigos: Hddrvr.bin (v1-3) e Hddrvr-v2.bin (v4) em vez do firmware SmartPort; `FixupUnitNum`.
 - Barramento flutuante lia a RAM principal; o AppleWin lê a imagem de leitura da CPU (aux com RAMRD), AUD-C-050.
 - Entrada de IRQ/NMI não gera linha de trace (o oráculo registra depois do fetch do opcode); opcode em `$C100-$CFFF` vem do fetch real.
-- Saturn64/Saturn128: o fork aloca os bancos com `new BYTE[16K]` sem zerar e o YAML só lista `0000: 00`; o oráculo lia lixo de heap (`$E000` = `$46`/`$32`). `run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255` (zera as alocações), como o porte e um heap novo do Windows.
+- Saturn64/Saturn128: o YAML só lista `0000: 00` e o resto do banco é indefinido no próprio AppleWin a8f0d1d, que também aloca os bancos com `new BYTE[kMemBankSize]` sem zerar (`LanguageCard.cpp:345,533`); o oráculo lia lixo de heap (`$E000` = `$46`/`$32`). Comportamento indefinido do AppleWin, fixado em zero no oráculo e no port: `run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255` (zera as alocações), como um heap novo do Windows. Não é defeito do fork.
 - SmartPort-firmware: o DIB devolvia `130.0` como versão do firmware; o `version.h` do oráculo é 1.32.0.0, logo `132.0` (`FW_VERSION` em `hdd.rs`).
 - SNES MAX-slot4: o fork do oráculo deixa o cartão sem tratador de E/S (o `SNESMAX.cpp` de `source/linux/duplicates` é um esqueleto); `audetto-snesmax.patch` o restaura sem joystick. O porte já seguia o AppleWin.
 - dazzledraw1 (3 arquivos): o primeiro evento de VBL do mouse vem 12480 ciclos (192 linhas, scanner em 0,0) depois do load, não do `Cycles This Frame`; e o evento recalculava a posição do quadro somando de novo os ciclos do opcode (7 ciclos antes).
