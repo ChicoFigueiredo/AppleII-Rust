@@ -77,6 +77,40 @@ impl Button {
     }
 }
 
+/// Where a dropped disk image goes (WinFrame.cpp `WM_DROPFILES`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DropTarget {
+    /// 0 or 1.
+    pub drive: usize,
+    /// AppleWin presses the Run button (reboot) unless the file was dropped on the Drive 1
+    /// button.
+    pub reboot: bool,
+}
+
+/// `cursor`: pointer position (points) when the file arrived; `rects`: the Drive 1 / Drive 2
+/// buttons. Outside both (or with the toolbar hidden): drive 1, with a reboot.
+pub fn drop_target(cursor: Option<(f32, f32)>, rects: [Option<egui::Rect>; 2]) -> DropTarget {
+    let inside = |r: Option<egui::Rect>| match (cursor, r) {
+        (Some((x, y)), Some(r)) => r.contains(egui::pos2(x, y)),
+        _ => false,
+    };
+    let on_drive2 = inside(rects[1]);
+    DropTarget {
+        drive: usize::from(on_drive2),
+        reboot: !inside(rects[0]),
+    }
+}
+
+/// The command for a dropped disk: insert (the file's own write-protect attribute decides), then
+/// reboot if the target says so and the disk was accepted.
+pub fn drop_command(t: &DropTarget, path: std::path::PathBuf) -> crate::emu::Command {
+    crate::emu::Command::DropDisk {
+        drive: t.drive,
+        path,
+        reboot: t.reboot,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Led {
     Off,
@@ -104,14 +138,16 @@ pub fn led_icon(d: &DriveStatus) -> Icon {
     }
 }
 
-/// "Drive 1: T17 DOS33.dsk" (AppleWin shows the track in decimal).
-pub fn drive_text(n: usize, d: &DriveStatus) -> String {
+/// "Drive 1: T17 S05 DOS33.dsk" (AppleWin shows track and sector in decimal; "S??" when the
+/// guest OS does not say, see [`crate::backend::guest_sector`]).
+pub fn drive_text(n: usize, d: &DriveStatus, sector: Option<u8>) -> String {
     if !d.present {
         return format!("Drive {}: -", n + 1);
     }
     let image = d.image.as_deref().unwrap_or("(empty)");
+    let sector = sector.map_or("??".to_string(), |s| format!("{s:2}"));
     format!(
-        "Drive {}: T{} {}{}",
+        "Drive {}: T{:2} S{sector} {}{}",
         n + 1,
         d.track,
         image,
@@ -175,8 +211,12 @@ mod tests {
             write_protected: true,
         };
         assert_eq!(led(&d), Led::Red);
-        assert_eq!(drive_text(0, &d), "Drive 1: T17 DOS33.dsk [WP]");
-        assert_eq!(drive_text(1, &DriveStatus::default()), "Drive 2: -");
+        assert_eq!(drive_text(0, &d, None), "Drive 1: T17 S?? DOS33.dsk [WP]");
+        assert_eq!(
+            drive_text(0, &d, Some(5)),
+            "Drive 1: T17 S 5 DOS33.dsk [WP]"
+        );
+        assert_eq!(drive_text(1, &DriveStatus::default(), None), "Drive 2: -");
     }
 
     #[test]

@@ -59,6 +59,12 @@ pub enum Action {
 
 /// Returns the action bound to a key press, if any. Auto-repeat must be filtered by the caller.
 pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
+    action_for_with(key, mods, true)
+}
+
+/// As [`action_for`], with the "Alt+Enter toggles full-screen" preference (`-alt-enter=`,
+/// WinFrame.cpp:1854): off, Alt+Enter is no action and reaches the Apple as Open Apple + Return.
+pub fn action_for_with(key: HostKey, mods: Mods, alt_enter_fullscreen: bool) -> Option<Action> {
     Some(match key {
         HostKey::F(1) => Action::Help,
         HostKey::F(2) if mods.ctrl => Action::SoftReset,
@@ -68,7 +74,7 @@ pub fn action_for(key: HostKey, mods: Mods) -> Option<Action> {
         HostKey::F(5) => Action::SwapDrives,
         HostKey::F(6) if mods.ctrl => Action::ToggleScale,
         HostKey::F(6) => Action::ToggleFullscreen,
-        HostKey::Enter if mods.alt => Action::ToggleFullscreen,
+        HostKey::Enter if mods.alt && alt_enter_fullscreen => Action::ToggleFullscreen,
         HostKey::F(7) => Action::ToggleDebugger,
         HostKey::F(8) => Action::Settings,
         HostKey::F(9) if mods.ctrl && mods.shift => Action::ToggleScanlines,
@@ -169,6 +175,21 @@ mod tests {
     fn ctrl_pause_is_reset_not_pause() {
         assert_eq!(action_for(HostKey::Pause, NONE), Some(Action::TogglePause));
         assert_eq!(action_for(HostKey::Pause, CTRL), None);
+    }
+
+    #[test]
+    fn alt_enter_follows_the_preference() {
+        let alt = Mods { alt: true, ..NONE };
+        assert_eq!(
+            action_for_with(HostKey::Enter, alt, true),
+            Some(Action::ToggleFullscreen)
+        );
+        assert_eq!(action_for_with(HostKey::Enter, alt, false), None);
+        // F6 is unaffected
+        assert_eq!(
+            action_for_with(HostKey::F(6), NONE, false),
+            Some(Action::ToggleFullscreen)
+        );
     }
 
     #[test]

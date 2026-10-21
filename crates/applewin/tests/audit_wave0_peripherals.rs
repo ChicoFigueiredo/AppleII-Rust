@@ -83,12 +83,15 @@ fn all_shell_sources() -> String {
     out
 }
 
-/// HU-0602. A SNES MAX só lê controles pelo `SnesMax::set_controller`; nada no frontend o chama
-/// (SNESMAX.cpp:110-128 lê `joyGetPosEx` direto). Os flags `-snes-max-alt-joy*`/`-user-joy*`
-/// ficam em `SlotCardSpec::SnesMax` e a fábrica faz `SnesMax { .. }` (ignora os dois).
+/// HU-0602. A SNES MAX só lê controles pelo `SnesMax::set_controller` (SNESMAX.cpp:110-128 lê
+/// `joyGetPosEx` direto). O frontend agora o chama (`emu.rs`, `Command::HostPads`); o
+/// comportamento de ponta a ponta (gamepad -> carta -> programa) está em
+/// `tests/hu0702_input.rs::aud_p_017_*`. Aqui só o resto do achado: os flags
+/// `-snes-max-alt-joy*`/`-user-joy*` ficam em `SlotCardSpec::SnesMax` e a fábrica faz
+/// `SnesMax { .. }` (ignora os dois) - a cargo do agente de factory.rs.
 #[test]
-#[ignore = "reproduz achado AUD-P-017"]
-fn aud_p_017_snes_max_gets_controllers_and_flags() {
+#[ignore = "reproduz achado AUD-P-017 (flags da fábrica)"]
+fn aud_p_017_snes_max_flags_reach_the_factory() {
     let all = all_shell_sources();
     assert!(
         all.contains("set_controller("),
@@ -101,9 +104,9 @@ fn aud_p_017_snes_max_gets_controllers_and_flags() {
     );
 }
 
-/// HU-0602/0702. A 4Play só recebe estado por `FourPlay::set_stick`; o frontend nunca o chama.
+/// HU-0602/0702. A 4Play só recebe estado por `FourPlay::set_stick`; o frontend agora o chama
+/// (`emu.rs`). O teste de ponta a ponta está em `tests/hu0702_input.rs::aud_p_018_*`.
 #[test]
-#[ignore = "reproduz achado AUD-P-018"]
 fn aud_p_018_four_play_gets_sticks() {
     assert!(all_shell_sources().contains("set_stick("));
 }
@@ -193,13 +196,49 @@ fn aud_p_026_disconnected_buttons_float_high_gh1234() {
 /// segue o Shift (:648-653). O Rust marca `attached[1] = true` (joy.rs:644) e o timer dos paddles
 /// 2/3 passa a contar como se houvesse joystick.
 #[test]
-#[ignore = "reproduz achado AUD-P-027"]
 fn aud_p_027_shift_key_mod_does_not_attach_joystick_1() {
     let mut j = joy(|s| {
         s.joystick.joystick1 = Joystick1Kind::Disabled;
         s.joystick.shift_key_mod = true;
     });
-    assert!(!j.output(0).attached[1]);
+    let f = j.output(0);
+    assert!(!f.attached[1]);
+    assert_eq!(
+        f.pb2_shift,
+        Some(true),
+        "PB2 segue o Shift (flutua alto sem ele)"
+    );
+}
+
+/// HU-0702, AUD-P-027 de ponta a ponta: sem joystick 1 os timers dos paddles 2/3 seguem
+/// "sempre ativos" e o PB2 segue o Shift.
+#[test]
+fn aud_p_027_paddle_timers_stay_always_active_with_shift_key_mod() {
+    let mut s = base_settings();
+    s.joystick.shift_key_mod = true;
+    s.joystick.joystick1 = Joystick1Kind::Disabled;
+    let mut e = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
+    let mut j = joy(|s| {
+        s.joystick.joystick1 = Joystick1Kind::Disabled;
+        s.joystick.shift_key_mod = true;
+    });
+    let f = j.output(0);
+    e.apply(Command::JoyAttached {
+        index: 1,
+        attached: f.attached[1],
+    });
+    e.apply(Command::JoyPb2Shift(f.pb2_shift));
+    let g = &e.machine.board().game;
+    assert!(!g.attached[1], "joystick 1 continua ausente");
+    // paddle 2 ativo para sempre, mesmo depois do strobe e de muito tempo
+    assert!(g.paddle_active(2, 10_000_000));
+    assert!(g.button(2, false), "sem Shift o PB2 flutua alto");
+    j.set_shift(true);
+    e.apply(Command::JoyPb2Shift(j.output(0).pb2_shift));
+    assert!(
+        !e.machine.board().game.button(2, false),
+        "Shift puxa o PB2 para baixo"
+    );
 }
 
 // ---------------------------------------------------------------- Serial
@@ -273,10 +312,8 @@ fn aud_p_036_existing_debug_keys() {
 // ---------------------------------------------------------------- UI
 
 /// HU-0802. Ctrl+Print Screen: AppleWin copia 40 ou 80 colunas (aux+principal) e a página 2
-/// (`Util_GetTextScreen`, Debug.cpp:5271). O Rust usa `apple2_core::text_screen`, só 40 colunas
-/// da página 1, embora `apple2_video::screen_text` já trate 80 colunas e página 2.
+/// (`Util_GetTextScreen`, Debug.cpp:5271). O comando usa `apple2_video::screen_text`.
 #[test]
-#[ignore = "reproduz achado AUD-P-040"]
 fn aud_p_040_ctrl_print_screen_copies_80_columns() {
     let mut s = base_settings();
     s.machine.model = apple2_core::Model::Apple2eEnhanced;
@@ -285,19 +322,41 @@ fn aud_p_040_ctrl_print_screen_copies_80_columns() {
     e.machine.poke_main(0x400, 0xC2);
     e.machine.poke_aux(0x400, 0xC1);
     e.apply(Command::CopyScreenText);
-    let rows = apple2_core::text_screen::text_screen(&e.machine);
+    let st = e.status();
+    assert_eq!(st.copied_seq, 1);
+    let first = st.copied_text.lines().next().unwrap();
+    assert!(first.starts_with("AB"), "linha 0 em 80 colunas: {first:?}");
+    assert_eq!(first.chars().count(), 80);
+    assert_eq!(st.copied_text.lines().count(), 24);
+}
+
+/// HU-0802, AUD-P-040: 40 colunas continuam 40, e a página 2 (sem 80STORE) é a copiada.
+#[test]
+fn aud_p_040_ctrl_print_screen_40_columns_and_page_2() {
+    use apple2_core::memory::mf;
+    let mut s = base_settings();
+    s.machine.model = apple2_core::Model::Apple2eEnhanced;
+    let mut e = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
+    e.machine.poke_main(0x400, 0xC1); // página 1: 'A'
+    e.machine.poke_main(0x800, 0xC2); // página 2: 'B'
+    e.apply(Command::CopyScreenText);
+    let first = e.status().copied_text.lines().next().unwrap().to_string();
     assert!(
-        rows[0].starts_with("AB"),
-        "linha 0 em 80 colunas: {:?}",
-        rows[0]
+        first.starts_with('A') && first.chars().count() == 40,
+        "{first:?}"
     );
+    // PAGE2 ligado ($C055) sem 80STORE: a página 2 é a que aparece
+    let mode = e.machine.memmode();
+    e.machine.board_mut().memory.set_memmode(mode | mf::PAGE2);
+    e.apply(Command::CopyScreenText);
+    let first = e.status().copied_text.lines().next().unwrap().to_string();
+    assert!(first.starts_with('B'), "página 2: {first:?}");
 }
 
 /// HU-0802. A preferência "Alt+Enter toggles full-screen" (`-alt-enter=...`) existe nas
 /// configurações e na página Advanced, mas nenhum código do frontend a consulta: Alt+Enter alterna
 /// a tela cheia sempre (`actions::action_for`).
 #[test]
-#[ignore = "reproduz achado AUD-P-046"]
 fn aud_p_046_alt_enter_setting_is_honoured() {
     let used = all_shell_sources()
         .matches("alt_enter_toggles_fullscreen")
