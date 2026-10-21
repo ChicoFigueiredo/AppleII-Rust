@@ -478,3 +478,325 @@ fn save_state_keeps_registers_and_raw_sockets() {
     assert_eq!(c.read_block(0x0009, 6), [2, 0, 0, 0, 0, 1]);
     assert_eq!(c.sr(0), SR_MACRAW);
 }
+
+// ---------------------------------------------------------------------------------------------
+// AUD-P-024: local, deterministic network tests (no Internet, no fixed ports: port 0 everywhere)
+// and AUD-P-021: modes AppleWin does not have.
+
+/// Sn_PORT of socket `s`.
+fn port_of(c: &mut Chip, s: u16) -> u16 {
+    c.rd16(Chip::sock(s) + 0x04)
+}
+
+/// Waits (bounded) until `pred` holds, running the card in between.
+fn wait_until(c: &mut Chip, what: &str, mut pred: impl FnMut(&mut Chip) -> bool) {
+    let t = Instant::now();
+    while !pred(c) {
+        assert!(
+            t.elapsed() < Duration::from_secs(5),
+            "timeout waiting for {what}"
+        );
+        c.m.run_cycles(2000);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+#[test]
+fn four_tcp_sockets_talk_to_the_host_at_the_same_time() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // One echo thread per accepted connection.
+    let server = std::thread::spawn(move || {
+        let mut workers = Vec::new();
+        for _ in 0..4 {
+            let (mut s, _) = listener.accept().unwrap();
+            workers.push(std::thread::spawn(move || {
+                let mut buf = [0u8; 64];
+                let n = s.read(&mut buf).unwrap();
+                s.write_all(&buf[..n]).unwrap();
+                // Hold the connection until the card closes it.
+                let _ = s.read(&mut buf);
+            }));
+        }
+        workers
+    });
+
+    let mut c = Chip::with_null();
+    for s in 0..4 {
+        c.open(s, 0x01);
+        c.set_dest(s, [127, 0, 0, 1], port);
+        c.command(s, 0x04);
+    }
+    for s in 0..4 {
+        assert_eq!(
+            c.wait_status(s, SR_ESTABLISHED),
+            SR_ESTABLISHED,
+            "socket {s}"
+        );
+    }
+    // Send in an order unrelated to the connection order.
+    for s in [2u16, 0, 3, 1] {
+        c.send(s, format!("socket-{s}-payload").as_bytes());
+    }
+    for s in 0..4u16 {
+        let want = format!("socket-{s}-payload");
+        assert_eq!(
+            c.wait_rx(s, want.len() as u16),
+            want.len() as u16,
+            "socket {s}"
+        );
+        assert_eq!(c.recv(s, want.len()), want.as_bytes(), "socket {s}");
+    }
+    drop(c); // closes the host sockets, releasing the echo threads
+    for w in server.join().unwrap() {
+        w.join().unwrap();
+    }
+}
+
+#[test]
+fn tcp_listen_with_port_zero_reports_the_chosen_port_and_serves_two_sockets() {
+    let mut c = Chip::with_null();
+    for s in 0..2 {
+        c.open(s, 0x01);
+        c.command(s, 0x02); // LISTEN on Sn_PORT = 0: the host picks
+        assert_eq!(c.sr(s), SR_LISTEN);
+    }
+    let p0 = port_of(&mut c, 0);
+    let p1 = port_of(&mut c, 1);
+    assert!(p0 != 0 && p1 != 0 && p0 != p1, "{p0} {p1}");
+
+    let mut a = TcpStream::connect(("127.0.0.1", p0)).unwrap();
+    let mut b = TcpStream::connect(("127.0.0.1", p1)).unwrap();
+    assert_eq!(c.wait_status(0, SR_ESTABLISHED), SR_ESTABLISHED);
+    assert_eq!(c.wait_status(1, SR_ESTABLISHED), SR_ESTABLISHED);
+
+    a.write_all(b"from-a").unwrap();
+    b.write_all(b"from-b!").unwrap();
+    assert_eq!(c.wait_rx(0, 6), 6);
+    assert_eq!(c.recv(0, 6), b"from-a");
+    assert_eq!(c.wait_rx(1, 7), 7);
+    assert_eq!(c.recv(1, 7), b"from-b!");
+
+    // The card answers, then the clients go away: the sockets close one at a time.
+    c.send(0, b"pong");
+    let mut buf = [0u8; 4];
+    a.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    a.read_exact(&mut buf).unwrap();
+    assert_eq!(&buf, b"pong");
+    drop(a);
+    wait_until(&mut c, "socket 0 to close", |c| {
+        c.rd16(S0 + 0x26); // reading RSR notices the EOF
+        c.sr(0) == SR_CLOSED
+    });
+    assert_eq!(c.sr(1), SR_ESTABLISHED);
+    drop(b);
+    wait_until(&mut c, "socket 1 to close", |c| {
+        c.rd16(Chip::sock(1) + 0x26);
+        c.sr(1) == SR_CLOSED
+    });
+}
+
+#[test]
+fn tcp_peer_that_sends_and_disconnects_still_delivers_its_data() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().unwrap();
+        s.write_all(b"last words").unwrap();
+    }); // dropped: FIN right after the data
+    let mut c = Chip::with_null();
+    c.open(0, 0x01);
+    c.set_dest(0, [127, 0, 0, 1], port);
+    c.command(0, 0x04);
+    server.join().unwrap();
+    assert_eq!(c.wait_status(0, SR_ESTABLISHED), SR_ESTABLISHED);
+    assert_eq!(c.wait_rx(0, 10), 10);
+    assert_eq!(c.recv(0, 10), b"last words");
+    wait_until(&mut c, "EOF", |c| {
+        c.rd16(S0 + 0x26);
+        c.sr(0) == SR_CLOSED
+    });
+    // A closed socket ignores further traffic and commands.
+    c.send(0, b"too late");
+    assert_eq!(c.rd16(S0 + 0x26), 0);
+}
+
+#[test]
+fn tcp_silent_peer_is_not_a_timeout_and_close_reaches_the_peer() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut buf = [0u8; 8];
+        s.read(&mut buf).unwrap() // 0 = the card closed the connection
+    });
+    let mut c = Chip::with_null();
+    c.open(0, 0x01);
+    c.set_dest(0, [127, 0, 0, 1], port);
+    c.command(0, 0x04);
+    assert_eq!(c.wait_status(0, SR_ESTABLISHED), SR_ESTABLISHED);
+    // Nothing arrives: polling for a while neither fabricates data nor drops the connection.
+    let t = Instant::now();
+    while t.elapsed() < Duration::from_millis(100) {
+        assert_eq!(c.rd16(S0 + 0x26), 0);
+        c.m.run_cycles(1000);
+    }
+    assert_eq!(c.sr(0), SR_ESTABLISHED);
+    c.command(0, 0x10); // CLOSE
+    assert_eq!(c.sr(0), SR_CLOSED);
+    assert_eq!(server.join().unwrap(), 0, "the peer saw EOF");
+}
+
+#[test]
+fn udp_oversized_and_empty_datagrams_stay_inside_the_ring() {
+    let mut c = Chip::with_null();
+    c.open(0, 0x02);
+    // Learn the card's (ephemeral) address from a datagram it sends.
+    let peer = UdpSocket::bind("127.0.0.1:0").unwrap();
+    peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    c.set_dest(0, [127, 0, 0, 1], peer.local_addr().unwrap().port());
+    c.send(0, b"probe");
+    let mut b = [0u8; 16];
+    let (_, card) = peer.recv_from(&mut b).unwrap();
+
+    // 4000 bytes into a 2 KB ring: cut by the read, never stored beyond the ring.
+    peer.send_to(&[0xAA; 4000], card).unwrap();
+    let n = c.wait_rx(0, 9);
+    assert!((9..0x800).contains(&n), "ring size {n}");
+    let rd = c.rd16(S0 + 0x28);
+    let header = c.read_block(RX0 + (rd & 0x7FF), 8);
+    let len = u16::from_be_bytes([header[6], header[7]]);
+    assert_eq!(len + 8, n, "header length matches what was stored");
+    c.wr16(S0 + 0x28, rd.wrapping_add(n));
+    c.command(0, 0x40);
+    assert_eq!(c.rd16(S0 + 0x26), 0);
+
+    // An empty datagram is only a header.
+    peer.send_to(&[], card).unwrap();
+    assert_eq!(c.wait_rx(0, 8), 8);
+    let h = c.recv(0, 8);
+    assert_eq!(u16::from_be_bytes([h[6], h[7]]), 0);
+}
+
+#[test]
+fn register_lengths_out_of_range_never_panic_or_overflow() {
+    let (mut c, h) = Chip::with_mock();
+    // TX and RX pointers far beyond the 2 KB ring on a closed socket: ignored.
+    c.wr16(S0 + 0x24, 0xFFFF);
+    c.command(0, 0x20);
+    c.wr16(S0 + 0x28, 0xFFFF);
+    c.command(0, 0x40);
+    // `updateRSR` is the ring distance between Sn_RX_WR (0) and the masked read pointer.
+    assert!(c.rd16(S0 + 0x26) < 0x800);
+
+    // MACRAW: write pointer wrapped around the ring, read pointer past the data.
+    c.open(0, 0x04);
+    c.wr16(S0 + 0x24, 0xFFFF);
+    c.command(0, 0x20);
+    assert_eq!(h.take_tx().len(), 1);
+    assert_eq!(
+        c.rd16(S0 + 0x22) & 0x7FF,
+        0x7FF,
+        "read pointer follows the masked write pointer"
+    );
+    c.wr16(S0 + 0x28, 0xFFFF);
+    c.command(0, 0x40); // RECV with Sn_RX_RD beyond the data
+    let rsr = c.rd16(S0 + 0x26);
+    assert!(rsr < 0x800, "RSR stays inside the ring: {rsr:#x}");
+
+    // A DNS name length past the register page is a failure (0.0.0.0), not an overrun.
+    c.wr(Chip::sock(1) + 0x2A, 0xFF);
+    c.open(1, 0x09);
+    assert_eq!(c.read_block(Chip::sock(1) + 0x0C, 4), [0, 0, 0, 0]);
+}
+
+#[test]
+fn malformed_frames_from_the_backend_are_dropped_not_delivered() {
+    let (mut c, h) = Chip::with_mock();
+    let my_mac = [2, 0, 0, 0, 0, 1];
+    c.write_block(0x0009, &my_mac);
+    c.write_block(0x000F, &[10, 0, 0, 2]);
+    c.wr(Chip::sock(1) + 0x14, 1);
+    c.open(1, 0x03); // IP RAW, ICMP
+
+    let good = create_eth2_frame(
+        &[8, 0, 0, 0, 0, 0, 0, 0],
+        [2, 0, 0, 0, 0, 9],
+        my_mac,
+        64,
+        0,
+        1,
+        [10, 0, 0, 1],
+        [10, 0, 0, 2],
+    );
+    let mut bad_total = good.clone();
+    bad_total[16] = 0xFF; // IP total length beyond the frame
+    let mut bad_version = good.clone();
+    bad_version[14] = 0x65; // IPv6 nibble under an IPv4 ethertype
+    let runt = &good[..10]; // shorter than an Ethernet header
+
+    for f in [
+        &bad_total[..],
+        &bad_version[..],
+        runt,
+        &[][..],
+    ] {
+        h.push_rx(f);
+    }
+    assert_eq!(
+        c.rd16(Chip::sock(1) + 0x26),
+        0,
+        "no IP RAW delivery for malformed packets"
+    );
+
+    h.push_rx(&good);
+    assert_eq!(
+        c.wait_rx(1, 14),
+        14,
+        "a well-formed packet still gets through afterwards"
+    );
+}
+
+#[test]
+fn unsupported_modes_leave_the_socket_closed_like_applewin() {
+    // AUD-P-021: W5100.h:51 defines PPPoE (MR=5); Uthernet2.cpp:405-440 and :947-1001 handle
+    // nothing for it or for the undefined values: OPEN leaves Sn_SR at 0 (CLOSED) with the
+    // pointers reset. Same here, and the socket works afterwards.
+    let (mut c, h) = Chip::with_mock();
+    for mr in [0x05u8, 0x06, 0x07, 0x0C, 0x0D, 0x0E, 0x0F, 0x00] {
+        c.wr(S0 + 0x25, 0x12); // dirty TX_WR, to see the pointers reset
+        c.open(0, mr);
+        assert_eq!(c.sr(0), SR_CLOSED, "MR={mr:#04x}");
+        assert_eq!(
+            c.rd16(S0 + 0x24),
+            0,
+            "MR={mr:#04x}: OPEN resets the pointers"
+        );
+        assert_eq!(c.rd16(S0 + 0x26), 0);
+    }
+    // Commands that do not exist on this card (PCON/PDISCON/PCR... $23-$27) are ignored.
+    c.open(0, 0x02);
+    assert_eq!(c.sr(0), SR_UDP);
+    for cr in [0x23u8, 0x24, 0x25, 0x26, 0x27, 0x80, 0xFF] {
+        c.command(0, cr);
+        assert_eq!(c.sr(0), SR_UDP, "CR={cr:#04x}");
+    }
+    assert!(h.take_tx().is_empty());
+}
+
+#[test]
+fn there_are_no_interrupts_and_the_pppoe_mode_bit_is_inert() {
+    // IMR is not implemented (writes ignored, as in AppleWin) and IR never rises, and MR bit 3 (PPPoE enable on the
+    // chip) changes nothing: sockets still open and the indirect bus still works.
+    let mut c = Chip::with_null();
+    c.wr(0x0016, 0xFF); // IMR: not implemented in AppleWin either, the write is ignored
+    assert_eq!(c.rd(0x0016), 0);
+    c.m.board_mut().write(MODE, 0x0B); // PPPoE bit | auto-increment | indirect
+    c.open(0, 0x02);
+    assert_eq!(c.sr(0), SR_UDP);
+    c.set_dest(0, [127, 0, 0, 1], 9);
+    c.send(0, b"x");
+    assert_eq!(c.rd(0x0015), 0, "IR (common) stays clear");
+    assert_eq!(c.rd(S0 + 0x02), 0, "Sn_IR stays clear");
+}
