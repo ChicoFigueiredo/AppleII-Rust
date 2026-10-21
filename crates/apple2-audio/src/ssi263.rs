@@ -119,6 +119,19 @@ pub struct Ssi263 {
     leadout: u64,
     play_start: u64,
     end_cycle: u64,
+    /// Start/end of phoneme notifications for the conformance log, drained by the card.
+    pub(crate) notes: Vec<SsiNote>,
+    /// Length of the last phoneme's input wave (`g_nPhonemeInfo[].nLength`).
+    input_len: usize,
+}
+
+/// What the chip tells the card about phoneme boundaries (conformance event log).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SsiNote {
+    /// `Play(phoneme)`; `samples` is the phoneme's length in 22.05 kHz input samples.
+    Start { phoneme: u8, samples: u32 },
+    /// `UpdateIRQ`: the phoneme is complete.
+    End,
 }
 
 impl Ssi263 {
@@ -145,6 +158,8 @@ impl Ssi263 {
             leadout: 0,
             play_start: 0,
             end_cycle: 0,
+            notes: Vec::new(),
+            input_len: 0,
         };
         s.reset_state(true);
         s
@@ -278,6 +293,10 @@ impl Ssi263 {
             self.dur_phon >> DURATION_MODE_SHIFT
         };
         self.build_wave(phoneme, dur);
+        self.notes.push(SsiNote::Start {
+            phoneme,
+            samples: self.input_len as u32,
+        });
         self.play_start = now;
         self.end_cycle = now
             + clk
@@ -298,6 +317,7 @@ impl Ssi263 {
         }
         let idx = if pause { 0 } else { p as usize - 2 };
         let (offset, len) = d.info[idx];
+        self.input_len = len;
         let input = &d.samples[offset..offset + len];
         let avg = match dur {
             0 | 1 => 1,
@@ -352,6 +372,7 @@ impl Ssi263 {
         let mut out = SsiOut::default();
         match self.phase {
             Phase::Playing => {
+                self.notes.push(SsiNote::End);
                 self.current_active |= LEADOUT_FLAG;
                 self.set_speech_irq(pcr, &mut out);
                 self.phase = Phase::Leadout;

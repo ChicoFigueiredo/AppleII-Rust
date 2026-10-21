@@ -55,6 +55,8 @@ fn every_shipped_case_passes_and_its_manifest_validates() {
             assert!(o.manifest.actual.contains("fixture ausente"), "{}", c.id);
             continue;
         }
+        // Large oracle traces live in target/conformance-cache (not versioned); without them the
+        // case is BLOCKED with the command that regenerates them.
         if o.manifest.result == TestResult::Blocked
             && c.oracle.trace_sha256.is_some()
             && o.manifest.actual.contains("trace de referência ausente")
@@ -66,11 +68,20 @@ fn every_shipped_case_passes_and_its_manifest_validates() {
             );
             continue;
         }
-        assert_eq!(
-            o.manifest.result,
-            TestResult::Pass,
-            "{}: {}",
+        // A case may document a finding it is expected to fail on (`known_divergence`), and a
+        // fixture-based case is BLOCKED, never PASS, where the corpus cache is absent.
+        let fixture_missing = c
+            .fixture
+            .as_ref()
+            .is_some_and(|f| !env.workspace.join(&f.path).exists());
+        let expected_fail =
+            o.manifest.result == TestResult::Fail && c.oracle.known_divergence.is_some();
+        let expected_blocked = o.manifest.result == TestResult::Blocked && fixture_missing;
+        assert!(
+            o.manifest.result == TestResult::Pass || expected_fail || expected_blocked,
+            "{}: {:?} {}",
             c.id,
+            o.manifest.result,
             o.manifest.actual
         );
         validate_against_schema(&serde_json::to_value(&o.manifest).unwrap()).unwrap();

@@ -207,7 +207,9 @@ pub struct SoundSockets {
 impl Default for SoundSockets {
     fn default() -> Self {
         SoundSockets {
-            ay: [AyChip::Ay8910, AyChip::Ay8910, AyChip::Empty, AyChip::Empty],
+            // AppleWin: every AY starts as an AY-3-8913 (AY8910.cpp:127); the registry's
+            // `AY Socket N` is never read at start-up (Mockingboard.cpp:101, TODO).
+            ay: [AyChip::Ay8913; 4],
             ssi263: [Ssi263Chip::Empty, Ssi263Chip::Ssi263AP],
             sc01: true,
             bad_6522: [false; 2],
@@ -356,10 +358,7 @@ impl SlotCardSpec {
                 support_dcd: false,
             },
             C::MockingboardC => S::MockingboardC(Default::default()),
-            C::Phasor => S::Phasor(SoundSockets {
-                ay: [AyChip::Ay8910; 4],
-                ..Default::default()
-            }),
+            C::Phasor => S::Phasor(Default::default()),
             C::MegaAudio => S::MegaAudio(Default::default()),
             C::SdMusic => S::SdMusic(Default::default()),
             C::GenericPrinter => S::GenericPrinter(Default::default()),

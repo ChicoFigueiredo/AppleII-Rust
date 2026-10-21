@@ -1,0 +1,183 @@
+diff --git a/source/CPU.cpp b/source/CPU.cpp
+index 2d5459bf..cc8bcdb7 100644
+--- a/source/CPU.cpp
++++ b/source/CPU.cpp
+@@ -87,6 +87,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ #include "StdAfx.h"
+ 
+ #include "CPU.h"
++#include "audio_hook.h"
+ #include "Core.h"
+ #include "CardManager.h"
+ #include "Memory.h"
+@@ -870,6 +871,7 @@ void CpuIrqAssert(eIRQSRC Device)
+ 	_ASSERT(g_bCritSectionValid);
+ 	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
+ 	g_bmIRQ |= 1<<Device;
++	ORACLE_AUDIO_EVENT(OAE_IRQ, Device, 1, 0, 0);
+ 	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
+ }
+ 
+@@ -878,6 +880,7 @@ void CpuIrqDeassert(eIRQSRC Device)
+ 	_ASSERT(g_bCritSectionValid);
+ 	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
+ 	g_bmIRQ &= ~(1<<Device);
++	ORACLE_AUDIO_EVENT(OAE_IRQ, Device, 0, 0, 0);
+ 	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
+ }
+ 
+diff --git a/source/Mockingboard.cpp b/source/Mockingboard.cpp
+index e348d339..758e5008 100644
+--- a/source/Mockingboard.cpp
++++ b/source/Mockingboard.cpp
+@@ -42,6 +42,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ #include "StdAfx.h"
+ 
+ #include "Mockingboard.h"
++#include "audio_hook.h"
+ #include "MockingboardDefs.h"
+ #include "6522.h"
+ 
+@@ -665,7 +666,9 @@ BYTE __stdcall MockingboardCard::IORead(WORD PC, WORD nAddr, BYTE bWrite, BYTE n
+ {
+ 	UINT slot = (nAddr >> 8) & 0xf;
+ 	MockingboardCard* pCard = (MockingboardCard*)MemGetSlotParameters(slot);
+-	return pCard->IOReadInternal(PC, nAddr, bWrite, nValue, nExecutedCycles);
++	const BYTE oracleRes = pCard->IOReadInternal(PC, nAddr, bWrite, nValue, nExecutedCycles);
++	ORACLE_AUDIO_EVENT(OAE_IO_R, slot, nAddr & 0xFF, oracleRes, 0);
++	return oracleRes;
+ }
+ 
+ BYTE MockingboardCard::IOReadInternal(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nExecutedCycles)
+@@ -732,7 +735,9 @@ BYTE __stdcall MockingboardCard::IOWrite(WORD PC, WORD nAddr, BYTE bWrite, BYTE
+ {
+ 	UINT slot = (nAddr >> 8) & 0xf;
+ 	MockingboardCard* pCard = (MockingboardCard*)MemGetSlotParameters(slot);
+-	return pCard->IOWriteInternal(PC, nAddr, bWrite, nValue, nExecutedCycles);
++	const BYTE oracleRes = pCard->IOWriteInternal(PC, nAddr, bWrite, nValue, nExecutedCycles);
++	ORACLE_AUDIO_EVENT(OAE_IO_W, slot, nAddr & 0xFF, nValue, 0);
++	return oracleRes;
+ }
+ 
+ BYTE MockingboardCard::IOWriteInternal(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nExecutedCycles)
+@@ -872,6 +877,9 @@ BYTE __stdcall MockingboardCard::PhasorIO(WORD PC, WORD nAddr, BYTE bWrite, BYTE
+ {
+ 	UINT slot = ((nAddr & 0xff) >> 4) - 8;
+ 	MockingboardCard* pCard = (MockingboardCard*)MemGetSlotParameters(slot);
++	if (g_pfnOracleAudioEvent)
++		CpuCalcCycles(nExecutedCycles);	// PhasorIOInternal never syncs g_nCumulativeCycles itself
++	ORACLE_AUDIO_EVENT(OAE_PHASOR_IO, slot, nAddr & 0xFF, bWrite, 0);
+ 	return pCard->PhasorIOInternal(PC, nAddr, bWrite, nValue, nExecutedCycles);
+ }
+ 
+@@ -1108,12 +1114,15 @@ void MockingboardCard::GetSnapshotForDebugger(DEBUGGER_MB_CARD* const pMBForDebu
+ BYTE MockingboardCard::AYReadReg(BYTE subunit, BYTE ay, int r)
+ {
+ 	_ASSERT(subunit < NUM_SUBUNITS_PER_MB && ay < NUM_AY8913_PER_SUBUNIT);
+-	return m_MBSubUnit[subunit].ay8913[ay].sound_ay_read(r);
++	const BYTE oracleVal = m_MBSubUnit[subunit].ay8913[ay].sound_ay_read(r);
++	ORACLE_AUDIO_EVENT(OAE_AY_R, m_slot, (subunit << 4) | ay, r, oracleVal);
++	return oracleVal;
+ }
+ 
+ void MockingboardCard::_AYWriteReg(BYTE subunit, BYTE ay, int r, int v)
+ {
+ 	_ASSERT(subunit < NUM_SUBUNITS_PER_MB && ay < NUM_AY8913_PER_SUBUNIT);
++	ORACLE_AUDIO_EVENT(OAE_AY_W, m_slot, (subunit << 4) | ay, r, v);
+ 	libspectrum_dword uOffset = (libspectrum_dword)(g_nCumulativeCycles - m_lastAYUpdateCycle);
+ 	m_MBSubUnit[subunit].ay8913[ay].sound_ay_write(r, v, uOffset);
+ }
+diff --git a/source/MockingboardCardManager.cpp b/source/MockingboardCardManager.cpp
+index 461a1876..0e25a43d 100644
+--- a/source/MockingboardCardManager.cpp
++++ b/source/MockingboardCardManager.cpp
+@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ #include "StdAfx.h"
+ 
+ #include "MockingboardCardManager.h"
++#include "audio_hook.h"
+ #include "Core.h"
+ #include "CardManager.h"
+ #include "CPU.h"
+@@ -425,6 +426,9 @@ void MockingboardCardManager::MixAllAndCopyToRingBuffer(UINT nNumSamples)
+ 
+ 	//
+ 
++	if (g_pfnOracleMbPcm)
++		g_pfnOracleMbPcm(&m_mixBuffer[0], nNumSamples);
++
+ 	DWORD dwDSLockedBufferSize0, dwDSLockedBufferSize1;
+ 	SHORT* pDSLockedBuffer0, * pDSLockedBuffer1;
+ 
+diff --git a/source/SSI263.cpp b/source/SSI263.cpp
+index 2fca2fd3..53619fd4 100644
+--- a/source/SSI263.cpp
++++ b/source/SSI263.cpp
+@@ -54,6 +54,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ #include "Memory.h"
+ #include "SoundCore.h"
+ #include "SSI263.h"
++#include "audio_hook.h"
+ #include "SSI263Phonemes.h"
+ 
+ #include "YamlHelper.h"
+@@ -366,6 +367,7 @@ void SSI263::Play(unsigned int nPhoneme)
+ 		nPhoneme-=2;	// Missing phoneme-1
+ 
+ 	m_phonemeLengthRemaining = g_nPhonemeInfo[nPhoneme].nLength;
++	ORACLE_AUDIO_EVENT(OAE_PHONEME_START, m_slot, m_device, m_currentActivePhoneme & PHONEME_MASK, m_phonemeLengthRemaining);
+ 
+ 	m_phonemeAccurateLengthRemaining = m_phonemeLengthRemaining;
+ 	m_phonemePlaybackAndDebugger = (g_nAppMode == MODE_STEPPING || g_nAppMode == MODE_DEBUG);
+@@ -672,6 +674,9 @@ void SSI263::Update()
+ 
+ 	//
+ 
++	if (g_pfnOracleSsiPcm)
++		g_pfnOracleSsiPcm(m_slot, m_device, &m_mixBufferSSI263[0], nNumSamples);
++
+ 	DWORD dwDSLockedBufferSize0, dwDSLockedBufferSize1;
+ 	short *pDSLockedBuffer0, *pDSLockedBuffer1;
+ 
+@@ -786,6 +791,7 @@ void SSI263::UpdateIRQ()
+ 	_ASSERT(m_currentActivePhoneme != -1);
+ 	_ASSERT((m_currentActivePhoneme & kPhonemeLeadoutFlag) == 0);
+ 	m_currentActivePhoneme |= kPhonemeLeadoutFlag;
++	ORACLE_AUDIO_EVENT(OAE_PHONEME_END, m_slot, m_device, 0, 0);
+ 
+ 	if (m_dbgFirst && m_dbgStartTime)
+ 	{
+diff --git a/source/Speaker.cpp b/source/Speaker.cpp
+index 70ac339f..a3de6654 100644
+--- a/source/Speaker.cpp
++++ b/source/Speaker.cpp
+@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ #include "StdAfx.h"
+ 
+ #include "Speaker.h"
++#include "audio_hook.h"
+ #include "Core.h"
+ #include "CPU.h"
+ #include "Interface.h"
+@@ -403,6 +404,7 @@ BYTE __stdcall SpkrToggle(WORD, WORD, BYTE, BYTE, ULONG nExecutedCycles)
+ 	}
+ 
+ 	CpuCalcCycles(nExecutedCycles);
++	ORACLE_AUDIO_EVENT(OAE_SPK_TOGGLE, 0, 0, 0, 0);
+ 
+ 	UpdateSpkr();
+ 
+@@ -454,6 +456,13 @@ void SpkrUpdate(uint32_t totalcycles)
+ 	//
+ 
+ 	UpdateSpkr();
++	if (g_pfnOracleSpkrPcm)
++	{
++		// Oracle: no DirectSound voice for the speaker; hand the PCM over and drain the buffer
++		g_pfnOracleSpkrPcm(g_pSpeakerBuffer, g_nBufferIdx, g_nSPKR_NumChannels);
++		g_nBufferIdx = 0;
++		return;
++	}
+ 	ULONG nSamplesUsed;
+ 
+ 	if (g_bFullSpeed)

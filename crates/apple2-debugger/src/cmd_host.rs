@@ -381,7 +381,7 @@ impl Debugger {
         let found = n > 0 && GENERAL_PARAMS.contains(&first.as_str());
         let file = if n > 1 { a.text(2) } else { "" };
         let lower = file.to_ascii_lowercase();
-        let is_bmp = lower.len() > 1 && lower[1..].ends_with(".bmp");
+        let is_bmp = lower.len() >= 5 && lower.ends_with(".bmp");
         let name = if file.is_empty() {
             DEFAULT_PALETTE_FILE.to_string()
         } else {

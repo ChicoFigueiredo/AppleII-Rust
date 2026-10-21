@@ -6,6 +6,7 @@
 //! emulation and mixing run on the same thread).
 
 use crate::clock::SampleClock;
+use crate::events::{AudioEvent, IrqLine};
 use apple2_core::VideoStandard;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -68,6 +69,9 @@ struct Inner {
     dac: Mutex<Vec<(u64, u8)>>,
     /// Bit `slot`: that slot's 6522s assert IRQ; bit `8 + slot`: its speech chip does.
     irq: AtomicU32,
+    /// Conformance event log (`None` = not recording) and the last logged level of each IRQ line.
+    events: Mutex<Option<Vec<(u64, AudioEvent)>>>,
+    irq_logged: AtomicU32,
 }
 
 /// Cheap-to-clone handle; create one per machine and pass it to every audio card and the mixer.
@@ -85,6 +89,8 @@ impl AudioBus {
             sources: Mutex::new(Vec::new()),
             dac: Mutex::new(Vec::new()),
             irq: AtomicU32::new(0),
+            events: Mutex::new(None),
+            irq_logged: AtomicU32::new(0),
         }))
     }
 
@@ -111,6 +117,50 @@ impl AudioBus {
 
     pub(crate) fn sources(&self) -> Vec<Source> {
         lock(&self.0.sources).clone()
+    }
+
+    /// Starts (or stops, dropping the log) recording [`AudioEvent`]s for conformance tests.
+    pub fn record_events(&self, on: bool) {
+        *lock(&self.0.events) = on.then(Vec::new);
+        self.0.irq_logged.store(0, Ordering::SeqCst);
+    }
+
+    /// Recorded events since the last call, oldest first (empty when not recording).
+    pub fn take_events(&self) -> Vec<(u64, AudioEvent)> {
+        lock(&self.0.events)
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn recording(&self) -> bool {
+        lock(&self.0.events).is_some()
+    }
+
+    pub(crate) fn log(&self, cycle: u64, ev: AudioEvent) {
+        if let Some(v) = lock(&self.0.events).as_mut() {
+            v.push((cycle, ev));
+        }
+    }
+
+    /// Logs an IRQ line level only when it differs from the last logged one.
+    pub(crate) fn log_irq(&self, cycle: u64, line: IrqLine, level: bool) {
+        if !self.recording() {
+            return;
+        }
+        let bit = match line {
+            IrqLine::Via6522 => 1,
+            IrqLine::Speech => 2,
+        };
+        let was = self.0.irq_logged.load(Ordering::SeqCst) & bit != 0;
+        if was != level {
+            if level {
+                self.0.irq_logged.fetch_or(bit, Ordering::SeqCst);
+            } else {
+                self.0.irq_logged.fetch_and(!bit, Ordering::SeqCst);
+            }
+            self.log(cycle, AudioEvent::Irq { line, level });
+        }
     }
 
     pub(crate) fn push_dac(&self, cycle: u64, value: u8) {

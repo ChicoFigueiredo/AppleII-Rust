@@ -226,6 +226,16 @@ pub fn opmode_opbyte<'a>(
     (op, Some(info.mode), info.mode.bytes() as usize, None)
 }
 
+/// `pData->nTargetAddress`: for `DA` it is the word stored at the line itself, read when the line
+/// is evaluated (`_6502_GetOpmodeOpbyte`, Debugger_Assembler.cpp:574); it is 0 for other data.
+fn data_target(ctx: &DisasmCtx, d: &DisasmData, addr: u16) -> u16 {
+    if d.kind == Nop::Address {
+        ctx.mem.read_word(addr)
+    } else {
+        d.target
+    }
+}
+
 /// `_6502_GetTargets`: effective addresses of the instruction at `addr` with current registers.
 /// Returns (partial, partial2, pointer, bytes); `NO_TARGET` (-1) when absent.
 pub fn get_targets(
@@ -354,7 +364,7 @@ pub fn target_address(ctx: &DisasmCtx, addr: u16) -> Option<u16> {
     let (op, mode, _n, data) = opmode_opbyte(ctx, addr);
     let mode = mode?;
     if let Some(d) = data {
-        return Some(d.target);
+        return Some(data_target(ctx, d, addr));
     }
     if mode != Mode::Implied {
         let (_, _, ptr, _) = get_targets(ctx, addr, false, true);
@@ -490,7 +500,7 @@ pub fn disassemble(ctx: &DisasmCtx, base: u16) -> DisasmLine {
 
     if let Some(mm) = m.filter(|m| *m != Mode::Implied) {
         let mut target: u16 = match data {
-            Some(d) => d.target,
+            Some(d) => data_target(ctx, d, base),
             None => {
                 let w = ctx.mem.read_word(base.wrapping_add(1));
                 if nbytes == 2 {

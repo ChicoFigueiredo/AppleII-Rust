@@ -17,6 +17,8 @@ path = "src/main.rs"
 [dependencies]
 apple2-core = { path = "../apple2-core" }
 apple2-video = { path = "../apple2-video" }
+apple2-audio = { path = "../apple2-audio" }
+apple2-savestate = { path = "../apple2-savestate" }
 apple2-storage = { path = "../apple2-storage" }
 flate2 = "1"
 serde.workspace = true

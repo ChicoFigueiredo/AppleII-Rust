@@ -10,8 +10,9 @@
 use crate::ay8910::{Ay, AyType};
 use crate::bus::{lock, AudioBus, CardVolume, Source};
 use crate::clock::SampleClock;
+use crate::events::{AudioEvent, IrqLine};
 use crate::snapshot::{MockingboardSnapshot, UnitSnapshot, ViaSnapshot};
-use crate::ssi263::{Ssi263, SsiOut, SsiType, PH_ECHO_PLUS, PH_MOCKINGBOARD, PH_PHASOR};
+use crate::ssi263::{Ssi263, SsiNote, SsiOut, SsiType, PH_ECHO_PLUS, PH_MOCKINGBOARD, PH_PHASOR};
 use crate::via6522::{reg, TimerSched, Via};
 use apple2_core::{Card, CardCtx, IrqSource};
 
@@ -31,7 +32,12 @@ pub struct Sockets {
     pub ssi263: [SsiType; 2],
     /// Votrax SC-01 beside unit 0 (`kSC01_Default`).
     pub sc01: bool,
-    pub ay: AyType,
+    /// AY socket types as `SetSocketAY891x(socket, type)` (cpp:136-151): socket `s` is the AY
+    /// `s >> 1` of 6522 unit `s & 1`, so sockets 0 and 1 are the Mockingboard's two AYs (left
+    /// and right) and 2 and 3 are the Phasor's second AY of each unit.
+    pub ay: [AyType; 4],
+    /// `-sN 6522a-bad` / `6522b-bad` (`UseBad6522A/B`).
+    pub bad_6522: [bool; 2],
 }
 
 impl Default for Sockets {
@@ -39,7 +45,9 @@ impl Default for Sockets {
         Sockets {
             ssi263: [SsiType::Empty, SsiType::Ap],
             sc01: true,
-            ay: AyType::Ay3_8913,
+            // `AY8913::AY8913()` starts every AY as an AY-3-8913 (AY8910.cpp:127).
+            ay: [AyType::Ay3_8913; 4],
+            bad_6522: [false; 2],
         }
     }
 }
@@ -52,6 +60,40 @@ const AY_LATCH: u8 = 7;
 /// Scheduler tokens: 0..=3 timers (`unit*2 + timer`), 4..=5 speech chips.
 const TOKEN_SSI: u16 = 4;
 const SAVE_VERSION: u8 = 1;
+
+#[allow(clippy::too_many_arguments)]
+fn log_ay(
+    bus: &AudioBus,
+    now: u64,
+    write: bool,
+    slot: u8,
+    unit: usize,
+    ay: usize,
+    reg: u8,
+    value: u8,
+) {
+    let (unit, ay, reg) = (unit as u8, ay as u8, reg & 0xF);
+    bus.log(
+        now,
+        if write {
+            AudioEvent::AyWrite {
+                slot,
+                unit,
+                ay,
+                reg,
+                value,
+            }
+        } else {
+            AudioEvent::AyRead {
+                slot,
+                unit,
+                ay,
+                reg,
+                value,
+            }
+        },
+    );
+}
 
 struct Sub {
     via: Via,
@@ -92,6 +134,9 @@ pub struct MockingboardCard {
     clock: SampleClock,
     produced: u64,
     pending_ssi: Option<(usize, SsiOut)>,
+    /// `CardCtx::access_cycle` of the access being served: the label of conformance events (the
+    /// Cycle AppleWin's `g_nCumulativeCycles` shows to the I/O handler).
+    access_cycle: u64,
 }
 
 impl MockingboardCard {
@@ -109,8 +154,13 @@ impl MockingboardCard {
                 Ssi263::new(SsiType::Empty, false)
             };
             let mut sub = Sub {
-                via: Via::new(mega),
-                ay: [Ay::new(sockets.ay), Ay::new(sockets.ay)],
+                via: {
+                    let mut v = Via::new(mega);
+                    v.bad = sockets.bad_6522[i];
+                    v
+                },
+                // AY socket `s` -> unit `s & 1`, AY `s >> 1` (SetSocketAY891x).
+                ay: [Ay::new(sockets.ay[i]), Ay::new(sockets.ay[i + 2])],
                 ssi,
                 cur_reg: [0; 2],
                 state: [AY_INACTIVE; 2],
@@ -132,6 +182,7 @@ impl MockingboardCard {
             clock: bus.clock(),
             produced: 0,
             pending_ssi: None,
+            access_cycle: 0,
         };
         card.set_ay_clocks();
         for s in &mut card.subs {
@@ -163,6 +214,11 @@ impl MockingboardCard {
     /// Debug view of an AY's registers.
     pub fn ay_regs(&self, unit: usize, ay: usize) -> [u8; 16] {
         *self.subs[unit].ay[ay].regs()
+    }
+
+    /// Type of the AY in socket `socket` (0..=3, see [`Sockets::ay`]).
+    pub fn ay_type(&self, socket: usize) -> AyType {
+        self.subs[socket & 1].ay[socket >> 1].ty
     }
 
     fn is_phasor(&self) -> bool {
@@ -255,12 +311,31 @@ impl MockingboardCard {
         let slot = ctx.slot as u32 & 7;
         let m = self.bus.irq_bits(1 << slot, via);
         ctx.set_irq(IrqSource::Mockingboard6522, m & 0xFF != 0);
+        self.bus
+            .log_irq(ctx.access_cycle, IrqLine::Via6522, m & 0xFF != 0);
         let m = self.bus.irq_bits(1 << (8 + slot), speech);
         ctx.set_irq(IrqSource::Speech, m & 0xFF00 != 0);
+        self.bus
+            .log_irq(ctx.access_cycle, IrqLine::Speech, m & 0xFF00 != 0);
     }
 
     fn apply_ssi(&mut self, unit: usize, out: SsiOut, ctx: &mut CardCtx) {
         let s = &mut self.subs[unit];
+        for n in std::mem::take(&mut s.ssi.notes) {
+            let ev = match n {
+                SsiNote::Start { phoneme, samples } => AudioEvent::PhonemeStart {
+                    slot: ctx.slot,
+                    device: unit as u8,
+                    phoneme,
+                    samples,
+                },
+                SsiNote::End => AudioEvent::PhonemeEnd {
+                    slot: ctx.slot,
+                    device: unit as u8,
+                },
+            };
+            self.bus.log(ctx.access_cycle, ev);
+        }
         if out.deassert_irq {
             s.speech_irq = false;
         }
@@ -301,6 +376,9 @@ impl MockingboardCard {
     }
 
     fn ay_write(&mut self, unit: usize, ay: usize, value: u8) {
+        let now = self.access_cycle;
+        let slot = self.slot;
+        let bus = self.bus.clone();
         let sd = self.variant == Variant::SdMusic;
         let via_i = if sd { 0 } else { unit };
         let phasor_native = self.is_phasor() && self.phasor_mode == PH_PHASOR;
@@ -313,11 +391,15 @@ impl MockingboardCard {
                 AY_READ => {
                     let mut v = None;
                     if sub.chip_sel[ay] && sub.latch_valid[ay] {
-                        v = Some(sub.ay[ay].read(sub.cur_reg[ay]) & (ddra ^ 0xFF));
+                        let r = sub.ay[ay].read(sub.cur_reg[ay]);
+                        log_ay(&bus, now, false, slot, unit, ay, sub.cur_reg[ay], r);
+                        v = Some(r & (ddra ^ 0xFF));
                         bus_state = true;
                     }
                     if phasor_native && ay == 0 && sub.chip_sel[1] && sub.latch_valid[1] {
-                        let b = sub.ay[1].read(sub.cur_reg[1]) & (ddra ^ 0xFF);
+                        let r = sub.ay[1].read(sub.cur_reg[1]);
+                        log_ay(&bus, now, false, slot, unit, 1, sub.cur_reg[1], r);
+                        let b = r & (ddra ^ 0xFF);
                         v = Some(v.unwrap_or(ora) | b);
                     }
                     if let Some(v) = v {
@@ -326,9 +408,11 @@ impl MockingboardCard {
                 }
                 AY_WRITE => {
                     if sub.chip_sel[ay] && sub.latch_valid[ay] {
+                        log_ay(&bus, now, true, slot, unit, ay, sub.cur_reg[ay], ora);
                         sub.ay[ay].write(sub.cur_reg[ay], ora);
                     }
                     if phasor_native && ay == 0 && sub.chip_sel[1] && sub.latch_valid[1] {
+                        log_ay(&bus, now, true, slot, unit, 1, sub.cur_reg[1], ora);
                         sub.ay[1].write(sub.cur_reg[1], ora);
                     }
                 }
@@ -413,15 +497,26 @@ impl MockingboardCard {
 
     // ---- bus access ----
 
+    /// Where the 6522 sees an access: AppleWin updates the chip to the first cycle of the
+    /// executing opcode (`access_cycle`) and compensates for the opcode's `adj` cycles
+    /// (`GetOpcodeCyclesForRead/Write`). The bus access itself is the opcode's last cycle.
+    fn opcode_span(ctx: &CardCtx) -> (u64, u16) {
+        (
+            ctx.access_cycle,
+            (ctx.cycles.saturating_sub(ctx.access_cycle) + 1).min(u16::MAX as u64) as u16,
+        )
+    }
+
     fn pre(&mut self, ctx: &CardCtx) {
         self.slot = ctx.slot;
+        self.access_cycle = ctx.access_cycle;
         self.advance_audio(ctx.cycles);
     }
 
     /// `IOReadInternal` (cpp:671). `a` = low byte of the address.
     fn read_io(&mut self, a: u8, ctx: &mut CardCtx) -> u8 {
         self.pre(ctx);
-        let now = ctx.cycles;
+        let (start, adj) = Self::opcode_span(ctx);
         let r = a & 0xF;
         if self.is_phasor() {
             let cs = match self.phasor_mode {
@@ -432,10 +527,10 @@ impl MockingboardCard {
             };
             let mut res = 0;
             if cs & 1 != 0 {
-                res |= self.subs[0].via.read(r, now);
+                res |= self.subs[0].via.read_at(r, start, adj);
             }
             if cs & 2 != 0 {
-                res |= self.subs[1].via.read(r, now);
+                res |= self.subs[1].via.read_at(r, start, adj);
             }
             let mut accessed = cs & 3 != 0;
             // SSI263 D7 at $Cs2x/$Cs4x (Phasor native only; not readable in Mockingboard mode).
@@ -457,7 +552,7 @@ impl MockingboardCard {
         } else {
             1
         };
-        let v = self.subs[unit].via.read(r, now);
+        let v = self.subs[unit].via.read_at(r, start, adj);
         self.sync_irq(ctx);
         v
     }
@@ -467,6 +562,7 @@ impl MockingboardCard {
         self.pre(ctx);
         self.false_read(a, ctx);
         let now = ctx.cycles;
+        let (start, adj) = Self::opcode_span(ctx);
         let r = a & 0xF;
         if self.is_phasor() {
             let cs = match self.phasor_mode {
@@ -477,7 +573,7 @@ impl MockingboardCard {
             };
             for unit in 0..2 {
                 if cs & (1 << unit) != 0 {
-                    let t = self.subs[unit].via.write(r, v, now);
+                    let t = self.subs[unit].via.write_at(r, v, start, adj);
                     self.schedule_timer(unit, t, ctx);
                     self.sync_gates(unit, r, ctx);
                     if r == reg::ORB {
@@ -494,7 +590,7 @@ impl MockingboardCard {
             } else {
                 ((a & 0x80 != 0) as usize, 0)
             };
-            let t = self.subs[unit].via.write(r, v, now);
+            let t = self.subs[unit].via.write_at(r, v, start, adj);
             self.schedule_timer(unit, t, ctx);
             self.sync_gates(unit, r, ctx);
             if r == reg::ORB {
@@ -543,6 +639,18 @@ impl MockingboardCard {
             let out = self.subs[0].ssi.write(a & 7, v, now, &clk);
             self.apply_ssi(0, out, ctx);
         }
+    }
+
+    /// Conformance log of a `$C0(8+slot)x` access: the oracle logs `nAddr & 0xFF`.
+    fn log_phasor_io(&self, lo: u8, write: bool, ctx: &CardCtx) {
+        self.bus.log(
+            ctx.access_cycle,
+            AudioEvent::PhasorIo {
+                slot: ctx.slot,
+                addr: 0x80 + (ctx.slot << 4) + (lo & 0xF),
+                write,
+            },
+        );
     }
 
     /// Phasor mode select via `$C0(8+slot)x` (cpp:878).
@@ -719,16 +827,34 @@ impl Card for MockingboardCard {
 
     // The 6522s live in the slot's `$Cs00-$CsFF` page (RegisterIoHandler(..., IORead, IOWrite)).
     fn slot_rom_read(&mut self, offset: u8, ctx: &mut CardCtx) -> u8 {
-        self.read_io(offset, ctx)
+        let value = self.read_io(offset, ctx);
+        self.bus.log(
+            ctx.access_cycle,
+            AudioEvent::IoRead {
+                slot: ctx.slot,
+                addr: offset,
+                value,
+            },
+        );
+        value
     }
 
     fn slot_rom_write(&mut self, offset: u8, value: u8, ctx: &mut CardCtx) {
         self.write_io(offset, value, ctx);
+        self.bus.log(
+            ctx.access_cycle,
+            AudioEvent::IoWrite {
+                slot: ctx.slot,
+                addr: offset,
+                value,
+            },
+        );
     }
 
     // Only the Phasor has `$C0(8+slot)x` handlers (mode select).
     fn io_read(&mut self, lo: u8, ctx: &mut CardCtx) -> u8 {
         if self.is_phasor() {
+            self.log_phasor_io(lo, false, ctx);
             self.phasor_io(lo, ctx);
         }
         ctx.floating_bus
@@ -736,6 +862,7 @@ impl Card for MockingboardCard {
 
     fn io_write(&mut self, lo: u8, _value: u8, ctx: &mut CardCtx) {
         if self.is_phasor() {
+            self.log_phasor_io(lo, true, ctx);
             self.phasor_io(lo, ctx);
         }
     }

@@ -12,6 +12,7 @@
 pub mod ay8910;
 pub mod bus;
 pub mod clock;
+pub mod events;
 pub mod mixer;
 pub mod mockingboard;
 pub mod sam;
@@ -22,6 +23,7 @@ pub mod via6522;
 
 pub use bus::{AudioBus, CardVolume};
 pub use clock::{volume_gain, SampleClock};
+pub use events::{AudioEvent, IrqLine};
 pub use mixer::Mixer;
 pub use mockingboard::{MockingboardCard, Sockets, Variant};
 pub use sam::SamCard;

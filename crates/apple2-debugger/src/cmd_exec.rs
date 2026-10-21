@@ -606,19 +606,25 @@ impl Debugger {
 
     // ---- cycles (CYCLES / RCC) ----
 
-    pub(crate) fn cmd_cycles_info(&mut self, a: &Args) -> Update {
-        if a.n() == 0 {
-            let mode = ["abs", "rel", "part"][self.cycle_mode as usize % 3];
-            self.console.print(&format!(" Cycles display: {mode}"));
-            return upd::CONSOLE_DISPLAY;
+    /// `CmdCyclesInfo` (Debug.cpp:7137): exactly one argument; `part` also sets the base
+    /// (GH#787), as `CmdCyclesReset(0)` does.
+    pub(crate) fn cmd_cycles_info(&mut self, m: &Machine, a: &Args) -> Update {
+        if a.n() != 1 {
+            return self.help_for(Cmd::CyclesInfo);
         }
-        match a.text(1).to_ascii_uppercase().as_str() {
-            "ABS" => self.cycle_mode = 0,
-            "REL" => self.cycle_mode = 1,
-            "PART" => self.cycle_mode = 2,
+        match a.text(1).to_ascii_lowercase().as_str() {
+            "abs" => self.cycle_mode = 0,
+            "rel" => self.cycle_mode = 1,
+            "part" => self.cycle_mode = 2,
             _ => return self.help_for(Cmd::CyclesInfo),
         }
-        upd::VIDEOSCANNER
+        if self.cycle_mode == 2 {
+            self.cycle_mark = m.cycles();
+        }
+        let arg = a.text(1).to_string();
+        self.console
+            .print(&format!("Cycles display updated: {arg}"));
+        upd::ALL
     }
 
     pub(crate) fn cmd_cycles_reset(&mut self, m: &Machine) -> Update {

@@ -1,0 +1,20 @@
+id = "audio-sc01-2x-fixture"
+story = "HU-0502"
+criterion = "Fixture real SC01-2x_phonemes_playing_continuously (AppleWin-Test): depois de carregar o save-state, a sequência de eventos e a duração dos fonemas do SC-01 por 90 quadros coincidem com o AppleWin"
+model = "apple2e-enhanced"
+notes = "Save-state v2 do corpus do AppleWin com fonemas do SC-01 (Votrax) repetindo. Sem o cache da fixture o resultado é BLOCKED."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/SC01-2x_phonemes_playing_continuously.aws.yaml"
+sha256 = "c248d1ba7ceff42f520eec564c696bb19221c2ae7bfaf0d587b16a66f9b77946"
+
+[run]
+frames = 90
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle --state sobre a mesma fixture; regenerar com: tools/conformance/audio/run-oracle-case.py audio-sc01-2x-fixture"
+events = "reference-audio/audio-sc01-2x-fixture.events"
+timing = "ssi"
+ssi_tolerance = 3987  # J_ssi = 2987 (maior diferença entre --audio-slice 1000 e 250 do oráculo sobre a fixture) + 1000

@@ -79,7 +79,21 @@ cargo build --release
 
 O executável é `target/release/applewin` (`applewin.exe` no Windows). As versões publicadas (releases do GitHub) trazem arquivos prontos para as três plataformas, gerados pelo CI.
 
-Recursos opcionais, para quem compila: `apple2-hostio` tem `serialport` (porta COM da Super Serial Card) e `pcap` (Ethernet bruta do Uthernet I), desligados por padrão.
+### Dependências opcionais por sistema
+
+O executável publicado não precisa de nada além do sistema: ROMs, símbolos e o manual estão embutidos. Estes recursos são opcionais:
+
+| Recurso | Para quê | Estado no binário da release | Linux | Windows | macOS |
+|---|---|---|---|---|---|
+| `serialport` (feature de `applewin`, ligada por padrão) | porta serial real na Super Serial Card | incluído | sem biblioteca extra para usar; o usuário precisa estar no grupo `dialout` (ou `uucp`) | portas COM; sem biblioteca extra | `/dev/cu.*`; sem biblioteca extra |
+| `pcap` (feature opcional, desligada) | Ethernet bruta do Uthernet I | **não incluído** (compile com `--features pcap`) | `libpcap-dev` para compilar; `libpcap` e privilégio de captura (root ou `setcap cap_net_raw,cap_net_admin`) para usar | Npcap (instalador, modo compatível com WinPcap) e o Npcap SDK para compilar; WinPcap antigo não serve | libpcap já vem no sistema; permissão de acesso a `/dev/bpf*` |
+| Uthernet II com sockets TCP e UDP | rede sem pcap | incluído | nada | nada | nada |
+| Gamepad | joystick do Apple II pelo controle | incluído (gilrs) | `libudev` | XInput/DirectInput do sistema | IOKit do sistema (não testado) |
+| Áudio | alto-falante, Mockingboard | incluído (cpal) | ALSA (`libasound2`); sem dispositivo o programa segue mudo | WASAPI | CoreAudio |
+
+Sem dispositivo de áudio ou sem gamepad o programa continua funcionando e avisa em `stderr`. O Wine não implementa o gamepad. Ao compilar com `pcap` no Windows, o Npcap precisa estar instalado também na máquina de quem executa.
+
+Os pacotes **não são assinados** (Authenticode no Windows) nem notarizados (macOS); veja [docs/conformance/platform/assinatura.md](docs/conformance/platform/assinatura.md).
 
 ### Como publicar uma versão
 
@@ -88,6 +102,15 @@ Recursos opcionais, para quem compila: `apple2-hostio` tem `serialport` (porta C
 3. Ao mesclar o PR, o workflow `Release` cria a tag `v<versão>` no commit de merge, gera os pacotes das três plataformas e publica a release (título e corpo do PR entram nas notas).
 
 Pull requests sem `[release]` nunca publicam. Se a tag já existir, o workflow falha: aumente a versão. A execução manual (Actions > Release > Run workflow) é um dry run: só compila e guarda os artefatos.
+
+Regras da release:
+
+- Versão com sufixo SemVer (`0.2.0-alpha.1`, `1.0.0-rc.1`) publica como **pre-release**; só `X.Y.Z` puro é release estável.
+- Antes de qualquer build, o job `verify` roda `cargo fmt --check`, `clippy -D warnings` e `cargo test --workspace --release` em Linux, Windows e macOS. Se algum falhar, nada é publicado.
+- A release traz os pacotes, o `SHA256SUMS`, a SBOM CycloneDX (`applewin-<versão>.cdx.json`) e, dentro de cada pacote, `THIRD-PARTY-LICENSES.html`.
+- Para conferir um download: `sha256sum --check --ignore-missing SHA256SUMS`.
+
+Reprodução local do pacote Linux (sem CI): `tools/package/linux.sh` gera o pacote, a SBOM e o `SHA256SUMS` em `dist/` e testa o pacote extraído num diretório temporário. Requer `cargo install cargo-about --features cli cargo-cyclonedx`.
 
 ## Executando
 
