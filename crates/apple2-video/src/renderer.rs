@@ -444,6 +444,7 @@ impl Renderer {
         self.pseudo_page = s.hgr_pseudo_page();
         let key = (s.model(), s.standard());
         if self.configured != Some(key) {
+            let first = self.configured.is_none();
             self.configured = Some(key);
             self.model = key.0;
             self.pal = key.1 == VideoStandard::Pal;
@@ -459,6 +460,14 @@ impl Renderer {
             self.apply_mode(snap.ntsc, false);
             self.resync(s.cycles_in_frame());
             self.update_video_scanner_address();
+            if first {
+                // `NTSC_VideoInit` runs `GenerateBaseColors` after the first scanner address: its
+                // last colour (15) leaves 0xFFF in `g_nSignalBitsNTSC` (and phase 0), and nothing
+                // clears it until the next `updateVideoScannerAddress`. The first pixel of the
+                // first frame therefore sees 12 bits of white history (GH#241, PAL monitor: the
+                // pixel at 2 before the line start is written in frame 1 only).
+                self.signal_bits = 0xFFF;
+            }
             return;
         }
         let snap = mode_snapshot(s);
