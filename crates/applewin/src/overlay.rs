@@ -97,6 +97,19 @@ impl Overlay {
     }
 }
 
+impl Overlay {
+    /// Full-screen "Show subunit status" option (`g_bFullScreen_ShowSubunitStatus`,
+    /// WinFrame.cpp:601,788,852): off, the drive LEDs, the Caps Lock letter and the other
+    /// status marks are not drawn at all (GH#224).
+    pub fn with_subunit_status(mut self, show: bool) -> Overlay {
+        if !show {
+            self.drives.clear();
+            self.caps = None;
+        }
+        self
+    }
+}
+
 fn led_color(l: Led) -> Color32 {
     match l {
         Led::Off => Color32::from_gray(90),
@@ -285,6 +298,24 @@ mod tests {
             Overlay::new(&s, false, MouseState::default()).drives.len(),
             1
         );
+    }
+
+    /// GH#224: full screen without drive status and Caps Lock marks when the option is off.
+    #[test]
+    fn fullscreen_subunit_status_option_hides_leds_and_caps() {
+        let mut s = status();
+        s.model = "Apple2eEnhanced".into();
+        s.drives[0] = DriveStatus {
+            present: true,
+            track: 5,
+            ..Default::default()
+        };
+        let on = Overlay::new(&s, false, MouseState::default()).with_subunit_status(true);
+        assert_eq!(on.drives.len(), 1);
+        assert!(on.caps.is_some());
+        let off = Overlay::new(&s, false, MouseState::default()).with_subunit_status(false);
+        assert!(off.drives.is_empty() && off.caps.is_none());
+        assert_eq!(off.banner, on.banner);
     }
 
     #[test]

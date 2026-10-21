@@ -11,13 +11,14 @@ use crate::joy::{mouse_to_paddle, JoyConfig};
 use crate::keymap::Mods;
 use crate::overlay::MouseState;
 use crate::pacing::Speed;
-use crate::screenshot::{next_screenshot_path, save_png};
+use crate::screenshot::{save_png, ScreenshotNamer};
 use crate::toolbar;
 use crate::ui::{UiEvent, UiState};
 use crate::video::Frame;
 use apple2_config::Settings;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, WindowEvent};
@@ -86,6 +87,9 @@ struct App {
     frame_seq: u64,
     status: EmuStatus,
     last_title: String,
+    /// Screenshot file names (AppleWin names them after the last floppy inserted).
+    shots: ScreenshotNamer,
+    drive_images: [Option<String>; 2],
     last_message_seq: u64,
     mods: ModifiersState,
     input: InputRouter,
@@ -94,6 +98,9 @@ struct App {
     pad_ids: Vec<gilrs::GamepadId>,
     clipboard: Option<arboard::Clipboard>,
     cursor: Option<(f32, f32)>,
+    /// Last pointer movement and whether the idle full-screen pointer is hidden (GH#504).
+    last_cursor_move: Instant,
+    cursor_hidden: bool,
     /// AppleMouse card capture (relative motion, cursor locked).
     mouse_captured: bool,
     /// Mouse-as-joystick capture (absolute position, cursor confined and hidden).
@@ -166,6 +173,8 @@ impl App {
             frame_seq: 0,
             status: EmuStatus::default(),
             last_title: String::new(),
+            shots: ScreenshotNamer::default(),
+            drive_images: [None, None],
             last_message_seq: 0,
             mods: ModifiersState::empty(),
             input: InputRouter::new(&settings_for_joy),
@@ -176,6 +185,8 @@ impl App {
             pad_ids: Vec::new(),
             clipboard: None,
             cursor: None,
+            last_cursor_move: Instant::now(),
+            cursor_hidden: false,
             mouse_captured: false,
             joy_cursor: false,
             last_copied_seq: 0,
@@ -214,6 +225,10 @@ impl App {
                     w.set_fullscreen(fs);
                 }
             }
+            Action::ToggleScale if self.window().is_some_and(|w| w.fullscreen().is_some()) => {
+                // ScreenWindowResize (WinFrame.cpp:1976): in full screen Ctrl+F6 also goes back.
+                self.do_action(Action::ToggleFullscreen);
+            }
             Action::ToggleScale => {
                 self.scale_toggle = !self.scale_toggle;
                 let s = if self.scale_toggle { 1 } else { 2 };
@@ -241,6 +256,25 @@ impl App {
             Action::Speed1Mhz => self.emu.send(Command::SetSpeed(Speed::NORMAL)),
             Action::SpeedMax => self.emu.send(Command::SetSpeed(Speed::Max)),
         }
+    }
+
+    /// `Win32Frame::ConfirmReboot` (WinFrame.cpp:1997): the same question and wording.
+    fn confirm_reboot(&mut self) -> bool {
+        let was_paused = self.status.paused;
+        self.emu.send(Command::SetPaused(true));
+        let yes = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title("Reboot")
+            .set_description(
+                "Are you sure you want to reboot?\n(All data will be lost!)\n\n\
+                 You can skip this dialog from displaying\nin the future by unchecking:\n\n    \
+                 [ ] Confirm reboot\n\nin the Configuration dialog.",
+            )
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show()
+            == rfd::MessageDialogResult::Yes;
+        self.emu.send(Command::SetPaused(was_paused));
+        yes
     }
 
     /// F11 / F12 (`SaveStateSelectImage`): the file dialog starts at the current state file; the
@@ -301,7 +335,7 @@ impl App {
             f = halve(&f);
         }
         let dir = std::env::current_dir().unwrap_or_default();
-        let path = next_screenshot_path(&dir);
+        let path = self.shots.next_path(&dir);
         self.ui.message = match save_png(&path, &f) {
             Ok(()) => format!("Screenshot: {}", path.display()),
             Err(e) => format!("Screenshot failed: {e}"),
@@ -581,7 +615,14 @@ impl App {
     fn handle_ui_events(&mut self, events: Vec<UiEvent>) {
         for e in events {
             match e {
-                UiEvent::Action(a) => self.do_action(a),
+                UiEvent::Action(a) => {
+                    if reboot_needs_confirmation(a, true, self.settings.misc.confirm_reboot)
+                        && !self.confirm_reboot()
+                    {
+                        continue;
+                    }
+                    self.do_action(a)
+                }
                 UiEvent::Apply(s) => {
                     self.settings = (*s).clone();
                     self.input
@@ -637,6 +678,17 @@ impl App {
         ) else {
             return;
         };
+        let eligible = window.fullscreen().is_some()
+            && !self.status.mouse_available
+            && !self.mouse_captured
+            && !self.joy_cursor;
+        let hide = cursor_idle_hides(self.last_cursor_move.elapsed(), eligible);
+        if hide != self.cursor_hidden {
+            self.cursor_hidden = hide;
+            if hide || !(self.mouse_captured || self.joy_cursor) {
+                window.set_cursor_visible(!hide);
+            }
+        }
         let seq = self.emu.shared.frame_seq();
         if seq != self.frame_seq {
             self.frame_seq = seq;
@@ -656,6 +708,12 @@ impl App {
             if self.status.message_seq != self.last_message_seq {
                 self.last_message_seq = self.status.message_seq;
                 self.ui.message = self.status.message.clone();
+            }
+            for d in 0..2 {
+                if self.status.drives[d].image != self.drive_images[d] {
+                    self.drive_images[d] = self.status.drives[d].image.clone();
+                    self.shots.reset(self.drive_images[d].as_deref());
+                }
             }
             let t = toolbar::title(&self.status);
             if t != self.last_title {
@@ -733,7 +791,32 @@ fn open_command(p: &std::path::Path) -> Command {
     }
 }
 
-fn window_size(scale: u32, toolbar: bool) -> LogicalSize<f64> {
+/// AppleWin asks "Are you sure you want to reboot?" only when F2's button is clicked (not the
+/// F2 key) and "Confirm reboot" is on (`ConfirmReboot(bFromButtonUI)`, WinFrame.cpp:1999).
+pub fn reboot_needs_confirmation(action: Action, from_button: bool, confirm_reboot: bool) -> bool {
+    matches!(action, Action::Reboot) && from_button && confirm_reboot
+}
+
+/// Largest scale (at most `wanted`, at least 1) whose window fits a screen of `avail` logical
+/// pixels. AppleWin reverts 2x to 1x when the screen is too small (WinFrame.cpp:3058, GH#161);
+/// here the screen is the one the window is on (GH#932 only looked at the primary display).
+pub fn fit_scale(wanted: u32, avail: (f64, f64), toolbar: bool) -> u32 {
+    (1..=wanted.clamp(1, 4))
+        .rev()
+        .find(|&s| {
+            let w = window_size(s, toolbar);
+            w.width <= avail.0 && w.height <= avail.1
+        })
+        .unwrap_or(1)
+}
+
+/// GH#504 (WinFrame.cpp:1627-1640): in full screen, with no mouse card and the mouse not driving
+/// a joystick, the pointer hides after 2 s without movement and shows again when it moves.
+pub fn cursor_idle_hides(idle: Duration, eligible: bool) -> bool {
+    eligible && idle > Duration::from_millis(2000)
+}
+
+pub fn window_size(scale: u32, toolbar: bool) -> LogicalSize<f64> {
     let s = f64::from(scale.clamp(1, 4));
     LogicalSize::new(
         560.0 * s + if toolbar { 92.0 + 17.0 } else { 0.0 },
@@ -794,6 +877,14 @@ impl ApplicationHandler<UserEvent> for App {
             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
         }
         window.set_ime_allowed(false);
+        if let Some(m) = window.current_monitor() {
+            let sz = m.size().to_logical::<f64>(m.scale_factor());
+            let wanted = self.settings.video.window_scale;
+            let fit = fit_scale(wanted, (sz.width, sz.height), true);
+            if fit != wanted.clamp(1, 4) {
+                let _ = window.request_inner_size(window_size(fit, true));
+            }
+        }
         self.window = Some(window);
     }
 
@@ -864,6 +955,7 @@ impl ApplicationHandler<UserEvent> for App {
                 self.debugger_wheel(delta)
             }
             WindowEvent::CursorMoved { position, .. } => {
+                self.last_cursor_move = Instant::now();
                 self.cursor = Some((
                     position.x as f32 / self.egui_ctx.pixels_per_point(),
                     position.y as f32 / self.egui_ctx.pixels_per_point(),
