@@ -322,9 +322,10 @@ impl Renderer {
         for (y, dst) in out.chunks_exact_mut(row_bytes).enumerate() {
             let start = (BORDER_H + y) * self.fb_w + BORDER_W;
             let row = &self.fb[start..start + self.vis_w];
-            for (&c, d) in row.iter().zip(dst.chunks_exact_mut(4)) {
+            let (dst, _) = dst.as_chunks_mut::<4>();
+            for (&c, d) in row.iter().zip(dst) {
                 // 0xAARRGGBB -> [R, G, B, A]
-                d.copy_from_slice(&c.rotate_left(8).to_be_bytes());
+                *d = c.rotate_left(8).to_be_bytes();
             }
         }
     }
