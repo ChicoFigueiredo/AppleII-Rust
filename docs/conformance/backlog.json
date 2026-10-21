@@ -1,0 +1,432 @@
+[
+  {
+    "id": "EP-00",
+    "tipo": "épico",
+    "titulo": "Auditoria histórica de issues e rastreabilidade integral",
+    "prioridade": "P0",
+    "onda": 0,
+    "gate": "G0 — Inventário",
+    "epico": "EP-00",
+    "issue": 2
+  },
+  {
+    "id": "EP-01",
+    "tipo": "épico",
+    "titulo": "CPU, temporização, barramento e memória",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-01",
+    "issue": 3
+  },
+  {
+    "id": "EP-02",
+    "tipo": "épico",
+    "titulo": "Vídeo, NTSC, PAL e modos de exibição",
+    "prioridade": "P0",
+    "onda": 2,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-02",
+    "issue": 4
+  },
+  {
+    "id": "EP-03",
+    "tipo": "épico",
+    "titulo": "Disco, mass storage e preservação de dados",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-03",
+    "issue": 5
+  },
+  {
+    "id": "EP-04",
+    "tipo": "épico",
+    "titulo": "Save-state, interoperabilidade e serialização",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-04",
+    "issue": 6
+  },
+  {
+    "id": "EP-05",
+    "tipo": "épico",
+    "titulo": "Som, fala e cartões especializados",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-05",
+    "issue": 7
+  },
+  {
+    "id": "EP-06",
+    "tipo": "épico",
+    "titulo": "Z80 e outras placas de expansão",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-06",
+    "issue": 8
+  },
+  {
+    "id": "EP-07",
+    "tipo": "épico",
+    "titulo": "Rede, serial, impressora e dispositivos de entrada",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-07",
+    "issue": 9
+  },
+  {
+    "id": "EP-08",
+    "tipo": "épico",
+    "titulo": "Debugger e experiência AppleWin",
+    "prioridade": "P1",
+    "onda": 3,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-08",
+    "issue": 10
+  },
+  {
+    "id": "EP-09",
+    "tipo": "épico",
+    "titulo": "Windows, Linux e macOS: qualidade de plataforma",
+    "prioridade": "P0",
+    "onda": 3,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-09",
+    "issue": 11
+  },
+  {
+    "id": "EP-10",
+    "tipo": "épico",
+    "titulo": "Performance preservando correção",
+    "prioridade": "P1",
+    "onda": 3,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-10",
+    "issue": 12
+  },
+  {
+    "id": "EP-11",
+    "tipo": "épico",
+    "titulo": "Compatibilidade com problemas históricos e novas issues abertas",
+    "prioridade": "P1",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-11",
+    "issue": 13
+  },
+  {
+    "id": "EP-12",
+    "tipo": "épico",
+    "titulo": "Evoluções próprias, sem comprometer compatibilidade",
+    "prioridade": "P2",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-12",
+    "issue": 14
+  },
+  {
+    "id": "HU-0001",
+    "tipo": "história",
+    "titulo": "Inventariar todas as issues relevantes do AppleWin",
+    "prioridade": "P0",
+    "onda": 0,
+    "gate": "G0 — Inventário",
+    "epico": "EP-00",
+    "issue": 15
+  },
+  {
+    "id": "HU-0002",
+    "tipo": "história",
+    "titulo": "Importar e utilizar AppleWin-Test como referência",
+    "prioridade": "P0",
+    "onda": 0,
+    "gate": "G0 — Inventário",
+    "epico": "EP-00",
+    "issue": 16
+  },
+  {
+    "id": "HU-0101",
+    "tipo": "história",
+    "titulo": "Conformidade 6502/65C02, inclusive opcodes não documentados quando aplicáveis",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-01",
+    "issue": 17
+  },
+  {
+    "id": "HU-0102",
+    "tipo": "história",
+    "titulo": "Cartões de memória, Language Card e Saturn sem perda de configuração",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-01",
+    "issue": 18
+  },
+  {
+    "id": "HU-0103",
+    "tipo": "história",
+    "titulo": "Floating bus e sincronismo CPU/vídeo/I-O",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-01",
+    "issue": 19
+  },
+  {
+    "id": "HU-0201",
+    "tipo": "história",
+    "titulo": "Fidelidade gráfica verificável por imagens e eventos",
+    "prioridade": "P0",
+    "onda": 2,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-02",
+    "issue": 20
+  },
+  {
+    "id": "HU-0202",
+    "tipo": "história",
+    "titulo": "VidHD e compatibilidade de resoluções",
+    "prioridade": "P0",
+    "onda": 2,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-02",
+    "issue": 21
+  },
+  {
+    "id": "HU-0301",
+    "tipo": "história",
+    "titulo": "Disk II/WOZ/DSK/NIB e integridade das gravações",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-03",
+    "issue": 22
+  },
+  {
+    "id": "HU-0302",
+    "tipo": "história",
+    "titulo": "Hot swap e persistência de configuração dos discos",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-03",
+    "issue": 23
+  },
+  {
+    "id": "HU-0303",
+    "tipo": "história",
+    "titulo": "HDD, SmartPort e imagens maiores",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-03",
+    "issue": 24
+  },
+  {
+    "id": "HU-0401",
+    "tipo": "história",
+    "titulo": "Importar save-states reais do AppleWin",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-04",
+    "issue": 25
+  },
+  {
+    "id": "HU-0402",
+    "tipo": "história",
+    "titulo": "Round-trip e atomicidade da gravação",
+    "prioridade": "P0",
+    "onda": 1,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-04",
+    "issue": 26
+  },
+  {
+    "id": "HU-0501",
+    "tipo": "história",
+    "titulo": "Mockingboard, Phasor e AY-3-8910",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-05",
+    "issue": 27
+  },
+  {
+    "id": "HU-0502",
+    "tipo": "história",
+    "titulo": "SSI263/SAM, fonemas e save-states",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-05",
+    "issue": 28
+  },
+  {
+    "id": "HU-0601",
+    "tipo": "história",
+    "titulo": "Z80 com interrupções e MEMPTR completos",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-06",
+    "issue": 29
+  },
+  {
+    "id": "HU-0602",
+    "tipo": "história",
+    "titulo": "ThunderClock, Breakpoint Card, SNES MAX e configuração por slot",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-06",
+    "issue": 30
+  },
+  {
+    "id": "HU-0701",
+    "tipo": "história",
+    "titulo": "Uthernet I/II com protocolo e ciclo de vida confiáveis",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-07",
+    "issue": 31
+  },
+  {
+    "id": "HU-0702",
+    "tipo": "história",
+    "titulo": "Entrada real e mapeamento consistente",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-07",
+    "issue": 32
+  },
+  {
+    "id": "HU-0703",
+    "tipo": "história",
+    "titulo": "Serial, impressora, Npcap/libpcap e permissões",
+    "prioridade": "P1",
+    "onda": 2,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-07",
+    "issue": 33
+  },
+  {
+    "id": "HU-0801",
+    "tipo": "história",
+    "titulo": "Paridade dos comandos e atalhos de debugger",
+    "prioridade": "P1",
+    "onda": 3,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-08",
+    "issue": 34
+  },
+  {
+    "id": "HU-0802",
+    "tipo": "história",
+    "titulo": "Operações de UI configuráveis e acessibilidade",
+    "prioridade": "P1",
+    "onda": 3,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-08",
+    "issue": 35
+  },
+  {
+    "id": "HU-0901",
+    "tipo": "história",
+    "titulo": "Funcionalidade executável e testada nos três sistemas",
+    "prioridade": "P0",
+    "onda": 3,
+    "gate": "G2 — Beta funcional",
+    "epico": "EP-09",
+    "issue": 36
+  },
+  {
+    "id": "HU-0902",
+    "tipo": "história",
+    "titulo": "Distribuição reproduzível e seguros de cadeia de suprimentos",
+    "prioridade": "P1",
+    "onda": 3,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-09",
+    "issue": 37
+  },
+  {
+    "id": "HU-1001",
+    "tipo": "história",
+    "titulo": "Profiling e desempenho determinístico",
+    "prioridade": "P1",
+    "onda": 3,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-10",
+    "issue": 38
+  },
+  {
+    "id": "HU-1101",
+    "tipo": "história",
+    "titulo": "Triar issues upstream abertas com valor alto",
+    "prioridade": "P1",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-11",
+    "issue": 39
+  },
+  {
+    "id": "HU-1201",
+    "tipo": "história",
+    "titulo": "Depuração temporal e rewind",
+    "prioridade": "P2",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-12",
+    "issue": 40
+  },
+  {
+    "id": "HU-1202",
+    "tipo": "história",
+    "titulo": "Interface DAP para VS Code",
+    "prioridade": "P2",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-12",
+    "issue": 41
+  },
+  {
+    "id": "HU-1203",
+    "tipo": "história",
+    "titulo": "Laboratório educacional e disassembler didático",
+    "prioridade": "P3",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-12",
+    "issue": 42
+  },
+  {
+    "id": "HU-1204",
+    "tipo": "história",
+    "titulo": "Investigação separada: suporte a Apple I",
+    "prioridade": "P3",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-12",
+    "issue": 43
+  },
+  {
+    "id": "HU-1205",
+    "tipo": "história",
+    "titulo": "Frontend web/WASM",
+    "prioridade": "P3",
+    "onda": 4,
+    "gate": "G3 — Stable candidata",
+    "epico": "EP-12",
+    "issue": 44
+  }
+]
