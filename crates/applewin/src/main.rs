@@ -59,6 +59,18 @@ fn main() {
             cmd.unsupported.join(" ")
         );
     }
+    // `-rom` / `-f8rom` / `-videorom`: AppleWin's checks (CmdLine.cpp:480-519, AppleWin.cpp:959).
+    match cmd.check_roms() {
+        Ok(warnings) => {
+            for w in warnings {
+                eprintln!("warning: {w}");
+            }
+        }
+        Err(msg) => {
+            eprintln!("{msg}");
+            std::process::exit(1);
+        }
+    }
     // `-load-state` is the current save-state file for this session (Snapshot_SetFilename).
     let apply = |settings: &mut Settings, cmd: &CmdLine| {
         cmd.apply(settings);

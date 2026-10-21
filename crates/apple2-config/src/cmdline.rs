@@ -214,6 +214,58 @@ fn atof(s: &str) -> f64 {
 }
 
 impl CmdLine {
+    /// The checks AppleWin makes on `-rom`, `-f8rom` and `-videorom` (CmdLine.cpp:480-519,
+    /// AppleWin.cpp:959-968), to run before the machine is created.
+    ///
+    /// * `Err(message)`: AppleWin shows the message and shuts down; do the same (exit with an
+    ///   error, no window). `-f8rom` must be a file of exactly 0x800 bytes, `-rom` of exactly
+    ///   0x3000 or 0x4000 bytes, and the two cannot be used together.
+    /// * `Ok(warnings)`: a bad `-videorom` (not found or not exactly 2/4/8/16K) only shows a
+    ///   message; the built-in video ROM stays in use.
+    ///
+    /// ROMs from `settings.toml` are not checked here: they fall back to the embedded ROM with a
+    /// warning ([`Settings::resolve_roms`](crate::Settings::resolve_roms)).
+    pub fn check_roms(&self) -> Result<Vec<String>, String> {
+        let (mut rom, mut f8, mut video) = (None, None, None);
+        for o in &self.opts {
+            match o {
+                Opt::CustomRom(p) => rom = Some(p),
+                Opt::CustomF8Rom(p) => f8 = Some(p),
+                Opt::VideoRom(p) => video = Some(p),
+                _ => {}
+            }
+        }
+        // Size of a file that can be opened; `None` = not found / not a file.
+        let size = |p: &PathBuf| {
+            std::fs::metadata(p)
+                .ok()
+                .filter(|m| m.is_file())
+                .map(|m| m.len())
+        };
+        let f8_size = f8.map(size);
+        let rom_size = rom.map(size);
+        if matches!(f8_size, Some(s) if s != Some(0x800)) {
+            return Err("Failed to load custom F8 rom (not found or not exactly 2KiB)".into());
+        }
+        if matches!(rom_size, Some(s) if s != Some(0x4000) && s != Some(0x3000)) {
+            return Err(
+                "Failed to load custom rom (not found or not exactly 12KiB or 16KiB)".into(),
+            );
+        }
+        // Both handles are open (the files exist and passed the checks above).
+        if f8_size.is_some() && rom_size.is_some() {
+            return Err("Unsupported -rom and -f8rom being used at the same time".into());
+        }
+        let mut warnings = Vec::new();
+        if let Some(p) = video {
+            if !matches!(size(p), Some(0x800 | 0x1000 | 0x2000 | 0x4000)) {
+                warnings
+                    .push("Failed to load video rom (not found or not exactly 2/4/8/16KiB)".into());
+            }
+        }
+        Ok(warnings)
+    }
+
     pub fn parse<S: AsRef<str>>(args: &[S]) -> Result<CmdLine, CmdLineError> {
         let mut c = CmdLine::default();
         let mut cmd_cards = [CardType::Empty; 8]; // `CardInstanceExists` (CmdLine.cpp:94) looks at the cmd line only
@@ -1027,6 +1079,50 @@ mod tests {
             CmdLine::parse(&["-f8rom"]),
             Err(CmdLineError::MissingValue(o)) if o == "-f8rom"
         ));
+    }
+
+    #[test]
+    fn rom_checks_follow_applewin_and_shut_down() {
+        let d = std::env::temp_dir().join(format!("a2cl-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let mk = |name: &str, n: usize| {
+            let p = d.join(name);
+            std::fs::write(&p, vec![0u8; n]).unwrap();
+            p.display().to_string()
+        };
+        let check = |args: &[&str]| CmdLine::parse(args).unwrap().check_roms();
+        let (r12, r16, r20) = (mk("r12", 0x3000), mk("r16", 0x4000), mk("r20", 20 * 1024));
+        let (f2, f3) = (mk("f2", 0x800), mk("f3", 0x801));
+        let missing = d.join("missing").display().to_string();
+        let f8_msg = "Failed to load custom F8 rom (not found or not exactly 2KiB)";
+        let rom_msg = "Failed to load custom rom (not found or not exactly 12KiB or 16KiB)";
+        // valid
+        assert_eq!(check(&["-rom", &r12]), Ok(vec![]));
+        assert_eq!(check(&["-rom", &r16]), Ok(vec![]));
+        assert_eq!(check(&["-f8rom", &f2]), Ok(vec![]));
+        assert_eq!(check(&[]), Ok(vec![]));
+        // wrong size / missing: error (the 20K file is rejected on the command line)
+        assert_eq!(check(&["-rom", &r20]), Err(rom_msg.into()));
+        assert_eq!(check(&["-rom", &missing]), Err(rom_msg.into()));
+        assert_eq!(check(&["-f8rom", &f3]), Err(f8_msg.into()));
+        assert_eq!(check(&["-f8rom", &missing]), Err(f8_msg.into()));
+        // F8 failure wins over ROM failure
+        assert_eq!(check(&["-rom", &r20, "-f8rom", &f3]), Err(f8_msg.into()));
+        // both together
+        assert_eq!(
+            check(&["-rom", &r16, "-f8rom", &f2]),
+            Err("Unsupported -rom and -f8rom being used at the same time".into())
+        );
+        // -videorom: only a warning
+        let v = mk("v", 3000);
+        assert_eq!(
+            check(&["-videorom", &v]),
+            Ok(vec![
+                "Failed to load video rom (not found or not exactly 2/4/8/16KiB)".into()
+            ])
+        );
+        assert_eq!(check(&["-videorom", &f2]), Ok(vec![]));
+        let _ = std::fs::remove_dir_all(d);
     }
 
     #[test]

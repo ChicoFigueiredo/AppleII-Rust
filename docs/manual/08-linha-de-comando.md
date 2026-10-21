@@ -18,11 +18,17 @@ Um argumento desconhecido é guardado na lista de "comandos não suportados" e n
 | `-50hz`, `-60hz` | Vídeo PAL de 50 Hz ou NTSC de 60 Hz |
 | `-clock-multiplier N` | Multiplicador de velocidade (decimal) |
 | `-memclear N` | Padrão de memória ao ligar, 0 a 7 |
-| `-rom arquivo` | ROM de sistema própria: 16K em $C000-$FFFF, ou os primeiros 12K em $D000-$FFFF |
-| `-f8rom arquivo` | ROM própria de 2K em $F800-$FFFF |
-| `-videorom arquivo` | ROM de vídeo própria de 2K, 4K, 8K ou 16K |
+| `-rom arquivo` | ROM de sistema própria: arquivo de exatamente 16K (em $C000-$FFFF) ou 12K (em $D000-$FFFF) |
+| `-f8rom arquivo` | ROM própria de exatamente 2K em $F800-$FFFF |
+| `-videorom arquivo` | ROM de vídeo própria de exatamente 2K, 4K, 8K ou 16K |
 
-Como no AppleWin, um arquivo inexistente, ilegível ou de tamanho que a leitura não aceita em `-rom`, `-f8rom` ou `-videorom` não impede a Máquina de iniciar: ela usa a ROM embutida, o programa mostra o aviso na janela e o registra no log. Os tamanhos exatos aceitos (por exemplo, 20K em `-rom` vale pelos primeiros 12K) estão em "Usar ROMs próprias", no capítulo de configuração.
+Estas três opções são conferidas antes de abrir a janela, com as mesmas regras e mensagens do AppleWin:
+
+- `-f8rom` com arquivo ausente ou que não tem exatamente 2K: `Failed to load custom F8 rom (not found or not exactly 2KiB)`.
+- `-rom` com arquivo ausente ou que não tem exatamente 12K nem 16K: `Failed to load custom rom (not found or not exactly 12KiB or 16KiB)`.
+- `-rom` e `-f8rom` juntos: `Unsupported -rom and -f8rom being used at the same time`.
+
+Nesses três casos o programa imprime a mensagem e termina com código 1, sem abrir a janela. Com `-videorom` inexistente ou de tamanho diferente de 2K, 4K, 8K e 16K o AppleWin só avisa (`Failed to load video rom (not found or not exactly 2/4/8/16KiB)`) e segue com a ROM de vídeo embutida; aqui também. Os arquivos de ROM do `settings.toml` (`[machine]` e `[roms]`) têm regra mais tolerante: se não puderem ser usados, a Máquina inicia com a ROM embutida e mostra um aviso. Veja "Usar ROMs próprias", no capítulo de configuração.
 | `-bootsector arquivo` | Setor de boot customizado |
 | `-no-nsc` | Remove o No-Slot Clock |
 | `-alt-cpu-emu` | CPU alternativa (testes) |

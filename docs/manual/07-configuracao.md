@@ -163,7 +163,7 @@ O relatório de ROMs (veja abaixo) marca essa ROM como `embedded ... (fallback: 
 
 Os tamanhos seguem as rotinas de leitura do AppleWin, que são tolerantes:
 
-- `-rom` (e a chave `custom_rom`): um arquivo de exatamente 16K vale como 4K de $C000 mais 12K de $D000; qualquer outro arquivo fornece os primeiros 12K e só falha se tiver menos de 12K. Um arquivo de 20K, por exemplo, é aceito e só os primeiros 12K são usados.
+- `custom_rom` (no `settings.toml`): um arquivo de exatamente 16K vale como 4K de $C000 mais 12K de $D000; qualquer outro arquivo fornece os primeiros 12K e só falha se tiver menos de 12K. Um arquivo de 20K, por exemplo, é aceito e só os primeiros 12K são usados. Na linha de comando a regra é mais estrita, como no AppleWin: `-rom` exige exatamente 12K ou 16K, `-f8rom` exatamente 2K, e um erro encerra o programa antes da janela (veja "Linha de comando").
 - `-f8rom` (e a chave `f8`): lê os primeiros 2K; falha se o arquivo tiver menos.
 - `-videorom` (e a chave `video`): exatamente 2K, 4K, 8K ou 16K (com 16K vale a metade de cima, 8K).
 - Chaves de Modelo de `[roms]`: tamanho exato da tabela acima. Isso é uma extensão deste programa; o AppleWin não tem essa tabela.
