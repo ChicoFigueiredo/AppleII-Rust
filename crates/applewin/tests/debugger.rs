@@ -1,6 +1,6 @@
 use applewin_shell::backend::DefaultBackend;
 use applewin_shell::emu::{Command, Emulator};
-use applewin_shell::keymap::DebugKey;
+use applewin_shell::keymap::{DbgKey, DebugKey};
 
 fn emulator() -> Emulator {
     let mut s = apple2_config::Settings::default();
@@ -12,7 +12,7 @@ fn type_line(e: &mut Emulator, line: &str) {
     for c in line.chars() {
         e.apply(Command::Debug(DebugKey::Char(c)));
     }
-    e.apply(Command::Debug(DebugKey::Enter));
+    e.apply(Command::Debug(DebugKey::plain(DbgKey::Enter)));
 }
 
 #[test]

@@ -1,13 +1,14 @@
 //! The winit application: window, input routing, actions, audio and gamepad glue.
 
-use crate::actions::{action_for, Action};
+use crate::actions::{action_for_mode_with, Action};
 use crate::audio::AudioOut;
 use crate::backend::BackendFactory;
 use crate::emu::{self, default_state_path, Command, EmuHandle, EmuStatus};
 use crate::gfx::Gfx;
 use crate::host;
-use crate::joy::{mouse_to_paddle, JoyConfig, JoyFinal, JoySystem, KeyUse};
-use crate::keymap::{HostKey, KeyEvent as AppleKey, KeyboardState, Mods};
+use crate::input::{InputRouter, KeyCtx, Routed};
+use crate::joy::{mouse_to_paddle, JoyConfig};
+use crate::keymap::Mods;
 use crate::overlay::MouseState;
 use crate::pacing::Speed;
 use crate::screenshot::{next_screenshot_path, save_png};
@@ -73,10 +74,7 @@ struct App {
     last_title: String,
     last_message_seq: u64,
     mods: ModifiersState,
-    kbd: KeyboardState,
-    joy: JoySystem,
-    /// What the machine was last told about the joysticks.
-    last_joy: Option<JoyFinal>,
+    input: InputRouter,
     started: std::time::Instant,
     gilrs: Option<gilrs::Gilrs>,
     pad_ids: Vec<gilrs::GamepadId>,
@@ -90,6 +88,7 @@ struct App {
     scale_toggle: bool,
     dump_window: Option<(PathBuf, u64)>,
     exit_after_capture: bool,
+    bench_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
 }
 
 impl App {
@@ -103,7 +102,6 @@ impl App {
             dump_window,
             type_text,
         } = opts;
-        let settings_caps = settings.keyboard.caps_lock;
         let settings_for_joy = settings.clone();
         let audio = if no_audio || settings.sound.disable_sound {
             None
@@ -139,6 +137,7 @@ impl App {
         Ok(App {
             dump_window,
             exit_after_capture: false,
+            bench_rx: None,
             ui: UiState::new(&settings),
             help: crate::help::HelpViewer::new(),
             settings,
@@ -155,9 +154,7 @@ impl App {
             last_title: String::new(),
             last_message_seq: 0,
             mods: ModifiersState::empty(),
-            kbd: KeyboardState::with_caps(settings_caps),
-            joy: JoySystem::new(JoyConfig::from_settings(&settings_for_joy)),
-            last_joy: None,
+            input: InputRouter::new(&settings_for_joy),
             started: std::time::Instant::now(),
             gilrs: gilrs::Gilrs::new()
                 .map_err(|e| eprintln!("gamepads unavailable: {e}"))
@@ -183,11 +180,14 @@ impl App {
     // ---- actions ----
 
     fn do_action(&mut self, a: Action) {
+        if crate::input::releases_keys(a) {
+            self.release_keys();
+        }
         match a {
             Action::Help => self.help.toggle(),
             Action::Reboot => self.emu.send(Command::PowerCycle),
             Action::SoftReset => self.emu.send(Command::Reset),
-            Action::DriveSelect(d) => self.pick_disk(usize::from(d)),
+            Action::DriveSelect(d) => self.pick_disk(usize::from(d), false),
             Action::DriveMenu(d) => self.ui.drive_menu = Some(usize::from(d)),
             Action::SwapDrives => self.emu.send(Command::SwapDrives),
             Action::ToggleFullscreen => {
@@ -248,12 +248,17 @@ impl App {
         });
     }
 
-    fn pick_disk(&mut self, drive: usize) {
+    /// `read_only`: "Open as Read Only" (the disk is mounted write-protected).
+    fn pick_disk(&mut self, drive: usize, read_only: bool) {
         // Pause while the modal dialog is open so sound does not stutter and time does not pass.
         let was_paused = self.status.paused;
         self.emu.send(Command::SetPaused(true));
         let mut dialog = rfd::FileDialog::new()
-            .set_title(format!("Select disk image for drive {}", drive + 1))
+            .set_title(format!(
+                "Select disk image for drive {}{}",
+                drive + 1,
+                if read_only { " (read only)" } else { "" }
+            ))
             .add_filter(
                 "Disk images",
                 &[
@@ -267,7 +272,11 @@ impl App {
         self.emu.send(Command::SetPaused(was_paused));
         if let Some(path) = picked {
             self.ui.disk.note_inserted(&path);
-            self.emu.send(Command::InsertDisk { drive, path });
+            self.emu.send(Command::InsertDisk {
+                drive,
+                path,
+                read_only,
+            });
         }
     }
 
@@ -315,71 +324,45 @@ impl App {
 
     // ---- input ----
 
-    /// Sends the machine whatever changed in the joystick state (also advances autofire).
+    fn now_us(&self) -> u64 {
+        self.started.elapsed().as_micros() as u64
+    }
+
+    /// Sends the machine whatever changed in the joystick / pad-card state (also advances autofire).
     fn update_joy(&mut self) {
-        let now = self.started.elapsed().as_micros() as u64;
-        let f = self.joy.output(now);
-        let prev = self.last_joy;
-        if prev == Some(f) {
-            return;
+        let now = self.now_us();
+        for c in self.input.update(now) {
+            self.emu.send(c);
         }
-        for i in 0..2 {
-            if prev.is_none_or(|p| p.attached[i] != f.attached[i]) {
-                self.emu.send(Command::JoyAttached {
-                    index: i,
-                    attached: f.attached[i],
-                });
-            }
-            if prev.is_none_or(|p| p.out[i] != f.out[i]) {
-                self.emu.send(Command::Joy {
-                    index: i,
-                    out: f.out[i],
-                });
-            }
-        }
-        self.last_joy = Some(f);
     }
 
     fn poll_gamepads(&mut self) {
-        use gilrs::{Axis, Button, EventType};
+        use gilrs::EventType;
         if let Some(g) = self.gilrs.as_mut() {
             while let Some(ev) = g.next_event() {
                 if let EventType::Disconnected = ev.event {
                     if let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) {
                         self.pad_ids.remove(slot);
                         if slot == 0 {
-                            self.joy.pads[0] = self.joy.pads[1];
+                            self.input.joy.pads[0] = self.input.joy.pads[1];
                         }
-                        self.joy.pads[1] = Default::default();
-                        self.joy.set_pads_connected(self.pad_ids.len());
+                        self.input.joy.pads[1] = Default::default();
+                        self.input.joy.set_pads_connected(self.pad_ids.len());
                     }
                     continue;
                 }
                 if !self.pad_ids.contains(&ev.id) && self.pad_ids.len() < 2 {
                     self.pad_ids.push(ev.id);
-                    self.joy.set_pads_connected(self.pad_ids.len());
+                    self.input.joy.set_pads_connected(self.pad_ids.len());
                 }
                 let Some(slot) = self.pad_ids.iter().position(|i| *i == ev.id) else {
                     continue;
                 };
-                let p = &mut self.joy.pads[slot];
+                let p = &mut self.input.joy.pads[slot];
                 match ev.event {
-                    EventType::AxisChanged(Axis::LeftStickX, v, _) => p.lx = v,
-                    EventType::AxisChanged(Axis::LeftStickY, v, _) => p.ly = -v,
-                    EventType::AxisChanged(Axis::RightStickX, v, _) => p.rx = v,
-                    EventType::AxisChanged(Axis::RightStickY, v, _) => p.ry = -v,
-                    EventType::ButtonPressed(b, _) | EventType::ButtonReleased(b, _) => {
-                        let down = matches!(ev.event, EventType::ButtonPressed(..));
-                        match b {
-                            Button::South | Button::West => p.buttons[0] = down,
-                            Button::East | Button::North => p.buttons[1] = down,
-                            Button::DPadLeft => p.lx = if down { -1.0 } else { 0.0 },
-                            Button::DPadRight => p.lx = if down { 1.0 } else { 0.0 },
-                            Button::DPadUp => p.ly = if down { -1.0 } else { 0.0 },
-                            Button::DPadDown => p.ly = if down { 1.0 } else { 0.0 },
-                            _ => {}
-                        }
-                    }
+                    EventType::AxisChanged(axis, v, _) => p.axis(axis, v),
+                    EventType::ButtonPressed(b, _) => p.button(b, true),
+                    EventType::ButtonReleased(b, _) => p.button(b, false),
                     _ => continue,
                 }
             }
@@ -397,52 +380,96 @@ impl App {
         }
     }
 
-    fn keyboard(&mut self, ev: &winit::event::KeyEvent) {
+    /// The mouse wheel over the debugger is Up/Down with the current modifiers (WinFrame.cpp:1647).
+    fn debugger_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+        let dy = match delta {
+            winit::event::MouseScrollDelta::LineDelta(_, y) => y,
+            winit::event::MouseScrollDelta::PixelDelta(p) => p.y as f32,
+        };
+        if let Some(k) = crate::keymap::wheel_debug_key(dy, self.mods()) {
+            self.emu.send(Command::Debug(k));
+        }
+    }
+
+    fn keyboard(&mut self, ev: &winit::event::KeyEvent, ui_wants_keys: bool) {
         let pressed = ev.state == ElementState::Pressed;
         let input = host::key_input(ev, self.mods);
         let mods = self.mods();
+        let alt_enter = self.settings.video.alt_enter_toggles_fullscreen;
+        let action = action_for_mode_with(input.key, mods, self.status.debugger_active, alt_enter);
         if pressed && !ev.repeat {
-            if let Some(a) = action_for(input.key, mods) {
+            if let Some(a) = action {
                 self.do_action(a);
                 return;
             }
-        } else if action_for(input.key, mods).is_some() {
-            return; // repeats and releases of bound keys
+        } else if pressed && action.is_some() {
+            return; // repeats of bound keys
         }
-        if self.status.debugger_active {
-            if pressed {
-                if let Some(k) = crate::keymap::debug_key(input.key, mods) {
-                    self.emu.send(Command::Debug(k));
-                }
-            }
-            return;
-        }
-        if input.key == HostKey::ScrollLock {
-            self.scroll_lock(pressed, ev.repeat);
-        }
-        // the game port takes its keys first (AppleWin JoyProcessKey)
-        match self.joy.process_key(input, pressed, ev.repeat) {
-            KeyUse::Joystick => {
-                self.update_joy();
-                return;
-            }
-            KeyUse::JoystickAndApple => self.update_joy(),
-            KeyUse::Ignored => {}
-        }
-        for e in self.kbd.handle(input, pressed, ev.repeat, mods) {
-            match e {
-                AppleKey::Paste => self.paste(),
-                other => self.emu.send(Command::Key(other)),
+        let ctx = KeyCtx {
+            mods,
+            debugger_active: self.status.debugger_active,
+            ui_wants_keys,
+        };
+        let now = self.now_us();
+        for r in self.input.key(input, pressed, ev.repeat, ctx, now) {
+            match r {
+                Routed::Cmd(c) => self.emu.send(c),
+                Routed::Paste => self.paste(),
+                Routed::ScrollLock { pressed, repeat } => self.scroll_lock(pressed, repeat),
             }
         }
     }
 
-    fn release_inputs(&mut self) {
-        for e in self.kbd.release_all() {
-            self.emu.send(Command::Key(e));
+    /// "Benchmark Emulator": runs on its own machine in a thread and reports when done.
+    fn start_benchmark(&mut self) {
+        if self.bench_rx.is_some() {
+            return;
         }
-        self.joy.release_all();
-        self.update_joy();
+        let settings = self.settings.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.bench_rx = Some(rx);
+        self.ui.benchmark_running = true;
+        std::thread::spawn(move || {
+            let mut backend = crate::backend::DefaultBackend;
+            let r =
+                crate::benchmark::run(&settings, &mut backend, std::time::Duration::from_secs(1))
+                    .map(|r| r.report());
+            let _ = tx.send(r);
+        });
+    }
+
+    fn poll_benchmark(&mut self) {
+        let Some(rx) = &self.bench_rx else { return };
+        if let Ok(r) = rx.try_recv() {
+            self.bench_rx = None;
+            self.ui.benchmark_running = false;
+            self.ui.benchmark_report = Some(r.unwrap_or_else(|e| format!("Benchmark failed: {e}")));
+        }
+    }
+
+    /// A file dropped on the window (WinFrame.cpp `WM_DROPFILES`): a state file loads; a disk
+    /// goes to drive 2 if dropped on the drive 2 button, else to drive 1, and the machine
+    /// reboots unless it was dropped on the drive 1 button.
+    fn dropped_file(&mut self, path: PathBuf) {
+        if crate::state_io::is_state_file(&path) {
+            self.emu.send(open_command(&path));
+            return;
+        }
+        let t = toolbar::drop_target(self.cursor, self.ui.drive_rects);
+        self.ui.disk.note_inserted(&path);
+        self.emu.send(toolbar::drop_command(&t, path));
+    }
+
+    /// Lets go of every held key and key-driven joystick (F7, full screen, focus lost).
+    fn release_keys(&mut self) {
+        let now = self.now_us();
+        for c in self.input.release_all(now) {
+            self.emu.send(c);
+        }
+    }
+
+    fn release_inputs(&mut self) {
+        self.release_keys();
         self.set_mouse_capture(false);
         self.set_joy_cursor(false);
     }
@@ -479,8 +506,8 @@ impl App {
             w.set_cursor_visible(!on);
         }
         if !on {
-            self.joy.set_mouse_button(0, false);
-            self.joy.set_mouse_button(1, false);
+            self.input.joy.set_mouse_button(0, false);
+            self.input.joy.set_mouse_button(1, false);
             self.update_joy();
         }
     }
@@ -488,7 +515,7 @@ impl App {
     /// Pointer position inside the Apple screen as paddle values.
     fn mouse_joy_position(&mut self) {
         if let (Some((cx, cy)), Some(r)) = (self.cursor, self.ui.screen_rect) {
-            self.joy.set_mouse_position(
+            self.input.joy.set_mouse_position(
                 mouse_to_paddle(cx - r.min.x, r.width()),
                 mouse_to_paddle(cy - r.min.y, r.height()),
             );
@@ -521,14 +548,14 @@ impl App {
             if pressed && release {
                 self.set_joy_cursor(false);
             } else {
-                self.joy.set_mouse_button(usize::from(idx), pressed);
+                self.input.joy.set_mouse_button(usize::from(idx), pressed);
                 self.update_joy();
             }
         } else if pressed && over_screen && !self.mods.control_key() {
             // The AppleMouse card takes the mouse before the joystick does.
             if self.status.mouse_available {
                 self.set_mouse_capture(true);
-            } else if self.joy.using_mouse() {
+            } else if self.input.joy.using_mouse() {
                 self.set_joy_cursor(true); // this click only captures, as in AppleWin
                 self.mouse_joy_position();
             }
@@ -543,9 +570,11 @@ impl App {
                 UiEvent::Action(a) => self.do_action(a),
                 UiEvent::Apply(s) => {
                     self.settings = (*s).clone();
-                    self.joy
+                    self.input
+                        .joy
                         .set_config(JoyConfig::from_settings(&self.settings));
-                    if !self.joy.using_mouse() {
+                    self.input.resend(); // the machine is rebuilt: it knows no input
+                    if !self.input.joy.using_mouse() {
                         self.set_joy_cursor(false);
                     }
                     self.update_joy();
@@ -555,6 +584,10 @@ impl App {
                     self.emu.send(Command::ApplySettings(s));
                 }
                 UiEvent::ApplyLive(s) => {
+                    // image changes of the Disk II / hard disk cards are applied to the running machine
+                    for c in crate::hotswap::commands(&self.settings, &s) {
+                        self.emu.send(c);
+                    }
                     self.settings = (*s).clone();
                     if let Err(e) = self.settings.save_default() {
                         self.ui.message = format!("Could not save settings: {e}");
@@ -565,17 +598,24 @@ impl App {
                 UiEvent::EjectDisk(d) => self.emu.send(Command::EjectDisk { drive: d }),
                 UiEvent::InsertDisk { drive, path } => {
                     self.ui.disk.note_inserted(&path);
-                    self.emu.send(Command::InsertDisk { drive, path });
+                    self.emu.send(Command::InsertDisk {
+                        drive,
+                        path,
+                        read_only: false,
+                    });
                 }
+                UiEvent::PickDiskReadOnly(drive) => self.pick_disk(drive, true),
                 UiEvent::SetWriteProtect { drive, on } => {
                     self.emu.send(Command::SetWriteProtect { drive, on })
                 }
                 UiEvent::Paste => self.paste(),
+                UiEvent::Benchmark => self.start_benchmark(),
             }
         }
     }
 
     fn redraw(&mut self) {
+        self.poll_benchmark();
         let (Some(window), Some(gfx), Some(state)) = (
             self.window.clone(),
             self.gfx.as_mut(),
@@ -610,7 +650,7 @@ impl App {
             }
         }
         self.ui.mouse = MouseState {
-            usable: self.status.mouse_available || self.joy.using_mouse(),
+            usable: self.status.mouse_available || self.input.joy.using_mouse(),
             captured: self.mouse_captured || self.joy_cursor,
             over_screen: matches!((self.cursor, self.ui.screen_rect), (Some((x, y)), Some(r)) if r.contains(egui::pos2(x, y))),
         };
@@ -674,6 +714,7 @@ fn open_command(p: &std::path::Path) -> Command {
         Command::InsertDisk {
             drive: 0,
             path: p.to_path_buf(),
+            read_only: false,
         }
     }
 }
@@ -796,11 +837,14 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::ModifiersChanged(m) => {
                 self.mods = m.state();
-                self.joy.set_shift(self.mods.shift_key());
+                self.input.joy.set_shift(self.mods.shift_key());
                 self.update_joy();
             }
             WindowEvent::Focused(false) => self.release_inputs(),
-            WindowEvent::KeyboardInput { event, .. } if !egui_wants_keys => self.keyboard(&event),
+            WindowEvent::KeyboardInput { event, .. } => self.keyboard(&event, egui_wants_keys),
+            WindowEvent::MouseWheel { delta, .. } if self.status.debugger_active => {
+                self.debugger_wheel(delta)
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = Some((
                     position.x as f32 / self.egui_ctx.pixels_per_point(),
@@ -813,12 +857,7 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::MouseInput { state, button, .. } => {
                 self.mouse_button(button, state == ElementState::Pressed)
             }
-            WindowEvent::DroppedFile(path) => {
-                self.emu.send(open_command(&path));
-                if matches!(open_command(&path), Command::InsertDisk { .. }) {
-                    self.emu.send(Command::PowerCycle);
-                }
-            }
+            WindowEvent::DroppedFile(path) => self.dropped_file(path),
             _ => {}
         }
     }

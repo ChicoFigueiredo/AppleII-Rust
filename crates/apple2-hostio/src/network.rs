@@ -41,6 +41,12 @@ pub trait NetworkBackend: Send {
     fn interface_name(&self) -> &str {
         ""
     }
+
+    /// Why the interface could not be opened, when `is_valid` is false because of a failure
+    /// (not simply because none was chosen). AppleWin only logs it.
+    fn last_error(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// Backend for a card with no interface selected: drops everything. The Uthernet II still works

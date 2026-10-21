@@ -553,7 +553,8 @@ pub fn restart_reasons(old: &Settings, new: &Settings) -> Vec<String> {
                 card_name(a.card_type()),
                 card_name(b.card_type())
             ));
-        } else if a != b {
+        } else if crate::hotswap::without_media(a) != crate::hotswap::without_media(b) {
+            // disk and hard disk images are hot-swapped (hotswap.rs), not a hardware change
             v.push(format!(
                 "Slot {i}: {} configuration has changed",
                 card_name(b.card_type())
@@ -578,10 +579,32 @@ pub fn restart_reasons(old: &Settings, new: &Settings) -> Vec<String> {
     if old.machine.custom_rom != new.machine.custom_rom
         || old.machine.custom_f8_rom != new.machine.custom_f8_rom
         || old.machine.video_rom != new.machine.video_rom
+        || old.roms != new.roms
     {
         v.push("Custom ROM has changed".into());
     }
     v
+}
+
+/// Reads an AppleWin configuration: a Windows registry export (`.reg`) or the INI file of the
+/// Linux port / `-conf` (`apple2_config::import`). `keep` supplies what the AppleWin files do not
+/// carry (the window position).
+pub fn import_applewin_file(path: &std::path::Path, keep: &Settings) -> Result<Settings, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let mut s = match ext.as_str() {
+        "reg" => apple2_config::import::import_reg(&bytes),
+        "ini" | "conf" | "cfg" => {
+            apple2_config::import::import_ini(&String::from_utf8_lossy(&bytes))
+        }
+        _ => return Err(format!("{}: expected a .reg or .ini file", path.display())),
+    };
+    s.video.window_pos = keep.video.window_pos;
+    normalize(&mut s);
+    Ok(s)
 }
 
 pub fn needs_restart(old: &Settings, new: &Settings) -> bool {
@@ -690,6 +713,11 @@ pub fn validate(s: &Settings) -> Vec<Problem> {
     if s.video.window_scale == 0 || s.video.window_scale > 8 {
         bad(&mut v, "Window scale must be 1-8");
     }
+    // A user ROM that is missing or has the wrong size: at start-up the embedded ROM would be
+    // used (AppleWin's behaviour), but the form refuses it on entry.
+    for e in s.rom_problems() {
+        bad(&mut v, e);
+    }
     v
 }
 
@@ -751,6 +779,25 @@ mod tests {
 
     fn base() -> Settings {
         Settings::default()
+    }
+
+    #[test]
+    fn imports_an_applewin_ini_into_a_draft() {
+        let dir = std::env::temp_dir().join(format!("applewin-import-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("AppleWin.ini");
+        std::fs::write(
+            &p,
+            "[Configuration]\nMaster volume=20\nComputer Emulation=6\n",
+        )
+        .unwrap();
+        let keep = Settings::default();
+        let s = import_applewin_file(&p, &keep).unwrap();
+        assert_eq!(s.sound.master_volume, 20);
+        // a settings form for it is a plain restart question against the running settings
+        let _ = restart_reasons(&keep, &s);
+        assert!(import_applewin_file(&dir.join("x.txt"), &keep).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

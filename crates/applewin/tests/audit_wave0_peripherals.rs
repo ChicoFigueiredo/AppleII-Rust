@@ -11,7 +11,7 @@ use apple2_config::{CardType, Settings, SlotCardSpec};
 use applewin_shell::backend::DefaultBackend;
 use applewin_shell::emu::{Command, Emulator};
 use applewin_shell::joy::{JoyConfig, JoySystem};
-use applewin_shell::keymap::{debug_key, DebugKey, HostKey, Mods};
+use applewin_shell::keymap::{debug_key, DbgKey, DbgMods, DebugKey, HostKey, Mods};
 
 fn base_settings() -> Settings {
     let mut s = Settings::default();
@@ -81,27 +81,45 @@ fn all_shell_sources() -> String {
     out
 }
 
-/// HU-0602. A SNES MAX só lê controles pelo `SnesMax::set_controller`; nada no frontend o chama
-/// (SNESMAX.cpp:110-128 lê `joyGetPosEx` direto). Os flags `-snes-max-alt-joy*`/`-user-joy*`
-/// ficam em `SlotCardSpec::SnesMax` e a fábrica faz `SnesMax { .. }` (ignora os dois).
+/// HU-0602. Parte da fábrica do AUD-P-017: os flags `-snes-max-alt-joy*`/`-user-joy*` ficam em
+/// `SlotCardSpec::SnesMax` e a fábrica os aplica à carta (antes fazia `SnesMax { .. }`). O
+/// comportamento fino está em `tests/factory_slots.rs`.
 #[test]
-#[ignore = "reproduz achado AUD-P-017"]
-fn aud_p_017_snes_max_gets_controllers_and_flags() {
-    let all = all_shell_sources();
-    assert!(
-        all.contains("set_controller("),
-        "nenhum gamepad do host alimenta a SNES MAX"
-    );
+fn aud_p_017_factory_applies_snes_max_flags() {
     let factory = src("factory.rs");
     assert!(
         !factory.contains("SlotCardSpec::SnesMax { .. }"),
         "a fábrica descarta alt_controller e user_mapping"
     );
+    let mut s = base_settings();
+    s.slots.0[5] = SlotCardSpec::SnesMax {
+        alt_controller: [true, false],
+        user_mapping: Default::default(),
+    };
+    let (m, _) = applewin_shell::factory::build_machine_report(
+        &s,
+        &apple2_audio::AudioBus::new(48_000, apple2_core::VideoStandard::Ntsc),
+    )
+    .unwrap();
+    let card = m.card::<apple2_cards::SnesMax>(5).unwrap();
+    assert!(card.alt_controller(0) && !card.alt_controller(1));
 }
 
-/// HU-0602/0702. A 4Play só recebe estado por `FourPlay::set_stick`; o frontend nunca o chama.
+/// HU-0602. A outra metade do AUD-P-017: o gamepad do host (gilrs) chamar `SnesMax::set_host_pad`
+/// ou `set_controller`. É do agente do frontend (app.rs/joy.rs); segue pendente aqui.
 #[test]
-#[ignore = "reproduz achado AUD-P-018"]
+#[ignore = "reproduz achado AUD-P-017 (parte do gamepad, fora da fábrica)"]
+fn aud_p_017_snes_max_gets_controllers() {
+    let all = all_shell_sources();
+    assert!(
+        all.contains("set_controller(") || all.contains("set_host_pad("),
+        "nenhum gamepad do host alimenta a SNES MAX"
+    );
+}
+
+/// HU-0602/0702. A 4Play só recebe estado por `FourPlay::set_stick`; o frontend agora o chama
+/// (`emu.rs`). O teste de ponta a ponta está em `tests/hu0702_input.rs::aud_p_018_*`.
+#[test]
 fn aud_p_018_four_play_gets_sticks() {
     assert!(all_shell_sources().contains("set_stick("));
 }
@@ -119,23 +137,21 @@ fn aud_p_015_thunderclock_has_no_card_type_like_applewin() {
     assert_eq!(names.len(), 26, "Card.h tem 26 tipos incluindo Empty");
 }
 
-/// HU-0602. `Emulator::new` aceita configurações que o diálogo recusa (`settings::model::validate`):
-/// dois cartões de mouse, Uthernet + Uthernet II. Sem erro nem aviso.
+/// HU-0602. No AppleWin, `CardManager::InsertInternal` deixa vazio o slot da segunda Mouse
+/// Interface (o oráculo vence): a Máquina inicia, o slot 7 fica vazio e há aviso visível.
 #[test]
-#[ignore = "reproduz achado AUD-P-019"]
-fn aud_p_019_emulator_rejects_conflicting_slot_configuration() {
+fn aud_p_019_emulator_ignores_duplicate_card_with_warning_like_applewin() {
     let mut s = base_settings();
     s.slots.0[5] = SlotCardSpec::new(CardType::MouseInterface);
     s.slots.0[7] = SlotCardSpec::new(CardType::MouseInterface);
-    assert!(
-        Emulator::new(s, Box::new(DefaultBackend), 48_000).is_err(),
-        "dois Mouse Interface devem ser recusados"
-    );
+    let e = Emulator::new(s, Box::new(DefaultBackend), 48_000).expect("a Máquina inicia");
+    assert!(e.machine.board().slots.card(5).is_some());
+    assert!(e.machine.board().slots.card(7).is_none());
+    assert!(e.status().message.contains("MouseInterface"));
 }
 
 /// HU-0602. Cartão que não é Language Card no slot 0 do ][+ some em silêncio.
 #[test]
-#[ignore = "reproduz achado AUD-P-020"]
 fn aud_p_020_invalid_card_in_slot_0_is_reported() {
     let mut s = base_settings();
     s.slots.0[0] = SlotCardSpec::new(CardType::Ssc);
@@ -191,13 +207,49 @@ fn aud_p_026_disconnected_buttons_float_high_gh1234() {
 /// segue o Shift (:648-653). O Rust marca `attached[1] = true` (joy.rs:644) e o timer dos paddles
 /// 2/3 passa a contar como se houvesse joystick.
 #[test]
-#[ignore = "reproduz achado AUD-P-027"]
 fn aud_p_027_shift_key_mod_does_not_attach_joystick_1() {
     let mut j = joy(|s| {
         s.joystick.joystick1 = Joystick1Kind::Disabled;
         s.joystick.shift_key_mod = true;
     });
-    assert!(!j.output(0).attached[1]);
+    let f = j.output(0);
+    assert!(!f.attached[1]);
+    assert_eq!(
+        f.pb2_shift,
+        Some(true),
+        "PB2 segue o Shift (flutua alto sem ele)"
+    );
+}
+
+/// HU-0702, AUD-P-027 de ponta a ponta: sem joystick 1 os timers dos paddles 2/3 seguem
+/// "sempre ativos" e o PB2 segue o Shift.
+#[test]
+fn aud_p_027_paddle_timers_stay_always_active_with_shift_key_mod() {
+    let mut s = base_settings();
+    s.joystick.shift_key_mod = true;
+    s.joystick.joystick1 = Joystick1Kind::Disabled;
+    let mut e = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
+    let mut j = joy(|s| {
+        s.joystick.joystick1 = Joystick1Kind::Disabled;
+        s.joystick.shift_key_mod = true;
+    });
+    let f = j.output(0);
+    e.apply(Command::JoyAttached {
+        index: 1,
+        attached: f.attached[1],
+    });
+    e.apply(Command::JoyPb2Shift(f.pb2_shift));
+    let g = &e.machine.board().game;
+    assert!(!g.attached[1], "joystick 1 continua ausente");
+    // paddle 2 ativo para sempre, mesmo depois do strobe e de muito tempo
+    assert!(g.paddle_active(2, 10_000_000));
+    assert!(g.button(2, false), "sem Shift o PB2 flutua alto");
+    j.set_shift(true);
+    e.apply(Command::JoyPb2Shift(j.output(0).pb2_shift));
+    assert!(
+        !e.machine.board().game.button(2, false),
+        "Shift puxa o PB2 para baixo"
+    );
 }
 
 // ---------------------------------------------------------------- Serial
@@ -218,24 +270,45 @@ fn dbg_emulator() -> Emulator {
     Emulator::new(base_settings(), Box::new(DefaultBackend), 48_000).unwrap()
 }
 
-/// HU-0801. `DebuggerProcessKey` (Debug.cpp:9770): Espaço com a linha de comando vazia = Trace
-/// (`CmdTrace`). O Rust transforma o Espaço em caractere do console.
-#[test]
-#[ignore = "reproduz achado AUD-P-035"]
-fn aud_p_035_space_traces_one_instruction_in_the_debugger() {
+fn press(e: &mut Emulator, k: DbgKey, m: DbgMods) {
+    e.apply(Command::Debug(DebugKey::Press(k, m)));
+}
+
+fn plain(e: &mut Emulator, k: DbgKey) {
+    e.apply(Command::Debug(DebugKey::plain(k)));
+}
+
+fn dbg_running() -> Emulator {
     let mut e = dbg_emulator();
     for _ in 0..120 {
         e.run_frame();
     }
     e.apply(Command::ToggleDebugger);
+    e
+}
+
+/// HU-0801. `DebuggerProcessKey` (Debug.cpp:9848-9867): Espaço com a linha de comando vazia =
+/// Trace (`CmdTrace`), Shift+Espaço = `CmdStepOut`, Ctrl+Espaço = `CmdStepOver`.
+#[test]
+fn aud_p_035_space_traces_one_instruction_in_the_debugger() {
+    let mut e = dbg_running();
     let pc = e.machine.cpu().pc;
     e.apply(Command::Debug(DebugKey::Char(' ')));
     assert_ne!(e.machine.cpu().pc, pc, "Espaço deveria dar um passo");
+    // via tradução do teclado (Espaço do winit chega como HostKey::Char(' '))
+    let pc = e.machine.cpu().pc;
+    let k = debug_key(HostKey::Char(' '), Mods::default()).expect("Espaço");
+    e.apply(Command::Debug(k));
+    assert_ne!(e.machine.cpu().pc, pc);
+    // com texto digitado o Espaço é caractere, não passo
+    e.apply(Command::Debug(DebugKey::Char('R')));
+    let pc = e.machine.cpu().pc;
+    e.apply(Command::Debug(DebugKey::Char(' ')));
+    assert_eq!(e.machine.cpu().pc, pc);
 }
 
-/// HU-0801. Teclas de navegação do depurador sem tradução no frontend (`keymap::debug_key`).
+/// HU-0801. Teclas de navegação do depurador têm tradução no frontend (`keymap::debug_key`).
 #[test]
-#[ignore = "reproduz achado AUD-P-035"]
 fn aud_p_035_navigation_keys_are_translated() {
     let none = Mods::default();
     for k in [
@@ -244,6 +317,13 @@ fn aud_p_035_navigation_keys_are_translated() {
         HostKey::End,
         HostKey::Left,
         HostKey::Right,
+        HostKey::Up,
+        HostKey::Down,
+        HostKey::PageUp,
+        HostKey::PageDown,
+        HostKey::Enter,
+        HostKey::Backspace,
+        HostKey::Escape,
     ] {
         assert!(debug_key(k, none).is_some(), "{k:?} sem ação no depurador");
     }
@@ -255,26 +335,201 @@ fn aud_p_035_navigation_keys_are_translated() {
         debug_key(HostKey::Right, ctrl).is_some(),
         "Ctrl-Right (PC := cursor)"
     );
+    for d in '0'..='9' {
+        assert_eq!(
+            debug_key(HostKey::Char(d), ctrl),
+            Some(DebugKey::Press(
+                DbgKey::Char(d),
+                DbgMods {
+                    ctrl: true,
+                    ..Default::default()
+                }
+            )),
+            "Ctrl+{d}"
+        );
+    }
+    // Ctrl+Shift+1 chega como '!' num teclado americano; o AppleWin olha o código da tecla
+    let cs = Mods {
+        ctrl: true,
+        shift: true,
+        alt: false,
+    };
+    assert!(matches!(
+        debug_key(HostKey::Char('!'), cs),
+        Some(DebugKey::Press(DbgKey::Char('1'), _))
+    ));
+    // Ctrl+~ alterna o console em tela cheia
+    assert!(debug_key(HostKey::Char('~'), ctrl).is_some());
 }
 
-/// HU-0801. Documenta o que existe: Enter, Backspace, Escape, PgUp/PgDn e histórico em Up/Down.
+/// HU-0801. Setas, Tab e Home/End mexem no cursor do disassembly (Debug.cpp:9830-10066).
+#[test]
+fn aud_p_035_navigation_keys_move_the_cursor() {
+    let mut e = dbg_running();
+    let pc = e.machine.cpu().pc;
+    assert_eq!(e.debugger().disasm_cur, pc);
+    plain(&mut e, DbgKey::Home);
+    assert_eq!(e.debugger().disasm_cur, 0x0000);
+    plain(&mut e, DbgKey::End);
+    assert_eq!(e.debugger().disasm_cur, 0x8000);
+    plain(&mut e, DbgKey::Tab);
+    assert_eq!(e.debugger().disasm_cur, pc);
+    // Shift+Direita: topo; Alt+Direita: centro
+    plain(&mut e, DbgKey::Home);
+    press(
+        &mut e,
+        DbgKey::Right,
+        DbgMods {
+            shift: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(e.debugger().disasm_cur, pc);
+    assert_eq!(e.debugger().disasm_cur_line, 0);
+    plain(&mut e, DbgKey::Home);
+    press(
+        &mut e,
+        DbgKey::Right,
+        DbgMods {
+            alt: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(e.debugger().disasm_cur, pc);
+    assert!(e.debugger().disasm_cur_line > 0);
+    // Ctrl+Direita: PC := cursor
+    plain(&mut e, DbgKey::Down);
+    let cur = e.debugger().disasm_cur;
+    assert_ne!(cur, pc);
+    press(
+        &mut e,
+        DbgKey::Right,
+        DbgMods {
+            ctrl: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(e.machine.cpu().pc, cur);
+}
+
+/// HU-0801. Ctrl+Shift+n cria o marcador n no cursor, Ctrl+n vai até ele (`CmdBookmarkAdd/Goto`).
+#[test]
+fn aud_p_035_ctrl_digits_are_bookmarks() {
+    let mut e = dbg_running();
+    let pc = e.machine.cpu().pc;
+    let ctrl = DbgMods {
+        ctrl: true,
+        ..Default::default()
+    };
+    let cs = DbgMods {
+        ctrl: true,
+        shift: true,
+        ..Default::default()
+    };
+    press(&mut e, DbgKey::Char('3'), cs);
+    plain(&mut e, DbgKey::Home);
+    press(&mut e, DbgKey::Char('3'), ctrl);
+    assert_eq!(e.debugger().disasm_cur, pc);
+}
+
+/// HU-0801 / AUD-P-036. Up/Down (linha vazia) movem o cursor do disassembly, como no AppleWin
+/// (Debug.cpp:9989-10047); PgUp/PgDn também. Com texto digitado só o console rola.
 #[test]
 fn aud_p_036_existing_debug_keys() {
     let none = Mods::default();
-    assert_eq!(debug_key(HostKey::Enter, none), Some(DebugKey::Enter));
-    assert_eq!(debug_key(HostKey::Escape, none), Some(DebugKey::ClearInput));
-    assert_eq!(debug_key(HostKey::PageUp, none), Some(DebugKey::ScrollUp));
-    // No AppleWin, Up/Down (sem texto digitado) movem o cursor do disassembly (Debug.cpp:9990-10028).
-    assert_eq!(debug_key(HostKey::Up, none), Some(DebugKey::HistoryPrev));
+    assert_eq!(
+        debug_key(HostKey::Enter, none),
+        Some(DebugKey::plain(DbgKey::Enter))
+    );
+    assert_eq!(
+        debug_key(HostKey::Escape, none),
+        Some(DebugKey::plain(DbgKey::Escape))
+    );
+    assert_eq!(
+        debug_key(HostKey::PageUp, none),
+        Some(DebugKey::plain(DbgKey::PageUp))
+    );
+    assert_eq!(
+        debug_key(HostKey::Up, none),
+        Some(DebugKey::plain(DbgKey::Up))
+    );
+    let mut e = dbg_running();
+    let cur = e.debugger().disasm_cur;
+    plain(&mut e, DbgKey::Down);
+    let down = e.debugger().disasm_cur;
+    assert!(down > cur, "Baixo desce uma instrução");
+    plain(&mut e, DbgKey::Up);
+    assert_eq!(e.debugger().disasm_cur, cur, "Cima volta");
+    plain(&mut e, DbgKey::PageDown);
+    assert_ne!(e.debugger().disasm_cur, cur, "PgDn move o cursor");
+    // com texto, Cima/Baixo não mexem no cursor (o AppleWin só rola o console com Shift)
+    e.apply(Command::Debug(DebugKey::Char('R')));
+    let cur = e.debugger().disasm_cur;
+    plain(&mut e, DbgKey::Down);
+    plain(&mut e, DbgKey::Up);
+    assert_eq!(e.debugger().disasm_cur, cur);
+}
+
+/// HU-0801. Enter com a linha vazia alterna o console em tela cheia (Debug.cpp:9788-9799);
+/// Esc limpa a linha.
+#[test]
+fn aud_p_035_empty_enter_toggles_the_full_screen_console() {
+    use apple2_debugger::debugger::Window;
+    let mut e = dbg_running();
+    assert_eq!(e.debugger().window, Window::Code);
+    plain(&mut e, DbgKey::Enter);
+    assert_eq!(e.debugger().window, Window::Console);
+    plain(&mut e, DbgKey::Enter);
+    assert_eq!(e.debugger().window, Window::Code);
+    e.apply(Command::Debug(DebugKey::Char('R')));
+    plain(&mut e, DbgKey::Escape);
+    assert!(e.debugger().console.input().is_empty());
+}
+
+/// HU-0801. A roda do mouse sobre o depurador é Cima/Baixo com os modificadores (WinFrame.cpp:1647).
+#[test]
+fn wheel_is_up_and_down_with_modifiers() {
+    use applewin_shell::keymap::wheel_debug_key;
+    let shift = Mods {
+        shift: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        wheel_debug_key(1.0, shift),
+        Some(DebugKey::Press(
+            DbgKey::Up,
+            DbgMods {
+                shift: true,
+                ..Default::default()
+            }
+        ))
+    );
+    assert_eq!(
+        wheel_debug_key(-3.0, Mods::default()),
+        Some(DebugKey::plain(DbgKey::Down))
+    );
+    assert_eq!(wheel_debug_key(0.0, Mods::default()), None);
+}
+
+/// HU-0801. Com o depurador na tela, Ctrl+0/1/3 são marcadores, não atalhos de velocidade.
+#[test]
+fn ctrl_digits_reach_the_debugger_not_the_speed_shortcuts() {
+    use applewin_shell::actions::action_for_mode;
+    let ctrl = Mods {
+        ctrl: true,
+        ..Default::default()
+    };
+    for d in ['0', '1', '3'] {
+        assert!(action_for_mode(HostKey::Char(d), ctrl, false).is_some());
+        assert!(action_for_mode(HostKey::Char(d), ctrl, true).is_none());
+    }
 }
 
 // ---------------------------------------------------------------- UI
 
 /// HU-0802. Ctrl+Print Screen: AppleWin copia 40 ou 80 colunas (aux+principal) e a página 2
-/// (`Util_GetTextScreen`, Debug.cpp:5271). O Rust usa `apple2_core::text_screen`, só 40 colunas
-/// da página 1, embora `apple2_video::screen_text` já trate 80 colunas e página 2.
+/// (`Util_GetTextScreen`, Debug.cpp:5271). O comando usa `apple2_video::screen_text`.
 #[test]
-#[ignore = "reproduz achado AUD-P-040"]
 fn aud_p_040_ctrl_print_screen_copies_80_columns() {
     let mut s = base_settings();
     s.machine.model = apple2_core::Model::Apple2eEnhanced;
@@ -283,19 +538,41 @@ fn aud_p_040_ctrl_print_screen_copies_80_columns() {
     e.machine.poke_main(0x400, 0xC2);
     e.machine.poke_aux(0x400, 0xC1);
     e.apply(Command::CopyScreenText);
-    let rows = apple2_core::text_screen::text_screen(&e.machine);
+    let st = e.status();
+    assert_eq!(st.copied_seq, 1);
+    let first = st.copied_text.lines().next().unwrap();
+    assert!(first.starts_with("AB"), "linha 0 em 80 colunas: {first:?}");
+    assert_eq!(first.chars().count(), 80);
+    assert_eq!(st.copied_text.lines().count(), 24);
+}
+
+/// HU-0802, AUD-P-040: 40 colunas continuam 40, e a página 2 (sem 80STORE) é a copiada.
+#[test]
+fn aud_p_040_ctrl_print_screen_40_columns_and_page_2() {
+    use apple2_core::memory::mf;
+    let mut s = base_settings();
+    s.machine.model = apple2_core::Model::Apple2eEnhanced;
+    let mut e = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
+    e.machine.poke_main(0x400, 0xC1); // página 1: 'A'
+    e.machine.poke_main(0x800, 0xC2); // página 2: 'B'
+    e.apply(Command::CopyScreenText);
+    let first = e.status().copied_text.lines().next().unwrap().to_string();
     assert!(
-        rows[0].starts_with("AB"),
-        "linha 0 em 80 colunas: {:?}",
-        rows[0]
+        first.starts_with('A') && first.chars().count() == 40,
+        "{first:?}"
     );
+    // PAGE2 ligado ($C055) sem 80STORE: a página 2 é a que aparece
+    let mode = e.machine.memmode();
+    e.machine.board_mut().memory.set_memmode(mode | mf::PAGE2);
+    e.apply(Command::CopyScreenText);
+    let first = e.status().copied_text.lines().next().unwrap().to_string();
+    assert!(first.starts_with('B'), "página 2: {first:?}");
 }
 
 /// HU-0802. A preferência "Alt+Enter toggles full-screen" (`-alt-enter=...`) existe nas
 /// configurações e na página Advanced, mas nenhum código do frontend a consulta: Alt+Enter alterna
 /// a tela cheia sempre (`actions::action_for`).
 #[test]
-#[ignore = "reproduz achado AUD-P-046"]
 fn aud_p_046_alt_enter_setting_is_honoured() {
     let used = all_shell_sources()
         .matches("alt_enter_toggles_fullscreen")

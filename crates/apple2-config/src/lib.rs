@@ -8,6 +8,7 @@ pub mod cmdline;
 pub mod import;
 pub mod machine;
 pub mod registry_map;
+pub mod roms;
 pub mod settings;
 pub mod store;
 

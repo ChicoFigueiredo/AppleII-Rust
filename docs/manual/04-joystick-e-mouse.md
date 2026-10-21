@@ -48,4 +48,4 @@ As opções de mostrar uma cruz na moldura da janela e de restringir o mouse à 
 
 ## 4Play e SNES MAX
 
-Veja "Cartas por slot". Essas Cartas leem os controles do computador pela mesma camada de gamepad descrita acima.
+Veja "Cartas por slot". Essas Cartas leem os controles do computador pela mesma camada de gamepad descrita acima: o controle 1 e o controle 2 do computador são os controles 1 e 2 da SNES MAX e as portas 1 e 2 da 4Play, qualquer que seja o dispositivo escolhido para os joysticks 0 e 1 do Apple. Na SNES MAX os botões seguem o mapa padrão do AppleWin (Sony DS4/DualSense): X/Sul = B, Quadrado/Oeste = Y, Círculo/Leste = A, Triângulo/Norte = X, gatilhos superiores = L e R, Select e Start; as direções vêm do analógico esquerdo e da cruz. Na 4Play os gatilhos são os botões Sul e Leste, e as portas 3 e 4 são o teclado: **E/S/D/F** (cima, esquerda, baixo, direita) com **Z/X** nas portas 3, e **I/J/K/L** com **N/M** na porta 4. Essas teclas continuam digitando no Apple.

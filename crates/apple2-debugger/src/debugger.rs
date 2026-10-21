@@ -5,6 +5,8 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
 
+use apple2_cards::breakpoint::{Breakpoint, BPTYPE_MEM, BPTYPE_PC};
+use apple2_cards::BreakpointCard;
 use apple2_core::{AccessKind, AccessObserver, Machine};
 
 use crate::assembler::Assembler;
@@ -230,6 +232,16 @@ pub struct Debugger {
     pre_hit: Vec<usize>,
     pub(crate) script_depth: u32,
     pub(crate) break_mem_addr: u16,
+    /// `SOURCE`: the loaded assembly listing.
+    pub source: crate::cmd_host::SourceState,
+    /// `g_bBenchmarking`.
+    pub benchmarking: bool,
+    /// `CmdDisk`'s `currentSlot`: the Disk II card `DISK` acts on.
+    pub disk_slot: u8,
+    /// `g_iFontSpacing` (`FONT MODE`).
+    pub font_spacing: u8,
+    /// `NTSC SAVE` dumps the Color TV table instead of the monitor one.
+    pub ntsc_color_tv: bool,
 }
 
 impl Default for Debugger {
@@ -302,6 +314,11 @@ impl Debugger {
             pre_hit: Vec::new(),
             script_depth: 0,
             break_mem_addr: 0,
+            source: Default::default(),
+            benchmarking: false,
+            disk_slot: 6,
+            font_spacing: 0,
+            ntsc_color_tv: false,
         }
     }
 
@@ -777,7 +794,12 @@ impl Debugger {
             }
             let pc = m.cpu().pc;
             if Some(pc) == self.step_until || hits != 0 {
-                let reason = self.stop_reason_text(m, hits, Some(pc) == self.step_until);
+                let until = Some(pc) == self.step_until;
+                let reason = self.stop_reason_text(m, hits, until);
+                // `g_InterceptBreakpointsCB`: a Breakpoint Card that took over interception gets
+                // the hit and the debugger keeps running (Debug.cpp:9185, :9218).
+                let hit = self.intercept_breakpoint(m, hits, until);
+                let intercepted = Self::report_to_breakpoint_card(m, hit);
                 let id = match self.hit_id {
                     Some(i) => {
                         format!("{CHC_DEFAULT}[{CHC_ARG_SEP}B#{CHC_NUM_HEX}{i:X}{CHC_DEFAULT}]")
@@ -789,7 +811,9 @@ impl Debugger {
                 ));
                 self.stop_reason = Some(reason);
                 self.hit_id = None;
-                self.steps = 0;
+                if !intercepted {
+                    self.steps = 0;
+                }
             }
             if self.steps > 0 {
                 self.steps -= 1;
@@ -801,6 +825,59 @@ impl Debugger {
             self.calc_top_bot(m);
         }
         m.cycles() - start
+    }
+
+    /// The `INTERCEPTBREAKPOINT` AppleWin builds next to the stop reason (Debug.cpp:9128-9170).
+    fn intercept_breakpoint(&self, m: &Machine, hits: u32, until: bool) -> Breakpoint {
+        let pc = m.cpu().pc;
+        let (r, w, rw) = (0u8, 1u8, 2u8);
+        let mem = |access| Breakpoint {
+            kind: BPTYPE_MEM,
+            addr_start: self.break_mem_addr,
+            addr_end: 0,
+            access,
+        };
+        if until || hits & (hit::INVALID | hit::OPCODE) != 0 {
+            Breakpoint::default()
+        } else if hits & hit::REG != 0 {
+            match self.hit_id.map(|i| self.breakpoints.slots[i].source) {
+                Some(Source::RegPc) => Breakpoint {
+                    kind: BPTYPE_PC,
+                    addr_start: pc,
+                    addr_end: 0,
+                    access: r,
+                },
+                _ => Breakpoint::default(),
+            }
+        } else if hits & hit::MEM != 0 {
+            mem(rw)
+        } else if hits & hit::MEMW != 0 {
+            mem(w)
+        } else if hits & hit::MEMR != 0 {
+            mem(r)
+        } else {
+            Breakpoint::default()
+        }
+    }
+
+    /// Hands `bp` to the first Breakpoint Card that selected card interception (`$C0n2`);
+    /// false if none did, so the debugger stops as usual.
+    fn report_to_breakpoint_card(m: &mut Machine, bp: Breakpoint) -> bool {
+        let Some(slot) = (0..8u8).find(|s| {
+            m.card::<BreakpointCard>(*s)
+                .is_some_and(BreakpointCard::intercepting)
+        }) else {
+            return false;
+        };
+        m.with_card(slot, |card, ctx| {
+            if let Some(c) = card
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<BreakpointCard>())
+            {
+                c.report(bp, ctx);
+            }
+        });
+        true
     }
 
     pub(crate) fn stop_reason_text(&mut self, m: &Machine, hits: u32, until: bool) -> String {

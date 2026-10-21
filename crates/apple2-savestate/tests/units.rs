@@ -67,6 +67,7 @@ fn enhanced_iie_unit_layout_follows_applewin() {
             date_stamp: "2026-01-01 00:00:00".into(),
             app_version: "test".into(),
             extension: false,
+            rgb: Default::default(),
         },
     )
     .unwrap();

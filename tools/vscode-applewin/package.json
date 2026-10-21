@@ -1,0 +1,73 @@
+{
+  "name": "applewin-debug",
+  "displayName": "AppleII-Rust Debug",
+  "description": "Debug Apple II programs on the AppleII-Rust headless machine through the applewin-dap adapter. Not published.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "GPL-2.0-or-later",
+  "publisher": "local",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Debuggers"],
+  "activationEvents": ["onDebug"],
+  "main": "./extension.js",
+  "contributes": {
+    "breakpoints": [{ "language": "asm6502" }, { "language": "plaintext" }],
+    "debuggers": [
+      {
+        "type": "applewin",
+        "label": "AppleII-Rust (6502)",
+        "languages": ["asm6502"],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "model": {
+                "type": "string",
+                "description": "apple2, apple2plus, apple2jplus, apple2e, apple2eenhanced, pravets82, pravets8m, pravets8a, base64a or tk3000e.",
+                "default": "apple2eenhanced"
+              },
+              "rom": { "type": "string", "description": "Custom system ROM file (replaces the model's ROM)." },
+              "disks": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Up to two disk images for the Disk II in slot 6."
+              },
+              "load": {
+                "type": "array",
+                "description": "Binary files to load into RAM before starting.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": { "type": "string" },
+                    "address": { "type": ["string", "number"], "description": "Load address, e.g. \"0x0800\"." }
+                  },
+                  "required": ["path"]
+                }
+              },
+              "pc": { "type": ["string", "number"], "description": "Initial program counter, e.g. \"0x0800\"." },
+              "stopOnEntry": { "type": "boolean", "default": true }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "applewin",
+            "request": "launch",
+            "name": "AppleII-Rust: launch",
+            "model": "apple2eenhanced",
+            "stopOnEntry": true
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "AppleII-Rust Debug",
+      "properties": {
+        "applewin.adapterPath": {
+          "type": "string",
+          "default": "applewin-dap",
+          "description": "Path to the applewin-dap executable (cargo build --release -p apple2-dap)."
+        }
+      }
+    }
+  }
+}

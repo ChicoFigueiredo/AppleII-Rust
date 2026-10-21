@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "applewin",
+      "request": "launch",
+      "name": "Apple ][+: run program.bin at $0800",
+      "model": "apple2plus",
+      "load": [{ "path": "${workspaceFolder}/build/program.bin", "address": "0x0800" }],
+      "pc": "0x0800",
+      "stopOnEntry": true
+    },
+    {
+      "type": "applewin",
+      "request": "launch",
+      "name": "Apple //e Enhanced: boot disk",
+      "model": "apple2eenhanced",
+      "disks": ["${workspaceFolder}/disks/game.dsk"],
+      "stopOnEntry": false
+    },
+    {
+      "type": "applewin",
+      "request": "attach",
+      "name": "Attach (fresh headless machine)",
+      "model": "apple2eenhanced"
+    }
+  ]
+}

@@ -106,7 +106,7 @@ impl LanguageCards {
     /// Cards for a configuration (CardManager/Memory.cpp:320-400): the //e family always has the
     /// built-in card in slot 0; the ][ family takes `CardKind::LanguageCard16K` or a Saturn in
     /// slot 0; a Saturn may sit in slots 1-7. A 16K card anywhere but slot 0 is ignored.
-    pub fn new(is_e: bool, slots: &[Option<CardKind>; 8]) -> Self {
+    pub fn new(is_e: bool, slots: &[Option<CardKind>; 8], saturn_banks: &[u8; 8]) -> Self {
         let mut cards = Vec::new();
         let mut next_region = 1;
         for (s, kind) in slots.iter().enumerate() {
@@ -114,7 +114,7 @@ impl LanguageCards {
                 (0, _, true) => Some(Kind::Builtin), // "No slot0 for //e": a configured card is ignored
                 (0, Some(CardKind::LanguageCard16K), false) => Some(Kind::Card16K),
                 (_, Some(CardKind::Saturn128K), _) => Some(Kind::Saturn {
-                    banks: SATURN_BANKS,
+                    banks: saturn_banks[s].clamp(1, SATURN_BANKS),
                     active: 0,
                 }),
                 _ => None,
@@ -128,7 +128,7 @@ impl LanguageCards {
                     region_base: next_region,
                 };
                 if matches!(kind, Kind::Saturn { .. }) {
-                    next_region += SATURN_BANKS as usize;
+                    next_region += SATURN_BANKS as usize; // regions stay 8 apart; only `banks` are used
                 }
                 card.reset(true, is_e);
                 cards.push(card);
@@ -178,10 +178,9 @@ impl LanguageCards {
     /// Power off and on: all cards back to their initial state (the memory was already cleared).
     pub fn power_cycle(&mut self, is_e: bool, mem: &mut Memory) {
         for c in &mut self.cards {
+            // The active Saturn bank survives (LanguageCardUnit::Reset leaves it alone,
+            // LanguageCard.cpp:89-100; AUD-C-006).
             c.reset(true, is_e);
-            if let Kind::Saturn { active, .. } = &mut c.kind {
-                *active = 0;
-            }
         }
         self.attach(mem);
     }

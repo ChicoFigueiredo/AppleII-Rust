@@ -102,13 +102,89 @@ O programa emula o alto-falante do Apple II, a Mockingboard, a Phasor e a SAM. A
 - **Nome do arquivo de save-state** e **salvar o estado ao sair**. Veja "Save-states".
 - **Clone**: o tipo de clone: Pravets 82, 8M, 8A, TK3000 //e, Base64A. Para o Pravets 8A e o TK3000 há também o layout do teclado (`Auto`, `Latin`, `Cyrillic`).
 - **ROM F8 do Freeze** (somente ][ e ][+): substitui a ROM de 2K em $F800 por uma versão hacker, sem autostart.
-- **ROMs alternativas**: `-rom arquivo` (ROM completa), `-f8rom arquivo` (apenas $F800) e `-videorom arquivo` (ROM de vídeo). Estas ROMs ainda não entram no save-state (como no AppleWin).
+- **ROMs alternativas**: `-rom arquivo` (ROM completa), `-f8rom arquivo` (apenas $F800) e `-videorom arquivo` (ROM de vídeo). Estas ROMs ainda não entram no save-state (como no AppleWin). A seção "Usar ROMs próprias" explica o conjunto completo, inclusive a tabela `[roms]` do `settings.toml`.
 - **Padrão de memória ao ligar**: `-memclear 0` a `7`.
 - **Setor de boot**: `-bootsector arquivo`.
 - **Game I/O Connector**: o dongle de proteção (nenhum, SpeedStar, CodeWriter, Robocom 500/1000/1500 ou Hayden).
 - **No-Slot Clock**: ligado por padrão (`-no-nsc` remove).
-- **Benchmark**: o AppleWin tem um teste de desempenho na interface; aqui o comando `BENCHMARK` do depurador cumpre o papel.
+- **Benchmark Emulator**: botão da página Advanced, como no AppleWin. Mede por cerca de 7 segundos, numa Máquina própria (a sessão em andamento não é tocada), os quadros por segundo de vídeo em texto e em hires, a velocidade pura da CPU com e sem atualização de vídeo e os quadros por segundo "realistas", e mostra o resultado numa janela. O comando `BENCHMARK` do depurador continua existindo.
+- **Import AppleWin settings...**: botão da página Advanced. Lê um `.reg` exportado do registro do Windows ou um `.ini` do AppleWin para dentro do formulário; **OK** ou **Apply** aplicam (com o aviso de reinício se o hardware mudou).
 - **Reiniciar tudo**: apague o arquivo `settings.toml` para voltar aos padrões.
+
+## Usar ROMs próprias
+
+O programa traz ROMs embutidas e funciona sem nenhum arquivo extra. Se você tem a sua própria ROM (uma revisão diferente, uma ROM modificada ou um clone), pode usá-la no lugar da embutida. O programa não distribui nem baixa ROMs: você fornece o arquivo.
+
+Há três maneiras, da mais forte para a mais fraca. Quando mais de uma vale para a mesma ROM, vence a primeira:
+
+1. A linha de comando: `-rom`, `-f8rom` e `-videorom` (veja "Linha de comando").
+2. As chaves `custom_rom`, `custom_f8_rom` e `video_rom` da seção `[machine]` do `settings.toml`, que são o que a aba Advanced e a linha de comando preenchem.
+3. A seção opcional `[roms]` do `settings.toml`, com uma ROM de sistema por Modelo.
+
+Exemplo de `settings.toml`:
+
+```
+[roms]
+apple2e_enhanced = "/home/eu/roms/minha-iie.rom"
+apple2_plus = "/home/eu/roms/minha-iiplus.rom"
+f8 = "/home/eu/roms/f8.rom"
+video = "/home/eu/roms/video.rom"
+```
+
+Se a seção `[roms]` não existe, tudo continua como antes.
+
+### Chaves de `[roms]` e tamanhos aceitos
+
+| Chave | ROM | Tamanho |
+|---|---|---|
+| `apple2` | Sistema do Apple ][ | 12288 bytes (12K) |
+| `apple2_plus` | Sistema do Apple ][+ | 12288 bytes (12K) |
+| `apple2_jplus` | Sistema do ][ J-Plus | 12288 bytes (12K) |
+| `apple2e` | Sistema do Apple //e | 16384 bytes (16K) |
+| `apple2e_enhanced` | Sistema do //e Enhanced | 16384 bytes (16K) |
+| `pravets82` | Sistema do Pravets 82 | 12288 bytes (12K) |
+| `pravets8m` | Sistema do Pravets 8M | 12288 bytes (12K) |
+| `pravets8a` | Sistema do Pravets 8A | 16384 bytes (16K) |
+| `tk3000e` | Sistema do TK3000 //e | 16384 bytes (16K) |
+| `base64a` | Sistema do Base64A | 49152 bytes (48K) |
+| `f8` | 2K em $F800 a $FFFF (como `-f8rom`) | 2048 bytes (2K) ou mais; usa os primeiros 2K |
+| `video` | Gerador de caracteres (como `-videorom`) | 2K, 4K, 8K ou 16K |
+
+Só a ROM do Modelo escolhido é lida; as demais chaves ficam guardadas. Uma ROM de 16K para o //e contém os 4K internos de $C000 seguidos dos 12K de $D000; uma de 12K cobre apenas $D000 a $FFFF. O `-rom` da linha de comando vale para qualquer Modelo, como no AppleWin, e vence a tabela `[roms]`. O AppleWin não permite trocar as ROMs das cartas de slot (Disk II, SSC, impressora, disco rígido, mouse), então este programa também não.
+
+### Validação
+
+Ao iniciar, o programa confere cada ROM do usuário. Se o arquivo não existe, não é um arquivo comum, não pode ser lido ou tem um tamanho que a regra aceita, a Máquina **inicia mesmo assim com a ROM embutida**, como faz o AppleWin ("Failed to read custom rom"). O motivo aparece como mensagem na janela e no log, por exemplo:
+
+```
+custom system ROM /home/eu/roms/minha-iie.rom: 100 bytes, expected at least 12288 (12K); using the embedded ROM
+```
+
+O relatório de ROMs (veja abaixo) marca essa ROM como `embedded ... (fallback: motivo)`.
+
+Os tamanhos seguem as rotinas de leitura do AppleWin, que são tolerantes:
+
+- `custom_rom` (no `settings.toml`): um arquivo de exatamente 16K vale como 4K de $C000 mais 12K de $D000; qualquer outro arquivo fornece os primeiros 12K e só falha se tiver menos de 12K. Um arquivo de 20K, por exemplo, é aceito e só os primeiros 12K são usados. Na linha de comando a regra é mais estrita, como no AppleWin: `-rom` exige exatamente 12K ou 16K, `-f8rom` exatamente 2K, e um erro encerra o programa antes da janela (veja "Linha de comando").
+- `-f8rom` (e a chave `f8`): lê os primeiros 2K; falha se o arquivo tiver menos.
+- `-videorom` (e a chave `video`): exatamente 2K, 4K, 8K ou 16K (com 16K vale a metade de cima, 8K).
+- Chaves de Modelo de `[roms]`: tamanho exato da tabela acima. Isso é uma extensão deste programa; o AppleWin não tem essa tabela.
+
+Na janela de configuração a regra é mais rígida, porque é validação na entrada: um arquivo que cairia na ROM embutida aparece como problema e bloqueia OK/Apply.
+
+### Escolher o arquivo na janela de configuração
+
+Na aba Advanced, em "Custom ROMs", cada ROM tem um campo de texto, o botão Browse... para escolher o arquivo e o botão Clear para voltar à ROM embutida. A linha "System ROM for this model" edita a chave `[roms]` do Modelo selecionado; "System ROM" edita o `-rom` geral. Trocar uma ROM reinicia a Máquina.
+
+### Saber quais ROMs estão em uso
+
+Na inicialização o programa escreve no log (saída de erro) uma linha por ROM, com a origem (embutida ou arquivo), o tamanho e o SHA-256:
+
+```
+rom: system ROM: file /home/eu/roms/minha-iie.rom, 16384 bytes, sha256=...
+rom: video ROM: embedded Apple2e_Enhanced_Video.rom, 4096 bytes, sha256=...
+```
+
+O mesmo relatório (ROM de sistema, F8, vídeo e firmware das cartas de slot) está disponível para o manifesto de conformidade. Sem nenhum override, os SHA-256 são os das ROMs embutidas.
 
 ## Velocidade máxima
 

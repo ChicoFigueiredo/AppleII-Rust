@@ -18,6 +18,8 @@ apple2-core = { path = "../apple2-core" }
 apple2-roms = { path = "../apple2-roms" }
 serialport = { version = "4", default-features = false, optional = true }
 pcap = { version = "2", optional = true }
+# Portable list of network interfaces (Linux, macOS, Windows) when libpcap is not built in.
+if-addrs = "0.15"
 
 [dev-dependencies]
 apple2-cpu = { path = "../apple2-cpu" }

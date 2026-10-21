@@ -44,6 +44,19 @@ fn every_shipped_case_passes_and_its_manifest_validates() {
     let mut outcomes = Vec::new();
     for c in &cases {
         let o = run_case(&env, c);
+        // Large oracle traces live in target/conformance-cache (not versioned); without them the
+        // case is BLOCKED with the command that regenerates them.
+        if o.manifest.result == TestResult::Blocked
+            && c.oracle.trace_sha256.is_some()
+            && o.manifest.actual.contains("trace de referência ausente")
+        {
+            assert!(
+                o.manifest.actual.contains("run-audetto-oracle.sh"),
+                "{}",
+                c.id
+            );
+            continue;
+        }
         // A case may document a finding it is expected to fail on (`known_divergence`), and a
         // fixture-based case is BLOCKED, never PASS, where the corpus cache is absent.
         let fixture_missing = c
@@ -356,4 +369,101 @@ source = "t"
     assert_eq!(a.manifest.result, TestResult::Pass);
     assert_eq!(b.manifest.result, TestResult::Pass);
     assert_ne!(a.manifest.actual, b.manifest.actual);
+}
+
+const APPLEWIN_CASE: &str = r#"
+id = "aw"
+story = "HU-0101"
+criterion = "CA"
+model = "apple2plus"
+[run]
+cycles = 3000
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "run-audetto-oracle.sh --model apple2p --cycles 3000"
+trace = "TRACE"
+"#;
+
+/// A reference trace for 3000 cycles of the ][+, taken from the shipped selfref trace but with
+/// the oracle's header, so that it compares equal.
+fn applewin_reference(root: &Path, name: &str, sha_line: &str) -> String {
+    let env = Env::detect(None);
+    let refs = std::fs::read_to_string(
+        env.root
+            .join("reference-traces/apple2plus-boot-selfref.csv"),
+    )
+    .unwrap();
+    let mut out = format!("#trace_format=v1\n#oracle=test\n{sha_line}");
+    for l in refs.lines().filter(|l| !l.starts_with('#')) {
+        out.push_str(&format!("{l}\n"));
+    }
+    // Only the first 3000 cycles are run by the case.
+    let kept: Vec<&str> = out
+        .lines()
+        .filter(|l| {
+            l.starts_with('#')
+                || l.starts_with("cycle")
+                || l.split(',').next().and_then(|c| c.parse::<u64>().ok()) < Some(3000)
+        })
+        .collect();
+    std::fs::create_dir_all(root.join("reference-traces")).unwrap();
+    let text = kept.join("\n") + "\n";
+    std::fs::write(root.join("reference-traces").join(name), &text).unwrap();
+    text
+}
+
+#[test]
+fn applewin_sha_comes_from_the_reference_trace_header() {
+    let root = scratch("awsha");
+    applewin_reference(
+        &root,
+        "ref.csv",
+        "#applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e\n",
+    );
+    let c = case(&APPLEWIN_CASE.replace("TRACE", "reference-traces/ref.csv"));
+    let o = run_case(&env_in(&root), &c);
+    assert_eq!(o.manifest.result, TestResult::Pass, "{}", o.manifest.actual);
+    assert_eq!(
+        o.manifest.applewin_sha.as_deref(),
+        Some("3e8054b4627624398e4589f7f27b3d40a6b9718e")
+    );
+}
+
+#[test]
+fn missing_cached_trace_is_blocked_with_the_regeneration_command() {
+    let root = scratch("awmissing");
+    let c = case(&APPLEWIN_CASE.replace("TRACE", "reference-traces/not-there.csv"));
+    let o = run_case(&env_in(&root), &c);
+    assert_eq!(o.manifest.result, TestResult::Blocked);
+    assert!(
+        o.manifest.actual.contains("ausente"),
+        "{}",
+        o.manifest.actual
+    );
+    assert!(
+        o.manifest
+            .actual
+            .contains("run-audetto-oracle.sh --model apple2p"),
+        "{}",
+        o.manifest.actual
+    );
+}
+
+#[test]
+fn cached_trace_with_another_hash_is_blocked_not_compared() {
+    let root = scratch("awhash");
+    let text = applewin_reference(&root, "ref.csv", "");
+    let good = apple2_conformance::sha256::sha256_hex(text.as_bytes());
+    let with = |sha: &str| {
+        case(&format!(
+            "{}trace_sha256 = \"{sha}\"\n",
+            APPLEWIN_CASE.replace("TRACE", "reference-traces/ref.csv")
+        ))
+    };
+    let o = run_case(&env_in(&root), &with(&"0".repeat(64)));
+    assert_eq!(o.manifest.result, TestResult::Blocked);
+    assert!(o.manifest.actual.contains(&good), "{}", o.manifest.actual);
+    let o = run_case(&env_in(&root), &with(&good));
+    assert_eq!(o.manifest.result, TestResult::Pass, "{}", o.manifest.actual);
 }
