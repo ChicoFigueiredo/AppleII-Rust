@@ -1,0 +1,16 @@
+# Proveniencia do save-state gerado pelo AppleWin real (oraculo sob Wine)
+applewin_version = "1.32.1.0"
+applewin_zip_sha256 = "94783120695ff1749823c933c02798a7df6155d16cc9d75363f73b0dccc88ff0"
+wine_version = "wine-10.0 (Ubuntu 10.0~repack-12ubuntu1)"
+host = "Linux 7.0.0-38-generic x86_64"
+generated_utc = "2026-10-21T00:55:55Z"
+model = "apple2ee"
+run_seconds = 25
+disk_source = "DOS 3.3 System Master - 680-0210-A.dsk"
+disk_sha256 = "caca91990b148e20062c887f0301a957b477353fbacf4e4a011f8fb3beab46a9"
+yaml_file = "apple2ee-dos33-master-boot.aws.yaml"
+yaml_sha256 = "880986d4275116e49280342997de7df14030b5ab63b3813245a29a21c3d82052"
+yaml_bytes = 318041
+deterministic = false  # tempo real sob Wine; ciclos acumulados variam
+command = '''cd Q:\\ && wine /mnt/d/Chico/AppleRust/target/conformance-cache/oracle/applewin-1.32.1.0/app/AppleWin.exe -noreg -conf aw.ini -model apple2ee -no-printscreen-dlg -no-printscreen-key -no-hook-system-key -log -d1 disk1.dsk -power-on '''
+invocation = '''./tools/conformance/oracle/run-applewin-wine.sh --name apple2ee-dos33-master-boot --model apple2ee --disk DOS\ 3.3\ System\ Master\ -\ 680-0210-A.dsk --seconds 25 '''

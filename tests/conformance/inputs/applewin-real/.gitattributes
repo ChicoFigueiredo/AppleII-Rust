@@ -1,0 +1,3 @@
+# Byte-exatos: save-states reais do AppleWin (CRLF) com hash na proveniencia.
+*.aws.yaml -text
+*.png binary

@@ -1,0 +1,16 @@
+# Proveniencia do save-state gerado pelo AppleWin real (oraculo sob Wine)
+applewin_version = "1.32.1.0"
+applewin_zip_sha256 = "94783120695ff1749823c933c02798a7df6155d16cc9d75363f73b0dccc88ff0"
+wine_version = "wine-10.0 (Ubuntu 10.0~repack-12ubuntu1)"
+host = "Linux 7.0.0-38-generic x86_64"
+generated_utc = "2026-10-21T00:54:37Z"
+model = "apple2ee"
+run_seconds = 15
+disk_source = ""
+disk_sha256 = ""
+yaml_file = "apple2ee-applesoft-prompt.aws.yaml"
+yaml_sha256 = "b39cdef729ea2e9a55c25a905f07075d5d5bc995522b35401ea0c832763dc45b"
+yaml_bytes = 300217
+deterministic = false  # tempo real sob Wine; ciclos acumulados variam
+command = '''cd Q:\\ && wine /mnt/d/Chico/AppleRust/target/conformance-cache/oracle/applewin-1.32.1.0/app/AppleWin.exe -noreg -conf aw.ini -model apple2ee -no-printscreen-dlg -no-printscreen-key -no-hook-system-key -log -s6 empty -power-on '''
+invocation = '''./tools/conformance/oracle/run-applewin-wine.sh --name apple2ee-applesoft-prompt --model apple2ee --seconds 15 '''
