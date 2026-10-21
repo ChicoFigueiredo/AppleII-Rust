@@ -93,19 +93,19 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 |---|---:|---:|
 | UNVERIFIED | 524 | 47.0 |
 | NOT_APPLICABLE | 286 | 25.7 |
-| PASS | 205 | 18.4 |
+| PASS | 206 | 18.5 |
 | BLOCKED | 87 | 7.8 |
-| FAIL | 13 | 1.2 |
+| FAIL | 12 | 1.1 |
 
 ## Taxas
 
-Taxa geral: PASS 205 / aplicáveis 829 = 24.7%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 737 | 168 | 11 | 476 | 22.8% |
+| todos | 1004 | 737 | 169 | 10 | 476 | 22.9% |
 | apple2e | 59 | 51 | 30 | 1 | 16 | 58.8% |
 | apple2e-enhanced | 59 | 47 | 25 | 0 | 17 | 53.2% |
 | apple2plus | 29 | 27 | 11 | 2 | 14 | 40.7% |
@@ -135,7 +135,7 @@ Taxa geral: PASS 205 / aplicáveis 829 = 24.7%. Aplicável = estado diferente de
 | cpu | 55 | 44 | 19 | 0 | 20 | 43.2% |
 | teclado | 53 | 39 | 6 | 0 | 30 | 15.4% |
 | memoria | 48 | 44 | 17 | 2 | 19 | 38.6% |
-| mockingboard | 47 | 42 | 17 | 1 | 14 | 40.5% |
+| mockingboard | 47 | 42 | 18 | 0 | 14 | 42.9% |
 | joystick | 41 | 36 | 4 | 0 | 32 | 11.1% |
 | audio | 32 | 25 | 2 | 0 | 14 | 8.0% |
 | savestate | 32 | 29 | 9 | 1 | 17 | 31.0% |
@@ -153,7 +153,7 @@ Taxa geral: PASS 205 / aplicáveis 829 = 24.7%. Aplicável = estado diferente de
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 376 | 123 | 2 | 181 | 32.7% |
+| runtime | 388 | 376 | 124 | 1 | 181 | 33.0% |
 | feature-futura | 146 | 146 | 0 | 0 | 146 | 0.0% |
 | ui | 122 | 122 | 0 | 0 | 122 | 0.0% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |

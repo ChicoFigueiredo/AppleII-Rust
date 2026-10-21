@@ -76,7 +76,13 @@ fn every_shipped_case_passes_and_its_manifest_validates() {
             .is_some_and(|f| !env.workspace.join(&f.path).exists());
         let expected_fail =
             o.manifest.result == TestResult::Fail && c.oracle.known_divergence.is_some();
-        let expected_blocked = o.manifest.result == TestResult::Blocked && fixture_missing;
+        // Disk/HDD images and save-state disks from the corpus are third-party files outside the
+        // repository too: without the cache they are BLOCKED with that cause, not a failure.
+        let third_party_missing = o.manifest.actual.contains("fora do repositório")
+            || o.manifest.actual.contains("imagens ausentes")
+            || o.manifest.actual.contains("imagem de disco ausente");
+        let expected_blocked =
+            o.manifest.result == TestResult::Blocked && (fixture_missing || third_party_missing);
         assert!(
             o.manifest.result == TestResult::Pass || expected_fail || expected_blocked,
             "{}: {:?} {}",
