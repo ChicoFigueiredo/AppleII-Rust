@@ -189,3 +189,41 @@ _Avoid_: ponto de parada, trap
 **Open Apple / Closed Apple**:
 As teclas modificadoras do IIe, lidas como os botões 0 e 1 do joystick.
 _Avoid_: Command, Option
+
+## Conformidade
+
+**Critério de aceite**:
+Uma condição verificável de uma história (CA-01, CA-02…), avaliada separadamente para cada Modelo e configuração em que se aplica.
+_Avoid_: requisito, checklist
+
+**Estado de verificação**:
+O resultado de um Critério de aceite num Modelo e numa configuração: IMPLEMENTED (o código existe, sem prova), PASS (o teste executado concorda com o Oráculo), FAIL (discorda), UNVERIFIED (ainda não testado), NOT_APPLICABLE (não se aplica, com justificativa) ou BLOCKED (o teste não pôde ser executado, com a causa). IMPLEMENTED nunca equivale a PASS, e o resultado de um Modelo não vale para outro.
+_Avoid_: status, feito, OK, N/A sem justificativa
+
+**Oráculo**:
+A fonte do resultado esperado de um teste: o AppleWin no SHA congelado (padrão), a especificação de hardware, uma Fixture validada ou um resultado conhecido.
+_Avoid_: referência (sozinho), gabarito
+
+**Divergência intencional**:
+Um ponto em que o AppleII-Rust segue o hardware real em vez do AppleWin, aceito só com evidência de hardware e registrado na lista de limitações.
+_Avoid_: correção de bug do AppleWin, melhoria
+
+**Fixture**:
+Uma entrada de teste com proveniência documentada (save-state, Imagem de disco, sequência de teclas), identificada pelo hash SHA-256.
+_Avoid_: arquivo de teste, mock
+
+**Corpus de referência**:
+O conjunto de Fixtures reais geradas pelo próprio AppleWin (como as do AppleWin-Test), distinto das Fixtures escritas pela equipe a partir do código.
+_Avoid_: dados de teste
+
+**Trace de referência**:
+O registro, ciclo a ciclo ou instrução a instrução, de estado de CPU, memória e barramento produzido pelo Oráculo, com o qual a Máquina é comparada até a primeira diferença.
+_Avoid_: log, dump
+
+**Manifesto de execução**:
+O registro de uma execução de teste com tudo que a reproduz: história, critério, SHAs, hashes de Fixture e ROM, Modelo, cartas, sistema hospedeiro, comando, esperado, obtido e resultado.
+_Avoid_: relatório de teste
+
+**Gate**:
+Um patamar de prontidão (G0 inventário, G1 alpha, G2 beta, G3 stable candidata) que só é atingido quando todos os seus critérios objetivos estão em PASS.
+_Avoid_: milestone, fase
