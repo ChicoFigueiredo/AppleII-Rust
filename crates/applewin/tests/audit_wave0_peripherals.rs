@@ -31,7 +31,6 @@ fn src(file: &str) -> String {
 /// HU-0501. AppleWin tem um tipo de AY por soquete (`SetSocketAY891x`, Mockingboard.cpp:136-151;
 /// `-sN ay-socketN`). O Rust só leva o soquete 0 para a carta (`factory::sockets` descarta 1-3).
 #[test]
-#[ignore = "reproduz achado AUD-P-006"]
 fn aud_p_006_ay_type_of_each_socket_reaches_the_card() {
     let a = SoundSockets {
         ay: [AyChip::Ay8910; 4],
@@ -51,7 +50,6 @@ fn aud_p_006_ay_type_of_each_socket_reaches_the_card() {
 /// HU-0501. `-sN 6522a-bad` / `6522b-bad` (CmdLine.cpp:254-260 -> `SY6522::InitBadState`,
 /// 6522.cpp:355: o DDRB lido perde o bit 0). O flag é lido pela linha de comando e descartado.
 #[test]
-#[ignore = "reproduz achado AUD-P-007"]
 fn aud_p_007_bad_6522_flag_reaches_the_card() {
     let a = SoundSockets::default();
     let b = SoundSockets {

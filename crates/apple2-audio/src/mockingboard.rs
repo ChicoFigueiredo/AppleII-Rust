@@ -31,7 +31,12 @@ pub struct Sockets {
     pub ssi263: [SsiType; 2],
     /// Votrax SC-01 beside unit 0 (`kSC01_Default`).
     pub sc01: bool,
-    pub ay: AyType,
+    /// AY socket types as `SetSocketAY891x(socket, type)` (cpp:136-151): socket `s` is the AY
+    /// `s >> 1` of 6522 unit `s & 1`, so sockets 0 and 1 are the Mockingboard's two AYs (left
+    /// and right) and 2 and 3 are the Phasor's second AY of each unit.
+    pub ay: [AyType; 4],
+    /// `-sN 6522a-bad` / `6522b-bad` (`UseBad6522A/B`).
+    pub bad_6522: [bool; 2],
 }
 
 impl Default for Sockets {
@@ -39,7 +44,9 @@ impl Default for Sockets {
         Sockets {
             ssi263: [SsiType::Empty, SsiType::Ap],
             sc01: true,
-            ay: AyType::Ay3_8913,
+            // `AY8913::AY8913()` starts every AY as an AY-3-8913 (AY8910.cpp:127).
+            ay: [AyType::Ay3_8913; 4],
+            bad_6522: [false; 2],
         }
     }
 }
@@ -109,8 +116,13 @@ impl MockingboardCard {
                 Ssi263::new(SsiType::Empty, false)
             };
             let mut sub = Sub {
-                via: Via::new(mega),
-                ay: [Ay::new(sockets.ay), Ay::new(sockets.ay)],
+                via: {
+                    let mut v = Via::new(mega);
+                    v.bad = sockets.bad_6522[i];
+                    v
+                },
+                // AY socket `s` -> unit `s & 1`, AY `s >> 1` (SetSocketAY891x).
+                ay: [Ay::new(sockets.ay[i]), Ay::new(sockets.ay[i + 2])],
                 ssi,
                 cur_reg: [0; 2],
                 state: [AY_INACTIVE; 2],
@@ -163,6 +175,11 @@ impl MockingboardCard {
     /// Debug view of an AY's registers.
     pub fn ay_regs(&self, unit: usize, ay: usize) -> [u8; 16] {
         *self.subs[unit].ay[ay].regs()
+    }
+
+    /// Type of the AY in socket `socket` (0..=3, see [`Sockets::ay`]).
+    pub fn ay_type(&self, socket: usize) -> AyType {
+        self.subs[socket & 1].ay[socket >> 1].ty
     }
 
     fn is_phasor(&self) -> bool {

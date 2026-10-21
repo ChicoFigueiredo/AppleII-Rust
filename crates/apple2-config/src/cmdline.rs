@@ -909,6 +909,45 @@ mod tests {
         assert_eq!(s.slot(0), &SlotCardSpec::Saturn128K { banks: 4 });
     }
 
+    /// AUD-P-006 / AUD-P-007: all four AY sockets and the two "bad 6522" switches reach the spec
+    /// (CmdLine.cpp:254-297); an unknown chip name leaves the socket untouched (`AY_Unknown`).
+    /// `-sN` has no `phasor` name in AppleWin, so a MEGA Audio carries the same `SoundSockets`.
+    #[test]
+    fn four_ay_sockets_and_bad_6522() {
+        let (_, s) = run(&[
+            "-s4",
+            "megaaudio",
+            "-s4",
+            "ay-socket0=ay8910",
+            "-s4",
+            "ay-socket1=empty",
+            "-s4",
+            "ay-socket2=ay8912",
+            "-s4",
+            "ay-socket3=ym2149",
+            "-s4",
+            "6522b-bad",
+        ]);
+        let SlotCardSpec::MegaAudio(k) = s.slot(4) else {
+            panic!("not a MEGA Audio: {:?}", s.slot(4));
+        };
+        assert_eq!(
+            k.ay,
+            [
+                AyChip::Ay8910,
+                AyChip::Empty,
+                AyChip::Ay8912,
+                AyChip::Ym2149
+            ]
+        );
+        assert_eq!(k.bad_6522, [false, true]);
+        let (_, s) = run(&["-s4", "megaaudio", "-s4", "ay-socket2=nonsense"]);
+        let SlotCardSpec::MegaAudio(k) = s.slot(4) else {
+            panic!()
+        };
+        assert_eq!(k.ay, [AyChip::Ay8913; 4], "AY_Unknown is ignored");
+    }
+
     #[test]
     fn model_resets_slot0_unless_given() {
         let (_, s) = run(&["-model", "apple2"]);

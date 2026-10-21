@@ -72,6 +72,9 @@ pub struct Via {
     pub mega: bool,
     /// An AY8913 drives port A (`SetBusBeingDriven`).
     pub bus_driven: bool,
+    /// `m_bad6522` (`-sN 6522a-bad` / `6522b-bad`, `InitBadState`): a faulty chip whose DDRB reads
+    /// back with bit 0 clear (cpp:355). A hardware trait, so it survives `Reset`.
+    pub bad: bool,
 }
 
 /// A timer-event request produced by a register write.
@@ -110,6 +113,7 @@ impl Via {
             last: 0,
             mega,
             bus_driven: false,
+            bad: false,
         };
         v.reset(true, 0);
         v
@@ -142,6 +146,7 @@ impl Via {
                 last: now,
                 mega: self.mega,
                 bus_driven: false,
+                bad: self.bad,
             };
         }
         self.ddrb = 0;
@@ -264,7 +269,13 @@ impl Via {
                     self.ora | if self.bus_driven { 0 } else { self.ddra ^ 0xFF }
                 }
             }
-            reg::DDRB => self.ddrb,
+            reg::DDRB => {
+                if self.bad {
+                    self.ddrb & !1 // DDRB.b0 = 0 (for testing mb-audit, 6522.cpp:355)
+                } else {
+                    self.ddrb
+                }
+            }
             reg::DDRA => self.ddra,
             reg::T1CL => {
                 self.update_ifr(IXR_TIMER1, 0);
