@@ -1,0 +1,21 @@
+id = "video-issue-1386-ind-x-12-color-monitor"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-1386-ind-x-12 em color-monitor a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-monitor"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-1386-ind-x-12.scene"
+scene_sha256 = "d40be09705e0c6cebe9b7deb9f9fad60998a8b883c80b6c9c20e17a992a4a677"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "1f31aa7a36491bad647c9ebfbb13b0028e06f21bc36e3dcb6c47acedd112779f"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-1386-ind-x-12.scene --video-type 3 --video-hz 60 --rgb-card 0 => fb_sha256_full=1f31aa7a36491bad647c9ebfbb13b0028e06f21bc36e3dcb6c47acedd112779f (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

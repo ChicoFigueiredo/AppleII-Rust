@@ -1,0 +1,21 @@
+id = "video-issue-0636-ioudis-on-color-idealized"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0636-ioudis-on em color-idealized a 60 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-idealized"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0636-ioudis-on.scene"
+scene_sha256 = "1925d370150cf20d108c6b3eb3eca866c910837df0502c341a544cf6f39ecab0"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "f445943578073419d6426876b93a1a940d450610a291d0efab3713b4f3791aab"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0636-ioudis-on.scene --video-type 1 --video-hz 60 --rgb-card 0 => fb_sha256_full=f445943578073419d6426876b93a1a940d450610a291d0efab3713b4f3791aab (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

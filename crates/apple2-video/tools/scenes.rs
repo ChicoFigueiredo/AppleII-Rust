@@ -681,6 +681,214 @@ pub fn all() -> Vec<SceneDef> {
         ));
     }
 
+    // ---- Per-issue scenes (docs/conformance/results/video.csv) ----
+    // GH#82: PR#3 (80 columns) then POKE -16304/-16301/-16298/-16290: GR, MIXED, LORES, AN3.
+    // Row 0 is colour 1 (red) in both pages of the double lo-res screen.
+    {
+        let main = text_page(0x400, |r, _| if r == 0 { 0x11 } else { 0x33 });
+        let aux = text_page(0x400, |r, _| if r == 0 { 0x11 } else { 0x55 });
+        v.push(scene(
+            "issue-0082-dlores-red",
+            "apple2ee",
+            "GH#82: double lo-res red line on row 0 with 4 inverse text lines below (PR#3, POKE -16304/-16301/-16298/-16290)",
+            main,
+            aux,
+            static_code(&[COL80_ON, GR, MIXED, LORES, AN3_ON]),
+        ));
+    }
+    // GH#241: DLORES -> TEXT80 -> DLORES on every scan line while the floating bus is sampled
+    // (LDA $C0A0, an empty slot) and stored in text page 2, one byte per line.
+    {
+        let mut a = Asm::default();
+        a.set(&[COL80_ON, AN3_ON, GR, FULL, LORES, PAGE2]);
+        a.bytes.extend([0xA0, 0x00]); // LDY #0
+        let top = a.here();
+        a.bytes.extend([0xAD, 0xA0, 0xC0]); // LDA $C0A0   4
+        a.bytes.extend([0x99, 0x00, 0x08]); // STA $0800,Y 5
+        a.bytes.push(0xC8); // INY         2
+        a.sta(TEXT).sta(GR); // 8 : TEXT80 for a few cycles, then DLORES again
+        a.bytes.extend([0x24, 0x24]); // BIT $24     3
+        a.nops(20); // 40
+        a.jmp(top); // 3 => 65
+        let main = text_page(0x400, |r, c| ((r * 3 + c) & 0xFF) as u8);
+        let aux = text_page(0x400, |r, c| ((r * 5 + c * 7) & 0xFF) as u8);
+        let mut m = main;
+        m.extend(text_page(0x800, |r, c| ((r + c * 9) & 0xFF) as u8));
+        v.push(scene(
+            "issue-0241-floatbus-dlores-text80",
+            "apple2ee",
+            "GH#241: DLORES/TEXT80 split on every line while sampling the floating bus into text page 2",
+            m,
+            aux,
+            a,
+        ));
+    }
+    // GH#516: AUXMOVE ($C311, main -> aux) with a double lo-res screen on display.
+    {
+        let mut a = Asm::default();
+        a.set(&[COL80_ON, AN3_ON, GR, FULL, LORES]);
+        for (zp, val) in [
+            (0x3C, 0x00),
+            (0x3D, 0x04),
+            (0x3E, 0xFF),
+            (0x3F, 0x07),
+            (0x42, 0x00),
+            (0x43, 0x04),
+        ] {
+            a.bytes.extend([0xA9, val, 0x85, zp]); // LDA #val; STA zp
+        }
+        a.bytes.push(0x38); // SEC (main -> aux)
+        a.bytes.extend([0x20, 0x11, 0xC3]); // JSR AUXMOVE
+        a.halt();
+        v.push(scene(
+            "issue-0516-auxmove-dlores",
+            "apple2ee",
+            "GH#516: ROM AUXMOVE of $0400-$07FF main -> aux while DLORES is displayed",
+            flatten(vec![
+                text_page(0x400, |r, c| ((r * 7 + c * 3) & 0xFF) as u8),
+                text_page(0x800, |r, c| ((r * 5 + c * 11 + 1) & 0xFF) as u8),
+            ]),
+            text_page(0x400, |r, c| ((r * 13 + c * 5 + 3) & 0xFF) as u8),
+            a,
+        ));
+    }
+    // GH#636: Enhanced //e IOUDIS/DHIRES switches ($C07E/$C07F). The reads show the switch state
+    // in the mixed-mode text window.
+    for (name, first, second) in [
+        ("issue-0636-ioudis-on", 0xC07Eu16, AN3_ON),
+        ("issue-0636-ioudis-off", 0xC07F, AN3_OFF),
+    ] {
+        let mut a = Asm::default();
+        a.set(&[GR, MIXED, HIRES, COL80_ON, first, second]);
+        a.bytes.extend([0xAD, 0x7E, 0xC0, 0x8D, 0x50, 0x06]); // LDA $C07E; STA $0650
+        a.bytes.extend([0xAD, 0x7F, 0xC0, 0x8D, 0x51, 0x06]); // LDA $C07F; STA $0651
+        a.set(&[AN3_OFF, AN3_ON]);
+        a.halt();
+        v.push(scene(
+            name,
+            "apple2ee",
+            "GH#636: IOUDIS written, AN3/DHIRES accessed, then the switches read back into text row 20",
+            flatten(vec![hgr_page(0x2000, bars), t40.clone()]),
+            flatten(vec![hgr_page(0x2000, |y, c| (y * 3 + c) as u8), aux_t.clone()]),
+            a,
+        ));
+    }
+    // GH#850/#828: RGB card mode sequences. Mode k = two AN3 toggles with 80COL (first, second).
+    {
+        let modes = [
+            (COL80_ON, COL80_ON),
+            (COL80_ON, COL80_OFF),
+            (COL80_OFF, COL80_ON),
+            (COL80_OFF, COL80_OFF),
+        ];
+        let seqs: [(&str, &[usize]); 4] = [
+            ("issue-0850-rgb-seq-1-0", &[1, 0]),
+            ("issue-0850-rgb-seq-0-1", &[0, 1]),
+            ("issue-0850-rgb-seq-3-1-2", &[3, 1, 2]),
+            ("issue-0850-rgb-seq-1-3-2-0", &[1, 3, 2, 0]),
+        ];
+        for (name, seq) in seqs {
+            let mut a = Asm::default();
+            for &k in seq {
+                let (f, s) = modes[k];
+                a.set(&[
+                    GR, FULL, HIRES, f, AN3_ON, AN3_OFF, s, AN3_ON, AN3_OFF, COL80_ON, AN3_ON,
+                ]);
+                a.delay_loop(255).delay_loop(255).delay_loop(255);
+                a.delay_loop(255).delay_loop(255).delay_loop(255);
+            }
+            a.halt();
+            v.push(scene(
+                name,
+                "apple2ee",
+                "GH#850: RGB card (Video-7) mode sequence, each mode held for ~1 frame, ending in the last mode",
+                flatten(vec![dhgr_main_noise.clone(), t40.clone()]),
+                dhgr_aux.clone(),
+                a,
+            ));
+        }
+        // GH#828: HIRES + AN3 toggled several times; colour must come back when AN3 returns.
+        let mut a = Asm::default();
+        a.set(&[GR, FULL, HIRES, COL80_OFF, AN3_ON]);
+        a.delay_loop(255).delay_loop(255).delay_loop(255);
+        a.delay_loop(255).delay_loop(255).delay_loop(255);
+        a.set(&[AN3_OFF]);
+        a.delay_loop(255).delay_loop(255).delay_loop(255);
+        a.delay_loop(255).delay_loop(255).delay_loop(255);
+        a.set(&[AN3_ON, AN3_OFF, AN3_ON, AN3_OFF]);
+        a.halt();
+        v.push(scene(
+            "issue-0828-hires-an3",
+            "apple2ee",
+            "GH#828: single hi-res with AN3 toggled; ends with AN3 off after several toggles",
+            hgr_noise.clone(),
+            vec![],
+            a,
+        ));
+    }
+    // GH#851/#1018/#1435: Video-7 SL7 extra modes (DHIRES switch on with 40-column modes: the aux
+    // text page carries the foreground/background colours) and the power-on 140/160/560 state.
+    {
+        let fb_aux = text_page(0x400, |r, c| {
+            (((r * 5 + c) % 15 + 1) as u8) << 4 | ((r + c * 3) % 16) as u8
+        });
+        v.push(scene(
+            "issue-1018-rgb-fb-text40",
+            "apple2ee",
+            "GH#1018/#851: 40-column text with DHIRES on (AN3 off): coloured F/B text on a Video-7 card",
+            t40.clone(),
+            fb_aux.clone(),
+            static_code(&[TEXT, AN3_ON]),
+        ));
+        v.push(scene(
+            "issue-0851-rgb-fb-lores-mixed",
+            "apple2ee",
+            "GH#851: lo-res mixed with F/B text window (SL7: AN3 off, 80COL off)",
+            lores_all.clone(),
+            fb_aux.clone(),
+            static_code(&[GR, MIXED, LORES, AN3_ON]),
+        ));
+        v.push(scene(
+            "issue-0851-rgb-fb-hires-mixed",
+            "apple2ee",
+            "GH#851: hi-res mixed with F/B text window (SL7: AN3 off, 80COL off)",
+            hgr_noise.clone(),
+            fb_aux.clone(),
+            static_code(&[GR, MIXED, HIRES, AN3_ON]),
+        ));
+        v.push(scene(
+            "issue-1435-rgb-default-dhires",
+            "apple2ee",
+            "GH#1435: double hi-res entered from power-on without latching a card mode",
+            flatten(vec![dhgr_main_noise.clone(), t40.clone()]),
+            dhgr_aux.clone(),
+            static_code(&[GR, FULL, HIRES, COL80_ON, AN3_ON]),
+        ));
+    }
+    // GH#1386: TXTCLR/TXTSET through `LDA ($02,X)` (X=0) at a fixed position of every line.
+    for (n, m) in [(5usize, 20usize), (12, 13)] {
+        let mut a = Asm::default();
+        a.set(&[GR, FULL, HIRES]);
+        a.bytes.extend([0xA2, 0x00]); // LDX #0
+        let top = a.here();
+        a.bytes.extend([0xA1, 0x02]); // LDA ($02,X)  -> $C050 (GR)   6
+        a.nops(n);
+        a.bytes.extend([0xA1, 0x04]); // LDA ($04,X)  -> $C051 (TEXT) 6
+        a.nops(m);
+        a.jmp(top); // 3 ; 15 + 2(n+m) = 65
+        v.push(scene(
+            &format!("issue-1386-ind-x-{n}"),
+            "apple2ee",
+            "GH#1386: GR/TEXT switched by LDA ($02,X) and LDA ($04,X) with X=0, every 65-cycle line",
+            flatten(vec![
+                vec![(0x0002, vec![0x50, 0xC0, 0x51, 0xC0])],
+                hgr_noise.clone(),
+            ]),
+            vec![],
+            a,
+        ));
+    }
+
     // ---- Super Hi-Res (VidHD, HU-0202) ----
     v.push(shr_scene(
         "shr-320-noise",

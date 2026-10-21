@@ -1,0 +1,21 @@
+id = "video-issue-0828-hires-an3-color-rgb"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0828-hires-an3 em color-rgb a 60 Hz com a carta video7-sl7, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-rgb"
+hz = 60
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0828-hires-an3.scene"
+scene_sha256 = "01931d9ec85e2354e47f164ef3c4d9f106424ddf28df49fdae82b8ceeb209a76"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "6da001f256345af454a910c3779a8a30268a8ddeefb6858d8e2e197e90ac8212"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0828-hires-an3.scene --video-type 2 --video-hz 60 --rgb-card 0 => fb_sha256_full=6da001f256345af454a910c3779a8a30268a8ddeefb6858d8e2e197e90ac8212 (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"

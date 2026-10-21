@@ -1,0 +1,21 @@
+id = "video-issue-0516-auxmove-dlores-color-monitor-pal"
+story = "HU-0201"
+criterion = "O framebuffer (600x420, bordas incluídas) da cena issue-0516-auxmove-dlores em color-monitor a 50 Hz, após 4 quadros, é idêntico bit a bit ao do AppleWin"
+model = "apple2e-enhanced"
+
+[run]
+frames = 4
+
+[video]
+type = "color-monitor"
+hz = 50
+rgb_card = "video7-sl7"
+region = "full"
+scene = "inputs/video/issue-0516-auxmove-dlores.scene"
+scene_sha256 = "40b30dd6f39b7133fb7d9785ceedac8bd64132697c2540be197924ab5007c7a7"
+
+[oracle]
+kind = "framebuffer-hash"
+authority = "applewin"
+sha256 = "1c056fc83dcaa89d132896d0287528f54babcd34cdbd3a7318c9753ddabb3b0b"
+source = "audetto-oracle --model apple2ee --frames 4 --out /dev/null --cards none --fb-out OUT --scene tests/conformance/inputs/video/issue-0516-auxmove-dlores.scene --video-type 3 --video-hz 50 --rgb-card 0 => fb_sha256_full=1c056fc83dcaa89d132896d0287528f54babcd34cdbd3a7318c9753ddabb3b0b (fork audetto a1e20c0, AppleWin 3e8054b, compilado com -fno-strict-aliasing; regenerar: tools/conformance/oracle/video-differential.py --write-cases)"
