@@ -97,39 +97,16 @@ impl HostLists {
     }
 }
 
+/// Serial ports for the SSC drop-down: the `serialport` crate's list (when built in) plus the
+/// per-OS heuristic scan, see `apple2_hostio::serial::list_serial_ports` (AUD-P-031).
 fn scan_serial_ports() -> Vec<String> {
-    if cfg!(windows) {
-        return (1..=9).map(|n| format!("COM{n}")).collect();
-    }
-    let mut v: Vec<String> = std::fs::read_dir("/dev")
-        .map(|d| {
-            d.filter_map(|e| e.ok())
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|n| {
-                    n.starts_with("ttyUSB")
-                        || n.starts_with("ttyACM")
-                        || n.starts_with("cu.")
-                        || n.starts_with("tty.usb")
-                })
-                .map(|n| format!("/dev/{n}"))
-                .collect()
-        })
-        .unwrap_or_default();
-    v.sort();
-    v
+    apple2_hostio::serial::list_serial_ports()
 }
 
+/// Interfaces for the Uthernet drop-down with their description: libpcap/Npcap's with the `pcap`
+/// feature, else the OS's own list, see `apple2_hostio::interfaces::list_interfaces` (AUD-P-032).
 fn scan_interfaces() -> Vec<(String, String)> {
-    let mut v: Vec<(String, String)> = std::fs::read_dir("/sys/class/net")
-        .map(|d| {
-            d.filter_map(|e| e.ok())
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .map(|n| (n, String::new()))
-                .collect()
-        })
-        .unwrap_or_default();
-    v.sort();
-    v
+    apple2_hostio::interfaces::list_interfaces()
 }
 
 pub struct SettingsDialog {

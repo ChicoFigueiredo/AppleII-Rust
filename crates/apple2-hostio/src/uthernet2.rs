@@ -755,6 +755,12 @@ impl Uthernet2 {
         let port = self.reg_word(i, SN_PORT0);
         if let Ok(l) = TcpListener::bind(("0.0.0.0", port)) {
             if l.set_nonblocking(true).is_ok() {
+                // Port 0 lets the host pick; the chosen port is written back to `Sn_PORT` so
+                // the program (and the tests, which never use fixed ports) can find it.
+                if let Ok(a) = l.local_addr() {
+                    self.set_reg(i, SN_PORT0, (a.port() >> 8) as u8);
+                    self.set_reg(i, SN_PORT0 + 1, a.port() as u8);
+                }
                 self.sockets[i].host = HostSocket::Listener(l);
                 self.sockets[i].set_status(SR_LISTEN);
             }
