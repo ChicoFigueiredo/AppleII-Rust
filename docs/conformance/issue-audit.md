@@ -91,31 +91,31 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| NOT_APPLICABLE | 364 | 32.6 |
-| UNVERIFIED | 318 | 28.5 |
-| PASS | 297 | 26.6 |
-| BLOCKED | 122 | 10.9 |
+| NOT_APPLICABLE | 391 | 35.1 |
+| PASS | 327 | 29.3 |
+| UNVERIFIED | 257 | 23.0 |
+| BLOCKED | 126 | 11.3 |
 | FAIL | 14 | 1.3 |
 
 ## Taxas
 
-Taxa geral: PASS 297 / aplicáveis 751 = 39.5%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 327 / aplicáveis 724 = 45.2%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 659 | 257 | 12 | 274 | 39.0% |
-| apple2e | 59 | 51 | 30 | 1 | 15 | 58.8% |
-| apple2e-enhanced | 59 | 47 | 25 | 0 | 17 | 53.2% |
-| apple2plus | 29 | 27 | 13 | 2 | 12 | 48.1% |
-| apple2 | 26 | 24 | 12 | 2 | 10 | 50.0% |
-| apple2jplus | 11 | 9 | 5 | 0 | 4 | 55.6% |
-| pravets82 | 7 | 7 | 3 | 0 | 4 | 42.9% |
-| pravets8m | 7 | 7 | 3 | 0 | 4 | 42.9% |
-| apple2c | 6 | 4 | 1 | 0 | 3 | 25.0% |
+| todos | 1004 | 637 | 278 | 12 | 227 | 43.6% |
+| apple2e | 59 | 50 | 35 | 1 | 9 | 70.0% |
+| apple2e-enhanced | 59 | 45 | 29 | 0 | 11 | 64.4% |
+| apple2plus | 29 | 25 | 14 | 2 | 9 | 56.0% |
+| apple2 | 26 | 22 | 13 | 2 | 7 | 59.1% |
+| apple2jplus | 11 | 9 | 6 | 0 | 3 | 66.7% |
+| pravets82 | 7 | 6 | 3 | 0 | 3 | 50.0% |
+| pravets8m | 7 | 6 | 4 | 0 | 2 | 66.7% |
+| apple2c | 6 | 4 | 2 | 0 | 2 | 50.0% |
 | base64a | 3 | 3 | 0 | 0 | 3 | 0.0% |
-| pravets8a | 2 | 2 | 1 | 0 | 1 | 50.0% |
+| pravets8a | 2 | 1 | 1 | 0 | 0 | 100.0% |
 | apple2e-platinum | 1 | 1 | 0 | 0 | 1 | 0.0% |
 | apple3 | 1 | 1 | 0 | 0 | 1 | 0.0% |
 | laser128 | 1 | 1 | 0 | 0 | 1 | 0.0% |
@@ -127,7 +127,7 @@ Taxa geral: PASS 297 / aplicáveis 751 = 39.5%. Aplicável = estado diferente de
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
 | disco | 159 | 111 | 57 | 0 | 0 | 51.4% |
-| video | 137 | 101 | 28 | 1 | 60 | 27.7% |
+| video | 137 | 75 | 58 | 1 | 0 | 77.3% |
 | debugger | 136 | 86 | 72 | 9 | 0 | 83.7% |
 | outra | 120 | 35 | 1 | 0 | 33 | 2.9% |
 | ui | 83 | 49 | 0 | 0 | 49 | 0.0% |
@@ -147,20 +147,20 @@ Taxa geral: PASS 297 / aplicáveis 751 = 39.5%. Aplicável = estado diferente de
 | ssi263 | 10 | 6 | 4 | 0 | 0 | 66.7% |
 | impressora | 9 | 4 | 4 | 0 | 0 | 100.0% |
 | z80 | 8 | 7 | 1 | 0 | 6 | 14.3% |
-| vidhd | 1 | 1 | 0 | 0 | 1 | 0.0% |
+| vidhd | 1 | 0 | 0 | 0 | 0 | n/a |
 
 ### Por aplicabilidade
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 363 | 172 | 2 | 102 | 47.4% |
-| feature-futura | 146 | 101 | 19 | 0 | 81 | 18.8% |
-| ui | 122 | 116 | 3 | 1 | 102 | 2.6% |
+| runtime | 388 | 356 | 189 | 2 | 77 | 53.1% |
+| feature-futura | 146 | 86 | 23 | 0 | 62 | 26.7% |
+| ui | 122 | 112 | 12 | 1 | 86 | 10.7% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
 | formato | 77 | 76 | 40 | 1 | 17 | 52.6% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
-| documentacao | 30 | 17 | 1 | 0 | 16 | 5.9% |
+| documentacao | 30 | 16 | 1 | 0 | 15 | 6.2% |
 | duplicada | 28 | 0 | 0 | 0 | 0 | n/a |
 | invalida | 26 | 0 | 0 | 0 | 0 | n/a |
