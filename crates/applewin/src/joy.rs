@@ -398,7 +398,123 @@ pub struct PadState {
     pub rx: f32,
     pub ry: f32,
     pub buttons: [bool; 2],
+    /// Every button in SNES MAX layout ([`apple2_cards::snesmax::buttons`]): South = B, West = Y,
+    /// East = A, North = X, shoulders = L/R, Select, Start, and the D-pad (the default mapping of
+    /// SNESMAX.cpp `m_mainControllerButtons` for a DualShock/DualSense).
+    pub snes: u32,
 }
+
+/// Analog threshold of SNESMAX.cpp / FourPlay.cpp: the 8-bit axis below 103 or above 153.
+fn axis_dir(v: f32) -> (bool, bool) {
+    let a = ((v.clamp(-1.0, 1.0) + 1.0) * 0.5 * 255.0) as u32;
+    (a < 103, a > 153)
+}
+
+impl PadState {
+    /// A host axis event (`-1..=1`, positive Y is up on gilrs: flipped to "down").
+    pub fn axis(&mut self, axis: gilrs::Axis, v: f32) {
+        match axis {
+            gilrs::Axis::LeftStickX => self.lx = v,
+            gilrs::Axis::LeftStickY => self.ly = -v,
+            gilrs::Axis::RightStickX => self.rx = v,
+            gilrs::Axis::RightStickY => self.ry = -v,
+            _ => {}
+        }
+    }
+
+    /// A host button event: joystick buttons, D-pad and the SNES MAX layout.
+    pub fn button(&mut self, b: gilrs::Button, down: bool) {
+        use apple2_cards::snesmax::buttons as s;
+        use gilrs::Button;
+        let bit = match b {
+            Button::South => s::B,
+            Button::West => s::Y,
+            Button::East => s::A,
+            Button::North => s::X,
+            Button::LeftTrigger => s::L,
+            Button::RightTrigger => s::R,
+            Button::Select => s::SELECT,
+            Button::Start => s::START,
+            Button::DPadUp => s::UP,
+            Button::DPadDown => s::DOWN,
+            Button::DPadLeft => s::LEFT,
+            Button::DPadRight => s::RIGHT,
+            _ => 0,
+        };
+        if down {
+            self.snes |= bit;
+        } else {
+            self.snes &= !bit;
+        }
+        match b {
+            Button::South | Button::West => self.buttons[0] = down,
+            Button::East | Button::North => self.buttons[1] = down,
+            Button::DPadLeft => self.lx = if down { -1.0 } else { 0.0 },
+            Button::DPadRight => self.lx = if down { 1.0 } else { 0.0 },
+            Button::DPadUp => self.ly = if down { -1.0 } else { 0.0 },
+            Button::DPadDown => self.ly = if down { 1.0 } else { 0.0 },
+            _ => {}
+        }
+    }
+
+    /// Direction bits (SNES layout) from the left stick and the D-pad (`GetControllerButtons`).
+    fn dirs(&self) -> u32 {
+        use apple2_cards::snesmax::buttons as b;
+        let (l, r) = axis_dir(self.lx);
+        let (u, d) = axis_dir(self.ly);
+        let mut m = self.snes & (b::UP | b::DOWN | b::LEFT | b::RIGHT);
+        if u {
+            m |= b::UP;
+        }
+        if d {
+            m |= b::DOWN;
+        }
+        if l {
+            m |= b::LEFT;
+        }
+        if r {
+            m |= b::RIGHT;
+        }
+        m
+    }
+
+    /// The SNES MAX controller mask for this pad.
+    pub fn snes_mask(&self) -> u32 {
+        use apple2_cards::snesmax::buttons as b;
+        let dir_bits = b::UP | b::DOWN | b::LEFT | b::RIGHT;
+        (self.snes & !dir_bits) | self.dirs()
+    }
+
+    /// The 4Play stick for this pad (`FourPlayCard::IORead`, ports 1-2): directions as above,
+    /// trigger 1 = the South button, trigger 2 = the East button.
+    pub fn four_play_stick(&self) -> apple2_cards::fourplay::Stick {
+        use apple2_cards::snesmax::buttons as b;
+        let m = self.snes_mask();
+        apple2_cards::fourplay::Stick {
+            up: m & b::UP != 0,
+            down: m & b::DOWN != 0,
+            left: m & b::LEFT != 0,
+            right: m & b::RIGHT != 0,
+            trigger1: m & b::B != 0,
+            trigger2: m & b::A != 0,
+        }
+    }
+}
+
+/// What the SNES MAX and 4Play cards must see (host pads and keys, not the game port).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HostPads {
+    /// SNES MAX controllers 1 and 2 (host gamepads 1 and 2): button masks, `None` = not plugged.
+    pub snes: [Option<u32>; 2],
+    /// 4Play ports 1-4: gamepads 1 and 2, then the E/S/D/F + Z/X and I/J/K/L + N/M keys.
+    pub sticks: [apple2_cards::fourplay::Stick; 4],
+}
+
+/// 4Play keys for ports 3 and 4 (FourPlay.cpp:105-120): up, down, left, right, trigger 1, trigger 2.
+const FOUR_PLAY_KEYS: [[char; 6]; 2] = [
+    ['e', 'd', 's', 'f', 'z', 'x'],
+    ['i', 'k', 'j', 'l', 'n', 'm'],
+];
 
 /// What the machine must see, from [`JoySystem::output`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -406,6 +522,10 @@ pub struct JoyFinal {
     /// `out[0]`: paddles 0-1 with PB0/PB1; `out[1]`: paddles 2-3 with PB2 in `buttons[0]`.
     pub out: [JoyOutput; 2],
     pub attached: [bool; 2],
+    /// "SHIFT key mod" (Joystick.cpp:648-653): with no joystick 1, the level PB2 reads
+    /// (`!Shift`). `None`: PB2 simply floats high. Joystick 1 stays "not attached", so the
+    /// paddle 2/3 timers remain "always active" (AUD-P-027).
+    pub pb2_shift: Option<bool>,
 }
 
 /// A physical key acting as a game-port button (Open/Closed Apple, or Control with `-*-alt-control-buttons`).
@@ -435,6 +555,8 @@ pub struct JoySystem {
     mouse_buttons: [bool; 3],
     shift: bool,
     autofire: Autofire,
+    /// Bit `port * 6 + n` of [`FOUR_PLAY_KEYS`] held (the keys are not consumed).
+    four_play_keys: u16,
 }
 
 impl JoySystem {
@@ -450,6 +572,7 @@ impl JoySystem {
             mouse_pos: (CENTRE, CENTRE),
             mouse_buttons: [false; 3],
             shift: false,
+            four_play_keys: 0,
         };
         s.rebuild_keyboards();
         s
@@ -508,6 +631,19 @@ impl JoySystem {
     /// Feeds a key transition. True if the key belongs to the game port and must not reach the
     /// Apple keyboard (cursor keys may still be shown to it, see [`KeyUse`]).
     pub fn process_key(&mut self, input: KeyInput, pressed: bool, repeat: bool) -> KeyUse {
+        if let (HostKey::Char(c), false) = (input.key, input.numpad) {
+            let c = c.to_ascii_lowercase();
+            for (port, keys) in FOUR_PLAY_KEYS.iter().enumerate() {
+                if let Some(n) = keys.iter().position(|k| *k == c) {
+                    let bit = 1u16 << (port * 6 + n);
+                    self.four_play_keys = if pressed {
+                        self.four_play_keys | bit
+                    } else {
+                        self.four_play_keys & !bit
+                    };
+                }
+            }
+        }
         // Alt keys can be switched off (`-no-hook-alt`, GH#583).
         if !self.cfg.hook_alt_keys && matches!(input.key, HostKey::AltLeft | HostKey::AltRight) {
             return KeyUse::Ignored;
@@ -547,6 +683,33 @@ impl JoySystem {
         self.apple = [false; 2];
         self.mouse_buttons = [false; 3];
         self.shift = false;
+        self.four_play_keys = 0;
+    }
+
+    /// The state of the SNES MAX and 4Play cards' inputs (AppleWin polls host joysticks 1 and 2
+    /// and, for 4Play ports 3-4, the keyboard).
+    pub fn host_pads(&self) -> HostPads {
+        let plugged = |n: usize| n < self.pads_connected && !self.cfg.disabled_pads[n];
+        let key = |bit: usize| self.four_play_keys & (1 << bit) != 0;
+        let key_stick = |port: usize| apple2_cards::fourplay::Stick {
+            up: key(port * 6),
+            down: key(port * 6 + 1),
+            left: key(port * 6 + 2),
+            right: key(port * 6 + 3),
+            trigger1: key(port * 6 + 4),
+            trigger2: key(port * 6 + 5),
+        };
+        let pad_stick = |n: usize| {
+            if plugged(n) {
+                self.pads[n].four_play_stick()
+            } else {
+                Default::default()
+            }
+        };
+        HostPads {
+            snes: [0, 1].map(|n| plugged(n).then(|| self.pads[n].snes_mask())),
+            sticks: [pad_stick(0), pad_stick(1), key_stick(0), key_stick(1)],
+        }
     }
 
     pub fn set_mouse_position(&mut self, x: u8, y: u8) {
@@ -637,13 +800,11 @@ impl JoySystem {
             (af[0], af[1])
         };
 
-        let mut attached = [kinds[0] != JoyMode::Disabled, joy1_present];
-        // "SHIFT key mod": PB2 floats high unless Shift pulls it low. Only without joystick 1.
-        let mut pb2 = af[2];
-        if !joy1_present && self.cfg.shift_key_mod {
-            attached[1] = true;
-            pb2 = !self.shift;
-        }
+        let attached = [kinds[0] != JoyMode::Disabled, joy1_present];
+        // "SHIFT key mod": PB2 floats high unless Shift pulls it low. Only without joystick 1;
+        // it does not make joystick 1 "present" (the paddle timers stay always active).
+        let pb2 = af[2];
+        let pb2_shift = (!joy1_present && self.cfg.shift_key_mod).then_some(!self.shift);
 
         let (x0, y0) = self.stick(0, kinds[0]);
         let (x1, y1) = self.stick(1, kinds[1]);
@@ -661,6 +822,7 @@ impl JoySystem {
                 },
             ],
             attached,
+            pb2_shift,
         }
     }
 
@@ -932,6 +1094,7 @@ mod tests {
             rx: 1.0,
             ry: 0.0,
             buttons: [false, true],
+            ..Default::default()
         };
         let f = s.output(0);
         assert_eq!(f.out[0].x, 0);
@@ -978,12 +1141,14 @@ mod tests {
     fn shift_key_mod_drives_pb2_when_joystick_one_is_absent() {
         let mut s = sys(|c| c.joystick.shift_key_mod = true);
         let f = s.output(0);
-        assert!(f.attached[1] && f.out[1].buttons[0], "PB2 floats high");
+        assert!(!f.attached[1], "joystick 1 stays absent (AUD-P-027)");
+        assert_eq!(f.pb2_shift, Some(true), "PB2 floats high");
         s.set_shift(true);
-        assert!(!s.output(0).out[1].buttons[0], "Shift pulls it low");
+        assert_eq!(s.output(0).pb2_shift, Some(false), "Shift pulls it low");
         // Without the mod joystick 1 stays unattached (the machine floats PB2 itself).
         let mut n = sys(|_| {});
         assert!(!n.output(0).attached[1]);
+        assert_eq!(n.output(0).pb2_shift, None);
     }
 
     #[test]

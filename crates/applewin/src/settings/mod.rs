@@ -120,6 +120,8 @@ pub struct SettingsDialog {
     confirm: Option<Confirm>,
     errors: Vec<String>,
     hosts: Option<HostLists>,
+    /// Result of the last "Import AppleWin settings...".
+    import_note: String,
 }
 
 impl SettingsDialog {
@@ -134,6 +136,7 @@ impl SettingsDialog {
             confirm: None,
             errors: Vec::new(),
             hosts: None,
+            import_note: String::new(),
         }
     }
 
@@ -153,6 +156,7 @@ impl SettingsDialog {
         self.sub = None;
         self.confirm = None;
         self.errors.clear();
+        self.import_note.clear();
         self.open = true;
     }
 

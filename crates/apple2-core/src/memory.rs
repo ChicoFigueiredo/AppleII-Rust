@@ -367,6 +367,18 @@ impl Memory {
         self.main[addr as usize] = value;
     }
 
+    /// Language Card RAM, bank 1, at `$D000-$DFFF`, ignoring paging (AppleWin
+    /// `MemGetMainPtrWithLC(0xC000 + n)`, "LC1 $Dnnn"). 0 outside that range.
+    pub fn peek_lc_bank1(&self, addr: u16) -> u8 {
+        if !(0xD000..0xE000).contains(&addr) {
+            return 0;
+        }
+        self.lc
+            .get(self.lc_region * LC_SIZE + usize::from(addr - 0xD000))
+            .copied()
+            .unwrap_or(0)
+    }
+
     /// Aux RAM of the current bank, ignoring paging (0 / discarded for an empty slot).
     pub fn peek_aux(&self, addr: u16) -> u8 {
         if !self.is_e && !self.vidhd_aux.is_empty() {

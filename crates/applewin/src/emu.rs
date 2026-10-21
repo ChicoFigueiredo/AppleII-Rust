@@ -5,7 +5,7 @@
 use crate::audio::AudioRing;
 use crate::backend::{Backend, BackendFactory, DiskSink, DriveStatus, MouseSink};
 use crate::debug_view::render_grid;
-use crate::joy::JoyOutput;
+use crate::joy::{HostPads, JoyOutput};
 use crate::keymap::{DebugKey, KeyEvent};
 use crate::pacing::{audio_frames_due, Speed, TimerPacer};
 use crate::video::{Frame, FrameSource};
@@ -36,6 +36,10 @@ pub enum Command {
         index: usize,
         attached: bool,
     },
+    /// Host controls of the SNES MAX and 4Play cards (every such card in any slot gets them).
+    HostPads(HostPads),
+    /// "SHIFT key mod": PB2 level with no joystick 1 (`None`: floats high).
+    JoyPb2Shift(Option<bool>),
     Paste(String),
     /// Ctrl+Print Screen: publish the text screen for the clipboard ([`EmuStatus::copied_text`]).
     CopyScreenText,
@@ -64,6 +68,22 @@ pub enum Command {
     InsertDisk {
         drive: usize,
         path: PathBuf,
+        /// "Open as Read Only": mounts write-protected whatever the file's attributes.
+        read_only: bool,
+    },
+    /// A disk file dropped on the window: inserted in `drive`, then the machine reboots if
+    /// `reboot` and the disk was accepted (WinFrame.cpp `WM_DROPFILES`).
+    DropDisk {
+        drive: usize,
+        path: PathBuf,
+        reboot: bool,
+    },
+    /// Hot-plugs (or, with `None`, unplugs) a hard disk image into unit `unit` of the controller
+    /// in `slot`; the machine keeps running (AppleWin `HarddiskInterfaceCard::Insert`).
+    SetHdd {
+        slot: u8,
+        unit: usize,
+        image: Option<PathBuf>,
     },
     EjectDisk {
         drive: usize,
@@ -98,6 +118,8 @@ pub struct EmuStatus {
     /// Measured emulated clock in MHz (about 1.02 at 1.0x).
     pub mhz: f32,
     pub drives: [DriveStatus; 2],
+    /// Sector each drive was last seen working on (`None`: "S??").
+    pub sectors: [Option<u8>; 2],
     pub model: String,
     pub video: String,
     pub underruns: u64,
@@ -245,6 +267,10 @@ pub struct Emulator {
     mhz: f32,
     underruns: u64,
     rom_report: Vec<apple2_config::roms::RomInfo>,
+    /// Last host controls given to the SNES MAX / 4Play cards (given again after a rebuild).
+    host_pads: HostPads,
+    /// Sector monitor: per drive, kept while the other drive is selected (`g_nSector`).
+    sectors: [Option<u8>; 2],
 }
 
 /// Writes the ROMs in use to the start-up log (stderr) and returns them.
@@ -304,6 +330,8 @@ impl Emulator {
             mhz: 0.0,
             underruns: 0,
             rom_report,
+            host_pads: HostPads::default(),
+            sectors: [None; 2],
         };
         if !rom_warnings.is_empty() {
             emu.say(rom_warnings.join("; "));
@@ -314,6 +342,22 @@ impl Emulator {
     /// The ROMs in use (embedded or file, size, SHA-256), for the conformance manifest.
     pub fn rom_report(&self) -> &[apple2_config::roms::RomInfo] {
         &self.rom_report
+    }
+
+    /// Gives the SNES MAX / 4Play cards (any slot) the host pads' state.
+    fn push_host_pads(&mut self) {
+        let hp = self.host_pads;
+        for slot in 1..=7u8 {
+            if let Some(c) = self.machine.card_mut::<apple2_cards::SnesMax>(slot) {
+                c.set_controller(0, hp.snes[0]);
+                c.set_controller(1, hp.snes[1]);
+            }
+            if let Some(c) = self.machine.card_mut::<apple2_cards::FourPlay>(slot) {
+                for (port, st) in hp.sticks.iter().enumerate() {
+                    c.set_stick(port, *st);
+                }
+            }
+        }
     }
 
     /// Full speed requested by the user (Scroll Lock) or by a spinning drive.
@@ -367,6 +411,8 @@ impl Emulator {
             RunMode::Debug => 0,
         };
         let audio = self.mixer.produce_machine(&mut self.machine);
+        let (drive, sector) = self.disks.guest_sector(&self.machine);
+        self.sectors[drive.min(1)] = sector;
         (cycles, audio)
     }
 
@@ -422,6 +468,7 @@ impl Emulator {
             frames: self.machine.frames(),
             mhz: self.mhz,
             drives: self.disks.status(&self.machine),
+            sectors: self.sectors,
             model: format!("{:?}", self.settings.machine.model),
             video: self.video.description(),
             underruns: self.underruns,
@@ -456,6 +503,7 @@ impl Emulator {
                 let (report, warnings) = log_roms(&settings);
                 self.rom_report = report;
                 self.settings = settings;
+                self.push_host_pads();
                 if warnings.is_empty() {
                     self.say("Settings applied");
                 } else {
@@ -529,6 +577,7 @@ impl Emulator {
         self.mixer = Mixer::new(&bus);
         self.bus = bus;
         self.machine = machine;
+        self.push_host_pads();
         self.video.reset();
         Ok(loaded.warnings)
     }
@@ -586,9 +635,15 @@ impl Emulator {
             Command::JoyAttached { index, attached } => {
                 self.machine.set_joystick_attached(index.min(1), attached)
             }
+            Command::HostPads(hp) => {
+                self.host_pads = hp;
+                self.push_host_pads();
+            }
+            Command::JoyPb2Shift(v) => self.machine.board_mut().game.pb2_shift_mod = v,
             Command::CopyScreenText => {
+                // Util_GetTextScreen: 40 or 80 columns (aux + main) and page 2, one line per row
                 self.copied_text =
-                    apple2_core::text_screen::text_screen(&self.machine).join("\n") + "\n";
+                    apple2_video::screen_text::screen_text(&self.machine).join("\n") + "\n";
                 self.copied_seq += 1;
                 self.say("Text screen copied to the clipboard");
             }
@@ -596,12 +651,7 @@ impl Emulator {
                 self.machine.paste(&t);
             }
             Command::Reset => self.soft_reset(),
-            Command::PowerCycle => {
-                self.machine.power_cycle();
-                self.mixer.reset();
-                self.video.reset();
-                self.say("Machine rebooted");
-            }
+            Command::PowerCycle => self.power_cycle(),
             Command::SetPaused(p) => self.paused = p,
             Command::TogglePause => self.paused = !self.paused,
             Command::SetSpeed(s) => match s {
@@ -643,10 +693,46 @@ impl Emulator {
             Command::SetVolume(v) => {
                 self.settings.sound.master_volume = v;
             }
-            Command::InsertDisk { drive, path } => {
-                match self.disks.insert(&mut self.machine, drive, &path) {
-                    Ok(()) => self.say(format!("Drive {}: {}", drive + 1, path.display())),
-                    Err(e) => self.say(e),
+            Command::InsertDisk {
+                drive,
+                path,
+                read_only,
+            } => match self
+                .disks
+                .insert(&mut self.machine, drive, &path, read_only)
+            {
+                Ok(()) => self.say(format!("Drive {}: {}", drive + 1, path.display())),
+                Err(e) => self.say(e),
+            },
+            Command::DropDisk {
+                drive,
+                path,
+                reboot,
+            } => match self.disks.insert(&mut self.machine, drive, &path, false) {
+                Ok(()) => {
+                    self.say(format!("Drive {}: {}", drive + 1, path.display()));
+                    if reboot {
+                        self.power_cycle();
+                    }
+                }
+                Err(e) => self.say(e),
+            },
+            Command::SetHdd { slot, unit, image } => {
+                match self
+                    .machine
+                    .card_mut::<apple2_storage::hdd::HardDiskCard>(slot)
+                {
+                    None => self.say(format!("Slot {slot} has no hard disk controller")),
+                    Some(c) => match image {
+                        None => {
+                            c.unplug(unit);
+                            self.say(format!("HDD {}: unplugged", unit + 1));
+                        }
+                        Some(p) => match c.insert_path(unit, &p) {
+                            Ok(()) => self.say(format!("HDD {}: {}", unit + 1, p.display())),
+                            Err(e) => self.say(format!("{}: {e:?}", p.display())),
+                        },
+                    },
                 }
             }
             Command::EjectDisk { drive } => self.disks.eject(&mut self.machine, drive),
@@ -685,6 +771,13 @@ impl Emulator {
             }
         }
         true
+    }
+
+    fn power_cycle(&mut self) {
+        self.machine.power_cycle();
+        self.mixer.reset();
+        self.video.reset();
+        self.say("Machine rebooted");
     }
 
     fn soft_reset(&mut self) {

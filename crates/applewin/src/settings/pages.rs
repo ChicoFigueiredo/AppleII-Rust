@@ -535,10 +535,28 @@ impl SettingsDialog {
         });
         ui.checkbox(&mut self.draft.machine.no_slot_clock, "No-Slot clock");
         ui.horizontal(|ui| {
-            // AppleWin's benchmark runs the emulator flat out for a few seconds; headless mode of this
-            // program does that, the in-window variant is not implemented.
-            ui.add_enabled(false, egui::Button::new("Benchmark Emulator"));
+            if ui
+                .button("Benchmark Emulator")
+                .on_hover_text(
+                    "Measures video FPS and CPU speed for about 7 seconds on a machine of its own",
+                )
+                .clicked()
+            {
+                ev.push(UiEvent::Benchmark);
+            }
+            if ui
+                .button("Import AppleWin settings...")
+                .on_hover_text(
+                    "Reads an AppleWin .reg export or .ini file into this form; press OK to apply",
+                )
+                .clicked()
+            {
+                self.import_settings();
+            }
         });
+        if !self.import_note.is_empty() {
+            ui.label(&self.import_note);
+        }
         ui.separator();
         ui.collapsing("Custom ROMs", |ui| {
             let rom = Some(("ROM images", &["rom", "bin"][..]));
@@ -594,6 +612,26 @@ impl SettingsDialog {
 
     /// Save/Load State buttons: AppleWin drops pending hardware changes and runs the action, using the
     /// file name typed here. Only the file name is applied.
+    /// "Import AppleWin settings...": loads the file into the draft; OK / Apply then decide
+    /// between a live apply and the restart prompt like for any other edit.
+    fn import_settings(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Import AppleWin settings")
+            .add_filter("AppleWin settings", &["reg", "ini"])
+            .pick_file()
+        else {
+            return;
+        };
+        self.import_note = match model::import_applewin_file(&path, &self.draft) {
+            Ok(s) => {
+                self.draft = s;
+                self.speed = model::SpeedForm::from_settings(&self.draft);
+                format!("Imported {} - press OK or Apply to use it", path.display())
+            }
+            Err(e) => format!("Cannot import: {e}"),
+        };
+    }
+
     fn state_action(&mut self, action: crate::actions::Action, ev: &mut Vec<UiEvent>) {
         let mut s = self.original.clone();
         s.storage.savestate_filename = self.draft.storage.savestate_filename.clone();
