@@ -91,22 +91,22 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| UNVERIFIED | 407 | 36.5 |
-| NOT_APPLICABLE | 343 | 30.8 |
-| PASS | 255 | 22.9 |
-| BLOCKED | 96 | 8.6 |
+| NOT_APPLICABLE | 364 | 32.6 |
+| UNVERIFIED | 318 | 28.5 |
+| PASS | 297 | 26.6 |
+| BLOCKED | 122 | 10.9 |
 | FAIL | 14 | 1.3 |
 
 ## Taxas
 
-Taxa geral: PASS 255 / aplicáveis 772 = 33.0%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 297 / aplicáveis 751 = 39.5%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 680 | 215 | 12 | 362 | 31.6% |
-| apple2e | 59 | 51 | 30 | 1 | 16 | 58.8% |
+| todos | 1004 | 659 | 257 | 12 | 274 | 39.0% |
+| apple2e | 59 | 51 | 30 | 1 | 15 | 58.8% |
 | apple2e-enhanced | 59 | 47 | 25 | 0 | 17 | 53.2% |
 | apple2plus | 29 | 27 | 13 | 2 | 12 | 48.1% |
 | apple2 | 26 | 24 | 12 | 2 | 10 | 50.0% |
@@ -126,7 +126,7 @@ Taxa geral: PASS 255 / aplicáveis 772 = 33.0%. Aplicável = estado diferente de
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| disco | 159 | 130 | 28 | 0 | 72 | 21.5% |
+| disco | 159 | 111 | 57 | 0 | 0 | 51.4% |
 | video | 137 | 101 | 28 | 1 | 60 | 27.7% |
 | debugger | 136 | 86 | 72 | 9 | 0 | 83.7% |
 | outra | 120 | 35 | 1 | 0 | 33 | 2.9% |
@@ -139,7 +139,7 @@ Taxa geral: PASS 255 / aplicáveis 772 = 33.0%. Aplicável = estado diferente de
 | joystick | 41 | 36 | 4 | 0 | 32 | 11.1% |
 | audio | 32 | 16 | 7 | 0 | 0 | 43.8% |
 | savestate | 32 | 29 | 9 | 1 | 17 | 31.0% |
-| hdd | 28 | 21 | 3 | 0 | 17 | 14.3% |
+| hdd | 28 | 19 | 16 | 0 | 0 | 84.2% |
 | serial | 20 | 14 | 10 | 0 | 0 | 71.4% |
 | mouse | 16 | 13 | 2 | 0 | 11 | 15.4% |
 | rede | 12 | 6 | 4 | 0 | 0 | 66.7% |
@@ -153,12 +153,12 @@ Taxa geral: PASS 255 / aplicáveis 772 = 33.0%. Aplicável = estado diferente de
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| runtime | 388 | 367 | 158 | 2 | 129 | 43.1% |
-| feature-futura | 146 | 114 | 11 | 0 | 103 | 9.6% |
-| ui | 122 | 119 | 2 | 1 | 115 | 1.7% |
+| runtime | 388 | 363 | 172 | 2 | 102 | 47.4% |
+| feature-futura | 146 | 101 | 19 | 0 | 81 | 18.8% |
+| ui | 122 | 116 | 3 | 1 | 102 | 2.6% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
-| formato | 77 | 77 | 21 | 1 | 44 | 27.3% |
+| formato | 77 | 76 | 40 | 1 | 17 | 52.6% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
 | documentacao | 30 | 17 | 1 | 0 | 16 | 5.9% |
