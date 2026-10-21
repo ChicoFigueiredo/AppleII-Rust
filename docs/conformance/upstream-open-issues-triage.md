@@ -1,6 +1,6 @@
 # Issues abertas do AppleWin para triagem (HU-1101 / EP-11)
 
-Gerado por `tools/conformance/summarize_issue_matrix.py`. Títulos, datas e labels vêm da coleta de 2026-10-21T00:47:54Z UTC (upstream `a8f0d1d40f55`).
+Gerado por `tools/conformance/summarize_issue_matrix.py`. Títulos, datas e labels vêm da coleta.
 Total de issues abertas: 358. As colunas valor/esforço/risco/selecionada ficam vazias até a triagem.
 
 | Nº | Título | Criada | Labels | Link | Valor | Esforço | Risco | Selecionada |
