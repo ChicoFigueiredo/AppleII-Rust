@@ -17,6 +17,10 @@ pub struct GamePort {
     /// Joystick 0 (paddles 0-1, PB0/PB1) and joystick 1 (paddles 2-3, PB2) present; AppleWin's
     /// default is `{ J0C_JOYSTICK1, J1C_DISABLED }` (Joystick.h:11).
     pub attached: [bool; 2],
+    /// "SHIFT key mod" (Joystick.cpp:648-653): with no joystick 1, PB2 reads this level
+    /// (`!Shift`) instead of floating high. `None`: floats high.
+    #[serde(default)]
+    pub pb2_shift_mod: Option<bool>,
     pub buttons: [bool; 3],
     pub paddles: [u8; 4],
     pub open_apple: bool,
@@ -31,6 +35,7 @@ impl Default for GamePort {
     fn default() -> Self {
         GamePort {
             attached: [true, false],
+            pb2_shift_mod: None,
             buttons: [false; 3],
             paddles: [127; 4],
             open_apple: false,
@@ -53,7 +58,8 @@ impl GamePort {
                 };
                 (ii_family && !self.attached[0]) || self.buttons[n] || apple
             }
-            _ => !self.attached[1] || self.buttons[2], // PB2 floats high with no joystick 1
+            _ if !self.attached[1] => self.pb2_shift_mod.unwrap_or(true), // floats high (GH#1234)
+            _ => self.buttons[2],
         }
     }
 
@@ -108,5 +114,26 @@ impl GamePort {
         self.open_apple = false;
         self.closed_apple = false;
         self.inactive_cycle = [0; 4];
+    }
+}
+
+#[cfg(test)]
+mod shift_mod_tests {
+    use super::*;
+
+    #[test]
+    fn pb2_follows_the_shift_mod_only_without_joystick_1() {
+        let mut g = GamePort::default();
+        assert!(g.button(2, false), "no joystick 1: PB2 floats high");
+        g.pb2_shift_mod = Some(false); // Shift held
+        assert!(!g.button(2, false));
+        g.pb2_shift_mod = Some(true);
+        assert!(g.button(2, false));
+        // the timers of paddles 2/3 stay "always active" (Joystick.cpp:695)
+        assert!(g.paddle_active(2, 1_000_000));
+        // with a joystick 1 the mod is ignored
+        g.attached[1] = true;
+        g.pb2_shift_mod = Some(true);
+        assert!(!g.button(2, false));
     }
 }

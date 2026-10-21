@@ -543,6 +543,11 @@ impl Machine {
         self.board.memory.poke_main(addr, value);
     }
 
+    /// Language Card RAM bank 1 at `$D000-$DFFF` whatever the paging (frontend status only).
+    pub fn peek_lc_bank1(&self, addr: u16) -> u8 {
+        self.board.memory.peek_lc_bank1(addr)
+    }
+
     /// Aux RAM of the current RamWorks bank, ignoring paging.
     pub fn peek_aux(&self, addr: u16) -> u8 {
         self.board.memory.peek_aux(addr)
@@ -1070,5 +1075,21 @@ mod tests {
         assert_eq!(m.cpu().pc, 0x500);
         m.run_cycles(100); // line stays high: no retrigger, handler loops
         assert_eq!(m.peek(0x11), 1, "handler entered once, not re-triggered");
+    }
+
+    #[test]
+    fn lc_bank1_can_be_peeked_whatever_the_paging() {
+        use crate::memory::mf;
+        let mut m = machine(Model::Apple2eEnhanced, VideoStandard::Ntsc);
+        // LC RAM readable and writable, bank 1
+        let mode = (m.memmode() & !(mf::BANK2)) | mf::HIGHRAM | mf::WRITERAM;
+        m.board_mut().memory.set_memmode(mode);
+        m.poke(0xD356, 9);
+        // back to ROM: the CPU no longer sees it, the frontend peek still does
+        let mode = m.memmode() & !mf::HIGHRAM;
+        m.board_mut().memory.set_memmode(mode);
+        assert_ne!(m.peek(0xD356), 9);
+        assert_eq!(m.peek_lc_bank1(0xD356), 9);
+        assert_eq!(m.peek_lc_bank1(0x0356), 0, "outside $D000-$DFFF");
     }
 }
