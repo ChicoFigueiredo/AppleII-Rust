@@ -317,7 +317,15 @@ impl Case {
         }
         let o = &self.oracle;
         match o.kind {
-            OracleKind::Trace if o.trace.is_none() => return Err("oracle.trace required".into()),
+            OracleKind::Trace
+                if o.trace.is_none()
+                    && !(o.authority == Authority::Determinism && self.run.repeat >= 2) =>
+            {
+                return Err(
+                    "oracle.trace required (or authority = determinism with run.repeat >= 2 for self-consistency)"
+                        .into(),
+                );
+            }
             OracleKind::Expr if o.expect.is_empty() => return Err("oracle.expect required".into()),
             OracleKind::Expr => {
                 for e in &o.expect {
@@ -671,6 +679,29 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
         )
         .contains("sha256 required"));
         assert!(toml::from_str::<Case>(&GOOD.replace("[run]", "[run]\nbogus = 1")).is_err());
+    }
+
+    #[test]
+    fn trace_without_reference_needs_a_determinism_case_with_repeats() {
+        let trace =
+            |authority: &str, repeat: u32| {
+                let t = GOOD
+                .replace("kind = \"text-hash\"", "kind = \"trace\"")
+                .replace("authority = \"regression\"", &format!("authority = \"{authority}\""))
+                .replace(
+                    "sha256 = \"0000000000000000000000000000000000000000000000000000000000000000\"",
+                    "",
+                )
+                .replace("frames = 3", &format!("frames = 3\nrepeat = {repeat}"));
+                toml::from_str::<Case>(&t).unwrap().validate()
+            };
+        assert!(trace("determinism", 10).is_ok());
+        assert!(trace("determinism", 1)
+            .unwrap_err()
+            .contains("oracle.trace"));
+        assert!(trace("regression", 10)
+            .unwrap_err()
+            .contains("oracle.trace"));
     }
 
     #[test]

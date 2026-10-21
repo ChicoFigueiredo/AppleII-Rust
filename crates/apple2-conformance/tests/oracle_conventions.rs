@@ -63,7 +63,9 @@ fn interrupt_entry_writes_no_row() {
 }
 
 #[test]
-fn nmi_entry_writes_no_row_and_masked_irq_is_not_an_entry() {
+fn nmi_line_is_not_an_interrupt_entry_and_masked_irq_is_not_either() {
+    // AppleWin's NMI() is compiled out (CPU.cpp:400-441) and nothing asserts it: an NMI line
+    // changes nothing and the step is an ordinary instruction (AUD-C-054).
     let mut m = machine();
     m.poke(0x300, 0xEA);
     m.poke(0x500, 0xE8);
@@ -72,12 +74,10 @@ fn nmi_entry_writes_no_row_and_masked_irq_is_not_an_entry() {
     assert!(!m.next_step_is_interrupt_entry());
     m.board_mut().interrupts.set_irq(IrqSource::Mouse, false);
     m.board_mut().interrupts.set_nmi(IrqSource::Mouse, true);
-    assert!(m.next_step_is_interrupt_entry());
+    assert!(!m.next_step_is_interrupt_entry());
     let mut w = TraceWriter::new(Vec::new(), &[]).unwrap();
     w.step(&mut m).unwrap();
-    assert_eq!((w.rows_written(), m.cpu().pc), (0, 0x500));
-    // The line stays high: an edge-triggered NMI is not entered again.
-    assert!(!m.next_step_is_interrupt_entry());
+    assert_eq!((w.rows_written(), m.cpu().pc), (1, 0x301));
 }
 
 #[test]
