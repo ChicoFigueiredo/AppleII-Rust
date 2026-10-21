@@ -14,7 +14,9 @@
 //! também vem desse MHz.
 //!
 //! A regressão é só para baixo: a mediana atual de MHz precisa ficar acima de
-//! `baseline * (1 - margem)`. Melhoras nunca falham.
+//! `baseline * (1 - margem)`. Melhoras nunca falham. Como interferência de outros processos só
+//! pode atrasar (nunca acelerar) uma execução, o `--check` só falha se a mediana E o melhor caso
+//! (máximo das repetições) caírem abaixo do limite; uma regressão real derruba os dois.
 //!
 //! Além do tempo, `--check` exige que a impressão digital (ciclos emulados, hash do último
 //! quadro, hash do áudio) seja idêntica: otimização não pode mudar timing, vídeo nem áudio.
@@ -22,7 +24,13 @@
 //! Se a CPU/núcleos do baseline não são os da máquina atual (baseline gravado no desenvolvedor,
 //! checado no runner), o MHz absoluto não é comparável. Aí cada cenário é comparado pela razão
 //! `MHz / MHz(cpu)`, que cancela a velocidade da máquina; o cenário `cpu` não é checado nesse
-//! modo e a saída avisa.
+//! modo e a saída avisa. Como a razão ainda muda com o cache e a microarquitetura (medido: um
+//! vizinho no mesmo núcleo físico já custa ~30 % só nos cenários Color TV), a margem nesse modo
+//! tem piso de 40 %: pega regressões grosseiras, não finas. Para regressões finas em CI, grave o
+//! baseline no próprio runner com o commit-base (`--write-baseline`) e confira o commit novo com
+//! `--check` no mesmo job.
+//!
+//! Um cenário reprovado é medido de novo (dobro de repetições) antes de a regressão valer.
 
 use serde_json::{json, Value};
 use std::fmt::Write;
@@ -96,6 +104,9 @@ pub fn markdown(doc: &Value) -> String {
         doc["reps"]
     );
 
+    if let Some(n) = doc["note"].as_str() {
+        let _ = writeln!(s, "\n**Condições desta medição:** {n}");
+    }
     s.push_str("\n## Cenários\n\n");
     s.push_str("Cada repetição roda num processo novo (o RSS de pico é só do cenário). O trecho cronometrado exclui a criação da máquina, mas inclui, em todo quadro, a execução da CPU e dos cartões, o renderer, a cópia do quadro e a mixagem do áudio (o trabalho da thread de emulação, sem o pacing). \"p95\" é o pior caso: o percentil 95 do tempo, e as taxas derivadas dele (a taxa que 95 % das execuções igualaram ou superaram); para CPU e RSS é o percentil 95 direto. \"MHz sobre CPU\" divide os ciclos pelo tempo de CPU da thread (é a base do `--check`, imune a preempção); o CV % é o dele. Referência: 1,0205 MHz emulado = tempo real (NTSC), 60 quadros/s.\n\n");
     s.push_str("| Cenário | Quadros | fps mediana | fps p95 | MHz mediana | MHz p95 | x tempo real | MHz sobre CPU (mediana) | CPU % (med) | RSS pico MiB (p95) | CV % |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n");
@@ -159,7 +170,7 @@ pub fn markdown(doc: &Value) -> String {
             &l["key_to_published_frame_ms"],
             1.0,
         ));
-        s.push_str("\nAs três primeiras linhas medem o caminho do núcleo: o programa de teste espera a tecla num laço `LDA $C000 / BPL` de 7 ciclos, então a latência em ciclos é o resto do laço (fase aleatória) mais o `LDA`. Com o firmware real o laço de `KEYIN` é parecido. A última linha é ponta a ponta no processo, sem janela nem áudio: a thread de emulação (`emu::spawn`, ritmo por timer a 1,0x, ADR 0003) aplica o comando entre quadros, roda o quadro de 16,7 ms, e só publica depois de renderizar; por isso o piso é o resto do quadro corrente (até ~17 ms) mais o intervalo mínimo de publicação (8 ms). Com áudio o anel de ~80 ms (ADR 0003) soma-se a isso.\n\n");
+        s.push_str("\nAs quatro primeiras linhas medem o caminho do núcleo: o programa de teste espera a tecla num laço `LDA $C000 / BPL` de 7 ciclos, então a latência em ciclos é o resto do laço (fase variada de propósito) mais o `LDA`; com o firmware real o laço de `KEYIN` é parecido. A última linha é ponta a ponta no processo, sem janela nem áudio: a thread de emulação (`emu::spawn`, ritmo por timer a 1,0x, ADR 0003) só aplica o comando entre quadros e só publica o quadro depois de renderizá-lo, no máximo a cada 8 ms; por isso o valor depende da fase do quadro de 16,7 ms em que a tecla chega (de poucos ms até ~1 quadro mais a publicação). Com áudio, o anel de ~80 ms (ADR 0003) soma-se a isso.\n\n");
         s.push_str("**Não dá para medir sem GUI:**\n\n");
         for item in l["not_measurable_without_gui"]
             .as_array()
@@ -191,6 +202,9 @@ pub fn markdown(doc: &Value) -> String {
     s
 }
 
+/// Piso da margem quando o baseline é de outra máquina (modo razão com `cpu`).
+const CROSS_MACHINE_MARGIN_PCT: f64 = 40.0;
+
 /// Margem de regressão em %, ver o módulo.
 pub fn margin_pct(cv_pct: f64) -> f64 {
     (3.0 * cv_pct).max(15.0)
@@ -204,6 +218,7 @@ pub fn baseline(doc: &Value) -> Value {
             name.clone(),
             json!({
                 "mhz_cpu_median": round3(f(v, &["mhz_cpu", "median"])),
+                "mhz_cpu_best": round3(best_mhz(v)),
                 "cv_pct": round3(f(v, &["cv_pct"])),
                 "margin_pct": round3(margin_pct(f(v, &["cv_pct"]))),
                 "fingerprint": v["fingerprint"],
@@ -220,6 +235,21 @@ pub fn baseline(doc: &Value) -> Value {
         "reps": doc["reps"],
         "scenarios": Value::Object(sc),
     })
+}
+
+/// Melhor (maior) MHz sobre CPU das repetições.
+fn best_mhz(v: &Value) -> f64 {
+    let from_runs = v["mhz_cpu_runs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_f64)
+        .fold(f64::NAN, f64::max);
+    if from_runs.is_nan() {
+        f(v, &["mhz_cpu", "best"])
+    } else {
+        from_runs
+    }
 }
 
 fn round3(x: f64) -> f64 {
@@ -241,8 +271,14 @@ pub fn check(doc: &Value, base: &Value) -> (bool, Vec<String>) {
             doc["machine"]["cpu"].as_str().unwrap_or("?"),
         ));
     }
-    let cur_cpu = f(&doc["scenarios"]["cpu"], &["mhz_cpu", "median"]);
-    let base_cpu = f(&base["scenarios"]["cpu"], &["mhz_cpu_median"]);
+    let cur_cpu = (
+        f(&doc["scenarios"]["cpu"], &["mhz_cpu", "median"]),
+        f(&doc["scenarios"]["cpu"], &["mhz_cpu", "best"]),
+    );
+    let base_cpu = (
+        f(&base["scenarios"]["cpu"], &["mhz_cpu_median"]),
+        f(&base["scenarios"]["cpu"], &["mhz_cpu_best"]),
+    );
     for (name, b) in base["scenarios"].as_object().into_iter().flatten() {
         let Some(cur) = doc["scenarios"].get(name) else {
             out.push(format!("{name}: ausente da execução atual (use --only?)"));
@@ -256,11 +292,18 @@ pub fn check(doc: &Value, base: &Value) -> (bool, Vec<String>) {
             ));
             continue;
         }
-        let margin = f(b, &["margin_pct"]);
+        let mut margin = f(b, &["margin_pct"]);
+        if !same_machine {
+            // Entre microarquiteturas a razão com o cenário `cpu` varia por dezenas de %
+            // (tamanho de cache: o renderer Color TV consulta tabelas de 64 KiB): só pega
+            // regressões grosseiras.
+            margin = margin.max(CROSS_MACHINE_MARGIN_PCT);
+        }
+        // (mediana, melhor) atuais e do baseline, em MHz ou na razão com o cenário `cpu`.
         let (cur_v, base_v, unit) = if same_machine {
             (
-                f(cur, &["mhz_cpu", "median"]),
-                f(b, &["mhz_cpu_median"]),
+                (f(cur, &["mhz_cpu", "median"]), f(cur, &["mhz_cpu", "best"])),
+                (f(b, &["mhz_cpu_median"]), f(b, &["mhz_cpu_best"])),
                 "MHz",
             )
         } else if name == "cpu" {
@@ -270,21 +313,37 @@ pub fn check(doc: &Value, base: &Value) -> (bool, Vec<String>) {
             continue;
         } else {
             (
-                f(cur, &["mhz_cpu", "median"]) / cur_cpu,
-                f(b, &["mhz_cpu_median"]) / base_cpu,
+                (
+                    f(cur, &["mhz_cpu", "median"]) / cur_cpu.0,
+                    f(cur, &["mhz_cpu", "best"]) / cur_cpu.1,
+                ),
+                (
+                    f(b, &["mhz_cpu_median"]) / base_cpu.0,
+                    f(b, &["mhz_cpu_best"]) / base_cpu.1,
+                ),
                 "x cpu",
             )
         };
-        let limit = base_v * (1.0 - margin / 100.0);
-        let delta = (cur_v / base_v - 1.0) * 100.0;
-        if cur_v < limit {
+        let keep = 1.0 - margin / 100.0;
+        let (limit_med, limit_best) = (base_v.0 * keep, base_v.1 * keep);
+        let delta = (cur_v.0 / base_v.0 - 1.0) * 100.0;
+        // Regressão real baixa a mediana E o melhor caso; interferência de outros processos
+        // baixa só a mediana (o melhor caso é o que menos sofre), então exige os dois.
+        if cur_v.0 < limit_med && cur_v.1 < limit_best {
             ok = false;
             out.push(format!(
-                "FALHA {name}: {cur_v:.3} {unit} < limite {limit:.3} (baseline {base_v:.3}, margem {margin:.1} %, variação {delta:+.1} %)"
+                "FALHA {name}: mediana {:.3} < {limit_med:.3} e melhor {:.3} < {limit_best:.3} {unit} (baseline {:.3}/{:.3}, margem {margin:.1} %, mediana {delta:+.1} %)",
+                cur_v.0, cur_v.1, base_v.0, base_v.1
             ));
         } else {
+            let note = if cur_v.0 < limit_med {
+                " (mediana abaixo do limite, mas o melhor caso está dentro: ruído de máquina ocupada)"
+            } else {
+                ""
+            };
             out.push(format!(
-                "ok    {name}: {cur_v:.3} {unit} (baseline {base_v:.3}, margem {margin:.1} %, variação {delta:+.1} %)"
+                "ok    {name}: mediana {:.3}, melhor {:.3} {unit} (baseline {:.3}/{:.3}, margem {margin:.1} %, mediana {delta:+.1} %){note}",
+                cur_v.0, cur_v.1, base_v.0, base_v.1
             ));
         }
     }
@@ -304,8 +363,8 @@ mod tests {
         json!({
             "machine": {"cpu": cpu, "logical_cores": 4},
             "scenarios": {
-                "cpu": {"mhz_cpu": {"median": cpu_mhz}, "fingerprint": "c"},
-                "hgr": {"mhz_cpu": {"median": mhz}, "fingerprint": fp, "cv_pct": 2.0},
+                "cpu": {"mhz_cpu": {"median": cpu_mhz, "best": cpu_mhz}, "fingerprint": "c"},
+                "hgr": {"mhz_cpu": {"median": mhz, "best": mhz}, "fingerprint": fp, "cv_pct": 2.0},
             }
         })
     }
@@ -328,6 +387,15 @@ mod tests {
     }
 
     #[test]
+    fn noisy_median_alone_does_not_fail_but_a_slow_best_case_does() {
+        let base = baseline(&doc(100.0, 400.0, "a", "X"));
+        let mut noisy = doc(60.0, 400.0, "a", "X");
+        noisy["scenarios"]["hgr"]["mhz_cpu"]["best"] = json!(98.0);
+        assert!(check(&noisy, &base).0, "melhor caso íntegro: é ruído");
+        assert!(!check(&doc(60.0, 400.0, "a", "X"), &base).0);
+    }
+
+    #[test]
     fn check_fails_when_fingerprint_changes() {
         let base = baseline(&doc(100.0, 400.0, "a", "X"));
         assert!(!check(&doc(100.0, 400.0, "b", "X"), &base).0);
@@ -338,6 +406,8 @@ mod tests {
         let base = baseline(&doc(100.0, 400.0, "a", "X"));
         // máquina 2x mais lenta, mesma razão: passa; razão pior: falha
         assert!(check(&doc(50.0, 200.0, "a", "Y"), &base).0);
-        assert!(!check(&doc(30.0, 200.0, "a", "Y"), &base).0);
+        assert!(!check(&doc(20.0, 200.0, "a", "Y"), &base).0);
+        // a margem entre máquinas tem piso de 40 %: -30 % de razão não reprova
+        assert!(check(&doc(35.0, 200.0, "a", "Y"), &base).0);
     }
 }

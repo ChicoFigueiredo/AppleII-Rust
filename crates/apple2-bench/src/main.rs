@@ -33,6 +33,7 @@ struct Args {
     allow_debug: bool,
     list: bool,
     breakdown: bool,
+    render: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -49,6 +50,7 @@ fn parse_args() -> Result<Args, String> {
         allow_debug: false,
         list: false,
         breakdown: false,
+        render: None,
     };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -68,6 +70,7 @@ fn parse_args() -> Result<Args, String> {
             "--allow-debug" => a.allow_debug = true,
             "--list" => a.list = true,
             "--breakdown" => a.breakdown = true,
+            "--render" => a.render = Some(val("--render")?.into()),
             "-h" | "--help" => {
                 println!("{}", include_str!("usage.txt"));
                 std::process::exit(0);
@@ -127,6 +130,21 @@ fn real_main() -> Result<(), String> {
     if let Some(name) = &a.child {
         return run_child(name, &a.root);
     }
+    if let Some(p) = &a.render {
+        // Regenera relatório/baseline a partir de um JSON já medido (sem rodar nada).
+        let text = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        let doc: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        if let Some(r) = &a.report {
+            write_file(r, &report::markdown(&doc))?;
+        }
+        if let Some(b) = &a.write_baseline {
+            let out =
+                serde_json::to_string_pretty(&report::baseline(&doc)).map_err(|e| e.to_string())?;
+            write_file(b, &(out + "\n"))?;
+        }
+        print!("{}", report::table(&doc));
+        return Ok(());
+    }
     if a.list {
         for s in scenarios::SCENARIOS {
             println!("{:14} {}", s.name, s.title);
@@ -150,20 +168,39 @@ fn real_main() -> Result<(), String> {
 
     let mut results = serde_json::Map::new();
     for sc in &selected {
-        eprint!("{:14} ", sc.name);
-        spawn_child(sc.name, &a.root)?; // aquecimento descartado (cache de arquivos, frequência)
-        let mut runs = Vec::new();
-        for _ in 0..a.reps {
-            runs.push(spawn_child(sc.name, &a.root)?);
-            eprint!(".");
+        results.insert(sc.name.to_string(), measure(sc, a.reps, &a.root)?);
+    }
+
+    // --check: um cenário reprovado é medido de novo (com o dobro de repetições) antes de a
+    // regressão valer. Numa máquina compartilhada, um vizinho no mesmo núcleo físico (SMT) pode
+    // custar ~30 % durante minutos; regressão de verdade reprova de novo.
+    let mut check_out: Option<(bool, Vec<String>)> = None;
+    if let Some(p) = &a.check {
+        let text = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        let base: Value = serde_json::from_str(&text).map_err(|e| format!("baseline: {e}"))?;
+        let machine = sys::machine_info();
+        let mut doc = json!({"machine": machine, "scenarios": Value::Object(results.clone())});
+        let (mut ok, mut lines) = report::check(&doc, &base);
+        if !ok {
+            let failed: Vec<&str> = selected
+                .iter()
+                .map(|s| s.name)
+                .filter(|n| {
+                    lines
+                        .iter()
+                        .any(|l| l.starts_with(&format!("FALHA {n}: mediana")))
+                })
+                .collect();
+            if !failed.is_empty() {
+                eprintln!("repetindo os cenários reprovados: {failed:?}");
+                for sc in selected.iter().filter(|s| failed.contains(&s.name)) {
+                    results.insert(sc.name.to_string(), measure(sc, a.reps * 2, &a.root)?);
+                }
+                doc = json!({"machine": machine, "scenarios": Value::Object(results.clone())});
+                (ok, lines) = report::check(&doc, &base);
+            }
         }
-        let summary = stats::summarize(sc.title, &runs)?;
-        eprintln!(
-            " {:.0} fps, {:.2} MHz (mediana)",
-            summary["fps"]["median"].as_f64().unwrap_or(0.0),
-            summary["mhz"]["median"].as_f64().unwrap_or(0.0)
-        );
-        results.insert(sc.name.to_string(), summary);
+        check_out = Some((ok, lines));
     }
 
     let latency = if a.latency && a.check.is_none() {
@@ -206,10 +243,7 @@ fn real_main() -> Result<(), String> {
         eprintln!("baseline gravado em {}", p.display());
     }
     print!("{}", report::table(&doc));
-    if let Some(p) = &a.check {
-        let text = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
-        let base: Value = serde_json::from_str(&text).map_err(|e| format!("baseline: {e}"))?;
-        let (ok, lines) = report::check(&doc, &base);
+    if let Some((ok, lines)) = check_out {
         for l in lines {
             println!("{l}");
         }
@@ -218,6 +252,25 @@ fn real_main() -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Uma execução de aquecimento descartada (cache de arquivos, frequência) e `reps` medidas, cada
+/// uma num processo filho.
+fn measure(sc: &scenarios::Scenario, reps: usize, root: &std::path::Path) -> Result<Value, String> {
+    eprint!("{:14} ", sc.name);
+    spawn_child(sc.name, root)?;
+    let mut runs = Vec::new();
+    for _ in 0..reps {
+        runs.push(spawn_child(sc.name, root)?);
+        eprint!(".");
+    }
+    let summary = stats::summarize(sc.title, &runs)?;
+    eprintln!(
+        " {:.0} fps, {:.2} MHz (mediana)",
+        summary["fps"]["median"].as_f64().unwrap_or(0.0),
+        summary["mhz"]["median"].as_f64().unwrap_or(0.0)
+    );
+    Ok(summary)
 }
 
 fn write_file(p: &std::path::Path, text: &str) -> Result<(), String> {

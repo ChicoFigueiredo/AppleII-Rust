@@ -84,6 +84,7 @@ pub fn summarize(title: &str, runs: &[Value]) -> Result<Value, String> {
         "mhz": {"median": cycles / w50 / 1e6, "p95": cycles / w95 / 1e6},
         "mhz_cpu": {
             "median": percentile(&mhz_cpu_sorted, 0.5), "p5": percentile(&mhz_cpu_sorted, 0.05),
+            "best": mhz_cpu_sorted[mhz_cpu_sorted.len() - 1],
             "mean": mhz_mean, "stdev": mhz_sd,
         },
         "cpu_pct": {"median": percentile(&cs, 0.5), "p95": percentile(&cs, 0.95)},

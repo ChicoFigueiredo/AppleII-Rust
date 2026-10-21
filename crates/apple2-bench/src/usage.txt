@@ -9,5 +9,6 @@ apple2-bench: desempenho determinístico do emulador (HU-1001)
   --check FILE           compara com o baseline; sai com 1 se a mediana piorar além da margem
                          ou se ciclos/quadro/áudio deixarem de ser idênticos
   --breakdown            decompõe o custo por quadro (máquina, renderer, RGBA, áudio)
+  --render FILE.json     regenera --report/--write-baseline de um JSON já medido, sem rodar
   --no-latency           pula a medição de latência de entrada
   --allow-debug          deixa rodar sem --release (números inválidos)

@@ -29,6 +29,21 @@ jobs:
         # Comando provisorio: sera ajustado quando o harness (crates/apple2-conformance) estiver pronto.
         run: cargo run --release -p apple2-conformance --bin conformance -- run --report target/conformance-report
 
+      # HU-1001: regressao de desempenho. Falha se a mediana de MHz (tempo de CPU da thread) piorar
+      # alem da margem do baseline (max(15 %, 3 x CV)) ou se ciclos/quadro/audio deixarem de ser
+      # identicos. O baseline vem de outra maquina: o --check compara entao MHz relativo ao cenario
+      # `cpu`, com margem de pelo menos 40 % (veja crates/apple2-bench/src/report.rs). Rode so quando o workflow for liberado.
+      - name: Performance regression (apple2-bench --check)
+        run: cargo run --release -p apple2-bench -- --check tests/conformance/perf-baseline.json --no-latency --json target/perf/performance.json
+
+      - name: Upload performance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance
+          path: target/perf
+          if-no-files-found: warn
+
       - name: Upload conformance report
         if: always()
         uses: actions/upload-artifact@v4
