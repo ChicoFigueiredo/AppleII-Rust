@@ -10,9 +10,9 @@ use apple2_config::card::DriveSpec;
 use apple2_config::settings::{RefreshRate, VideoType};
 use apple2_config::{Settings, SlotCardSpec};
 use apple2_core::Machine;
-use applewin_shell::backend::{Backend, DefaultBackend};
-use applewin_shell::benchmark::setup_cpu_benchmark;
-use applewin_shell::emu::Emulator;
+use apple2_rust_shell::backend::{Backend, DefaultBackend};
+use apple2_rust_shell::benchmark::setup_cpu_benchmark;
+use apple2_rust_shell::emu::Emulator;
 use std::path::Path;
 use std::time::Instant;
 
@@ -234,7 +234,7 @@ fn boot_text(_root: &Path) -> Result<Sample, String> {
     let mut emu = new_emulator(base_settings())?;
     // O boot entra no cronômetro: é o que o usuário espera de "ligar a máquina".
     let mut a = timed_frames(&mut emu, 150);
-    emu.apply(applewin_shell::emu::Command::Paste(
+    emu.apply(apple2_rust_shell::emu::Command::Paste(
         "10 FOR I=1 TO 200:PRINT I;\" APPLE II RUST BENCHMARK\":NEXT I\rRUN\r".into(),
     ));
     let b = timed_frames(&mut emu, 450);

@@ -39,7 +39,7 @@ Teclado regional (rodar P3 com cada layout do SO ativo):
 
 ## Windows nativo (x86_64)
 
-Material: Windows 10 ou 11, o `applewin-<versão>-windows-x64.zip` da release.
+Material: Windows 10 ou 11, o `apple2-rust-<versão>-windows-x64.zip` da release.
 
 | Campo | Valor |
 |---|---|
@@ -54,18 +54,18 @@ Material: Windows 10 ou 11, o `applewin-<versão>-windows-x64.zip` da release.
 |---|---|---|
 | W1 | Baixe o `.zip` e verifique o SHA-256 contra o `SHA256SUMS`. | |
 | W2 | Extraia para uma pasta (por exemplo `C:\AppleII-Rust`), sem espaços e depois com espaços e acentos no caminho. | |
-| W3 | Abra `applewin.exe` com duplo clique. Anote se o SmartScreen ou o antivírus avisou (o executável não é assinado). Use "Mais informações" > "Executar assim mesmo". | |
-| W4 | De um `cmd` ou PowerShell: `applewin.exe --help`. A ajuda aparece? (O exe é do subsistema GUI e anexa ao console pai; o prompt volta antes do fim: esperado.) | |
+| W3 | Abra `apple2-rust.exe` com duplo clique. Anote se o SmartScreen ou o antivírus avisou (o executável não é assinado). Use "Mais informações" > "Executar assim mesmo". | |
+| W4 | De um `cmd` ou PowerShell: `apple2-rust.exe --help`. A ajuda aparece? (O exe é do subsistema GUI e anexa ao console pai; o prompt volta antes do fim: esperado.) | |
 | W5 | Passos P1 a P14. | |
 | W6 | Pasta `disks\` presente com os três discos. `THIRD-PARTY-LICENSES.html` e `LICENSE` presentes. | |
 | W7 | DPI por monitor (manifesto PerMonitorV2): arraste entre monitores de escalas diferentes, sem ficar borrado. | |
 | W8 | Caminho longo (> 260 caracteres) num disco: monta sem erro. | |
-| W9 | Configurações: ficam em `%APPDATA%\...\applewin-rs`? Anote o caminho real. | |
+| W9 | Configurações: ficam em `%APPDATA%\...\apple2-rust`? Anote o caminho real. | |
 | W10 | Apague o programa e a pasta de configuração: não deixa lixo fora delas. | |
 
 ## macOS Intel (x86_64) e Apple Silicon (arm64)
 
-Material: o `applewin-<versão>-macos-universal.zip` (binário universal, `lipo`), assinado só ad hoc e não notarizado. Rode em **cada** máquina, preenchendo um quadro por arquitetura.
+Material: o `apple2-rust-<versão>-macos-universal.zip` (binário universal, `lipo`), assinado só ad hoc e não notarizado. Rode em **cada** máquina, preenchendo um quadro por arquitetura.
 
 | Campo | Intel | Apple Silicon |
 |---|---|---|
@@ -91,7 +91,7 @@ Material: o `applewin-<versão>-macos-universal.zip` (binário universal, `lipo`
 
 ## Linux (Wayland nativo, o que a automação não cobre)
 
-Material: sessão Wayland (KDE ou GNOME), `applewin-<versão>-linux-x64.tar.gz`.
+Material: sessão Wayland (KDE ou GNOME), `apple2-rust-<versão>-linux-x64.tar.gz`.
 
 | Campo | Valor |
 |---|---|
@@ -102,7 +102,7 @@ Material: sessão Wayland (KDE ou GNOME), `applewin-<versão>-linux-x64.tar.gz`.
 
 | # | Passo | Resultado |
 |---|---|---|
-| L1 | `tar xzf` e `./applewin` dentro da pasta extraída, **sem** `WINIT_UNIX_BACKEND`, para usar Wayland nativo. | |
+| L1 | `tar xzf` e `./apple2-rust` dentro da pasta extraída, **sem** `WINIT_UNIX_BACKEND`, para usar Wayland nativo. | |
 | L2 | Passos P1 a P14, especialmente P14: fechar a janela sob Wayland + NVIDIA **não pode** gerar SEGV. Depois: `coredumpctl list --since "5 min ago"` deve estar vazio para `applewin`. | |
 | L3 | P10 com escala fracionária (125%, 150%) e inteira (200%). | |
 | L4 | P12: minimizar e restaurar sob o compositor. | |

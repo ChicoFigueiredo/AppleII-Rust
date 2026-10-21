@@ -51,8 +51,8 @@ build-linux:
   stage: test
   <<: *linux_deps
   script:
-    - cargo build -p applewin --release
-    - target/release/applewin --headless-frames 300 --dump-screen out.png
+    - cargo build -p apple2-rust --release
+    - target/release/apple2-rust --headless-frames 300 --dump-screen out.png
     - test -s out.png
     - apt-get install -y -qq zip
     - packaging/package.sh linux "${CI_COMMIT_TAG:-dev-$CI_COMMIT_SHORT_SHA}" target/release

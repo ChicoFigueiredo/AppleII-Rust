@@ -30,7 +30,7 @@ Estado de execução: SHA da `main` `469bf941deab932ab228169a7ffebddae1fc6854` (
 | Floating bus com Color Monitor PAL, `TEXT/GR` por linha e texto na página 2 | //e | PASS | #241: `tests/conformance/inputs/video/issue-0241-floatbus-dlores-text80.scene` (casos `video-issue-0241-*`: NTSC, Color TV PAL e Color Monitor PAL) | Nenhuma desde `de3ac3b` (histórico de sinal do primeiro quadro; antes, 1 pixel de borda em x=18, y=18) | #46 | P1 |
 | Estado inicial da RAM (`MemReset`, `MIP_*`) | todos | PASS | `apple2-core/src/ram_init.rs`; boots do vídeo com "RAM padrão do AppleWin" e "RAM zerada" (DIV-004) | O sorteio de `$4E/$4F` é fixo no Oráculo (`$20`), aleatório no AppleWin real | #19 | P1 |
 | Controle de velocidade ("Fastest") e pacing | todos | BLOCKED | #4, #290; vive no frontend (`applewin/src/pacing.rs`) e depende do relógio real; sem Oráculo headless | Nenhuma medida | #36 | P1 |
-| Disco rápido com som ativo (GH#1340) e "Fastest" em todos os Modelos (#1448) | todos | PASS | `crates/applewin/tests/gh1340_full_speed_sound.rs` (8 testes: o disco só acelera sem alto-falante nem Mockingboard ativos, como `AppleWin.cpp:183`); `p23_ui.rs::p23_fastest_speed_on_every_model` | #1448: o AppleWin não acelera no ][ e ][+ e o port sim (a favor do usuário, sem decisão) | #36 | P2 |
+| Disco rápido com som ativo (GH#1340) e "Fastest" em todos os Modelos (#1448) | todos | PASS | `crates/apple2-rust/tests/gh1340_full_speed_sound.rs` (8 testes: o disco só acelera sem alto-falante nem Mockingboard ativos, como `AppleWin.cpp:183`); `p23_ui.rs::p23_fastest_speed_on_every_model` | #1448: o AppleWin não acelera no ][ e ][+ e o port sim (a favor do usuário, sem decisão) | #36 | P2 |
 
 ## Memória e cartas de RAM
 
@@ -113,7 +113,7 @@ Estado de execução: SHA da `main` `469bf941deab932ab228169a7ffebddae1fc6854` (
 | Relógios: No-Slot Clock, Generic, ThunderClock Plus | ][+, //e | IMPLEMENTED | `apple2-cards/tests/clocks.rs`; estados `NoSlotClockTest*` BLOCKED (hora real) | ThunderClock Plus existe, sem tipo de carta escolhível na configuração | #30 | P1 |
 | SSC, impressora, Uthernet I e II | ][+, //e | IMPLEMENTED; BLOCKED (rede e serial reais) | `apple2-hostio/tests/audit_entrada.rs`, `uthernet1.rs`, `uthernet2.rs`; [manual-tests/rede-serial-impressora.md](manual-tests/rede-serial-impressora.md) | Uthernet II sem SPI, PPPoE e interrupções (também no AppleWin); estados com TCP BLOCKED | #31, #33 | P1 |
 | 4Play, SNES MAX, botões e paddles (#1522, #1234) | ][+, //e | PASS | `audit_wave0_peripherals.rs`, `p23_entrada.rs`; `SNES_MAX-slot4` PASS (o FAIL antigo era do Oráculo, sem tratador de E/S na carta: `audetto-snesmax.patch`) | Nenhuma | #30, #32 | P1 |
-| Open Apple depois do F2 (#1396) | //e | PASS (Divergência aprovada, ADR 0006) | `crates/applewin/tests/p23_entrada.rs::gh1396_alt_f2_keeps_open_apple_pressed_approved_divergence` | O AppleWin zera o Open Apple no F2 (`JoyReset`); o port mantém e Alt+F2 funciona. Decisão do dono de 21/10/2026 | #32 | P2 |
+| Open Apple depois do F2 (#1396) | //e | PASS (Divergência aprovada, ADR 0006) | `crates/apple2-rust/tests/p23_entrada.rs::gh1396_alt_f2_keeps_open_apple_pressed_approved_divergence` | O AppleWin zera o Open Apple no F2 (`JoyReset`); o port mantém e Alt+F2 funciona. Decisão do dono de 21/10/2026 | #32 | P2 |
 | Breakpoint Card | ][+, //e | IMPLEMENTED | Entrega dos breakpoints pelo depurador (AUD-P-016 corrigido) | Sem Oráculo | #30 | P2 |
 | Configuração de slots (conflitos) | ][+, //e | PASS (como o CardManager do AppleWin) | `374852b` e testes `aud_p_019/020` | Nenhuma | #30 | P2 |
 
@@ -122,7 +122,7 @@ Estado de execução: SHA da `main` `469bf941deab932ab228169a7ffebddae1fc6854` (
 | Componente | Modelo | Resultado | Evidência | Divergência | Issue Rust | Prioridade |
 |---|---|---|---|---|---|---|
 | Depurador: 130 issues, 251 comandos | ][+, //e Enhanced | PASS (79); FAIL (5); BLOCKED (7); NOT_APPLICABLE (39) | [results/depurador.csv](results/depurador.csv) e [results/p23-depurador.csv](results/p23-depurador.csv); `apple2-debugger/tests/matriz_depurador*.rs`, `p23_depurador.rs`; [debugger-commands.md](audit/debugger-commands.md) (249 comandos IMPLEMENTED, 2 N/A) | Seis Divergências aprovadas (ADR 0006, 21/10/2026): #114, #245, #458, #466, #468, #1381, hoje PASS. Os 5 FAIL são comportamentos do próprio AppleWin que o Rust reproduz: #713, #1145, #1377 (paridade mantida pelo dono) e #1426, #1431 (adiadas) | #10, #34 | P1 |
-| Depurador: atalhos de teclado (`DebuggerProcessKey`) | ][+, //e Enhanced | PASS | `crates/apple2-debugger/tests/hu0801.rs`, `crates/applewin/tests/debugger.rs` (AUD-P-035/036/037) | Extensão: Ctrl+F11 passo | #34 | P1 |
+| Depurador: atalhos de teclado (`DebuggerProcessKey`) | ][+, //e Enhanced | PASS | `crates/apple2-debugger/tests/hu0801.rs`, `crates/apple2-rust/tests/debugger.rs` (AUD-P-035/036/037) | Extensão: Ctrl+F11 passo | #34 | P1 |
 | Depurador: robustez (fuzz da linha de comando, Unicode, intervalos) | todos | PASS | `4cd5132`, `d2e9962`; fuzz da linha de comando | Panics com Unicode e cópia gigante corrigidos | #34 | P1 |
 | Interface: tecla presa, Alt+Enter, somente leitura, soltar disco, monitor de setores, benchmark, importar configuração, tela cheia, título, status, escala | todos | PASS (testes Rust); sem Oráculo de janela | `applewin/tests/hu0702_input.rs`, `audit_persistence.rs`, `p23_ui.rs`; [results/p23-ui.csv](results/p23-ui.csv) (49 issues: 29 PASS, 20 NOT_APPLICABLE); HU-0702/0802 | Divergências aprovadas (ADR 0006: tela cheia #280/#358/#1374/#117, monitor atual #932, "Fastest" #1448): veja o gaps. #781 (cursor de espera ao carregar estado) FAIL | #32, #35 | P1 |
 | Linha de comando, ROMs do usuário (`-rom`, `-f8rom`, `-videorom`) | todos | PASS | `06d3f42`, `0973c85`; proveniência em [rom-provenance.md](rom-provenance.md) | Nenhuma | #35 | P1 |
@@ -138,10 +138,10 @@ Estado de execução: SHA da `main` `469bf941deab932ab228169a7ffebddae1fc6854` (
 | Componente | Modelo | Resultado | Evidência | Divergência | Issue Rust | Prioridade |
 |---|---|---|---|---|---|---|
 | Depuração temporal / rewind | //e Enhanced | IMPLEMENTED | crate `apple2-rewind`; capítulo 16 do manual | Extensão; sem Oráculo | #40 | P2 |
-| Adaptador DAP para VS Code | ][+, //e Enhanced | IMPLEMENTED | crate `apple2-dap`, `applewin-dap`; capítulo 15 do manual | Extensão | #41 | P2 |
+| Adaptador DAP para VS Code | ][+, //e Enhanced | IMPLEMENTED | crate `apple2-dap`, `apple2-rust-dap`; capítulo 15 do manual | Extensão | #41 | P2 |
 | Laboratório educacional | //e Enhanced | IMPLEMENTED | crate `apple2-lab`; capítulo 14 do manual | Extensão | #42 | P3 |
 | Apple I | Apple I | NOT_APPLICABLE | [ADR 0005](../adr/0005-apple-i-fora-do-escopo-ate-decisao.md); [apple1-investigation.md](apple1-investigation.md) | Fora do escopo até decisão do dono | #43 | P3 |
-| Frontend web/WASM | núcleo | IMPLEMENTED (protótipo opt-in) | [wasm-estudo.md](wasm-estudo.md); crate `applewin-web`; o núcleo compila para `wasm32-unknown-unknown` sem mudanças | Protótipo | #44 | P3 |
+| Frontend web/WASM | núcleo | IMPLEMENTED (protótipo opt-in) | [wasm-estudo.md](wasm-estudo.md); crate `apple2-rust-web`; o núcleo compila para `wasm32-unknown-unknown` sem mudanças | Protótipo | #44 | P3 |
 | Desempenho determinístico | todos | IMPLEMENTED | crate `apple2-bench`, [performance.md](../../tests/conformance/reports/performance.md), `--check` do baseline | Sem hardware nem compilação fixos; não é comparação com o AppleWin | #38 | P1 |
 
 ## Issues upstream sem componente próprio

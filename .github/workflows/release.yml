@@ -43,7 +43,7 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            # A versao do binario vem de [workspace.package] (crates/applewin usa version.workspace = true).
+            # A versao do binario vem de [workspace.package] (crates/apple2-rust usa version.workspace = true).
             V="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\(.*\)".*/\1/p}' Cargo.toml | head -n1)"
             if [[ -z "$V" ]]; then echo "::error::Nao foi possivel ler a versao em Cargo.toml ([workspace.package])."; exit 1; fi
             if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
@@ -134,28 +134,28 @@ jobs:
         if: runner.os != 'macOS'
         shell: bash
         run: |
-          cargo build -p applewin --release
+          cargo build -p apple2-rust --release
           echo "BINDIR=target/release" >> "$GITHUB_ENV"
 
       # macOS: build both architectures and merge them with lipo.
       - name: Build (macOS universal)
         if: runner.os == 'macOS'
         run: |
-          cargo build -p applewin --release --target aarch64-apple-darwin
-          cargo build -p applewin --release --target x86_64-apple-darwin
+          cargo build -p apple2-rust --release --target aarch64-apple-darwin
+          cargo build -p apple2-rust --release --target x86_64-apple-darwin
           mkdir -p target/universal
           lipo -create \
-            target/aarch64-apple-darwin/release/applewin \
-            target/x86_64-apple-darwin/release/applewin \
-            -output target/universal/applewin
-          lipo -info target/universal/applewin
+            target/aarch64-apple-darwin/release/apple2-rust \
+            target/x86_64-apple-darwin/release/apple2-rust \
+            -output target/universal/apple2-rust
+          lipo -info target/universal/apple2-rust
           echo "BINDIR=target/universal" >> "$GITHUB_ENV"
 
       # ROMs and symbols are embedded, so the bare executable must run: render 300 frames, no window.
       - name: Smoke test (headless)
         shell: bash
         run: |
-          EXE="$BINDIR/applewin"; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          EXE="$BINDIR/apple2-rust"; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
           "$EXE" --headless-frames 300 --dump-screen smoke.png
           test -s smoke.png
 
@@ -205,7 +205,7 @@ jobs:
       # SBOM CycloneDX 1.5 das dependencias de todas as plataformas + SHA256SUMS de todos os artefatos.
       - name: SBOM and checksums
         run: |
-          tools/package/sbom.sh "artifacts/applewin-${{ needs.prepare.outputs.version }}.cdx.json"
+          tools/package/sbom.sh "artifacts/apple2-rust-${{ needs.prepare.outputs.version }}.cdx.json"
           tools/package/checksums.sh artifacts
           cat artifacts/SHA256SUMS
 

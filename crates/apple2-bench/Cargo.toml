@@ -11,7 +11,7 @@ name = "apple2-bench"
 path = "src/main.rs"
 
 [dependencies]
-applewin = { path = "../applewin" }
+apple2-rust = { path = "../apple2-rust" }
 apple2-audio = { path = "../apple2-audio" }
 apple2-core = { path = "../apple2-core" }
 apple2-config = { path = "../apple2-config" }

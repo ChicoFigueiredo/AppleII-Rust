@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Smoke do executavel Windows (cross-compilado com cargo-xwin) no Wine, comparado ao binario Linux.
 # Wine NAO e Windows nativo: ver docs/conformance/platform/windows-wine.md.
-#   tools/package/smoke-wine.sh [applewin.exe] [applewin-linux]
+#   tools/package/smoke-wine.sh [apple2-rust.exe] [apple2-rust-linux]
 set -uo pipefail
 
 cache=${CONFORMANCE_CACHE:-/mnt/d/Chico/AppleRust/target/conformance-cache}
-exe=${1:-$cache/target-win/x86_64-pc-windows-msvc/release/applewin.exe}
-lin=${2:-target/release/applewin}
+exe=${1:-$cache/target-win/x86_64-pc-windows-msvc/release/apple2-rust.exe}
+lin=${2:-target/release/apple2-rust}
 export WINEPREFIX=$cache/wineprefix WINEDEBUG=-all
 out=$cache/smoke
 mkdir -p "$out"
@@ -33,7 +33,7 @@ if [ $rc -eq 0 ] && cmp -s "$out/lin-dos.png" "$out/win-dos.png"; then ok "boot 
 else bad "boot DOS 3.3 (rc=$rc)"; fi
 
 # --help (o exe e subsistema GUI: a saida so aparece se houver console; no Wine, via stdout redirecionado)
-if wine "$exe" --help 2>&1 | grep -q "Usage: applewin"; then ok "--help"; else bad "--help"; fi
+if wine "$exe" --help 2>&1 | grep -q "Usage: apple2-rust"; then ok "--help"; else bad "--help"; fi
 
 # janela real (Vulkan do host via winevulkan) por ~15 s, fechada com WM_DELETE_WINDOW; Wine demora a abrir
 here=$(cd "$(dirname "$0")" && pwd)

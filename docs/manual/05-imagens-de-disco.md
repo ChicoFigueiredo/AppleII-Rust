@@ -38,7 +38,7 @@ Os discos protegidos contra cópia que usam trilhas especiais só funcionam como
 - **F3** (drive 1) e **F4** (drive 2) abrem o seletor de arquivos. Enquanto o seletor está aberto a emulação fica em pausa, para o som não gaguejar.
 - O menu do drive (botão direito sobre o botão, ou **Ctrl+F3** e **Ctrl+F4**) permite inserir uma imagem, inserir como **somente leitura** ("Insert disk image (read only)...": o disco entra com a proteção de gravação ligada, como a caixa "Open as Read Only" do AppleWin), ejetar, proteger contra gravação e trocar os drives.
 - **Arrastar e soltar** um arquivo de disco sobre a janela, como no AppleWin: solto sobre o botão do drive 2, vai para o drive 2; em qualquer outro lugar, para o drive 1. A Máquina reinicia (como se o botão Run fosse apertado) se o disco foi aceito, **exceto** quando o arquivo foi solto sobre o botão do drive 1. Um arquivo que não é disco só mostra o erro. Arquivos `.aws.yaml` carregam o save-state.
-- Na linha de comando: `-d1 arquivo.dsk -d2 outro.dsk` ou, para outros slots, `-s5d1 arquivo.dsk`. Um nome sem opção (como `applewin jogo.dsk`) também insere o disco no drive 1.
+- Na linha de comando: `-d1 arquivo.dsk -d2 outro.dsk` ou, para outros slots, `-s5d1 arquivo.dsk`. Um nome sem opção (como `apple2-rust jogo.dsk`) também insere o disco no drive 1.
 - **F5** troca os discos dos drives 1 e 2. Não faça isso durante um acesso ao disco: o programa do Apple pode travar e a imagem pode ser corrompida.
 
 ## Trocar imagens com a Máquina ligada

@@ -1,7 +1,7 @@
 # Linha de comando
 
 ```
-applewin [opções] [arquivo...]
+apple2-rust [opções] [arquivo...]
 ```
 
 A linha de comando segue a do AppleWin (`ProcessCmdLine`), com as grafias de um só hífen. As opções sobrepõem a configuração salva apenas naquela execução. Os cartões inseridos com `-sN` valem antes das opções de cada cartão, então `-s6 diskii -s6d1 x.dsk` funciona em qualquer ordem.
@@ -154,14 +154,14 @@ No modo sem janela (`--headless-frames`) as configurações do usuário são ign
 
 ```
 # Boot de um DOS 3.3 no drive 1, ligando já
-applewin -d1 dos33.dsk -power-on
+apple2-rust -d1 dos33.dsk -power-on
 
 # ][+ com Language Card e Mockingboard no slot 4 (configurada), vídeo PAL
-applewin -model apple2p -s0 lc -50hz
+apple2-rust -model apple2p -s0 lc -50hz
 
 # Disco rígido ProDOS no slot 7 com SmartPort
-applewin -s7 hdc-sp -s7h1 meu.hdv
+apple2-rust -s7 hdc-sp -s7h1 meu.hdv
 
 # Gravar uma captura de tela headless da tela de boot
-applewin --headless-frames 300 --dump-screen boot.png
+apple2-rust --headless-frames 300 --dump-screen boot.png
 ```

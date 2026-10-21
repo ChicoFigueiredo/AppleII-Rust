@@ -20,15 +20,15 @@ Comando:
 ```sh
 XWIN_CACHE_DIR=target/conformance-cache/xwin XWIN_ACCEPT_LICENSE=1 \
 CARGO_TARGET_DIR=target/conformance-cache/target-win \
-cargo xwin build -p applewin --release --target x86_64-pc-windows-msvc
+cargo xwin build -p apple2-rust --release --target x86_64-pc-windows-msvc
 ```
 
-Saída: `target/conformance-cache/target-win/x86_64-pc-windows-msvc/release/applewin.exe`.
+Saída: `target/conformance-cache/target-win/x86_64-pc-windows-msvc/release/apple2-rust.exe`.
 
 Observações:
 
 - `XWIN_ACCEPT_LICENSE=1` aceita a licença do Microsoft CRT/SDK que o cargo-xwin baixa. É um ato de aceite do dono do ambiente; o cache fica fora do repositório.
-- O ícone, o manifesto e a versão (`crates/applewin/build.rs`, `packaging/windows/applewin.manifest`) foram embutidos sem erro no cruzado.
+- O ícone, o manifesto e a versão (`crates/apple2-rust/build.rs`, `packaging/windows/applewin.manifest`) foram embutidos sem erro no cruzado.
 - A alternativa `x86_64-pc-windows-gnu` não foi necessária (não há mingw e não há sudo). O `cargo-zigbuild` também não foi preciso.
 - Mac não tem equivalente: compilar macOS exige o SDK da Apple, cuja licença só permite uso em hardware Apple. Por isso macOS segue BLOCKED.
 
@@ -67,7 +67,7 @@ Notas sobre o que foi observado:
 
 ```sh
 cargo install cargo-xwin
-cargo build -p applewin --release                        # binário Linux de referência
-cargo xwin build -p applewin --release --target x86_64-pc-windows-msvc   # com as variáveis acima
+cargo build -p apple2-rust --release                        # binário Linux de referência
+cargo xwin build -p apple2-rust --release --target x86_64-pc-windows-msvc   # com as variáveis acima
 tools/package/smoke-wine.sh
 ```

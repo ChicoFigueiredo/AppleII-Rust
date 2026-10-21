@@ -10,10 +10,10 @@
 
 use apple2_config::Settings;
 use apple2_config::SlotCardSpec;
-use applewin_shell::backend::DefaultBackend;
-use applewin_shell::emu::{spawn, Command, Emulator};
-use applewin_shell::keymap::KeyEvent;
-use applewin_shell::video::Frame;
+use apple2_rust_shell::backend::DefaultBackend;
+use apple2_rust_shell::emu::{spawn, Command, Emulator};
+use apple2_rust_shell::keymap::KeyEvent;
+use apple2_rust_shell::video::Frame;
 use std::time::{Duration, Instant};
 
 pub const NOT_MEASURABLE: &[&str] = &[
@@ -145,7 +145,7 @@ fn through_thread() -> Result<serde_json::Value, String> {
         std::thread::sleep(Duration::from_millis(20));
     }
     let mut frame = Frame::new(0, 0);
-    let wait_change = |h: &applewin_shell::emu::EmuHandle, frame: &mut Frame, from: u64| {
+    let wait_change = |h: &apple2_rust_shell::emu::EmuHandle, frame: &mut Frame, from: u64| {
         let t0 = Instant::now();
         loop {
             h.shared.copy_frame(frame);

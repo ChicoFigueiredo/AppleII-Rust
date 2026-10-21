@@ -6,7 +6,7 @@ símbolos e cores ("mesmos símbolos, traço moderno"). Desenhados à mão em SV
 **Licença:** GPL-2.0-or-later, como o restante do projeto.
 
 Fonte da verdade: `assets/ui/toolbar/*.svg` (embutidos com `include_bytes!` em
-`crates/applewin/src/icons.rs`; rasterizados com `resvg` por tamanho de pixel e cacheados).
+`crates/apple2-rust/src/icons.rs`; rasterizados com `resvg` por tamanho de pixel e cacheados).
 
 | Arquivo | Uso |
 |---|---|
@@ -26,6 +26,6 @@ Fonte da verdade: `assets/ui/toolbar/*.svg` (embutidos com `include_bytes!` em
 Nota: `run.svg` reproduz a maçã de seis listras do RUN.BMP do AppleWin; a maçã arco-íris é
 marca da Apple Inc. (ver aviso de marcas do projeto).
 
-Teste: `cargo test -p applewin --test icons` valida e renderiza tudo em 24/48/128 px;
+Teste: `cargo test -p apple2-rust --test icons` valida e renderiza tudo em 24/48/128 px;
 com `ICONS_OUT=<dir>` (e `ICONS_REF=<dir de PNGs dos BMPs originais>`) salva PNGs e uma folha
 de contato.

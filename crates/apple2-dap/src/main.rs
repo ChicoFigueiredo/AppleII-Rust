@@ -1,4 +1,4 @@
-//! `applewin-dap`: Debug Adapter Protocol server over stdio. See the crate docs.
+//! `apple2-rust-dap`: Debug Adapter Protocol server over stdio. See the crate docs.
 
 use apple2_dap::protocol::{read_message, write_message};
 use apple2_dap::Session;

@@ -855,7 +855,7 @@ pub fn split_command_line(line: &str) -> Vec<String> {
 
 /// `--help` text.
 pub const HELP: &str = "\
-Usage: applewin [options]
+Usage: apple2-rust [options]
 
 Disks:
   -d1 <img> | -d2 <img>            Disk II drive 1/2 image in slot 6
