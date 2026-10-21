@@ -1,0 +1,46 @@
+titulo = "Sub-rotina com JSR e RTS"
+enunciado = """
+A sub-rotina MAIS10, já carregada em $0900, soma 10 ao acumulador e volta com RTS.
+Carregue em A o byte de $0300, chame MAIS10 três vezes com JSR
+e guarde o resultado em $0301. Ao terminar, a pilha deve estar
+equilibrada (SP igual ao valor do início, $FF). Termine com BRK.
+"""
+dica = "Cada JSR empilha 2 bytes e cada RTS os desempilha, então SP volta ao valor original."
+org = 0x0800
+
+[programa_inicial]
+endereco = 0x0900
+assembly = """
+        ORG $0900
+MAIS10  CLC
+        ADC #10
+        RTS
+"""
+
+[[caso]]
+nome = "5 vira 35"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "05"
+[caso.entrada.registradores]
+sp = 0xFF
+[[caso.esperado.memoria]]
+endereco = 0x0301
+bytes = "23"
+[caso.esperado.registradores]
+sp = 0xFF
+
+[[caso]]
+nome = "230 passa de 255: vira 4 com carry"
+[[caso.entrada.memoria]]
+endereco = 0x0300
+bytes = "E6"
+[caso.entrada.registradores]
+sp = 0xFF
+[[caso.esperado.memoria]]
+endereco = 0x0301
+bytes = "04"
+[caso.esperado.registradores]
+sp = 0xFF
+[caso.esperado.flags]
+c = true
