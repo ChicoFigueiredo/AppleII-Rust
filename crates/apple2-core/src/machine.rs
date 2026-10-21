@@ -139,8 +139,10 @@ impl Board {
             opcode,
             ..
         } = self;
-        let irq_on_last_cycle = scheduler.update(n, |id, rem| {
-            let fc = (cif as i64 + rem as i64).rem_euclid(cpf as i64) as u32;
+        let irq_on_last_cycle = scheduler.update(n, |id, _cycles| {
+            // `NTSC_GetCyclesUntilVBlank(cycles)` adds the opcode's cycles to a scanner that is
+            // still behind; the frame counter here has already advanced by them.
+            let fc = cif;
             match actions.iter().find(|(i, _)| *i == id).map(|(_, a)| *a) {
                 Some(EventAction::RaiseIrq(src)) => interrupts.set_irq(src, true),
                 Some(EventAction::Card { slot, token }) => {

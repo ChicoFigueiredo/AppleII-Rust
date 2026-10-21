@@ -1,0 +1,20 @@
+id = "savestate-corpus-Saturn128"
+story = "HU-0401"
+criterion = "Importar o save-state real Saturn128.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2plus"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Memory/Saturn128.aws.yaml"
+sha256 = "6f3ff8d41460d7a436f301212b61b840dec62aaa874d619b094b976d4ab1b9b5"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state Saturn128.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "a8a047e460e5689829196e6c5a1b6e7fac66e4ee74d90fe8526540776ff30719"

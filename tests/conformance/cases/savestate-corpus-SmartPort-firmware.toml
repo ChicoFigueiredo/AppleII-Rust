@@ -1,0 +1,20 @@
+id = "savestate-corpus-SmartPort-firmware"
+story = "HU-0401"
+criterion = "Importar o save-state real SmartPort-firmware.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/SmartPort-firmware/SmartPort-firmware.aws.yaml"
+sha256 = "b0a6c7c9b4ad531c5ca97b22a6fcc0237c1b75303ef607a93e34a43efd2d99fb"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state SmartPort-firmware.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "6d5b2f623065b07ef346e43b625b3d71abf1ca0fa520e8ffa9e6cb8d5ffa28ed"

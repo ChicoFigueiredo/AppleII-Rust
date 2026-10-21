@@ -1,0 +1,41 @@
+--- a/source/linux/duplicates/SerialComms.cpp
++++ b/source/linux/duplicates/SerialComms.cpp
+@@ -2,6 +2,9 @@
+ 
+ #include "SerialComms.h"
+ #include "YamlHelper.h"
++#include "Interface.h"
++#include "Memory.h"
++#include "../resource/resource.h"
+ 
+ CSuperSerialCard::CSuperSerialCard(UINT slot)
+     : Card(CT_SSC, slot)
+@@ -46,8 +49,28 @@
+ {
+ }
+ 
++// Conformance oracle: the fork stubs the whole card. Restored from SerialComms.cpp (upstream):
++// the firmware in the slot's $Cn00 page and the 2K expansion ROM at $C800. The 6551 registers
++// stay unimplemented (I/O handlers are IO_Null).
+ void CSuperSerialCard::InitializeIO(LPBYTE pCxRomPeripheral)
+ {
++    const UINT SSC_FW_SIZE = 2*1024;
++    const UINT SSC_SLOT_FW_SIZE = 256;
++    const UINT SSC_SLOT_FW_OFFSET = 7*256;
++
++    BYTE* pData = GetFrame().GetResource(IDR_SSC_FW, "FIRMWARE", SSC_FW_SIZE);
++    if(pData == NULL)
++        return;
++
++    memcpy(pCxRomPeripheral + m_slot*SSC_SLOT_FW_SIZE, pData+SSC_SLOT_FW_OFFSET, SSC_SLOT_FW_SIZE);
++
++    if (m_pExpansionRom == NULL)
++    {
++        m_pExpansionRom = new BYTE [SSC_FW_SIZE];
++        memcpy(m_pExpansionRom, pData, SSC_FW_SIZE);
++    }
++
++    RegisterIoHandler(m_slot, IO_Null, IO_Null, NULL, NULL, this, m_pExpansionRom);
+ }
+ 
+ void CSuperSerialCard::RescanCOMPortsAndSetSerialPortItem(DWORD newSerialPortItem)

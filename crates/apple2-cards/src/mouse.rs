@@ -439,11 +439,13 @@ fn clamp(v: &mut i32, (min, max): (i32, i32)) -> i32 {
 }
 
 impl MouseCard {
-    /// Re-arms the VBL event from the machine's current frame position. A save-state load puts
-    /// the video counter back after the card was inserted, so the event inserted then (relative
-    /// to a fresh frame) is stale; AppleWin builds the card after `g_dwCyclesThisFrame` is loaded.
+    /// Arms the VBL event as AppleWin does when a save-state load builds the card:
+    /// `InitializeIO` runs `NTSC_GetCyclesUntilVBlank(0)` while the video scanner
+    /// (`g_nVideoClockVert/Horz`) is still at (0,0) of a freshly started machine, so the first
+    /// event comes 192 lines (12480 cycles) after the load, whatever "Cycles This Frame" says.
+    /// Only later events (`on_event`) use the real scanner position.
     pub fn rearm_vbl(&mut self, ctx: &mut CardCtx) {
-        ctx.schedule(VBL_TOKEN, ctx.cycles_until_vblank() as i32);
+        ctx.schedule(VBL_TOKEN, 192 * 65);
     }
 }
 

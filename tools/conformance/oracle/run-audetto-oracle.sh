@@ -9,6 +9,12 @@
 # Without --out the CSV goes to stdout. Run build-audetto-oracle.sh first.
 set -euo pipefail
 
+# Determinism: the fork allocates the Saturn/LC banks with `new BYTE[16K]` and never clears them;
+# a partial `Memory BankNN` dump in a save-state (e.g. "0000: 00") leaves the rest as heap garbage
+# (it differs between runs of different states). glibc fills every malloc with the complement of
+# this byte, i.e. zeros, which is what the Rust port (and a fresh Windows heap) holds.
+export MALLOC_PERTURB_=255
+
 FORK_SHA="a1e20c0362f392dc25f1a3b218d2f84d4f1a25da"
 PORT_BASE_SHA="a8f0d1d40f551ad9e010522c29c2891e33c88275"   # upstream commit the Rust port started from
 FORK_UPSTREAM_SHA="3e8054b4627624398e4589f7f27b3d40a6b9718e"   # newest upstream AppleWin commit contained in the fork (merge-base)

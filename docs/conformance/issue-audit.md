@@ -93,19 +93,19 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 |---|---:|---:|
 | UNVERIFIED | 524 | 47.0 |
 | NOT_APPLICABLE | 286 | 25.7 |
-| PASS | 206 | 18.5 |
+| PASS | 207 | 18.6 |
 | BLOCKED | 87 | 7.8 |
-| FAIL | 12 | 1.1 |
+| FAIL | 11 | 1.0 |
 
 ## Taxas
 
-Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 207 / aplicáveis 829 = 25.0%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 737 | 169 | 10 | 476 | 22.9% |
+| todos | 1004 | 737 | 170 | 9 | 476 | 23.1% |
 | apple2e | 59 | 51 | 30 | 1 | 16 | 58.8% |
 | apple2e-enhanced | 59 | 47 | 25 | 0 | 17 | 53.2% |
 | apple2plus | 29 | 27 | 11 | 2 | 14 | 40.7% |
@@ -138,7 +138,7 @@ Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de
 | mockingboard | 47 | 42 | 18 | 0 | 14 | 42.9% |
 | joystick | 41 | 36 | 4 | 0 | 32 | 11.1% |
 | audio | 32 | 25 | 2 | 0 | 14 | 8.0% |
-| savestate | 32 | 29 | 9 | 1 | 17 | 31.0% |
+| savestate | 32 | 29 | 10 | 0 | 17 | 34.5% |
 | hdd | 28 | 21 | 3 | 0 | 17 | 14.3% |
 | serial | 20 | 19 | 0 | 0 | 17 | 0.0% |
 | mouse | 16 | 13 | 2 | 0 | 11 | 15.4% |
@@ -158,7 +158,7 @@ Taxa geral: PASS 206 / aplicáveis 829 = 24.8%. Aplicável = estado diferente de
 | ui | 122 | 122 | 0 | 0 | 122 | 0.0% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
-| formato | 77 | 77 | 20 | 1 | 45 | 26.0% |
+| formato | 77 | 77 | 21 | 0 | 45 | 27.3% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
 | documentacao | 30 | 30 | 0 | 0 | 30 | 0.0% |

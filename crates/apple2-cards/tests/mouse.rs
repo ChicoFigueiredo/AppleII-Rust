@@ -152,3 +152,38 @@ fn save_and_load_roundtrip() {
     let mut c = MouseCard::new();
     assert!(!c.load(&[1, 2, 3]));
 }
+
+/// The VBL event re-arms with `NTSC_GetCyclesUntilVBlank(cycles)`: the frame position it reads
+/// already includes the opcode that expired it, so every event lands on line 192 (cycle 12480 of
+/// the frame) and not a few cycles before (dazzledraw1 save-states, 7 cycles early in the trace).
+#[test]
+fn vbl_event_keeps_landing_on_line_192_of_each_frame() {
+    let mut m = machine();
+    call(&mut m, 0x19, 0);
+    call(&mut m, 0x12, 0x09); // on + VBL interrupt
+    for round in 0..4 {
+        // 20 x INC $0200 (6 cycles) and a JMP back; the I flag stays set so the IRQ is never taken.
+        for i in 0..20u16 {
+            for (j, b) in [0xEE, 0x00, 0x02].iter().enumerate() {
+                m.poke(0x300 + 3 * i + j as u16, *b);
+            }
+        }
+        for (j, b) in [0x4C, 0x00, 0x03].iter().enumerate() {
+            m.poke(0x300 + 60 + j as u16, *b);
+        }
+        m.cpu_mut().pc = 0x300;
+        m.cpu_mut().p |= 0x04;
+        let mut steps = 0;
+        while !m.board().interrupts.irq_line() {
+            m.step();
+            steps += 1;
+            assert!(steps < 100_000, "round {round}: no VBL IRQ");
+        }
+        let pos = m.cycles_in_frame();
+        assert!(
+            (192 * 65..192 * 65 + 6).contains(&pos),
+            "round {round}: VBL IRQ at frame cycle {pos}"
+        );
+        call(&mut m, 0x13, 0); // SERVEMOUSE releases it
+    }
+}

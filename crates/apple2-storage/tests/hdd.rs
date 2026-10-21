@@ -179,6 +179,17 @@ fn smartport_status_reports_the_devices() {
     m.board_mut().read(reg(0));
     let id: String = (0..14).map(|i| m.peek(0x5105 + i) as char).collect();
     assert_eq!(id, "AppleWin SP D#");
+    // Type, subtype and firmware version (AppleWin 1.32.x => 132.0, as the oracle's version.h):
+    // the SmartPort-firmware save-state prints these bytes.
+    assert_eq!(
+        [
+            m.peek(0x5100 + 21),
+            m.peek(0x5100 + 22),
+            m.peek(0x5100 + 23),
+            m.peek(0x5100 + 24)
+        ],
+        [0x02, 0x20, 132, 0]
+    );
 }
 
 #[test]
