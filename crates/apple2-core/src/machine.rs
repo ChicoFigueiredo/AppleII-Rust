@@ -707,6 +707,15 @@ impl Machine {
 
     /// Removes the speaker toggles recorded so far (absolute cycles, oldest first). If the
     /// frontend never drains, only the newest [`crate::speaker::CAPACITY`] are kept.
+    /// AppleWin `Spkr_IsActive`: the speaker toggled within the last 0.2 s of Apple time. Does
+    /// not touch the saved state.
+    pub fn speaker_is_active(&self) -> bool {
+        self.board.speaker.is_active(
+            self.board.cycles,
+            self.config().video_standard.cpu_clock_hz(),
+        )
+    }
+
     pub fn drain_speaker_toggles(&mut self) -> impl Iterator<Item = u64> + '_ {
         self.board.speaker.drain()
     }

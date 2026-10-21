@@ -137,6 +137,9 @@ pub struct MockingboardCard {
     /// `CardCtx::access_cycle` of the access being served: the label of conformance events (the
     /// Cycle AppleWin's `g_nCumulativeCycles` shows to the I/O handler).
     access_cycle: u64,
+    /// Cycle of the last AY register write (`m_regAccessedFlag`, Mockingboard.cpp:345). Derived
+    /// from the I/O, not saved: it only feeds [`Self::is_active_to_prevent_full_speed`].
+    last_ay_write: Option<u64>,
 }
 
 impl MockingboardCard {
@@ -183,6 +186,7 @@ impl MockingboardCard {
             produced: 0,
             pending_ssi: None,
             access_cycle: 0,
+            last_ay_write: None,
         };
         card.set_ay_clocks();
         for s in &mut card.subs {
@@ -191,6 +195,16 @@ impl MockingboardCard {
             }
         }
         card
+    }
+
+    /// `MockingboardCard::IsActiveToPreventFullSpeed` (Mockingboard.cpp:1050): `m_isActive`, true
+    /// after an AY register write and cleared by `MB_Update` once more than 0.1 s of Apple time
+    /// (`g_fCurrentCLK6502 / 10`, cpp:521) passes without one. SSI263 phonemes are ignored on
+    /// purpose (GH#1340).
+    pub fn is_active_to_prevent_full_speed(&self, now: u64) -> bool {
+        let window = (self.clock.clk_hz() / 10.0) as u64;
+        self.last_ay_write
+            .is_some_and(|t| now.saturating_sub(t) <= window)
     }
 
     /// Volume/mute handle for the frontend.
@@ -377,6 +391,7 @@ impl MockingboardCard {
 
     fn ay_write(&mut self, unit: usize, ay: usize, value: u8) {
         let now = self.access_cycle;
+        self.last_ay_write = Some(now);
         let slot = self.slot;
         let bus = self.bus.clone();
         let sd = self.variant == Variant::SdMusic;
@@ -873,6 +888,7 @@ impl Card for MockingboardCard {
             ctx.cancel(t);
         }
         self.phasor_mode = PH_MOCKINGBOARD;
+        self.last_ay_write = None; // m_isActive = false (Mockingboard.cpp:645)
         for s in &mut self.subs {
             s.chip_sel[0] = true;
         }
