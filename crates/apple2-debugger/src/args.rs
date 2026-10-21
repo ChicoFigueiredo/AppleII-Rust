@@ -174,6 +174,10 @@ pub fn tokenize(input: &str) -> Vec<Arg> {
         while j < ch.len() && !is_token_char(ch[j]) {
             j += 1;
         }
+        // Approved divergence (ADR 0006, #466): a `#` closing a name (`CMDNTB.PR#`) belongs to it.
+        if j < ch.len() && ch[j] == '#' && (j + 1 == ch.len() || ch[j + 1].is_whitespace()) {
+            j += 1;
+        }
         let s: String = ch[i..j].iter().take(MAX_ARG_LEN).collect();
         out.push(Arg::new(&s, Kind::Text));
         i = j;

@@ -118,13 +118,13 @@ impl Debugger {
     }
 
     /// `Util_GetDebuggerText` (Debug.cpp:5238): the debugger screen as text, the payload of
-    /// Ctrl+PrintScreen (WinFrame.cpp:1221-1231). Like the oracle it keeps only the first
-    /// `DEBUG_VIRTUAL_TEXT_HEIGHT` (43) rows, so the last console rows are lost (upstream #458),
+    /// Ctrl+PrintScreen (WinFrame.cpp:1221-1231). Unlike the oracle (approved divergence, ADR
+    /// 0006, #458) it keeps all 48 rows; the oracle cut at `DEBUG_VIRTUAL_TEXT_HEIGHT` (43),
     /// shifts every cell right of `DISPLAY_DISASM_RIGHT` (pixel 353, column 51 on) one column
     /// (`PrintGlyph`, Debugger_Display.cpp:725), blanks non-printable glyphs and ends each row with
     /// LF (the CR is `_WIN32` only).
     pub fn screen_text(&mut self, m: &Machine) -> String {
-        const TEXT_HEIGHT: usize = 43;
+        const TEXT_HEIGHT: usize = GRID_H;
         let g = self.render(m);
         let mut out = String::new();
         for y in 0..TEXT_HEIGHT {

@@ -237,10 +237,10 @@ fn gh1382_da_follow_target_uses_the_stored_word() {
     assert_eq!(d.disasm_cur, 0x2120);
 }
 
-/// gh1381: com um símbolo de dados exato no alvo, `DA` deve mostrar esse símbolo (`da B_2100`).
-/// O oráculo procura também alvo+1 quando há dado e troca para `A_2101-1`; o port repete isso.
+/// gh1381: Divergência aprovada (ADR 0006). Com um símbolo de dados exato no alvo, `DA` mostra esse
+/// símbolo (`da B_2100`). O AppleWin a8f0d1d procura também alvo+1 quando há dado e troca para
+/// `A_2101-1`; o port só usa alvo+1 quando não há símbolo exato.
 #[test]
-#[ignore = "FAIL gh1381: o oráculo (Debugger_Disassembler.cpp, `|| pData`) mostra `da A_2101-1`; o port repete"]
 fn gh1381_da_prefers_the_exact_data_symbol() {
     let (mut m, mut d, _) = setup();
     load(&mut m, 0x2000, &[0x20, 0x00, 0xBF, 0xC7, 0x00, 0x21, 0x60]);
@@ -425,10 +425,9 @@ fn gh114_symuser_load_with_quotes_reads_the_file() {
     assert!(t.contains("Symbol File not found"), "{t}");
 }
 
-/// gh114: `SYMUSER LOAD filename.sym` sem aspas não faz nada no oráculo (só o nome entre aspas é
-/// lido), e o port repete.
+/// gh114: Divergência aprovada (ADR 0006). No AppleWin a8f0d1d `SYMUSER LOAD filename.sym` sem
+/// aspas não faz nada (CmdSymbolsLoad exige TYPE_QUOTED_2); o port aceita o nome sem aspas.
 #[test]
-#[ignore = "FAIL gh114: sem aspas o nome do arquivo é ignorado, igual ao oráculo (CmdSymbolsLoad exige TYPE_QUOTED_2)"]
 fn gh114_symuser_load_accepts_an_unquoted_file_name() {
     let (mut m, mut d, files) = setup();
     files
@@ -438,10 +437,10 @@ fn gh114_symuser_load_accepts_an_unquoted_file_name() {
     assert_eq!(d.symbols.find_address("FOO").map(|x| x.0), Some(0x300));
 }
 
-/// gh245: `SYMUSER SAVE` não grava nada e não diz nada (no oráculo `CmdSymbolsSave` só devolve
-/// UPDATE_CONSOLE_DISPLAY); depois de salvar e limpar, o LOAD não restaura os símbolos.
+/// gh245: Divergência aprovada (ADR 0006). No AppleWin a8f0d1d `SYMUSER SAVE` não grava nada e não
+/// diz nada (CmdSymbolsSave só devolve UPDATE_CONSOLE_DISPLAY); o port grava o arquivo e avisa, e o
+/// LOAD restaura os símbolos.
 #[test]
-#[ignore = "FAIL gh245: SYMUSER SAVE é um no-op, igual ao oráculo (CmdSymbolsSave não faz nada)"]
 fn gh245_symuser_save_then_load_round_trips() {
     let (mut m, mut d, files) = setup();
     cmd(&mut d, &mut m, "SYM TOMMY = 1111");
@@ -474,9 +473,9 @@ fn gh466_special_chars_in_loaded_symbols_are_shown() {
     cmd(&mut d, &mut m, "SYM A/B");
 }
 
-/// gh466: procurar pelo nome com `#` deveria achar o símbolo.
+/// gh466: Divergência aprovada (ADR 0006). No AppleWin a8f0d1d `SYM CMDNTB.PR#` dá Syntax Error (o
+/// `#` final é operador no tokenizador); o port trata o `#` que fecha o nome como parte dele.
 #[test]
-#[ignore = "FAIL gh466: `SYM CMDNTB.PR#` dá Syntax Error (o `#` é operador no tokenizador), igual ao oráculo"]
 fn gh466_symbol_names_with_hash_can_be_looked_up() {
     let (mut m, mut d, _) = setup();
     d.symbols.set(Table::User1, "CMDNTB.PR#", 0xA8E1);
@@ -1044,9 +1043,9 @@ fn temp_tree() -> std::path::PathBuf {
     base
 }
 
-/// gh468: `CD ..` remove o último diretório do caminho em vez de acrescentar `..`.
+/// gh468: Divergência aprovada (ADR 0006). O AppleWin a8f0d1d acrescenta `..` ao caminho (PWD
+/// mostra `.../y/..`); o port resolve `..` e remove o último diretório.
 #[test]
-#[ignore = "FAIL gh468: FsHost::set_dir só faz dir.join(..), PWD mostra .../y/..; o oráculo também acrescenta"]
 fn gh468_cd_dotdot_removes_the_last_directory() {
     use apple2_debugger::host::FsHost;
     let base = temp_tree();
