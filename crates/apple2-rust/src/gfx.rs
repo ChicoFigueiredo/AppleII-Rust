@@ -4,21 +4,30 @@
 use std::sync::Arc;
 use winit::window::Window;
 
-pub struct Gfx {
-    // Field order is drop order: everything that borrows from the instance goes first, the instance
-    // last. It is kept alive explicitly because dropping it may terminate EGL, which needs the
-    // display connection to still be alive (see `App::release_gpu`).
-    renderer: egui_wgpu::Renderer,
-    surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    capture: Option<std::path::PathBuf>,
-    pub captured: bool,
+/// GPU objects shared by every window: one instance/adapter/device/queue per process. Each window
+/// only owns a [`Gfx`] (surface + egui renderer).
+pub struct GpuShared {
+    // Field order is drop order; the instance goes last. Dropping it may terminate EGL, which needs
+    // the display connection to still be alive (see `App::release_gpu`).
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub adapter: wgpu::Adapter,
     _instance: wgpu::Instance,
 }
 
+/// Per-window GPU state (surface, its configuration and the egui renderer).
+pub struct Gfx {
+    renderer: egui_wgpu::Renderer,
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
+    capture: Option<std::path::PathBuf>,
+    pub captured: bool,
+    // Last: the shared context outlives every surface that was created from its instance.
+    shared: Arc<GpuShared>,
+}
+
 impl Gfx {
+    /// First window: creates the shared GPU context too (see [`Gfx::shared`]).
     pub fn new(window: Arc<Window>) -> Result<Gfx, String> {
         // PRIMARY = Vulkan/Metal/DX12. GL is only a fallback: initialising (and later terminating)
         // an EGL instance on Wayland+NVIDIA crashes, so avoid creating it when not needed.
@@ -33,8 +42,39 @@ impl Gfx {
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None))
                 .map_err(|e| e.to_string())?;
+        let shared = Arc::new(GpuShared {
+            device,
+            queue,
+            adapter,
+            _instance: instance,
+        });
+        Self::with_surface(shared, surface, &window)
+    }
+
+    /// Another window on the same GPU context.
+    pub fn for_window(shared: &Arc<GpuShared>, window: Arc<Window>) -> Result<Gfx, String> {
+        let surface = shared
+            ._instance
+            .create_surface(window.clone())
+            .map_err(|e| e.to_string())?;
+        Self::with_surface(shared.clone(), surface, &window)
+    }
+
+    /// The shared context, to open further windows with [`Gfx::for_window`].
+    pub fn shared(&self) -> Arc<GpuShared> {
+        self.shared.clone()
+    }
+
+    fn with_surface(
+        shared: Arc<GpuShared>,
+        surface: wgpu::Surface<'static>,
+        window: &Window,
+    ) -> Result<Gfx, String> {
         let size = window.inner_size();
-        let caps = surface.get_capabilities(&adapter);
+        let caps = surface.get_capabilities(&shared.adapter);
+        if caps.formats.is_empty() || caps.alpha_modes.is_empty() {
+            return Err("surface not supported by the adapter".into());
+        }
         // egui wants a non-sRGB target
         let format = caps
             .formats
@@ -57,17 +97,15 @@ impl Gfx {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
-        surface.configure(&device, &config);
-        let renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
+        surface.configure(&shared.device, &config);
+        let renderer = egui_wgpu::Renderer::new(&shared.device, format, None, 1, false);
         Ok(Gfx {
             surface,
-            device,
-            queue,
             config,
             renderer,
             capture: None,
             captured: false,
-            _instance: instance,
+            shared,
         })
     }
 
@@ -112,7 +150,7 @@ impl Gfx {
     ) -> wgpu::Buffer {
         let (w, h) = (self.config.width, self.config.height);
         let row = (w * 4).div_ceil(256) * 256;
-        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let buffer = self.shared.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("capture"),
             size: u64::from(row * h),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -143,7 +181,7 @@ impl Gfx {
         let slice = buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |r| drop(tx.send(r)));
-        self.device.poll(wgpu::Maintain::Wait);
+        self.shared.device.poll(wgpu::Maintain::Wait);
         rx.recv()
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
@@ -174,14 +212,14 @@ impl Gfx {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
-            self.surface.configure(&self.device, &self.config);
+            self.surface.configure(&self.shared.device, &self.config);
         }
     }
 
     pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
         for (id, delta) in &output.textures_delta.set {
             self.renderer
-                .update_texture(&self.device, &self.queue, *id, delta);
+                .update_texture(&self.shared.device, &self.shared.queue, *id, delta);
         }
         let jobs = ctx.tessellate(output.shapes, output.pixels_per_point);
         let screen = egui_wgpu::ScreenDescriptor {
@@ -191,7 +229,7 @@ impl Gfx {
         let frame = match self.surface.get_current_texture() {
             Ok(f) => f,
             Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => {
-                self.surface.configure(&self.device, &self.config);
+                self.surface.configure(&self.shared.device, &self.config);
                 return;
             }
             Err(_) => return,
@@ -199,13 +237,19 @@ impl Gfx {
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("egui"),
-            });
-        self.renderer
-            .update_buffers(&self.device, &self.queue, &mut encoder, &jobs, &screen);
+        let mut encoder =
+            self.shared
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("egui"),
+                });
+        self.renderer.update_buffers(
+            &self.shared.device,
+            &self.shared.queue,
+            &mut encoder,
+            &jobs,
+            &screen,
+        );
         {
             let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("egui"),
@@ -228,7 +272,7 @@ impl Gfx {
             .capture
             .take()
             .map(|p| (self.capture_texture(&mut encoder, &frame.texture), p));
-        self.queue.submit(Some(encoder.finish()));
+        self.shared.queue.submit(Some(encoder.finish()));
         if let Some((buffer, path)) = capture {
             match self.save_capture(&buffer, &path) {
                 Ok(()) => self.captured = true,

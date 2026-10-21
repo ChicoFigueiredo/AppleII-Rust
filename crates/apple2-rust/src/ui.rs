@@ -66,6 +66,10 @@ pub struct UiState {
     pub mouse: crate::overlay::MouseState,
     /// Rasterised SVG toolbar icons, per pixel size.
     icons: IconCache,
+    /// A Generic Printer is configured: the toolbar shows the Printer button.
+    pub printer_available: bool,
+    /// Lit for a short while after bytes reach the printer (never repaints per byte).
+    pub printer_activity: crate::printer_window::ActivityIndicator,
 }
 
 impl UiState {
@@ -101,6 +105,8 @@ impl UiState {
             benchmark_running: false,
             mouse: Default::default(),
             icons: IconCache::default(),
+            printer_available: false,
+            printer_activity: Default::default(),
         }
     }
 
@@ -133,6 +139,9 @@ impl UiState {
                     ui.spacing_mut().item_spacing.y = 6.0;
                     for b in Button::ALL {
                         self.button(ui, b, status, &mut ev);
+                    }
+                    if self.printer_available {
+                        self.button(ui, Button::Printer, status, &mut ev);
                     }
                 });
             egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
@@ -225,7 +234,10 @@ impl UiState {
                 )))),
                 None => ui.add_sized(Vec2::splat(ICON_POINTS), egui::Button::new(&label)),
             };
-            let resp = resp.on_hover_text(format!("{label} (F{})", b.fkey()));
+            let resp = resp.on_hover_text(match b.fkey() {
+                Some(k) => format!("{label} (F{k})"),
+                None => label.clone(),
+            });
             if let Some(d) = drive {
                 self.drive_rects[d] = Some(resp.rect);
             }
@@ -237,7 +249,20 @@ impl UiState {
                 ui.label(egui::RichText::new(b.label()).small());
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 3.0;
-                    ui.label(egui::RichText::new(format!("F{}", b.fkey())).small().weak());
+                    if let Some(k) = b.fkey() {
+                        ui.label(egui::RichText::new(format!("F{k}")).small().weak());
+                    }
+                    if b == Button::Printer {
+                        let lit = self.printer_activity.is_active(std::time::Instant::now());
+                        let led = if lit { Icon::LedRead } else { Icon::LedOff };
+                        if let Some(t) = self.icons.get(&ctx, led, LED_POINTS) {
+                            ui.add(egui::Image::new((t.id(), Vec2::splat(LED_POINTS))))
+                                .on_hover_text("Printer activity");
+                        }
+                        if lit {
+                            ctx.request_repaint_after(self.printer_activity.hold());
+                        }
+                    }
                     if let Some(d) = drive {
                         if resp.secondary_clicked() {
                             self.drive_menu = Some(d);
@@ -314,6 +339,12 @@ impl UiState {
                 self.benchmark_report = None;
             }
         }
+    }
+
+    /// The printer card received bytes: lights the toolbar indicator.
+    pub fn set_printer_activity(&mut self, on: bool) {
+        self.printer_activity
+            .set_activity(on, std::time::Instant::now());
     }
 
     /// F8: opens the Settings dialog on the applied settings, or closes it.

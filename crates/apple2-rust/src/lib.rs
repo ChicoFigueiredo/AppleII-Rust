@@ -22,6 +22,7 @@ pub mod joy;
 pub mod keymap;
 pub mod overlay;
 pub mod pacing;
+pub mod printer_window;
 pub mod screenshot;
 pub mod settings;
 pub mod state_io;

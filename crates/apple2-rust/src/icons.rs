@@ -26,6 +26,8 @@ pub enum Icon {
     CapsOn,
     CapsOnLat,
     CapsOnP8,
+    /// Printer Center button (no AppleWin original).
+    Printer,
 }
 
 macro_rules! svg {
@@ -35,7 +37,7 @@ macro_rules! svg {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 19] = [
+    pub const ALL: [Icon; 20] = [
         Icon::Help,
         Icon::Run,
         Icon::RunPravets,
@@ -55,6 +57,7 @@ impl Icon {
         Icon::CapsOn,
         Icon::CapsOnLat,
         Icon::CapsOnP8,
+        Icon::Printer,
     ];
 
     /// File stem under `assets/ui/toolbar/`.
@@ -79,6 +82,7 @@ impl Icon {
             Icon::CapsOn => "caps-on",
             Icon::CapsOnLat => "caps-on-lat",
             Icon::CapsOnP8 => "caps-on-p8",
+            Icon::Printer => "printer",
         }
     }
 
@@ -103,6 +107,7 @@ impl Icon {
             Icon::CapsOn => svg!("caps-on"),
             Icon::CapsOnLat => svg!("caps-on-lat"),
             Icon::CapsOnP8 => svg!("caps-on-p8"),
+            Icon::Printer => svg!("printer"),
         }
     }
 

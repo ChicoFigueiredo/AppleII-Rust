@@ -4,13 +4,14 @@ use crate::actions::{action_for_mode_with, Action};
 use crate::audio::AudioOut;
 use crate::backend::BackendFactory;
 use crate::emu::{self, default_state_path, Command, EmuHandle, EmuStatus};
-use crate::gfx::Gfx;
+use crate::gfx::{Gfx, GpuShared};
 use crate::host;
 use crate::input::{InputRouter, KeyCtx, Routed};
 use crate::joy::{mouse_to_paddle, JoyConfig};
 use crate::keymap::Mods;
 use crate::overlay::MouseState;
 use crate::pacing::Speed;
+use crate::printer_window::{self, PrinterViewModel, PrinterWindow, Route};
 use crate::screenshot::{save_png, ScreenshotNamer};
 use crate::toolbar;
 use crate::ui::{UiEvent, UiState};
@@ -80,6 +81,15 @@ struct App {
     _audio: Option<crate::audio::AudioOut>,
     window: Option<Arc<Window>>,
     gfx: Option<Gfx>,
+    /// GPU context shared with the Printer Center window.
+    gpu: Option<Arc<GpuShared>>,
+    /// Second native window (Printer Center); never receives emulator input.
+    printer: PrinterWindow,
+    printer_vm: PrinterViewModel,
+    /// The main window has keyboard focus (decides whether an automatic opening gives it back).
+    main_focused: bool,
+    /// `APPLE2_RUST_PRINTER_DEMO=script`: scripted close / reopen smoke (stage, start, frames).
+    demo_script: Option<(u8, Instant, u64)>,
     quit: bool,
     egui_ctx: egui::Context,
     egui_state: Option<egui_winit::State>,
@@ -172,6 +182,11 @@ impl App {
             _audio: audio,
             window: None,
             gfx: None,
+            gpu: None,
+            printer: PrinterWindow::default(),
+            printer_vm: PrinterViewModel::default(),
+            main_focused: false,
+            demo_script: None,
             quit: false,
             egui_ctx: egui::Context::default(),
             egui_state: None,
@@ -268,6 +283,7 @@ impl App {
             Action::SpeedToggleMax => self.toggle_max_speed(),
             Action::Speed1Mhz => self.emu.send(Command::SetSpeed(Speed::NORMAL)),
             Action::SpeedMax => self.emu.send(Command::SetSpeed(Speed::Max)),
+            Action::PrinterCenter => self.printer.open(false),
         }
     }
 
@@ -843,11 +859,98 @@ pub fn window_size(scale: u32, toolbar: bool) -> LogicalSize<f64> {
 }
 
 impl App {
+    /// Creates / focuses the Printer Center when asked, and schedules its (rate-limited) redraws.
+    fn drive_printer(&mut self, el: &ActiveEventLoop) {
+        if self.printer.is_open() {
+            if let Some(shared) = self.gpu.clone() {
+                match self
+                    .printer
+                    .realize(el, &shared, crate::icon::window_icon())
+                {
+                    Ok(true) => {
+                        // winit cannot open it unfocused here: give the focus back
+                        if self.main_focused {
+                            if let Some(w) = &self.window {
+                                w.focus_window();
+                            }
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        eprintln!("cannot open the Printer Center: {e}");
+                        self.printer.close();
+                    }
+                }
+            }
+        }
+        match self.printer.drive(Instant::now()) {
+            Some(t) => el.set_control_flow(ControlFlow::WaitUntil(t)),
+            None => el.set_control_flow(ControlFlow::Wait),
+        }
+    }
+
+    /// Smoke script: close the Central at 3 s, check the emulation kept running, reopen at 5 s,
+    /// close the main window (clean exit) at 7 s.
+    fn run_demo_script(&mut self, el: &ActiveEventLoop) {
+        let Some((stage, t0, frames)) = self.demo_script else {
+            return;
+        };
+        let secs = t0.elapsed().as_secs_f32();
+        let seq = self.emu.shared.frame_seq();
+        match stage {
+            0 if secs > 3.0 => {
+                self.printer.close();
+                eprintln!("script: Central closed at frame {seq}, main window alive");
+                self.demo_script = Some((1, t0, seq));
+            }
+            1 if secs > 5.0 => {
+                eprintln!(
+                    "script: emulation advanced {} frames while closed",
+                    seq - frames
+                );
+                self.printer.open(false);
+                self.demo_script = Some((2, t0, seq));
+            }
+            2 if secs > 7.0 => {
+                eprintln!(
+                    "script: Central reopened (page {} kept), closing the main window",
+                    self.printer.preview.page + 1
+                );
+                self.emu.shutdown();
+                self.release_gpu();
+                el.exit();
+                self.demo_script = None;
+            }
+            _ => {}
+        }
+        el.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(100),
+        ));
+    }
+
+    /// Development flag `APPLE2_RUST_PRINTER_DEMO` (see [`printer_window::DEMO_ENV`]).
+    fn start_printer_demo(&mut self) {
+        let Ok(v) = std::env::var(printer_window::DEMO_ENV) else {
+            return;
+        };
+        self.ui.printer_available = true;
+        self.ui.set_printer_activity(true);
+        self.printer_vm = printer_window::demo_view_model(100);
+        if v == "script" {
+            self.demo_script = Some((0, Instant::now(), 0));
+        }
+        self.printer.dump = std::env::var_os("APPLE2_RUST_PRINTER_DUMP").map(PathBuf::from);
+        self.printer.open(v == "auto");
+    }
+
     /// Releases GPU and window resources in dependency order: Gfx (renderer, surface, device, queue,
     /// instance), then the egui winit state, then the window. Must run while the event loop (and so
     /// the display connection) is still alive: terminating EGL on Wayland afterwards segfaults.
     fn release_gpu(&mut self) {
+        // The secondary window goes first: its surface was created from the shared instance.
+        self.printer.shutdown();
         self.gfx = None;
+        self.gpu = None;
         self.egui_state = None;
         self.window = None;
     }
@@ -875,7 +978,10 @@ impl ApplicationHandler<UserEvent> for App {
             }
         };
         match Gfx::new(window.clone()) {
-            Ok(g) => self.gfx = Some(g),
+            Ok(g) => {
+                self.gpu = Some(g.shared());
+                self.gfx = Some(g);
+            }
             Err(e) => {
                 eprintln!("graphics init failed: {e}");
                 self.release_gpu();
@@ -904,6 +1010,8 @@ impl ApplicationHandler<UserEvent> for App {
             }
         }
         self.window = Some(window);
+        self.main_focused = true;
+        self.start_printer_demo();
     }
 
     fn user_event(&mut self, el: &ActiveEventLoop, e: UserEvent) {
@@ -917,7 +1025,20 @@ impl ApplicationHandler<UserEvent> for App {
         }
     }
 
-    fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, el: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        match printer_window::route(
+            id,
+            self.window.as_ref().map(|w| w.id()),
+            self.printer.window_id(),
+        ) {
+            Route::Main => {}
+            Route::Printer => {
+                // Everything typed or clicked in the Printer Center stays there (R08).
+                self.printer.window_event(event, &self.printer_vm);
+                return;
+            }
+            Route::Unknown => return,
+        }
         let mut egui_wants_keys = false;
         if let (Some(state), Some(window)) = (self.egui_state.as_mut(), self.window.as_ref()) {
             let r = state.on_window_event(window, &event);
@@ -947,6 +1068,7 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             WindowEvent::CloseRequested => {
                 self.emu.shutdown();
+                self.printer.shutdown();
                 self.release_gpu();
                 el.exit();
             }
@@ -967,7 +1089,11 @@ impl ApplicationHandler<UserEvent> for App {
                 self.input.joy.set_shift(self.mods.shift_key());
                 self.update_joy();
             }
-            WindowEvent::Focused(false) => self.release_inputs(),
+            WindowEvent::Focused(false) => {
+                self.main_focused = false;
+                self.release_inputs();
+            }
+            WindowEvent::Focused(true) => self.main_focused = true,
             WindowEvent::KeyboardInput { event, .. } => self.keyboard(&event, egui_wants_keys),
             WindowEvent::MouseWheel { delta, .. } if self.status.debugger_active => {
                 self.debugger_wheel(delta)
@@ -999,10 +1125,12 @@ impl ApplicationHandler<UserEvent> for App {
         }
     }
 
-    fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
-        // gamepads are polled with every published frame (user_event); nothing else to do
+    fn about_to_wait(&mut self, el: &ActiveEventLoop) {
+        // gamepads are polled with every published frame (user_event)
         if self.gilrs.is_some() {
             self.poll_gamepads();
         }
+        self.drive_printer(el);
+        self.run_demo_script(el);
     }
 }

@@ -55,6 +55,9 @@ pub enum Action {
     SpeedMax,
     /// Debugger single-step (F11 in AppleWin's debugger is "step into"; here Ctrl+F11).
     Step,
+    /// Toolbar "Printer" button: opens / focuses the Printer Center window. No key: F9..F12
+    /// are taken (video mode, rocker switch, states), as in AppleWin.
+    PrinterCenter,
 }
 
 /// Returns the action bound to a key press, if any. Auto-repeat must be filtered by the caller.

@@ -60,6 +60,7 @@ fn ref_name(i: Icon) -> &'static str {
         Icon::CapsOn => "LED_CAPS_ON",
         Icon::CapsOnLat => "LED_CAPS_ON_LAT",
         Icon::CapsOnP8 => "LED_CAPS_ON_P8",
+        Icon::Printer => "PRINTER", // no AppleWin original
     }
 }
 
