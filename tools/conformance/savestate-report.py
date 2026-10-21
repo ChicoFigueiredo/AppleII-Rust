@@ -30,16 +30,11 @@ BLOCKERS = [
     ("NoSlotClockTest", "dependência de tempo real: o No-Slot Clock devolve a hora do hospedeiro (fixa no Rust, real no oráculo)"),
     ("skm-", "o fork do oráculo não tem Shift Key Mod (unidade Game I/O v4); state-compat.py a remove, então o botão lido difere"),
     ("CPM2.2(56k)-3", "Z80 SoftCard ativo: o trace cobre só a CPU 6502 e o ciclo inicial do oráculo difere do arquivo"),
-    ("SSC-", "dependência de TCP/serial do hospedeiro; o oráculo executa BRK em $C8EA/$CAE1 (ROM de expansão do SSC não restaurada no fork)"),
+    ("SSC-", "dependência de TCP/serial do hospedeiro; o fork não emula o 6551 do SSC (audetto-ssc-rom.patch só restaura a ROM) e o oráculo lê o barramento flutuante em $C0A8-$C0AF"),
 ]
-# Known causes of FAIL, from the first divergence.
-CAUSES = [
-    ("Saturn", "Saturn: o byte lido de um banco restaurado do estado difere do oráculo (a contagem de bancos, AUD-C-001, já foi corrigida; causa raiz ainda não investigada)"),
-    ("Mockingboard", "temporização do VIA 6522 / IRQ do Mockingboard após o load (primeira divergência no IFR ou no ciclo da IRQ)"),
-    ("dazzledraw", "IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado"),
-    ("SNES_MAX", "SNES MAX: bit de dados do controle lido no meio da leitura"),
-    ("SmartPort-firmware", "SmartPort: valor de status lido de $C0nX difere"),
-]
+# Known causes of FAIL, from the first divergence (all earlier ones are fixed: Saturn, SmartPort,
+# SNES MAX, mouse VBL and 6522/SSI263 now match the oracle).
+CAUSES = []
 
 
 def sh(*a):
@@ -122,6 +117,11 @@ def main():
            "- Controlador de HDD de estados antigos: Hddrvr.bin (v1-3) e Hddrvr-v2.bin (v4) em vez do firmware SmartPort; `FixupUnitNum`.",
            "- Barramento flutuante lia a RAM principal; o AppleWin lê a imagem de leitura da CPU (aux com RAMRD), AUD-C-050.",
            "- Entrada de IRQ/NMI não gera linha de trace (o oráculo registra depois do fetch do opcode); opcode em `$C100-$CFFF` vem do fetch real.",
+           "- Saturn64/Saturn128: o fork aloca os bancos com `new BYTE[16K]` sem zerar e o YAML só lista `0000: 00`; o oráculo lia lixo de heap (`$E000` = `$46`/`$32`). `run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255` (zera as alocações), como o porte e um heap novo do Windows.",
+           "- SmartPort-firmware: o DIB devolvia `130.0` como versão do firmware; o `version.h` do oráculo é 1.32.0.0, logo `132.0` (`FW_VERSION` em `hdd.rs`).",
+           "- SNES MAX-slot4: o fork do oráculo deixa o cartão sem tratador de E/S (o `SNESMAX.cpp` de `source/linux/duplicates` é um esqueleto); `audetto-snesmax.patch` o restaura sem joystick. O porte já seguia o AppleWin.",
+           "- dazzledraw1 (3 arquivos): o primeiro evento de VBL do mouse vem 12480 ciclos (192 linhas, scanner em 0,0) depois do load, não do `Cycles This Frame`; e o evento recalculava a posição do quadro somando de novo os ciclos do opcode (7 ciclos antes).",
+           "- 6522-one-shot e SSI263-test: não era o reset do 6522 (GH#1176). O programa varre os slots lendo `$Cn04`; o fork não instalava a ROM do SSC em `$C2xx` e lia 0 onde o porte lê `$0C`. `audetto-ssc-rom.patch` instala a ROM.",
            "- Ferramental: o oráculo precisava de o `CpuExecute(slice, true)` do oráculo (sem ele o scanner de vídeo ficava parado e o barramento flutuante era constante), "
            "da cwd com as imagens e de `state-compat.py` (remove a unidade Game I/O v4 que o fork não conhece).", ""]
     out = os.path.join(ROOT, "tests/conformance/reports/savestate-import.md")

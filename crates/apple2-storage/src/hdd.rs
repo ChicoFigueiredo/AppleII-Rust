@@ -55,9 +55,11 @@ const fn status_error(err: u8) -> u8 {
     (err << 1) | STATUS_ERROR
 }
 
-/// Firmware revision reported in SmartPort device information blocks (the AppleWin version
-/// numbers there; only informational).
-const FW_VERSION: (u8, u8) = (130, 0);
+/// Firmware revision reported in SmartPort device information blocks: the AppleWin version as
+/// `major*100+minor`, `fix` (`SmartPortCmdStatus`). 132.0 is what the oracle (fork, `version.h`
+/// 1.32.0.0) reports; the 1.32.1.0 release would report 132.1. The SmartPort-firmware save-state
+/// prints these bytes.
+const FW_VERSION: (u8, u8) = (132, 0);
 
 /// Which slot ROM to run (`HdcMode` and the `-hdc-firmware` options).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

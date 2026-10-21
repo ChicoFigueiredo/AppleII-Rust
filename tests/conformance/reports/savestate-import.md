@@ -11,8 +11,8 @@ Duas verificações por arquivo:
 
 | resultado | arquivos |
 |---|---|
-| PASS | 79 |
-| FAIL | 9 |
+| PASS | 88 |
+| FAIL | 0 |
 | BLOCKED | 27 |
 | total | 115 |
 
@@ -51,10 +51,10 @@ Duas verificações por arquivo:
 | v2/Prince of Persia.aws.yaml | PASS | 100000 | FAIL (8) | 26444 instruções idênticas; rows_sha256=3f2523699c64b1347724f5558c014e4f15e7e015188018351206d3a5edc05f2a |
 | v2/Reset_defaults.aws.yaml | PASS | 100000 | FAIL (1) | 38679 instruções idênticas; rows_sha256=27c292736b7517d35a5ad06c5a725e042e5689a88d09cde22caf37aa9dd4501e |
 | v2/SAM Slot 5.aws.yaml | PASS | 100000 | FAIL (1) | 31245 instruções idênticas; rows_sha256=b1943a75fdca577c50aa2b250e623e32ed1df63c59b383a1f488da646fd96c6a |
-| v2/SNES_MAX-slot4.aws.yaml | FAIL | 6 | FAIL (2) | SNES MAX: bit de dados do controle lido no meio da leitura \| linha 2: oráculo 182315542,0C54,2A,A0,01,08,E3,B4 / rust 182315542,0C54,2A,E0,01,08,E3,B4 |
-| v2/SSC-COM2-tx-rx-tcp.aws.yaml | BLOCKED | - | FAIL (1) | dependência de TCP/serial do hospedeiro; o oráculo executa BRK em $C8EA/$CAE1 (ROM de expansão do SSC não restaurada no fork) |
-| v2/SSC-TCP-IN#2.aws.yaml | BLOCKED | - | FAIL (1) | dependência de TCP/serial do hospedeiro; o oráculo executa BRK em $C8EA/$CAE1 (ROM de expansão do SSC não restaurada no fork) |
-| v2/SSC-TCP-tx-rx-tcp.aws.yaml | BLOCKED | - | FAIL (1) | dependência de TCP/serial do hospedeiro; o oráculo executa BRK em $C8EA/$CAE1 (ROM de expansão do SSC não restaurada no fork) |
+| v2/SNES_MAX-slot4.aws.yaml | PASS | 100000 | FAIL (2) | 28547 instruções idênticas; rows_sha256=8615a2a78a21544d79325feafce89dca2afabf1a9c7a43d69be17b1999840b3f |
+| v2/SSC-COM2-tx-rx-tcp.aws.yaml | BLOCKED | - | FAIL (1) | dependência de TCP/serial do hospedeiro; o fork não emula o 6551 do SSC (audetto-ssc-rom.patch só restaura a ROM) e o oráculo lê o barramento flutuante em $C0A8-$C0AF |
+| v2/SSC-TCP-IN#2.aws.yaml | BLOCKED | - | FAIL (1) | dependência de TCP/serial do hospedeiro; o fork não emula o 6551 do SSC (audetto-ssc-rom.patch só restaura a ROM) e o oráculo lê o barramento flutuante em $C0A8-$C0AF |
+| v2/SSC-TCP-tx-rx-tcp.aws.yaml | BLOCKED | - | FAIL (1) | dependência de TCP/serial do hospedeiro; o fork não emula o 6551 do SSC (audetto-ssc-rom.patch só restaura a ROM) e o oráculo lê o barramento flutuante em $C0A8-$C0AF |
 | v2/Sherwood Forest.aws.yaml | PASS | 100000 | FAIL (1) | 38679 instruções idênticas; rows_sha256=ce64c6abcfcd92d6b2eedd79ab37de88f0237ea8759ab737df0e108b6ff3fb20 |
 | v2/TK3000e.aws.yaml | PASS | 100000 | FAIL (1) | 26699 instruções idênticas; rows_sha256=a4b183b3440f85a2ef9c53a46aaa0726844e50daee72c8fec89385a1afd43018 |
 | v2/Tests-Various.aws.yaml | PASS | 100000 | FAIL (1) | 38679 instruções idênticas; rows_sha256=ce64c6abcfcd92d6b2eedd79ab37de88f0237ea8759ab737df0e108b6ff3fb20 |
@@ -70,11 +70,11 @@ Duas verificações por arquivo:
 | v2/audit-A2e-enhanced.aws.yaml | PASS | 100000 | FAIL (1) | 38679 instruções idênticas; rows_sha256=ce64c6abcfcd92d6b2eedd79ab37de88f0237ea8759ab737df0e108b6ff3fb20 |
 | v2/audit-A2e.aws.yaml | PASS | 100000 | FAIL (1) | 38683 instruções idênticas; rows_sha256=e3ed96e4e20bb2b6602c2384fe018ca23730633cc23b870c77ed78cc80d2fa0f |
 | v2/contiki-apple2-1-request-ip.aws.yaml | BLOCKED | - | FAIL (2) | oráculo não carregou o estado: [oracle] MessageBox: Uthernet Interface: Uthernet interface isn't valid! |
-| v2/dazzledraw1-mouse-rom-page0.aws.yaml | FAIL | 12489 | FAIL (1) | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 3847: oráculo 32722781,0360,D8,00,0D,00,F8,77 / rust 32722774,6CEF,8D,00,0D,00,FB,73 |
-| v2/dazzledraw1-mouse-rom-page6.aws.yaml | FAIL | 12489 | FAIL (1) | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 4124: oráculo 32708499,0360,D8,00,0D,00,F8,77 / rust 32708492,6CEE,58,00,0D,00,FB,73 |
+| v2/dazzledraw1-mouse-rom-page0.aws.yaml | PASS | 100000 | FAIL (1) | 31799 instruções idênticas; rows_sha256=dc75fd169abaeb940804a885fac43f3293b01a168b29e799424531d34c0894ca |
+| v2/dazzledraw1-mouse-rom-page6.aws.yaml | PASS | 100000 | FAIL (1) | 31925 instruções idênticas; rows_sha256=94268c103b429aaeb581ea7f3123d6188b705d819058c4ebd6881ece0e01b499 |
 | v2/skm-apple2ee.aws.yaml | BLOCKED | - | FAIL (1) | o fork do oráculo não tem Shift Key Mod (unidade Game I/O v4); state-compat.py a remove, então o botão lido difere |
 | v2/skm-apple2p.aws.yaml | BLOCKED | - | FAIL (1) | o fork do oráculo não tem Shift Key Mod (unidade Game I/O v4); state-compat.py a remove, então o botão lido difere |
-| v2/SmartPort-firmware/SmartPort-firmware.aws.yaml | FAIL | 4373 | FAIL (1) | SmartPort: valor de status lido de $C0nX difere \| linha 1330: oráculo 366402089,6193,AA,84,00,13,F0,B0 / rust 366402089,6193,AA,82,00,13,F0,B0 |
+| v2/SmartPort-firmware/SmartPort-firmware.aws.yaml | PASS | 100000 | FAIL (1) | 28027 instruções idênticas; rows_sha256=6d5b2f623065b07ef346e43b625b3d71abf1ca0fa520e8ffa9e6cb8d5ffa28ed |
 | v2/DiskFormat/DOS3.2.1_init_enh_nib.aws.yaml | BLOCKED | - | BLOCKED | rust: erro: BLOCKED: imagens ausentes: test0.nib |
 | v2/DiskFormat/DOS3.2.1_init_enh_woz1.aws.yaml | BLOCKED | - | BLOCKED | rust: erro: BLOCKED: imagens ausentes: wozv1.woz |
 | v2/DiskFormat/DOS3.2.1_init_enh_woz2.aws.yaml | BLOCKED | - | BLOCKED | rust: erro: BLOCKED: imagens ausentes: wozv2.woz |
@@ -96,7 +96,7 @@ Duas verificações por arquivo:
 | v2/HDD-RW-IO-Boundary/HDD-RW-IO-Boundary.aws.yaml | PASS | 100000 | FAIL (6) | 26908 instruções idênticas; rows_sha256=99499870a5e1b526ef609d5730a499786bbc6ddc5493dca9c483790df3f623d0 |
 | v2/VidHD/SHR-AppleII-64K-Skyfox.aws.yaml | PASS | 100000 | FAIL (3) | 25281 instruções idênticas; rows_sha256=7fc4aca1562ee99f5f2b0c0eb2fbb9496d6176523f93d67202329f469c581409 |
 | v2/RGB card/AppleColorCard-slideshow-lake.aws.yaml | PASS | 100000 | FAIL (1) | 26666 instruções idênticas; rows_sha256=52be34f0be26f968f2d3f375afc49731cc81a1aa7a64f1589aa75f7659137fe5 |
-| v2/RGB card/dazzledraw1.aws.yaml | FAIL | 7260 | FAIL (1) | IRQ do cartão de mouse (evento de VBL) 7 ciclos adiantado ou atrasado \| linha 2405: oráculo 32693053,6CF2,AD,00,0C,00,FB,73 / rust 32693060,0360,D8,00,0C,00,F8,77 |
+| v2/RGB card/dazzledraw1.aws.yaml | PASS | 100000 | FAIL (1) | 31983 instruções idênticas; rows_sha256=284e0c5b3520211c63a1bd84821a56b3904157476b9c67cb5357aad2d491106d |
 | v2/RGB card/dragon_wars.aws.yaml | PASS | 100000 | FAIL (1) | 37675 instruções idênticas; rows_sha256=a877e5def0f598a6108e47c50a71a55ecfc0c295396fc9dcf3d8a3d41faa9da6 |
 | v2/Video ROM/A2+.aws.yaml | PASS | 100000 | FAIL (1) | 26666 instruções idênticas; rows_sha256=ef9d11a9713daf5c9abb5bf31d35ea78e0467b7d46e59c636472c9d1e7560e38 |
 | v2/Video ROM/A2.aws.yaml | PASS | 100000 | FAIL (1) | 26666 instruções idênticas; rows_sha256=522a20ae04da0e2fecea32a9700bf3577afa799f1839e5c0c62c4b71d02c6b0b |
@@ -116,9 +116,9 @@ Duas verificações por arquivo:
 | v2/Memory/RamWorksIII-256KB.aws.yaml | PASS | 100000 | FAIL (2) | 28285 instruções idênticas; rows_sha256=8a896ce75c046b8cd01019e714190d8a65972726b1e8d50f29ba97e201598e68 |
 | v2/Memory/RamWorks_r4.aws.yaml | PASS | 100000 | FAIL (1) | 27890 instruções idênticas; rows_sha256=e0f02a5bb2baca14780201b34646d335d277d0ea1b27cd409871006cb85f883a |
 | v2/Memory/Saturn128-Bank3-2.aws.yaml | PASS | 100000 | FAIL (1) | 27993 instruções idênticas; rows_sha256=1bd771b4011afa5840c5ffc15547cf610a8bef6d0bb07b96a70c5232e8965cad |
-| v2/Memory/Saturn128.aws.yaml | FAIL | 406 | FAIL (1) | Saturn: o byte lido de um banco restaurado do estado difere do oráculo (a contagem de bancos, AUD-C-001, já foi corrigida; causa raiz ainda não investigada) \| linha 118: oráculo 30645974,2ADB,EE,32,00,03,EC,34 / rust 30645974,2ADB,EE,00,00,03,EC,36 |
-| v2/Memory/Saturn64.aws.yaml | FAIL | 406 | FAIL (1) | Saturn: o byte lido de um banco restaurado do estado difere do oráculo (a contagem de bancos, AUD-C-001, já foi corrigida; causa raiz ainda não investigada) \| linha 118: oráculo 22561764,28F7,EE,46,00,03,EE,34 / rust 22561764,28F7,EE,00,00,03,EE,36 |
-| v2/Mockingboard/6522-one-shot.aws.yaml | FAIL | 115 | FAIL (1) | linha 32: oráculo 122820435,6195,C5,00,06,04,EC,36 / rust 122820435,6195,C5,0C,06,04,EC,34 |
+| v2/Memory/Saturn128.aws.yaml | PASS | 100000 | FAIL (1) | 27473 instruções idênticas; rows_sha256=a8a047e460e5689829196e6c5a1b6e7fac66e4ee74d90fe8526540776ff30719 |
+| v2/Memory/Saturn64.aws.yaml | PASS | 100000 | FAIL (1) | 27489 instruções idênticas; rows_sha256=0c3d00886dfbf9ab74a1489de74525c3972009fb66b1fca5104ff3417514ca0a |
+| v2/Mockingboard/6522-one-shot.aws.yaml | PASS | 100000 | FAIL (1) | 31716 instruções idênticas; rows_sha256=3c80ffcca7304edb91e7336cec4584aafc1ad62a42645bcf3b413f94d0632bd9 |
 | v2/Mockingboard/Cybernoid(MBv3).aws.yaml | PASS | 100000 | FAIL (1) | 29874 instruções idênticas; rows_sha256=8b3cb6e3f4bfd26571f437a9ca73bed76aeb3be0dfee55344cc6188012819e73 |
 | v2/Mockingboard/Cybernoid-TimerAtC480.aws.yaml | PASS | 100000 | FAIL (1) | 27073 instruções idênticas; rows_sha256=83bd623716f9d59c65c8671fbab2874357edc9ade8ca51e481cf1a73a5314613 |
 | v2/Mockingboard/Cybernoid.aws.yaml | PASS | 100000 | FAIL (1) | 30134 instruções idênticas; rows_sha256=cf0279fc0eb790bd5100ce00e88c13996d3eb444aeea5a90278a26504faac6d4 |
@@ -129,7 +129,7 @@ Duas verificações por arquivo:
 | v2/Mockingboard/SC01-2x_phonemes_playing_continuously.aws.yaml | PASS | 100000 | FAIL (1) | 26700 instruções idênticas; rows_sha256=4d3457b5cd0e702b9bd5bd8d5855481dd20114767fdec79a66f14769752d1ccf |
 | v2/Mockingboard/SSI263-4x_phonemes_playing_continuously-alt.aws.yaml | PASS | 100000 | FAIL (1) | 26700 instruções idênticas; rows_sha256=937775f136c9e02f8a1c53878b79ef06ce79f6f74746bde7958bcfde3e20ea71 |
 | v2/Mockingboard/SSI263-4x_phonemes_playing_continuously.aws.yaml | PASS | 100000 | FAIL (1) | 26700 instruções idênticas; rows_sha256=adfb57cd6770f9311c3b06d2e200543161a23ae9ccb35abced002331c13ffa71 |
-| v2/Mockingboard/SSI263-test.aws.yaml | FAIL | 109 | FAIL (1) | linha 30: oráculo 78000058,646F,C5,00,06,04,EE,36 / rust 78000058,646F,C5,0C,06,04,EE,34 |
+| v2/Mockingboard/SSI263-test.aws.yaml | PASS | 100000 | FAIL (1) | 39871 instruções idênticas; rows_sha256=e1ce3ec32205e9e9b33bee4f8565c8b102be250a3262e77cc95cfdd524d5fdc2 |
 | v2/Mockingboard/irq-pending.aws.yaml | PASS | 100000 | FAIL (1) | 28395 instruções idênticas; rows_sha256=3c7f29eb2ed24d7bf9703d29c4e39dd7186c5a491f8bc00eedf47663b8570231 |
 | v2/Mockingboard/phasor-fugue(v9).aws.yaml | PASS | 100000 | FAIL (1) | 31766 instruções idênticas; rows_sha256=ee5a8d138bda4c790baa17c51426daf447232c2b13c6cb9b8f81bc39d26d685b |
 | v2/Mockingboard/phasor-fugue.aws.yaml | PASS | 100000 | FAIL (2) | 31766 instruções idênticas; rows_sha256=ee5a8d138bda4c790baa17c51426daf447232c2b13c6cb9b8f81bc39d26d685b |
@@ -144,5 +144,10 @@ Duas verificações por arquivo:
 - Controlador de HDD de estados antigos: Hddrvr.bin (v1-3) e Hddrvr-v2.bin (v4) em vez do firmware SmartPort; `FixupUnitNum`.
 - Barramento flutuante lia a RAM principal; o AppleWin lê a imagem de leitura da CPU (aux com RAMRD), AUD-C-050.
 - Entrada de IRQ/NMI não gera linha de trace (o oráculo registra depois do fetch do opcode); opcode em `$C100-$CFFF` vem do fetch real.
+- Saturn64/Saturn128: o fork aloca os bancos com `new BYTE[16K]` sem zerar e o YAML só lista `0000: 00`; o oráculo lia lixo de heap (`$E000` = `$46`/`$32`). `run-audetto-oracle.sh` exporta `MALLOC_PERTURB_=255` (zera as alocações), como o porte e um heap novo do Windows.
+- SmartPort-firmware: o DIB devolvia `130.0` como versão do firmware; o `version.h` do oráculo é 1.32.0.0, logo `132.0` (`FW_VERSION` em `hdd.rs`).
+- SNES MAX-slot4: o fork do oráculo deixa o cartão sem tratador de E/S (o `SNESMAX.cpp` de `source/linux/duplicates` é um esqueleto); `audetto-snesmax.patch` o restaura sem joystick. O porte já seguia o AppleWin.
+- dazzledraw1 (3 arquivos): o primeiro evento de VBL do mouse vem 12480 ciclos (192 linhas, scanner em 0,0) depois do load, não do `Cycles This Frame`; e o evento recalculava a posição do quadro somando de novo os ciclos do opcode (7 ciclos antes).
+- 6522-one-shot e SSI263-test: não era o reset do 6522 (GH#1176). O programa varre os slots lendo `$Cn04`; o fork não instalava a ROM do SSC em `$C2xx` e lia 0 onde o porte lê `$0C`. `audetto-ssc-rom.patch` instala a ROM.
 - Ferramental: o oráculo precisava de o `CpuExecute(slice, true)` do oráculo (sem ele o scanner de vídeo ficava parado e o barramento flutuante era constante), da cwd com as imagens e de `state-compat.py` (remove a unidade Game I/O v4 que o fork não conhece).
 

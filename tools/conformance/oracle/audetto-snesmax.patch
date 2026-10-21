@@ -1,0 +1,74 @@
+--- a/source/linux/duplicates/SNESMAX.cpp
++++ b/source/linux/duplicates/SNESMAX.cpp
+@@ -1,9 +1,58 @@
+ #include "StdAfx.h"
+ #include "SNESMAX.h"
+ #include "YamlHelper.h"
++#include "Memory.h"
++
++// Conformance oracle: the fork stubs the whole card. Restored from source/SNESMAX.cpp (upstream)
++// without the Windows joystick (the oracle has no gamepad, so a latch leaves every button
++// released and the "controller plugged in" bit clear).
++BYTE __stdcall SNESMAXCard::IORead(WORD pc, WORD addr, BYTE bWrite, BYTE value, ULONG nExecutedCycles)
++{
++    const UINT slot = ((addr & 0xff) >> 4) - 8;
++    SNESMAXCard *pCard = (SNESMAXCard *)MemGetSlotParameters(slot);
++
++    BYTE output = MemReadFloatingBus(nExecutedCycles);
++
++    switch (addr & 0xF)
++    {
++    case 0:
++        output = (output & 0x3F) | ((pCard->m_controller2Buttons & 0x1) << 6) | ((pCard->m_controller1Buttons & 0x1) << 7);
++        break;
++    default:
++        break;
++    }
++    return output;
++}
++
++BYTE __stdcall SNESMAXCard::IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE value, ULONG nExecutedCycles)
++{
++    const UINT slot = ((addr & 0xff) >> 4) - 8;
++    SNESMAXCard *pCard = (SNESMAXCard *)MemGetSlotParameters(slot);
++
++    switch (addr & 0xF)
++    {
++    case 0: // Latch
++        pCard->m_buttonIndex = 0;
++        pCard->m_controller1Buttons = ~0u;
++        pCard->m_controller2Buttons = ~0u;
++        break;
++    case 1: // Clock
++        if (pCard->m_buttonIndex <= NUM_BUTTONS)
++        {
++            pCard->m_buttonIndex++;
++            pCard->m_controller1Buttons = pCard->m_controller1Buttons >> 1;
++            pCard->m_controller2Buttons = pCard->m_controller2Buttons >> 1;
++        }
++        break;
++    default:
++        break;
++    }
++    return 0;
++}
+ 
+ void SNESMAXCard::InitializeIO(LPBYTE pCxRomPeripheral)
+ {
++    RegisterIoHandler(m_slot, &SNESMAXCard::IORead, &SNESMAXCard::IOWrite, IO_Null, IO_Null, this, NULL);
+ }
+ 
+ bool SNESMAXCard::ParseControllerMappingFile(UINT joyNum, const char *pathname, std::string &errorMsg)
+@@ -36,7 +85,11 @@
+     if (version < 1 || version > kUNIT_VERSION)
+         ThrowErrorInvalidVersion(version);
+ 
+-    yamlLoadHelper.LoadUint(SS_YAML_KEY_BUTTON_INDEX);
++    m_buttonIndex = yamlLoadHelper.LoadUint(SS_YAML_KEY_BUTTON_INDEX);
++
++    // Initialise with no buttons pressed (loaded state maybe part way through reading the buttons)
++    m_controller1Buttons = 0x1ffff;
++    m_controller2Buttons = 0x1ffff;
+ 
+     return true;
+ }

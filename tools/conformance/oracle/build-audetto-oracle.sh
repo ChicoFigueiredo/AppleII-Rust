@@ -39,6 +39,10 @@ git -C "$CLONE" submodule update --init --recursive -q
 # Apply the trace patch (the tree is pristine after the reset above, so this is a plain apply).
 patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$PATCH"
 patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$AUDIO_PATCH"
+# SNES MAX card: the fork stubs it out (no I/O handler); this restores the upstream I/O without a joystick.
+patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$HERE/audetto-snesmax.patch"
+# Super Serial Card: same story, the fork installs no firmware ROM ($Cn00 page and $C800 expansion).
+patch -d "$CLONE" -p1 --no-backup-if-mismatch < "$HERE/audetto-ssc-rom.patch"
 cp "$HERE/audetto-oracle/audio_hook.h" "$CLONE/source/audio_hook.h"
 
 # The oracle frontend lives in Git here and is copied into the fork tree (untracked there).

@@ -1,0 +1,20 @@
+id = "savestate-corpus-dazzledraw1-mouse-rom-page0"
+story = "HU-0401"
+criterion = "Importar o save-state real dazzledraw1-mouse-rom-page0.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/dazzledraw1-mouse-rom-page0.aws.yaml"
+sha256 = "32d1da8820346b1241895fd95640be91838baf171d68c6fb1136169151176c71"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state dazzledraw1-mouse-rom-page0.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "dc75fd169abaeb940804a885fac43f3293b01a168b29e799424531d34c0894ca"

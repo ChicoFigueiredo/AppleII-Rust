@@ -1,0 +1,20 @@
+id = "savestate-corpus-6522-one-shot"
+story = "HU-0401"
+criterion = "Importar o save-state real 6522-one-shot.aws.yaml e rodar 100000 ciclos gera o mesmo trace do AppleWin (Trace v1)"
+model = "apple2e-enhanced"
+notes = "Oráculo: AppleWin (fork audetto) carregando o mesmo YAML. Reproduzir: tools/conformance/oracle/run-audetto-oracle.sh --state <arquivo> --cycles 100000. Hash das linhas do trace do oráculo."
+
+[fixture]
+path = "target/conformance-cache/applewin-test/v2/Mockingboard/6522-one-shot.aws.yaml"
+sha256 = "c03fb6a55347993f058bdb148418d20be2533c1c9cc703346b4e66e7e263af1b"
+save_state = true
+image_dirs = []
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "trace"
+authority = "applewin"
+source = "AppleWin (fork audetto a1e20c0) --state 6522-one-shot.aws.yaml --cycles 100000; ver tools/conformance/savestate-compare.py"
+trace_rows_sha256 = "3c80ffcca7304edb91e7336cec4584aafc1ad62a42645bcf3b413f94d0632bd9"
