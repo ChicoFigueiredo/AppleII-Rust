@@ -714,7 +714,13 @@ impl Uthernet2 {
             }
             _ => {}
         }
-        if dns {
+        // Only TCP, UDP and IP RAW have a *_DNS mode (openSocket:988-995).
+        if dns
+            && matches!(
+                protocol & !SN_VIRTUAL_DNS,
+                SN_MR_IPRAW | SN_MR_TCP | SN_MR_UDP
+            )
+        {
             self.resolve_dns(i);
         }
         self.reset_rx_tx_buffers(i);

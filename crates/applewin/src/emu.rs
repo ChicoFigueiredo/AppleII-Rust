@@ -292,6 +292,12 @@ impl Emulator {
         mut backend: Box<dyn Backend>,
         audio_rate: u32,
     ) -> Result<Self, String> {
+        // AppleWin leaves a duplicate single-instance card's slot empty and ignores invalid slot 0
+        // cards; the factory does the same and we add a visible warning (AUD-P-019/020).
+        let (slot_warnings, _) = crate::factory::check_slots(&settings);
+        for w in &slot_warnings {
+            eprintln!("warning: {w}");
+        }
         let bus = AudioBus::new(audio_rate, settings.to_machine_config().video_standard);
         let mut machine = backend.build_machine(&settings, &bus)?;
         let mixer = Mixer::new(&bus);
@@ -333,8 +339,10 @@ impl Emulator {
             host_pads: HostPads::default(),
             sectors: [None; 2],
         };
-        if !rom_warnings.is_empty() {
-            emu.say(rom_warnings.join("; "));
+        let mut startup_warnings = rom_warnings;
+        startup_warnings.extend(slot_warnings);
+        if !startup_warnings.is_empty() {
+            emu.say(startup_warnings.join("; "));
         }
         Ok(emu)
     }

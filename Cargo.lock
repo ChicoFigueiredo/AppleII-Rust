@@ -117,6 +117,8 @@ dependencies = [
  "apple2-cpu",
  "apple2-roms",
  "apple2-video",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -92,6 +92,7 @@ fn a_state_loads_into_an_emulator_with_other_settings() {
     let dir = temp_dir("other");
     let path = dir.join("a.aws.yaml");
     let mut s = settings_with_disk();
+    s.slots.0[2] = SlotCardSpec::Empty; // the default SSC: AppleWin keeps only the first one
     s.slots.0[3] = SlotCardSpec::new(CardType::Ssc);
     let mut a = Emulator::new(s, Box::new(DefaultBackend), 48_000).unwrap();
     for _ in 0..200 {

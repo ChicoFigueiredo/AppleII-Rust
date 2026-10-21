@@ -83,24 +83,39 @@ fn all_shell_sources() -> String {
     out
 }
 
-/// HU-0602. A SNES MAX só lê controles pelo `SnesMax::set_controller` (SNESMAX.cpp:110-128 lê
-/// `joyGetPosEx` direto). O frontend agora o chama (`emu.rs`, `Command::HostPads`); o
-/// comportamento de ponta a ponta (gamepad -> carta -> programa) está em
-/// `tests/hu0702_input.rs::aud_p_017_*`. Aqui só o resto do achado: os flags
-/// `-snes-max-alt-joy*`/`-user-joy*` ficam em `SlotCardSpec::SnesMax` e a fábrica faz
-/// `SnesMax { .. }` (ignora os dois) - a cargo do agente de factory.rs.
+/// HU-0602. Parte da fábrica do AUD-P-017: os flags `-snes-max-alt-joy*`/`-user-joy*` ficam em
+/// `SlotCardSpec::SnesMax` e a fábrica os aplica à carta (antes fazia `SnesMax { .. }`). O
+/// comportamento fino está em `tests/factory_slots.rs`.
 #[test]
-#[ignore = "reproduz achado AUD-P-017 (flags da fábrica)"]
-fn aud_p_017_snes_max_flags_reach_the_factory() {
-    let all = all_shell_sources();
-    assert!(
-        all.contains("set_controller("),
-        "nenhum gamepad do host alimenta a SNES MAX"
-    );
+fn aud_p_017_factory_applies_snes_max_flags() {
     let factory = src("factory.rs");
     assert!(
         !factory.contains("SlotCardSpec::SnesMax { .. }"),
         "a fábrica descarta alt_controller e user_mapping"
+    );
+    let mut s = base_settings();
+    s.slots.0[5] = SlotCardSpec::SnesMax {
+        alt_controller: [true, false],
+        user_mapping: Default::default(),
+    };
+    let (m, _) = applewin_shell::factory::build_machine_report(
+        &s,
+        &apple2_audio::AudioBus::new(48_000, apple2_core::VideoStandard::Ntsc),
+    )
+    .unwrap();
+    let card = m.card::<apple2_cards::SnesMax>(5).unwrap();
+    assert!(card.alt_controller(0) && !card.alt_controller(1));
+}
+
+/// HU-0602. A outra metade do AUD-P-017: o gamepad do host (gilrs) chamar `SnesMax::set_host_pad`
+/// ou `set_controller`. É do agente do frontend (app.rs/joy.rs); segue pendente aqui.
+#[test]
+#[ignore = "reproduz achado AUD-P-017 (parte do gamepad, fora da fábrica)"]
+fn aud_p_017_snes_max_gets_controllers() {
+    let all = all_shell_sources();
+    assert!(
+        all.contains("set_controller(") || all.contains("set_host_pad("),
+        "nenhum gamepad do host alimenta a SNES MAX"
     );
 }
 
@@ -124,23 +139,21 @@ fn aud_p_015_thunderclock_has_no_card_type_like_applewin() {
     assert_eq!(names.len(), 26, "Card.h tem 26 tipos incluindo Empty");
 }
 
-/// HU-0602. `Emulator::new` aceita configurações que o diálogo recusa (`settings::model::validate`):
-/// dois cartões de mouse, Uthernet + Uthernet II. Sem erro nem aviso.
+/// HU-0602. No AppleWin, `CardManager::InsertInternal` deixa vazio o slot da segunda Mouse
+/// Interface (o oráculo vence): a Máquina inicia, o slot 7 fica vazio e há aviso visível.
 #[test]
-#[ignore = "reproduz achado AUD-P-019"]
-fn aud_p_019_emulator_rejects_conflicting_slot_configuration() {
+fn aud_p_019_emulator_ignores_duplicate_card_with_warning_like_applewin() {
     let mut s = base_settings();
     s.slots.0[5] = SlotCardSpec::new(CardType::MouseInterface);
     s.slots.0[7] = SlotCardSpec::new(CardType::MouseInterface);
-    assert!(
-        Emulator::new(s, Box::new(DefaultBackend), 48_000).is_err(),
-        "dois Mouse Interface devem ser recusados"
-    );
+    let e = Emulator::new(s, Box::new(DefaultBackend), 48_000).expect("a Máquina inicia");
+    assert!(e.machine.board().slots.card(5).is_some());
+    assert!(e.machine.board().slots.card(7).is_none());
+    assert!(e.status().message.contains("MouseInterface"));
 }
 
 /// HU-0602. Cartão que não é Language Card no slot 0 do ][+ some em silêncio.
 #[test]
-#[ignore = "reproduz achado AUD-P-020"]
 fn aud_p_020_invalid_card_in_slot_0_is_reported() {
     let mut s = base_settings();
     s.slots.0[0] = SlotCardSpec::new(CardType::Ssc);
