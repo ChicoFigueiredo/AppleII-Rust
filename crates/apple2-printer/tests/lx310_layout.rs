@@ -8,7 +8,8 @@ use apple2_printer::paper::PaperKind;
 use lx310_common::*;
 
 const X0: u32 = 1620; // (9.5" - 8") / 2
-const BASE: u32 = 210; // text-layer baseline: pin 8 (7 * 30)
+const Y0: u32 = 357; // top of form: pin 1 at the 4.2 mm minimum top margin
+const BASE: u32 = Y0 + 210; // text-layer baseline: pin 8 (7 * 30)
 
 fn runs(doc: &PageDocument, page: usize) -> Vec<(u32, u32, String)> {
     doc.pages[page]
@@ -16,6 +17,11 @@ fn runs(doc: &PageDocument, page: usize) -> Vec<(u32, u32, String)> {
         .iter()
         .map(|t: &TextRun| (t.x, t.y, t.text.clone()))
         .collect()
+}
+
+/// Moves expected dots from top-of-form coordinates to page coordinates.
+fn lift(v: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
+    v.into_iter().map(|(x, y)| (x, y + Y0)).collect()
 }
 
 fn no_diag(doc: &PageDocument) {
@@ -205,7 +211,7 @@ fn t007_bold_double_strike_underline_affect_dots() {
     assert_eq!(both.len(), plain.len() * 4);
 
     let ul = dots_of(&run(&[0x1B, b'-', 1, b'X']), 0);
-    let line: Vec<(u32, u32)> = (0..12).map(|k| (X0 + k * 18, 240)).collect();
+    let line: Vec<(u32, u32)> = (0..12).map(|k| (X0 + k * 18, Y0 + 240)).collect();
     let mut expect = plain.clone();
     expect.extend(line);
     assert_eq!(ul, expect, "underline on pin 9 across the 10 cpi cell");
@@ -264,11 +270,11 @@ fn t008_esc_k_eight_columns_exact_dots_and_text_resumes() {
         (X0 + 144, 120),
         (X0 + 144, 180),
     ];
-    assert_eq!(&dots_of(&d, 0)[..full.len()], &full[..]);
+    assert_eq!(&dots_of(&d, 0)[..full.len()], &lift(full)[..]);
     // col 5 is 0x00; col 6 is 0x81: pins 0 and 7; col 7 is 0x40: pin 1.
     let all = dots_of(&d, 0);
-    assert!(all.contains(&(X0 + 216, 0)) && all.contains(&(X0 + 216, 210)));
-    assert!(all.contains(&(X0 + 252, 30)));
+    assert!(all.contains(&(X0 + 216, Y0)) && all.contains(&(X0 + 216, Y0 + 210)));
+    assert!(all.contains(&(X0 + 252, Y0 + 30)));
     // No fictitious command: the 0x1B and 0x0A inside were data, so no line feed happened and the
     // text after the eighth column prints right after the graphic (8 * 36 = 288).
     assert_eq!(runs(&d, 0), vec![(X0 + 288, BASE, "A".into())]);
@@ -329,21 +335,24 @@ fn graphics_two_contiguous_lines_no_transposition() {
     ]);
     assert_eq!(
         dots_of(&d, 0),
-        vec![
+        lift(vec![
             (X0, 0),
             (X0 + 36, 30),
             (X0 + 72, 210),
             (X0, 360 + 210),
             (X0 + 36, 360 + 30),
             (X0 + 72, 360),
-        ]
+        ])
     );
 }
 
 #[test]
 fn nine_pin_graphics_uses_second_byte_for_the_ninth_pin() {
     let d = run(&[0x1B, b'^', 1, 2, 0, 0x80, 0x01, 0x00, 0x01]);
-    assert_eq!(dots_of(&d, 0), vec![(X0, 0), (X0, 240), (X0 + 18, 240)]);
+    assert_eq!(
+        dots_of(&d, 0),
+        lift(vec![(X0, 0), (X0, 240), (X0 + 18, 240)])
+    );
 }
 
 #[test]
@@ -411,17 +420,24 @@ fn t016_one_thousand_lines_without_drift() {
     }
     let d = run(&s);
     no_diag(&d);
-    let all: Vec<(usize, u32)> = d
+    // The strip of continuous paper: page * height + y must be exactly n * 360 + baseline
+    // (66 lines of 1/6" = one 11" form), so the baseline of line 66 lands on the next form.
+    let all: Vec<u32> = d
         .pages
         .iter()
-        .enumerate()
-        .flat_map(|(i, p)| p.text.iter().map(move |t| (i, t.y)))
+        .flat_map(|p| p.text.iter().map(|t| t.y))
         .collect();
     assert_eq!(all.len(), 1000);
-    for (n, &(page, y)) in all.iter().enumerate() {
-        assert_eq!(page, n / 66, "line {n}");
-        assert_eq!(y, (n % 66) as u32 * 360 + BASE, "line {n}");
+    let h = d.pages[0].height;
+    let mut n = 0u32;
+    for (i, p) in d.pages.iter().enumerate() {
+        for t in &p.text {
+            let abs = i as u32 * h + t.y;
+            assert_eq!(abs, n * 360 + BASE, "line {n}");
+            n += 1;
+        }
     }
+    assert_eq!(n, 1000);
     assert_eq!(d.pages.len(), 16);
 }
 
@@ -632,14 +648,15 @@ fn unknown_and_unsupported_commands_never_pass_silently() {
 }
 
 #[test]
-fn upper_control_codes_print_only_after_esc_6() {
+fn upper_codes_print_by_default_and_esc_7_makes_them_controls() {
     let d = run(b"\x80");
-    assert!(d.pages.is_empty());
-    assert_eq!(d.diagnostics.len(), 1);
-    let d = run(b"\x1b6\x80\x1b7\x80");
-    assert_eq!(d.pages[0].text.len(), 0); // placeholder only decodes ASCII text
+    assert_eq!(d.pages[0].text.len(), 0); // placeholder decodes only ASCII text
     assert!(!d.pages[0].dots.is_empty());
+    assert!(d.diagnostics.is_empty());
+    let d = run(b"\x1b7\x80\x1b6\x80");
     assert_eq!(d.diagnostics.len(), 1);
+    assert_eq!(d.diagnostics[0].offset, 2);
+    assert!(!d.pages[0].dots.is_empty());
 }
 
 #[test]
@@ -688,4 +705,72 @@ fn begin_starts_a_fresh_job() {
     assert_eq!(d.pages.len(), 1);
     assert!(d.diagnostics.is_empty());
     assert_eq!(d.pages[0].text[0].x, 289);
+}
+
+#[test]
+fn first_line_is_inside_the_page_at_the_top_margin() {
+    for kind in [PaperKind::GreenBar, PaperKind::A4, PaperKind::Letter] {
+        let d = run_paper(kind, b"\x1bE\x1bW\x01APPLE II-RUST\x1bF");
+        no_diag(&d);
+        let p = &d.pages[0];
+        let min = p.dots.iter().map(|d| d.y).min().unwrap();
+        let max = p.dots.iter().map(|d| d.y).max().unwrap();
+        assert_eq!(
+            min, 357,
+            "pin 1 at the 4.2 mm minimum top margin ({kind:?})"
+        );
+        assert_eq!(max, 357 + 6 * 30, "placeholder box rows 0..6 ({kind:?})");
+        assert!(max < p.height);
+        assert!(p
+            .dots
+            .iter()
+            .all(|d| d.x >= if kind == PaperKind::A4 { 289 } else { 540 }));
+    }
+}
+
+#[test]
+fn double_width_doubles_every_matrix_column() {
+    let plain = dots_of(&run(b"X"), 0);
+    for stream in [&b"\x1bW\x01X"[..], b"\x0eX", b"\x1b!\x20X"] {
+        let wide = dots_of(&run(stream), 0);
+        let mut expect = Vec::new();
+        for &(x, y) in &plain {
+            let c = x - X0; // multiple of 18: the matrix column index * 18
+            expect.push((X0 + c * 2, y));
+            expect.push((X0 + c * 2 + 18, y));
+        }
+        assert_eq!(wide, expect, "{stream:02X?}");
+    }
+}
+
+#[test]
+fn line_66_of_a_form_prints_on_the_next_form_without_loss() {
+    // 66 lines fill an 11" form; the last line's lower pins fall past the form edge and continue
+    // on the next form (continuous paper), where they cannot collide with its first line.
+    let mut s = Vec::new();
+    for _ in 0..65 {
+        s.extend_from_slice(b"\r\n");
+    }
+    s.extend_from_slice(b"X");
+    let d = run(&s);
+    no_diag(&d);
+    let base = dots_of(&run(b"X"), 0);
+    let abs: Vec<u32> = d
+        .pages
+        .iter()
+        .enumerate()
+        .flat_map(|(i, p)| p.dots.iter().map(move |q| i as u32 * p.height + q.y))
+        .collect();
+    let mut expect: Vec<u32> = base.iter().map(|&(_, y)| y + 65 * 360).collect();
+    let mut abs = abs;
+    abs.sort_unstable();
+    expect.sort_unstable();
+    assert_eq!(abs, expect);
+    assert_eq!(d.pages.len(), 2);
+    // Single sheets cannot: the dots below the sheet are dropped and reported.
+    let d = run_paper(PaperKind::A4, b"\x1bC\x00\x16\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xff\x1bJ\xffX");
+    assert!(d
+        .pages
+        .iter()
+        .all(|p| p.dots.iter().all(|q| q.y < p.height)));
 }
