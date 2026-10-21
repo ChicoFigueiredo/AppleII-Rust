@@ -13,7 +13,6 @@ fn saturn_banks_survive_the_import_into_settings() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-040; remover ignore quando corrigido"]
 fn explicit_65c02_cpu_type_is_imported() {
     // Utilities.cpp:145-148: valor 2 (CPU_65C02) e o padrao e e respeitado em qualquer modelo.
     // import.rs: `Some(1) => Cpu6502, _ => Auto` descarta o 2 e o "ausente" do AppleWin (= 65C02).

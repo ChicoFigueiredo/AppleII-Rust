@@ -69,5 +69,18 @@ fi
 # that stray writes (screenshots, logs) cannot leak into the user's profile.
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"; [ -n "$OUT" ] && rm -f "$TMP"' EXIT
+# A --state file written by a newer AppleWin than the fork is adapted first (see state-compat.py);
+# the fixture hash in the metadata stays that of the original file.
+for ((i = 0; i < ${#ARGS[@]}; i++)); do
+  if [ "${ARGS[i]}" = "--state" ]; then
+    # Disk images are looked up next to the save-state: link the neighbours into the scratch dir.
+    STATE_DIR="$(cd "$(dirname "${ARGS[i+1]}")" && pwd)"
+    for f in "$STATE_DIR"/*; do
+      case "$f" in *.aws.yaml) ;; *) [ -f "$f" ] && ln -sf "$f" "$SCRATCH/$(basename "$f")" ;; esac
+    done
+    python3 -I "$HERE/state-compat.py" "${ARGS[i+1]}" "$SCRATCH/state.aws.yaml"
+    ARGS[i+1]="$SCRATCH/state.aws.yaml"
+  fi
+done
 HOME="$SCRATCH" "$BIN" "${ARGS[@]}" "${META[@]}" --out "$TMP" 1>&2
 if [ -n "$OUT" ]; then mv "$TMP" "$OUT"; else cat "$TMP" > "$TARGET"; rm -f "$TMP"; fi

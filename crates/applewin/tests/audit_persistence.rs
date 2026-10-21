@@ -106,7 +106,6 @@ fn quitting_flushes_the_pending_track() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-030; remover ignore quando corrigido"]
 fn applying_settings_flushes_the_pending_track_before_dropping_the_machine() {
     // emu.rs:396-405 (`rebuild`): `self.machine = m` descarta a maquina antiga e a Disk2Card com a
     // trilha suja; nao ha `disks.flush` antes (nem `impl Drop` que descarregue).
@@ -123,7 +122,6 @@ fn applying_settings_flushes_the_pending_track_before_dropping_the_machine() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-031; remover ignore quando corrigido"]
 fn loading_a_state_flushes_the_pending_track_first() {
     // emu.rs:~486 (`try_load_state`): `self.machine = machine` sem descarregar a antiga; o AppleWin
     // chama EjectDisk -> FlushCurrentTrack em LoadSnapshot. A maquina nova ja reabriu o arquivo.
@@ -146,7 +144,6 @@ fn loading_a_state_flushes_the_pending_track_first() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-032; remover ignore quando corrigido"]
 fn save_state_replaces_the_file_atomically() {
     // emu.rs:427 usa `std::fs::write(path, ..)`: trunca o arquivo no lugar. Um hard link para o
     // save anterior (mesmo inode) mostra a diferenca: com "temporario + rename" o link continua

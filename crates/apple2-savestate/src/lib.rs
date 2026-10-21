@@ -23,10 +23,12 @@
 pub mod apple2;
 pub mod cards;
 pub mod ext;
+pub mod fsio;
 pub mod host;
 mod misc;
 pub mod yaml;
 
+pub use fsio::{write_atomic, write_atomic_with};
 pub use host::{default_card, ImageRequest, LoadHost};
 
 use apple2_core::{CardKind, Machine, MachineConfig};

@@ -477,7 +477,8 @@ pub fn apply_apple2(
         st.cpu.a = c.u32("A")? as u8;
         st.cpu.x = c.u32("X")? as u8;
         st.cpu.y = c.u32("Y")? as u8;
-        st.cpu.p = ((c.u32("P")? as u8) | 0x20) & !0x10;
+        // CPU.cpp:963: `| (AF_RESERVED | AF_BREAK)`, so B reads as 1 like in AppleWin.
+        st.cpu.p = (c.u32("P")? as u8) | 0x30;
         st.cpu.sp = c.u32("S")? as u8;
         st.cpu.pc = c.u32("PC")? as u16;
         st.cpu.irq = false;

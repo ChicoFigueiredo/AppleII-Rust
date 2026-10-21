@@ -119,7 +119,6 @@ fn wrong_typed_or_hostile_values_never_panic() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-010; remover ignore quando corrigido"]
 fn extension_length_field_with_hostile_value_does_not_panic_or_allocate_unbounded() {
     // ext.rs:66: `vec![0u8; len.div_ceil(8) * 8]` com `len` vindo do arquivo (u64 sem teto).
     // "-1" vira u64::MAX (strtoul), a multiplicacao estoura (panic em debug, alocacao
@@ -198,7 +197,6 @@ fn strings_with_spaces_hash_and_unicode_round_trip() {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-020; remover ignore quando corrigido"]
 fn strings_with_a_double_backslash_round_trip() {
     // yaml.rs:394 so dobra as contrabarras se a string NAO contem "\\\\" e yaml.rs:108 desdobra
     // todo "\\\\": um caminho UNC (\\servidor\share) ou misto perde uma contrabarra por ciclo.

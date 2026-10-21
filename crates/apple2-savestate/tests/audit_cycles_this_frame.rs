@@ -42,7 +42,6 @@ fn state_with_cycles_this_frame(v: u64) -> String {
 }
 
 #[test]
-#[ignore = "reproduz achado AUD-C-060; remover ignore quando corrigido"]
 fn cycles_this_frame_above_the_frame_length_is_normalised_on_load() {
     for v in [17030u64, 26190, 1_000_000] {
         let doc = state_with_cycles_this_frame(v);

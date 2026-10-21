@@ -215,7 +215,18 @@ pub fn generate_trace(
     events: &[InputEvent],
     meta: &[(&str, &str)],
 ) -> Result<Vec<u8>, String> {
-    let mut m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    let m = Machine::try_new(cfg).map_err(|e| e.to_string())?;
+    generate_trace_from(m, run, events, meta)
+}
+
+/// Like [`generate_trace`] from a machine already built (for example imported from a save-state).
+/// `run.cycles` is an absolute cycle count, as in [`drive`].
+pub fn generate_trace_from(
+    mut m: Machine,
+    run: &RunSpec,
+    events: &[InputEvent],
+    meta: &[(&str, &str)],
+) -> Result<Vec<u8>, String> {
     let mut w = TraceWriter::new(Vec::new(), meta).map_err(|e| e.to_string())?;
     drive(
         &mut m,

@@ -8,6 +8,7 @@ pub mod case;
 pub mod manifest;
 pub mod report;
 pub mod runner;
+pub mod state;
 pub mod sha256;
 pub mod trace;
 
