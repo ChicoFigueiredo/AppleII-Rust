@@ -763,6 +763,38 @@ fn audio_verdict(env: &Env, case: &Case, artifacts: &mut Vec<(String, Vec<u8>)>)
             }
         }
     }
+    if let Some(pat) = &o.silent_after {
+        let exp = audio::lines_of(&expected);
+        let Some(line) = exp
+            .iter()
+            .rev()
+            .find(|l| l.split_once(',').is_some_and(|x| x.1 == pat))
+        else {
+            return Verdict::Fail(
+                format!("silent_after `{pat}`: o oráculo não tem esse evento"),
+                None,
+            );
+        };
+        let c: u64 = line
+            .split(',')
+            .next()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(0);
+        let clock = apple2_audio::SampleClock::new(44_100, apple2_core::VideoStandard::Ntsc);
+        let from = clock.frames_at(c) as usize + 2;
+        let tail = run.mb_pcm.get(from * 2..).unwrap_or(&[]);
+        let loud = tail.iter().filter(|&&s| s != 0).count();
+        if loud > 0 {
+            return Verdict::Fail(
+                format!("PCM não é silêncio depois de `{pat}` (ciclo {c}): {loud} amostras não nulas de {}", tail.len()),
+                None,
+            );
+        }
+        summary.push_str(&format!(
+            "; silêncio exato depois de `{pat}` (ciclo {c}, {} amostras)",
+            tail.len()
+        ));
+    }
     for w in &run.warnings {
         summary.push_str(&format!("; aviso: {w}"));
     }

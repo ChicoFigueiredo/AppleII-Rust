@@ -21,4 +21,4 @@ authority = "applewin"
 source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-phasor-two-ay"
 events = "reference-audio/audio-phasor-two-ay.events"
 pcm = "reference-audio/audio-phasor-two-ay.mb.pcm"
-pcm_limits = { f_tol = 0.0, rms_tol = 0.0, peak_tol = 0.0 }  # PLACEHOLDER: calibrar (audit/audio-differential.md)
+pcm_limits = { f_tol = 0.0100, rms_tol = 0.0200, peak_tol = 0.0200 }  # 2 x oráculo(1000) contra oráculo(250), pisos 1/2/2 %

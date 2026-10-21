@@ -20,4 +20,4 @@ authority = "applewin"
 source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-noise"
 events = "reference-audio/audio-ay-noise.events"
 pcm = "reference-audio/audio-ay-noise.mb.pcm"
-pcm_limits = { f_tol = 0.0, rms_tol = 0.0, peak_tol = 0.0 }  # PLACEHOLDER: calibrar (audit/audio-differential.md)
+pcm_limits = { f_tol = 0.4000, rms_tol = 0.0308, peak_tol = 0.0200 }  # 2 x oráculo(1000) contra oráculo(250), pisos 1/2/2 %

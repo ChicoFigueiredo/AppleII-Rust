@@ -254,6 +254,11 @@ pub struct OracleSpec {
     pub pcm: Option<String>,
     #[serde(default)]
     pub pcm_limits: Option<PcmLimitsSpec>,
+    /// Kind `audio-events`: an event line without its cycle (e.g. `IOW,4,43,80`, SSI263 CTL=1).
+    /// After the last such event of the oracle's log the Rust PCM must be exactly silent
+    /// (power-down silences the chip, GH#1412).
+    #[serde(default)]
+    pub silent_after: Option<String>,
 }
 
 impl Case {

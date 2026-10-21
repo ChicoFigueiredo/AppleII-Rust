@@ -6,7 +6,7 @@
 
 Reads tests/conformance/cases/CASE_ID.toml and writes, into DIR (default tests/conformance/
 reference-audio/), CASE_ID.events, CASE_ID.mb.pcm / CASE_ID.spkr.pcm (raw s16le, 44.1 kHz) and
-CASE_ID.trace.csv (the oracle's CPU trace, for cross-checking the instruction timeline).
+CASE_ID.trace.csv and CASE_ID.ssi.N.pcm (the oracle's CPU trace and SSI263 PCM, only with --keep-all).
 The oracle binary: --bin, $ORACLE_BIN, or <repo>/target/conformance-cache/oracle/build/audetto-oracle
 (build it with tools/conformance/oracle/build-audetto-oracle.sh). Without it the case is BLOCKED.
 """
@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--no-pcm", action="store_true")
     ap.add_argument("--program", help="override audio.program (calibration variants)")
     ap.add_argument("--tag", default="", help="suffix for the output file names")
+    ap.add_argument("--keep-all", action="store_true", help="keep the oracle CPU trace and the SSI263 PCM (large)")
     ns = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -96,6 +97,13 @@ def main():
         cmd += ["--audio-ssi-pcm", os.path.join(out_dir, name + ".ssi")]
     print(" ".join(cmd))
     r = subprocess.run(cmd)
+    if r.returncode == 0 and not ns.keep_all:
+        # Only the events and the PCM are references; the CPU trace and the SSI263 PCM are large.
+        for f in (name + ".trace.csv", name + ".ssi.0.pcm", name + ".ssi.1.pcm"):
+            try:
+                os.remove(os.path.join(out_dir, f))
+            except FileNotFoundError:
+                pass
     return r.returncode
 
 
