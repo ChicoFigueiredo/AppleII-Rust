@@ -2,13 +2,15 @@
 #case=disk-prodos243-boot-apple2e-enhanced
 #model=apple2e-enhanced
 #memclear=0
+#authentic=false
 #every=2000
 #rows=3754497
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=748cee5a2f6f2c320321b4409e9afc3896e25ef53f88ac04eaeb38a4f24df16a
+#oracle_trace_sha256=e36e1db6e2ca8924e5860200000e1840a6392ade9d6bb0b931c0ba9488cfa24b
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 12000000 --disk <fixture> --memclear 0
+#final_sha256_fixture=398d333cb2ab92df9f8bb2cf64b946f2567116910eb8359cf4bdee5d4194f0fa
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E

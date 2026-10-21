@@ -159,6 +159,7 @@ impl Checkpoints {
 }
 
 /// FNV-1a over one trace row; `p` is normalised the way the oracle reports it (bits 5 and 4 set).
+#[allow(clippy::too_many_arguments)]
 pub fn fold_row(h: u64, cycle: u64, pc: u16, a: u8, x: u8, y: u8, sp: u8, p: u8) -> u64 {
     let mut h = h;
     let mut eat = |b: u8| {
@@ -267,7 +268,9 @@ pub fn build(env: &Env, case: &Case) -> Result<Rig, String> {
         let dst = dir.join(format!("{role}-{name}"));
         std::fs::copy(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
         if case.readonly.iter().any(|r| r == role) {
-            let mut perm = std::fs::metadata(&dst).map_err(|e| e.to_string())?.permissions();
+            let mut perm = std::fs::metadata(&dst)
+                .map_err(|e| e.to_string())?
+                .permissions();
             perm.set_readonly(true);
             std::fs::set_permissions(&dst, perm).map_err(|e| e.to_string())?;
         }
@@ -363,15 +366,13 @@ pub fn check(rig: &mut Rig, ck: &Checkpoints) -> Result<String, Failure> {
     let mut h = HASH_SEED;
     for row in 0..total {
         stepper.skip_interrupt_entries(m);
-        if syncs.front().is_some_and(|s| s.row == row) {
-            let s = syncs.pop_front().unwrap();
+        if let Some(s) = syncs.pop_front_if(|s| s.row == row) {
             let c = m.cpu_mut();
             (c.a, c.x, c.y, c.p) = (s.a, s.x, s.y, s.p);
         }
         let c = m.cpu();
         let (cycle, pc, a, x, y, sp, p) = (m.cycles(), c.pc, c.a, c.x, c.y, c.sp, c.p | 0x30);
-        if checks.front().is_some_and(|k| k.row == row) {
-            let k = checks.pop_front().unwrap();
+        if let Some(k) = checks.pop_front_if(|k| k.row == row) {
             let want = (k.cycle, k.pc, k.a, k.x, k.y, k.sp, k.p | 0x30, k.hash);
             let got = (cycle, pc, a, x, y, sp, p, h);
             if want != got {
@@ -393,9 +394,7 @@ pub fn check(rig: &mut Rig, ck: &Checkpoints) -> Result<String, Failure> {
         if let Some(want) = ck.meta(&format!("final_sha256_{role}")) {
             if want != got {
                 return Err(Failure::Fail(
-                    format!(
-                        "imagem {role} ao final: sha256 {got}, o oráculo deixou {want}"
-                    ),
+                    format!("imagem {role} ao final: sha256 {got}, o oráculo deixou {want}"),
                     String::new(),
                 ));
             }

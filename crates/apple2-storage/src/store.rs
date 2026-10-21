@@ -85,7 +85,10 @@ pub struct FileStore {
 impl FileStore {
     /// Checks that `path` can be written; fails if it is read-only.
     pub fn open(path: &std::path::Path) -> io::Result<Self> {
-        std::fs::OpenOptions::new().read(true).write(true).open(path)?;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)?;
         Ok(FileStore {
             path: path.to_path_buf(),
             fault: None,

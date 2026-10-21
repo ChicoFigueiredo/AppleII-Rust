@@ -83,11 +83,11 @@ fn seeds() -> Vec<(&'static str, Vec<u8>)> {
         }
     }
     v.push(("blank.nib", new_disk::new_blank_disk(232_960, false)));
-    v.push(("t.2mg", make_2mg(&new_disk::new_blank_disk(143_360, false), 1)));
     v.push((
-        "t.hdv",
-        new_disk::new_blank_disk(64 * HD_BLOCK_SIZE, true),
+        "t.2mg",
+        make_2mg(&new_disk::new_blank_disk(143_360, false), 1),
     ));
+    v.push(("t.hdv", new_disk::new_blank_disk(64 * HD_BLOCK_SIZE, true)));
     v.push((
         "h.2mg",
         make_2mg(&new_disk::new_blank_disk(128 * HD_BLOCK_SIZE, true), 1),
@@ -202,10 +202,15 @@ fn mutated_images_never_panic_or_hang_second_seed() {
 #[test]
 fn pure_random_bytes_never_panic() {
     let mut rng = Rng(42);
-    for ext in ["x.dsk", "x.po", "x.do", "x.nib", "x.woz", "x.2mg", "x.hdv", "x.zip", "x.gz"] {
+    for ext in [
+        "x.dsk", "x.po", "x.do", "x.nib", "x.woz", "x.2mg", "x.hdv", "x.zip", "x.gz",
+    ] {
         for len in [0usize, 1, 3, 63, 64, 65, 255, 4096, 143_360, 232_960] {
             let b: Vec<u8> = (0..len).map(|_| rng.next() as u8).collect();
-            assert!(catch_unwind(AssertUnwindSafe(|| exercise(ext, b))).is_ok(), "{ext} {len}");
+            assert!(
+                catch_unwind(AssertUnwindSafe(|| exercise(ext, b))).is_ok(),
+                "{ext} {len}"
+            );
         }
     }
 }

@@ -4,7 +4,7 @@ criterion = "Boot do HDD, status, leituras sequenciais e aleatórias, gravaçõe
 model = "apple2e-enhanced"
 cards = ["6:disk2"]
 memclear = 0
-notes = "Issues do AppleWin: #1165. Micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): trace ciclo a ciclo e SHA-256 das imagens ao final. Regerar: tools/conformance/oracle/run-audetto-oracle.sh + disk_follow --emit-ckpt (ver docs/conformance/audit/disk-differential.md)."
+notes = "Issues do AppleWin: #1165. Boot de imagem ou micro-programa de boot (tests/conformance/inputs/disk-micro, gerado por cargo run --release -p apple2-storage --example make_micro) comparado com o oráculo AppleWin (fork audetto, Apple //e Enhanced, memclear 0): sequência de instruções ciclo a ciclo e SHA-256 das imagens ao final. As imagens do corpus AppleWin-Test não são versionadas (sem elas o caso fica BLOCKED). Regerar: tools/conformance/disk/gen-disk-cases.sh disk-hdd-seq-iie (ver docs/conformance/audit/disk-differential.md)."
 
 [run]
 cycles = 3000000

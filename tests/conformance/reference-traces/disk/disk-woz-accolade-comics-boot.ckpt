@@ -2,13 +2,15 @@
 #case=disk-woz-accolade-comics-boot
 #model=apple2e-enhanced
 #memclear=0
+#authentic=false
 #every=2000
 #rows=2076017
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=9adf484cd045db6dbc2e2ad51c5a07ce1ac8a8fa52fd1f20151c00a2d9c1ffc9
+#oracle_trace_sha256=d61340cd9668ac8e2e7ed164b2a81af427e34240dc166ad1e3d837abe5e187a4
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
+#final_sha256_fixture=413b1996d5b1a7f87088e1e3dfb4552403e7a181e875768c9af9a402927e9dd1
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E

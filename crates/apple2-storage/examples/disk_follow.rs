@@ -69,7 +69,10 @@ fn main() {
     let oracle_finals: Vec<(String, String)> = args
         .windows(2)
         .filter(|w| w[0] == "--oracle-final")
-        .filter_map(|w| w[1].split_once('=').map(|(r, h)| (r.to_string(), h.to_string())))
+        .filter_map(|w| {
+            w[1].split_once('=')
+                .map(|(r, h)| (r.to_string(), h.to_string()))
+        })
         .collect();
     let log = Log::default();
     m.set_access_observer(Some(Box::new(log.clone())));
@@ -87,7 +90,8 @@ fn main() {
         got.p |= 0x30;
         let cx_pc = (0xC000..0xD000).contains(&want.pc);
         // `op` of code running in slot ROM space is read by peek(), which does not see it
-        let same_flow = got.cycle == want.cycle && got.pc == want.pc && (cx_pc || got.op == want.op);
+        let same_flow =
+            got.cycle == want.cycle && got.pc == want.pc && (cx_pc || got.op == want.op);
         let same_regs =
             (got.a, got.x, got.y, got.sp, got.p) == (want.a, want.x, want.y, want.sp, want.p);
         if !same_flow {
@@ -160,7 +164,9 @@ fn main() {
                 hash,
             });
         }
-        hash = disk::fold_row(hash, want.cycle, want.pc, want.a, want.x, want.y, want.sp, want.p);
+        hash = disk::fold_row(
+            hash, want.cycle, want.pc, want.a, want.x, want.y, want.sp, want.p,
+        );
         log.0.borrow_mut().clear();
         stepper.step(m);
         rows += 1;
@@ -184,7 +190,10 @@ fn main() {
                 std::process::exit(1);
             }
             Some((_, want)) => {
-                println!("final image {role}: identical to the oracle's ({})", &want[..12]);
+                println!(
+                    "final image {role}: identical to the oracle's ({})",
+                    &want[..12]
+                );
                 final_meta.push((format!("final_sha256_{role}"), want.clone()));
             }
             None => {}

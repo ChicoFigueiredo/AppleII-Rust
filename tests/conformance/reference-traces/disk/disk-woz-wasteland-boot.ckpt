@@ -2,13 +2,15 @@
 #case=disk-woz-wasteland-boot
 #model=apple2e-enhanced
 #memclear=0
+#authentic=false
 #every=2000
 #rows=2329147
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=e8020aff3edb26ccdf729bc764644fea277526d4c2d28075d86a8964efe57635
+#oracle_trace_sha256=9f3c3bbe483501f97d6f7fc934220ce3b4a336ccdc074ee875de8d6b6e4fa1da
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
+#final_sha256_fixture=ee71ec4bbc66a1e775082ccb582bcad75372cb5d216bf928ad9a741bba5c22f9
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E

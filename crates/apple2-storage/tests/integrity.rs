@@ -11,7 +11,9 @@ use apple2_storage::image::{Class, DiskImage};
 use std::path::{Path, PathBuf};
 
 fn micro(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/conformance/inputs/disk-micro").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/conformance/inputs/disk-micro")
+        .join(name)
 }
 
 fn scratch(tag: &str) -> PathBuf {
@@ -33,7 +35,10 @@ fn content_of(p: &Path) -> Vec<u8> {
     let bytes = std::fs::read(p).unwrap();
     if p.extension().is_some_and(|e| e == "gz") {
         // the crate's own gzip reader: opening it as an image gives the plain bytes
-        DiskImage::from_bytes("x.do.gz", bytes).unwrap().data().to_vec()
+        DiskImage::from_bytes("x.do.gz", bytes)
+            .unwrap()
+            .data()
+            .to_vec()
     } else {
         bytes
     }
@@ -70,10 +75,21 @@ fn writing_a_sector_on_track_1_changes_only_that_sector() {
     let diff = changed_ranges(&before, &after);
     assert!(!diff.is_empty(), "the program wrote a sector");
     // physical sector 3 of track 1 = one 256-byte logical sector of the 4096 bytes of track 1
-    assert!(diff.iter().all(|&i| (4096..8192).contains(&i)), "bytes outside track 1 changed");
+    assert!(
+        diff.iter().all(|&i| (4096..8192).contains(&i)),
+        "bytes outside track 1 changed"
+    );
     let first = diff[0] / 256;
-    assert!(diff.iter().all(|&i| i / 256 == first), "more than one sector changed");
-    assert!(after[first * 256..first * 256 + 256].iter().all(|&b| b == 0), "data field of zeros");
+    assert!(
+        diff.iter().all(|&i| i / 256 == first),
+        "more than one sector changed"
+    );
+    assert!(
+        after[first * 256..first * 256 + 256]
+            .iter()
+            .all(|&b| b == 0),
+        "data field of zeros"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -107,7 +123,11 @@ fn the_dirty_track_reaches_the_host_file_when_the_motor_stops_without_ejecting_g
     // the program turns the motor off right after the write; 1 s later the track is written back
     run(&mut m, 4_500_000);
     assert!(!m.card::<Disk2Card>(6).unwrap().is_motor_on());
-    assert_ne!(std::fs::read(&path).unwrap(), before, "no eject, no Drop: the file already has it");
+    assert_ne!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "no eject, no Drop: the file already has it"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -131,11 +151,16 @@ fn swapping_the_image_in_the_middle_of_a_write_keeps_both_images_consistent() {
     drop(ejected);
     card.insert_path(0, &b_path, false).unwrap();
     run(&mut m, 4_000_000);
-    assert_eq!(std::fs::read(&b_path).unwrap().len(), std::fs::metadata(&b_path).unwrap().len() as usize);
+    assert_eq!(
+        std::fs::read(&b_path).unwrap().len(),
+        std::fs::metadata(&b_path).unwrap().len() as usize
+    );
     let a_after = std::fs::read(&a_path).unwrap();
     assert_eq!(a_after.len(), a_before.len(), "image A keeps its size");
     // whatever reached A is inside the track the head was on (track 0)
-    assert!(changed_ranges(&a_before, &a_after).iter().all(|&i| i < 4096));
+    assert!(changed_ranges(&a_before, &a_after)
+        .iter()
+        .all(|&i| i < 4096));
     // image B was inserted after the swap and only ever saw its own program's writes
     let b_after = content_of(&b_path);
     assert_eq!(b_after.len(), b_before.len());
@@ -158,7 +183,12 @@ fn a_hard_disk_image_larger_than_a_prodos_volume_is_refused() {
 }
 
 fn f_set_len(p: &Path, n: u64) {
-    std::fs::OpenOptions::new().write(true).open(p).unwrap().set_len(n).unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(p)
+        .unwrap()
+        .set_len(n)
+        .unwrap();
 }
 
 #[test]

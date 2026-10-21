@@ -183,7 +183,9 @@ fn quarter_steps(ops: &[(u32, bool)]) -> String {
     let mut o = String::from(" ldy #0\n sty $09\n");
     for (ph, on) in ops {
         let addr = 0xC080 + 2 * ph + u32::from(*on);
-        o.push_str(&format!(" lda ${addr:04x},x\n ldy #60\n jsr dly\n jsr rd8\n"));
+        o.push_str(&format!(
+            " lda ${addr:04x},x\n ldy #60\n jsr dly\n jsr rd8\n"
+        ));
     }
     o
 }
@@ -250,11 +252,14 @@ q: lda $c08c,x
         ),
     ));
     // #664: boot from drive 1, write to drive 2
-    v.push(("write-sector-d2", write_sector_on(5, 0, true, "lda $c08b,x\n")));
+    v.push((
+        "write-sector-d2",
+        write_sector_on(5, 0, true, "lda $c08b,x\n"),
+    ));
     // #649: read the first nibbles of drive 2
     v.push((
         "read-d2",
-        format!(
+        String::from(
             r#".org $0801
  lda $c08e,x
  lda $c08b,x
@@ -278,7 +283,7 @@ r2: lda $c08c,x
  cpy #32
  bne r2
  jmp *
-"#
+"#,
         ),
     ));
     v.push(("write-sector", write_sector(5, 0, true)));
@@ -288,7 +293,7 @@ r2: lda $c08c,x
     // #303: Q6L returns variable values even if the drive is off.
     v.push((
         "latch-motor-off",
-        format!(
+        String::from(
             r#".org $0801
  lda $c08e,x
  ldy #8
@@ -318,17 +323,28 @@ a2: lda $c08c,x
  lda $c08e,x
  sta $0321
  jmp *
-"#
+"#,
         ),
     ));
 
     // #672/#673: every even address of the controller returns the data latch.
     let mut even = String::from(".org $0801\n lda $c08e,x\n");
-    for (i, a) in [0x80u16, 0x82, 0x84, 0x86, 0x8A, 0x8C, 0x8E, 0x8C, 0x80, 0x8C].iter().enumerate() {
-        even.push_str(&format!(" lda $c0{a:02x},x\n sta $03{:02x}\n nop\n nop\n", i));
+    for (i, a) in [
+        0x80u16, 0x82, 0x84, 0x86, 0x8A, 0x8C, 0x8E, 0x8C, 0x80, 0x8C,
+    ]
+    .iter()
+    .enumerate()
+    {
+        even.push_str(&format!(
+            " lda $c0{a:02x},x\n sta $03{:02x}\n nop\n nop\n",
+            i
+        ));
     }
     // and the odd ones return the floating bus (video scanner)
-    for (i, a) in [0x81u16, 0x83, 0x85, 0x87, 0x8B, 0x8D, 0x8F].iter().enumerate() {
+    for (i, a) in [0x81u16, 0x83, 0x85, 0x87, 0x8B, 0x8D, 0x8F]
+        .iter()
+        .enumerate()
+    {
         even.push_str(&format!(" lda $c0{a:02x},x\n sta $03{:02x}\n", 0x20 + i));
     }
     even.push_str(" jmp *\n");
@@ -361,7 +377,11 @@ a2: lda $c08c,x
         for _ in 0..k {
             pn.push_str(" nop\n");
         }
-        pn.push_str(&format!(" lda $c08c,x\n sta $03{:02x}\n lda $c08c,x\n sta $03{:02x}\n", k * 2, k * 2 + 1));
+        pn.push_str(&format!(
+            " lda $c08c,x\n sta $03{:02x}\n lda $c08c,x\n sta $03{:02x}\n",
+            k * 2,
+            k * 2 + 1
+        ));
     }
     pn.push_str(" jmp *\n");
     v.push(("partial-nibble", pn));
@@ -480,7 +500,6 @@ w3: lda $c08c,x
     v
 }
 
-
 /// Boot programs of the hard disk (block 0 is loaded at $0800 by the slot 7 firmware, which jumps
 /// to $0801; up to 512 bytes).
 fn hdd_programs() -> Vec<(&'static str, String)> {
@@ -584,7 +603,16 @@ nr: sta $06
         ),
     ));
     // #1007: DMA that touches I/O or ROM space, and the 64 KiB wrap
-    let boundary_cases = [(0xBF, 0x00, "r"), (0xBE, 0x00, "r"), (0xC1, 0x00, "r"), (0xFF, 0x80, "r"), (0xFF, 0x80, "w"), (0xBF, 0x00, "w"), (0xFE, 0x00, "r"), (0xBF, 0xF0, "r")];
+    let boundary_cases = [
+        (0xBF, 0x00, "r"),
+        (0xBE, 0x00, "r"),
+        (0xC1, 0x00, "r"),
+        (0xFF, 0x80, "r"),
+        (0xFF, 0x80, "w"),
+        (0xBF, 0x00, "w"),
+        (0xFE, 0x00, "r"),
+        (0xBF, 0xF0, "r"),
+    ];
     let mut b = String::from(
         r#".org $0801
  lda $c7ff
@@ -655,7 +683,11 @@ fn hdv_with(src: &str, blocks: usize) -> Vec<u8> {
             img[b * 512 + i] = ((b * 37 + i * 5) as u8) | if i % 7 == 0 { 0x80 } else { 0 };
         }
     }
-    assert!(code.len() + 1 <= 512, "hdd boot block is {} bytes", code.len() + 1);
+    assert!(
+        code.len() < 512,
+        "hdd boot block is {} bytes",
+        code.len() + 1
+    );
     img[..512].fill(0);
     img[0] = 1;
     img[1..1 + code.len()].copy_from_slice(&code);
@@ -742,14 +774,40 @@ fn extras(out: &Path) {
         write_file(out, "read-t1-noflux.woz", wimg.data());
     }
     // #1110: quarter tracks
-    let q = dsk_with(&programs().into_iter().find(|(n, _)| *n == "quarter").unwrap().1);
-    write_file(out, "quarter.woz", &woz_quarters(&q, &(0..=16).collect::<Vec<_>>()));
+    let q = dsk_with(
+        &programs()
+            .into_iter()
+            .find(|(n, _)| *n == "quarter")
+            .unwrap()
+            .1,
+    );
+    write_file(
+        out,
+        "quarter.woz",
+        &woz_quarters(&q, &(0..=16).collect::<Vec<_>>()),
+    );
     // #664: WOZ in drive 1 (boot, selects drive 2) and a writable DSK in drive 2
-    let d2 = dsk_with(&programs().into_iter().find(|(n, _)| *n == "write-sector-d2").unwrap().1);
-    write_file(out, "write-sector-d2.woz", &woz_from_dsk(&d2, &[0, 1, 2, 3]));
+    let d2 = dsk_with(
+        &programs()
+            .into_iter()
+            .find(|(n, _)| *n == "write-sector-d2")
+            .unwrap()
+            .1,
+    );
+    write_file(
+        out,
+        "write-sector-d2.woz",
+        &woz_from_dsk(&d2, &[0, 1, 2, 3]),
+    );
     gz_write("patterned.do.gz", &patterned_dsk());
     // #649: .2mg wrapped images in both drives
-    let rd2 = dsk_with(&programs().into_iter().find(|(n, _)| *n == "read-d2").unwrap().1);
+    let rd2 = dsk_with(
+        &programs()
+            .into_iter()
+            .find(|(n, _)| *n == "read-d2")
+            .unwrap()
+            .1,
+    );
     gz_write("read-d2.do.2mg.gz", &wrap_2mg(&rd2, 0));
     gz_write("patterned.po.2mg.gz", &wrap_2mg(&patterned_dsk(), 1));
     // #186: ProDOS-order 2IMG (Microzine-like): ProDOS 2.4.3 in a .2mg with the ProDOS-order flag
@@ -765,7 +823,8 @@ fn extras(out: &Path) {
                 w[pos..pos + 4].fill(0);
                 break;
             }
-            let size = u32::from_le_bytes([w[pos + 4], w[pos + 5], w[pos + 6], w[pos + 7]]) as usize;
+            let size =
+                u32::from_le_bytes([w[pos + 4], w[pos + 5], w[pos + 6], w[pos + 7]]) as usize;
             pos += 8 + size;
         }
         woz::update_crc(&mut w);
@@ -789,7 +848,10 @@ fn main() {
             write_file(&out, &format!("{name}.do"), &dsk);
         }
         write_file(&out, &format!("{name}.do.gz"), &gz(&dsk));
-        if matches!(name, "even-latch" | "partial-nibble" | "rotation" | "write-sector") {
+        if matches!(
+            name,
+            "even-latch" | "partial-nibble" | "rotation" | "write-sector"
+        ) {
             let w = woz_from_dsk(&dsk, &[0, 1, 2, 3]);
             write_file(&out, &format!("{name}.woz"), &w);
         }

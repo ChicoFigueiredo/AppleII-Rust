@@ -31,8 +31,15 @@ fn a_failed_rewrite_leaves_the_previous_image_intact() {
         img.set_store(Some(Box::new(store)));
         img.write_track(0.0, &buf[..n], n);
 
-        assert!(img.take_io_error().is_some(), "{name}: the failed write is reported");
-        assert_eq!(std::fs::read(&path).unwrap(), before, "{name}: the file did not change");
+        assert!(
+            img.take_io_error().is_some(),
+            "{name}: the failed write is reported"
+        );
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "{name}: the file did not change"
+        );
         let leftovers: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()
             .flatten()
@@ -44,7 +51,11 @@ fn a_failed_rewrite_leaves_the_previous_image_intact() {
         let mut img = DiskImage::open_path(&path, Class::Floppy, false).unwrap();
         img.write_track(0.0, &buf[..n], n);
         assert!(img.take_io_error().is_none());
-        assert_ne!(std::fs::read(&path).unwrap(), before, "{name}: the write reached the file");
+        assert_ne!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "{name}: the write reached the file"
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 }

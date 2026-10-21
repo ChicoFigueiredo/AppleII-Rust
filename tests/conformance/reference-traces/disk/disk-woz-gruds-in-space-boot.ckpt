@@ -2,13 +2,15 @@
 #case=disk-woz-gruds-in-space-boot
 #model=apple2e-enhanced
 #memclear=0
+#authentic=false
 #every=2000
 #rows=2014924
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=d6a9db1cf28ec64dadaaa4a91ea36538dde696086c41b06d5fd95eb4b25a5ebf
+#oracle_trace_sha256=44518c172c88441f0fb930372b421cb91df66c5f50f239b06453c7f38316d907
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
+#final_sha256_fixture=6e6e27f8ec1a31775c960adb3196af85e5b1b85d31796c5f28041f08e31e749f
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E

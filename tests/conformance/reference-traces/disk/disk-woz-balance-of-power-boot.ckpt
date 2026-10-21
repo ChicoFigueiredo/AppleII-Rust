@@ -2,13 +2,15 @@
 #case=disk-woz-balance-of-power-boot
 #model=apple2e-enhanced
 #memclear=0
+#authentic=false
 #every=2000
 #rows=2080324
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=350842afd2612250f39fbc3fc1644e81231ff3d2cbe55c578cde6b0e19914f07
+#oracle_trace_sha256=283d1022636687453d4d49fa30271246aa1e3b40b2eb1b211717e020ade924bc
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
+#final_sha256_fixture=110ecff25657cf38543d240fab38f75fae9d6875654207a2103f881e5de42bdc
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E

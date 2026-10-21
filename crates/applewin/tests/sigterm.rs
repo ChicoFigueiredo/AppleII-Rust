@@ -18,7 +18,10 @@ fn run_and_signal(sig: &str) -> Option<std::process::ExitStatus> {
     let dir = std::env::temp_dir().join(format!("a2sig-{sig}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let img = dir.join("copy.dsk");
-    let master = format!("{}/../../assets/disks/BLANK.DSK", env!("CARGO_MANIFEST_DIR"));
+    let master = format!(
+        "{}/../../assets/disks/BLANK.DSK",
+        env!("CARGO_MANIFEST_DIR")
+    );
     std::fs::copy(master, &img).unwrap();
     let before = std::fs::read(&img).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_applewin"))

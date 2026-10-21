@@ -2,13 +2,13 @@
 //! is a FAIL, a missing fixture is a BLOCKED with the cause. Uses the free DOS 3.3 image only.
 
 use apple2_conformance::case::Case;
-use apple2_conformance::disk::{self, Checkpoints, Failure};
+use apple2_conformance::disk::{self, Checkpoints, Failure, Rig};
 use apple2_conformance::manifest::TestResult;
 use apple2_conformance::runner::{machine_config, run_case, Env};
-use apple2_core::Machine;
 
-const CKPT: &str =
-    include_str!("../../../tests/conformance/reference-traces/disk/disk-dos33-boot-apple2plus.ckpt");
+const CKPT: &str = include_str!(
+    "../../../tests/conformance/reference-traces/disk/disk-dos33-boot-apple2plus.ckpt"
+);
 const DOS_CASE: &str = r#"
 id = "d0"
 story = "HU-0301"
@@ -28,7 +28,7 @@ source = "x"
 trace = "reference-traces/disk/disk-dos33-boot-apple2plus.ckpt"
 "#;
 
-fn machine(memclear: u32) -> Machine {
+fn machine(memclear: u32) -> Rig {
     let c: Case = toml::from_str(&DOS_CASE.replace("MC", &memclear.to_string())).unwrap();
     c.validate().unwrap();
     disk::build(&Env::detect(None), &c).unwrap()
@@ -75,10 +75,7 @@ fn a_different_ram_pattern_is_detected_by_the_boot_trace() {
     // memclear 2 fills RAM with $FF: the early boot reads it, so the chain breaks.
     let ck = prefix(60_000);
     let mut m = machine(2);
-    assert!(matches!(
-        disk::check(&mut m, &ck),
-        Err(Failure::Fail(..))
-    ));
+    assert!(matches!(disk::check(&mut m, &ck), Err(Failure::Fail(..))));
 }
 
 #[test]

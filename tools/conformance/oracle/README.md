@@ -67,6 +67,9 @@ tools/conformance/oracle/run-audetto-oracle.sh --model apple2ee --cycles 500000 
 #   --model   apple2 | apple2p | apple2jp | apple2e | apple2ee   (nomes do AppleWin)
 #   --frames N          em vez de --cycles (1 quadro NTSC = 17030 ciclos)
 #   --disk imagem.dsk   Disk II drive 1 (sha256 vai no cabeçalho)
+#   --disk2 imagem.dsk  Disk II drive 2
+#   --hdd imagem.hdv    controlador de disco rígido no slot 7, unidade 1 (--hdd2: unidade 2)
+#   --authentic         "Enhance Disk Speed" desligado (velocidade autêntica do Disk II)
 #   --state x.aws.yaml  carrega save-state antes de rodar (o modelo vem do arquivo; "cycle" continua do valor salvo)
 #   --memclear 0..7     padrão de preenchimento da RAM (padrão do AppleWin: 2)
 #   --cards disk2|none
@@ -76,7 +79,7 @@ Cache (fora do Git, compartilhado entre worktrees): `target/conformance-cache/or
 
 ## Formato (v1)
 
-Linhas `#chave=valor` (UTF-8, antes do cabeçalho): `trace_format`, `oracle`, `model`, `cpu`, `frames` (se pedido), `cycles`, `start_cycle`, `memclear`, `cards`, `input`, `disk`, `state`, `rom_sha256`, `applewin_sha`, `port_base_applewin_sha`, `fork_sha`, `fork_url` (e `fixture_sha256` com disco/save-state). Depois `cycle,pc,op,a,x,y,sp,p` e uma linha por instrução: `cycle` decimal, `pc` com 4 dígitos hexa maiúsculos, os demais com 2. Finais de linha `\n`.
+Linhas `#chave=valor` (UTF-8, antes do cabeçalho): `trace_format`, `oracle`, `model`, `cpu`, `frames` (se pedido), `cycles`, `start_cycle`, `memclear`, `cards`, `input`, `disk`, `state`, `rom_sha256`, `applewin_sha`, `port_base_applewin_sha`, `fork_sha`, `fork_url` (e `fixture_sha256` com disco/save-state; `disk2`, `hdd`, `hdd2` e `enhance_disk` com os dispositivos extras). Depois `cycle,pc,op,a,x,y,sp,p` e uma linha por instrução: `cycle` decimal, `pc` com 4 dígitos hexa maiúsculos, os demais com 2. Finais de linha `\n`.
 
 ## Relógio de vídeo (alteração do frontend `main.cpp`, HU-0103)
 
@@ -132,3 +135,9 @@ Commits upstream entre o merge-base e a base do port (`3e8054b..a8f0d1d`, 22 com
 - `6c579da5` `-no-joystick<1|2>`; `56c95d31` `-ssc-tcp-port`; `3057ddf8`/`daf813dc` versão no save-state; `18303d49` PNG em vez de BMP.
 
 Nenhum desses altera o fluxo de CPU do boot sem disco, mas qualquer comparação de leituras de `$C061-$C063` ou de save-states com campos novos (`Shift Key Mod`, versão) pode divergir.
+
+## Disco e HDD (HU-0301/0303)
+
+`--disk`, `--disk2`, `--hdd`, `--hdd2` e `--authentic` repassam as opções de `EmulatorOptions` (`disk1/disk2/hardDisk1/hardDisk2`) e o valor de registro `Enhance Disk Speed`. O oráculo **escreve** nas imagens (AppleWin grava a trilha suja ao desligar o motor, ao ejetar e ao sair): rode sempre sobre uma cópia (o script de geração dos casos faz isso) e compare o SHA-256 da cópia depois da execução. Imagens `.gz` e `.zip` são aceitas; a regravação de `.gz` produz o mesmo conteúdo que a do Rust, mas bytes comprimidos diferentes (compare o conteúdo descomprimido).
+
+O cache do oráculo (`target/conformance-cache/oracle`) é **compartilhado entre worktrees**: quem roda `build-audetto-oracle.sh` troca o binário de todos, com o `main.cpp` da sua própria worktree. Se um binário sem estas opções aparecer (o `usage` não lista `--disk2`), reconstrua, ou use um cache privado (`ORACLE_CACHE=/caminho tools/conformance/oracle/build-audetto-oracle.sh`, depois a mesma variável no `run-audetto-oracle.sh`; basta copiar `audetto-AppleWin` para lá antes).

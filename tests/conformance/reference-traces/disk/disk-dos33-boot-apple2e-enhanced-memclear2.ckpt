@@ -2,13 +2,15 @@
 #case=disk-dos33-boot-apple2e-enhanced-memclear2
 #model=apple2e-enhanced
 #memclear=2
+#authentic=false
 #every=2000
 #rows=2861035
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=83229ae6440033e7e7b0c3f12bda1f1a8749bd7e421dd3a59fc07aeb64bb5a6e
+#oracle_trace_sha256=9907e8a8bd84335b6473a322e6d85a9e4d2b8cd9ec8e1f675809e3c87a423273
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 8000000 --disk <fixture> --memclear 2
+#final_sha256_fixture=caca91990b148e20062c887f0301a957b477353fbacf4e4a011f8fb3beab46a9
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAA,25,02,87,F4,35,27783B38ADD66158
 ck,4000,10308,FCAA,09,02,87,F4,35,AC7AE21671507EA8

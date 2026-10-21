@@ -2,13 +2,15 @@
 #case=disk-dos33-boot-apple2plus-memclear2
 #model=apple2plus
 #memclear=2
+#authentic=false
 #every=2000
 #rows=2804334
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=7782a7887c8fad8939e7efecb1d3ec9a323d2fddf9872e4835584a616153521e
+#oracle_trace_sha256=7171ea2f96b533c3ce9f9f04370581ccd99d8f7fd56c02e7cd544ee1d4679ff9
 #oracle_command=run-audetto-oracle.sh --model apple2p --cycles 8000000 --disk <fixture> --memclear 2
+#final_sha256_fixture=caca91990b148e20062c887f0301a957b477353fbacf4e4a011f8fb3beab46a9
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5080,FCAC,23,38,87,F4,35,4F68377111E5A536
 ck,4000,10107,FCAC,07,38,87,F4,35,9E01CDD8882EBF08

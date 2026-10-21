@@ -18,9 +18,16 @@ fn inserting_a_disk_into_an_empty_drive_and_resetting_boots_it_gh640() {
     }
     assert!(!screen_has(&m, "DOS VERSION 3.3"));
     let image = DiskImage::from_bytes("master.dsk", disk(DOS33)).unwrap();
-    assert!(m.card_mut::<Disk2Card>(6).unwrap().insert_disk(0, image).is_none());
+    assert!(m
+        .card_mut::<Disk2Card>(6)
+        .unwrap()
+        .insert_disk(0, image)
+        .is_none());
     m.power_cycle(); // cold start (Ctrl+Reset on a running //e only warm-starts Applesoft)
-    run_until(&mut m, 700, "DOS 3.3 after inserting into the empty drive", |m| {
-        screen_has(m, "DOS VERSION 3.3")
-    });
+    run_until(
+        &mut m,
+        700,
+        "DOS 3.3 after inserting into the empty drive",
+        |m| screen_has(m, "DOS VERSION 3.3"),
+    );
 }

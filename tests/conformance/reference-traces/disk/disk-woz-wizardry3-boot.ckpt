@@ -2,13 +2,15 @@
 #case=disk-woz-wizardry3-boot
 #model=apple2e-enhanced
 #memclear=0
+#authentic=false
 #every=2000
 #rows=2089780
 #oracle=audetto-oracle
 #oracle_fork_sha=a1e20c0362f392dc25f1a3b218d2f84d4f1a25da
 #oracle_applewin_sha=3e8054b4627624398e4589f7f27b3d40a6b9718e
-#oracle_trace_sha256=53965730b6669a9befd47036c0f3c60e396b55aadb6545f4320e848275b91f92
+#oracle_trace_sha256=e1c975fe1471b2e08f8755fdaeca6c999ad838ef3f3342bcb7d9acc54d83b6fb
 #oracle_command=run-audetto-oracle.sh --model apple2ee --cycles 6000000 --disk <fixture> --memclear 0
+#final_sha256_fixture=d7f82cacfe0972aa1744dec159d7a2b5d18a81b7d2e7c7d4a94310875aa85aab
 ck,0,0,FA62,FF,FF,FF,FC,34,CBF29CE484222325
 ck,2000,5284,FCAC,22,02,87,F4,35,862E277329031E33
 ck,4000,10308,FCAC,06,02,87,F4,35,A247D0D3F30B4A6E
