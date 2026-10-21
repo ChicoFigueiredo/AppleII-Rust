@@ -1,0 +1,13 @@
+id = "boot-iie-enhanced-prompt"
+story = "HU-0101"
+criterion = "Depois do boot sem disco o cursor está no prompt ] (linha 2 da tela) e a CPU espera teclado na ROM"
+model = "apple2e-enhanced"
+
+[run]
+frames = 30
+
+[oracle]
+kind = "expr"
+authority = "known-result"
+source = "Firmware do //e Enhanced: o Applesoft escreve ] ($DD em tela) em $0500 e fica no laço de teclado em ROM ($C000-$FFFF); mesmo critério de crates/apple2-core/tests/boot.rs"
+expect = ["main[0x0500] == 0xDD", "pc >= 0xC000"]
