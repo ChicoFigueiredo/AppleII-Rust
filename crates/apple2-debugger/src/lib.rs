@@ -26,9 +26,11 @@ pub mod display;
 pub mod help;
 mod helptext;
 pub mod host;
+pub mod keys;
 pub mod mem;
 pub mod opcodes;
 pub mod symbols;
 
 pub use debugger::{upd, Debugger, RunMode, Update};
 pub use display::{Grid, GridCell};
+pub use keys::{Align, Key, KeyMods};

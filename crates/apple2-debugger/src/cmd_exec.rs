@@ -56,11 +56,40 @@ impl Debugger {
 
     /// `CmdCursorFollowTarget` (Ctrl-Right on a branch/jump): jump to the cursor's target.
     pub fn cursor_follow_target(&mut self, m: &Machine) -> Update {
+        self.cursor_follow_target_at(m, crate::keys::Align::Keep)
+    }
+
+    /// `CmdCursorFollowTarget( align )`; the Right arrow key passes `CURSOR_ALIGN_TOP`.
+    pub fn cursor_follow_target_at(&mut self, m: &Machine, align: crate::keys::Align) -> Update {
         let t = crate::disasm::target_address(&self.ctx(m), self.disasm_cur);
         if let Some(t) = t {
-            self.goto(m, t);
+            self.disasm_cur = t;
+            self.align_cursor(align);
+            self.calc_top_bot(m);
         }
         upd::ALL
+    }
+
+    /// `CmdCursorLineDown( nBytes )` (Shift+Down): shifts the whole window by `n` bytes, with no
+    /// smart disassembly. The data window still moves by a line.
+    pub fn cursor_line_down_bytes(&mut self, m: &Machine, n: u16) -> Update {
+        if self.window == Window::Data {
+            return self.cursor_line_down(m);
+        }
+        self.disasm_top = self.disasm_top.wrapping_add(n);
+        self.disasm_cur = self.disasm_cur.wrapping_add(n);
+        self.calc_top_bot(m);
+        upd::DISASM
+    }
+
+    /// `CmdCursorLineUp( nBytes )` (Shift+Up): moves the top back by one byte.
+    pub fn cursor_line_up_bytes(&mut self, m: &Machine, _n: u16) -> Update {
+        if self.window == Window::Data {
+            return self.cursor_line_up(m);
+        }
+        self.disasm_top = self.disasm_top.wrapping_sub(1);
+        self.calc_cur_from_top(m);
+        upd::DISASM
     }
 
     /// `CmdCursorLineDown` (Down arrow).

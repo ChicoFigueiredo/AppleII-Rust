@@ -11,7 +11,7 @@ use apple2_config::{CardType, Settings, SlotCardSpec};
 use applewin_shell::backend::DefaultBackend;
 use applewin_shell::emu::{Command, Emulator};
 use applewin_shell::joy::{JoyConfig, JoySystem};
-use applewin_shell::keymap::{debug_key, DebugKey, HostKey, Mods};
+use applewin_shell::keymap::{debug_key, DbgKey, DbgMods, DebugKey, HostKey, Mods};
 
 fn base_settings() -> Settings {
     let mut s = Settings::default();
@@ -220,24 +220,45 @@ fn dbg_emulator() -> Emulator {
     Emulator::new(base_settings(), Box::new(DefaultBackend), 48_000).unwrap()
 }
 
-/// HU-0801. `DebuggerProcessKey` (Debug.cpp:9770): Espaço com a linha de comando vazia = Trace
-/// (`CmdTrace`). O Rust transforma o Espaço em caractere do console.
-#[test]
-#[ignore = "reproduz achado AUD-P-035"]
-fn aud_p_035_space_traces_one_instruction_in_the_debugger() {
+fn press(e: &mut Emulator, k: DbgKey, m: DbgMods) {
+    e.apply(Command::Debug(DebugKey::Press(k, m)));
+}
+
+fn plain(e: &mut Emulator, k: DbgKey) {
+    e.apply(Command::Debug(DebugKey::plain(k)));
+}
+
+fn dbg_running() -> Emulator {
     let mut e = dbg_emulator();
     for _ in 0..120 {
         e.run_frame();
     }
     e.apply(Command::ToggleDebugger);
+    e
+}
+
+/// HU-0801. `DebuggerProcessKey` (Debug.cpp:9848-9867): Espaço com a linha de comando vazia =
+/// Trace (`CmdTrace`), Shift+Espaço = `CmdStepOut`, Ctrl+Espaço = `CmdStepOver`.
+#[test]
+fn aud_p_035_space_traces_one_instruction_in_the_debugger() {
+    let mut e = dbg_running();
     let pc = e.machine.cpu().pc;
     e.apply(Command::Debug(DebugKey::Char(' ')));
     assert_ne!(e.machine.cpu().pc, pc, "Espaço deveria dar um passo");
+    // via tradução do teclado (Espaço do winit chega como HostKey::Char(' '))
+    let pc = e.machine.cpu().pc;
+    let k = debug_key(HostKey::Char(' '), Mods::default()).expect("Espaço");
+    e.apply(Command::Debug(k));
+    assert_ne!(e.machine.cpu().pc, pc);
+    // com texto digitado o Espaço é caractere, não passo
+    e.apply(Command::Debug(DebugKey::Char('R')));
+    let pc = e.machine.cpu().pc;
+    e.apply(Command::Debug(DebugKey::Char(' ')));
+    assert_eq!(e.machine.cpu().pc, pc);
 }
 
-/// HU-0801. Teclas de navegação do depurador sem tradução no frontend (`keymap::debug_key`).
+/// HU-0801. Teclas de navegação do depurador têm tradução no frontend (`keymap::debug_key`).
 #[test]
-#[ignore = "reproduz achado AUD-P-035"]
 fn aud_p_035_navigation_keys_are_translated() {
     let none = Mods::default();
     for k in [
@@ -246,6 +267,13 @@ fn aud_p_035_navigation_keys_are_translated() {
         HostKey::End,
         HostKey::Left,
         HostKey::Right,
+        HostKey::Up,
+        HostKey::Down,
+        HostKey::PageUp,
+        HostKey::PageDown,
+        HostKey::Enter,
+        HostKey::Backspace,
+        HostKey::Escape,
     ] {
         assert!(debug_key(k, none).is_some(), "{k:?} sem ação no depurador");
     }
@@ -257,17 +285,155 @@ fn aud_p_035_navigation_keys_are_translated() {
         debug_key(HostKey::Right, ctrl).is_some(),
         "Ctrl-Right (PC := cursor)"
     );
+    for d in '0'..='9' {
+        assert_eq!(
+            debug_key(HostKey::Char(d), ctrl),
+            Some(DebugKey::Press(
+                DbgKey::Char(d),
+                DbgMods {
+                    ctrl: true,
+                    ..Default::default()
+                }
+            )),
+            "Ctrl+{d}"
+        );
+    }
+    // Ctrl+Shift+1 chega como '!' num teclado americano; o AppleWin olha o código da tecla
+    let cs = Mods {
+        ctrl: true,
+        shift: true,
+        alt: false,
+    };
+    assert!(matches!(
+        debug_key(HostKey::Char('!'), cs),
+        Some(DebugKey::Press(DbgKey::Char('1'), _))
+    ));
+    // Ctrl+~ alterna o console em tela cheia
+    assert!(debug_key(HostKey::Char('~'), ctrl).is_some());
 }
 
-/// HU-0801. Documenta o que existe: Enter, Backspace, Escape, PgUp/PgDn e histórico em Up/Down.
+/// HU-0801. Setas, Tab e Home/End mexem no cursor do disassembly (Debug.cpp:9830-10066).
+#[test]
+fn aud_p_035_navigation_keys_move_the_cursor() {
+    let mut e = dbg_running();
+    let pc = e.machine.cpu().pc;
+    assert_eq!(e.debugger().disasm_cur, pc);
+    plain(&mut e, DbgKey::Home);
+    assert_eq!(e.debugger().disasm_cur, 0x0000);
+    plain(&mut e, DbgKey::End);
+    assert_eq!(e.debugger().disasm_cur, 0x8000);
+    plain(&mut e, DbgKey::Tab);
+    assert_eq!(e.debugger().disasm_cur, pc);
+    // Shift+Direita: topo; Alt+Direita: centro
+    plain(&mut e, DbgKey::Home);
+    press(
+        &mut e,
+        DbgKey::Right,
+        DbgMods {
+            shift: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(e.debugger().disasm_cur, pc);
+    assert_eq!(e.debugger().disasm_cur_line, 0);
+    plain(&mut e, DbgKey::Home);
+    press(
+        &mut e,
+        DbgKey::Right,
+        DbgMods {
+            alt: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(e.debugger().disasm_cur, pc);
+    assert!(e.debugger().disasm_cur_line > 0);
+    // Ctrl+Direita: PC := cursor
+    plain(&mut e, DbgKey::Down);
+    let cur = e.debugger().disasm_cur;
+    assert_ne!(cur, pc);
+    press(
+        &mut e,
+        DbgKey::Right,
+        DbgMods {
+            ctrl: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(e.machine.cpu().pc, cur);
+}
+
+/// HU-0801. Ctrl+Shift+n cria o marcador n no cursor, Ctrl+n vai até ele (`CmdBookmarkAdd/Goto`).
+#[test]
+fn aud_p_035_ctrl_digits_are_bookmarks() {
+    let mut e = dbg_running();
+    let pc = e.machine.cpu().pc;
+    let ctrl = DbgMods {
+        ctrl: true,
+        ..Default::default()
+    };
+    let cs = DbgMods {
+        ctrl: true,
+        shift: true,
+        ..Default::default()
+    };
+    press(&mut e, DbgKey::Char('3'), cs);
+    plain(&mut e, DbgKey::Home);
+    press(&mut e, DbgKey::Char('3'), ctrl);
+    assert_eq!(e.debugger().disasm_cur, pc);
+}
+
+/// HU-0801 / AUD-P-036. Up/Down (linha vazia) movem o cursor do disassembly, como no AppleWin
+/// (Debug.cpp:9989-10047); PgUp/PgDn também. Com texto digitado só o console rola.
 #[test]
 fn aud_p_036_existing_debug_keys() {
     let none = Mods::default();
-    assert_eq!(debug_key(HostKey::Enter, none), Some(DebugKey::Enter));
-    assert_eq!(debug_key(HostKey::Escape, none), Some(DebugKey::ClearInput));
-    assert_eq!(debug_key(HostKey::PageUp, none), Some(DebugKey::ScrollUp));
-    // No AppleWin, Up/Down (sem texto digitado) movem o cursor do disassembly (Debug.cpp:9990-10028).
-    assert_eq!(debug_key(HostKey::Up, none), Some(DebugKey::HistoryPrev));
+    assert_eq!(
+        debug_key(HostKey::Enter, none),
+        Some(DebugKey::plain(DbgKey::Enter))
+    );
+    assert_eq!(
+        debug_key(HostKey::Escape, none),
+        Some(DebugKey::plain(DbgKey::Escape))
+    );
+    assert_eq!(
+        debug_key(HostKey::PageUp, none),
+        Some(DebugKey::plain(DbgKey::PageUp))
+    );
+    assert_eq!(
+        debug_key(HostKey::Up, none),
+        Some(DebugKey::plain(DbgKey::Up))
+    );
+    let mut e = dbg_running();
+    let cur = e.debugger().disasm_cur;
+    plain(&mut e, DbgKey::Down);
+    let down = e.debugger().disasm_cur;
+    assert!(down > cur, "Baixo desce uma instrução");
+    plain(&mut e, DbgKey::Up);
+    assert_eq!(e.debugger().disasm_cur, cur, "Cima volta");
+    plain(&mut e, DbgKey::PageDown);
+    assert_ne!(e.debugger().disasm_cur, cur, "PgDn move o cursor");
+    // com texto, Cima/Baixo não mexem no cursor (o AppleWin só rola o console com Shift)
+    e.apply(Command::Debug(DebugKey::Char('R')));
+    let cur = e.debugger().disasm_cur;
+    plain(&mut e, DbgKey::Down);
+    plain(&mut e, DbgKey::Up);
+    assert_eq!(e.debugger().disasm_cur, cur);
+}
+
+/// HU-0801. Enter com a linha vazia alterna o console em tela cheia (Debug.cpp:9788-9799);
+/// Esc limpa a linha.
+#[test]
+fn aud_p_035_empty_enter_toggles_the_full_screen_console() {
+    use apple2_debugger::debugger::Window;
+    let mut e = dbg_running();
+    assert_eq!(e.debugger().window, Window::Code);
+    plain(&mut e, DbgKey::Enter);
+    assert_eq!(e.debugger().window, Window::Console);
+    plain(&mut e, DbgKey::Enter);
+    assert_eq!(e.debugger().window, Window::Code);
+    e.apply(Command::Debug(DebugKey::Char('R')));
+    plain(&mut e, DbgKey::Escape);
+    assert!(e.debugger().console.input().is_empty());
 }
 
 // ---------------------------------------------------------------- UI

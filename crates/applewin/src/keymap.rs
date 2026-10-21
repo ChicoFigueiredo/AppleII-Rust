@@ -7,6 +7,7 @@
 //! characters exist, Pravets / TK3000 remaps) live in `apple2_core::Keyboard`.
 
 use apple2_core::NavKey;
+pub use apple2_debugger::keys::{Key as DbgKey, KeyMods as DbgMods};
 use std::collections::HashSet;
 
 /// A host key, already layout-translated (`Char` carries the shifted character).
@@ -131,35 +132,77 @@ pub fn char_to_ascii(c: char, mods: Mods) -> Option<u8> {
     (code != 0 && code <= 0xFF).then_some(code as u8)
 }
 
-/// Keys the debugger console understands.
+/// Keys the debugger understands (`DebuggerProcessKey`, Debug.cpp:9653): `Char` is a typed
+/// character; `Press` is a key with its modifiers, which navigates or edits depending on whether
+/// the command line is empty (the rules live in `apple2_debugger::keys`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DebugKey {
     Char(char),
-    Enter,
-    Backspace,
-    HistoryPrev,
-    HistoryNext,
-    ClearInput,
-    ScrollUp,
-    ScrollDown,
+    Press(DbgKey, DbgMods),
 }
 
-/// Console input for a key press while the debugger is on screen.
-pub fn debug_key(key: HostKey, mods: Mods) -> Option<DebugKey> {
-    if mods.ctrl {
-        return None;
+impl DebugKey {
+    /// A key without modifiers.
+    pub fn plain(k: DbgKey) -> Self {
+        DebugKey::Press(k, DbgMods::default())
     }
-    Some(match key {
-        HostKey::Char(c) if !c.is_control() => DebugKey::Char(c),
-        HostKey::Enter => DebugKey::Enter,
-        HostKey::Backspace | HostKey::Delete => DebugKey::Backspace,
-        HostKey::Up => DebugKey::HistoryPrev,
-        HostKey::Down => DebugKey::HistoryNext,
-        HostKey::Escape => DebugKey::ClearInput,
-        HostKey::PageUp => DebugKey::ScrollUp,
-        HostKey::PageDown => DebugKey::ScrollDown,
+}
+
+/// US-layout shifted digits: Ctrl+Shift+1 reports `!` but AppleWin looks at the key code.
+fn unshifted_digit(c: char) -> Option<char> {
+    match c {
+        '0'..='9' => Some(c),
+        ')' => Some('0'),
+        '!' => Some('1'),
+        '@' => Some('2'),
+        '#' => Some('3'),
+        '$' => Some('4'),
+        '%' => Some('5'),
+        '^' => Some('6'),
+        '&' => Some('7'),
+        '*' => Some('8'),
+        '(' => Some('9'),
+        _ => None,
+    }
+}
+
+/// Debugger input for a key press while the debugger is on screen.
+pub fn debug_key(key: HostKey, mods: Mods) -> Option<DebugKey> {
+    let m = DbgMods {
+        shift: mods.shift,
+        ctrl: mods.ctrl,
+        alt: mods.alt,
+    };
+    let k = match key {
+        HostKey::Char(c) if mods.ctrl => {
+            let c = if mods.shift {
+                unshifted_digit(c).unwrap_or(c)
+            } else {
+                c
+            };
+            if c == ' ' || c.is_ascii_digit() || matches!(c, '~' | '`' | '\u{ac}') {
+                DbgKey::Char(c)
+            } else {
+                return None;
+            }
+        }
+        HostKey::Char(' ') => DbgKey::Char(' '),
+        HostKey::Char(c) if !c.is_control() => return Some(DebugKey::Char(c)),
+        HostKey::Enter => DbgKey::Enter,
+        HostKey::Backspace | HostKey::Delete => DbgKey::Backspace,
+        HostKey::Escape => DbgKey::Escape,
+        HostKey::Tab => DbgKey::Tab,
+        HostKey::Home => DbgKey::Home,
+        HostKey::End => DbgKey::End,
+        HostKey::Up => DbgKey::Up,
+        HostKey::Down => DbgKey::Down,
+        HostKey::Left => DbgKey::Left,
+        HostKey::Right => DbgKey::Right,
+        HostKey::PageUp => DbgKey::PageUp,
+        HostKey::PageDown => DbgKey::PageDown,
         _ => return None,
-    })
+    };
+    Some(DebugKey::Press(k, m))
 }
 
 /// Stateful translator: tracks held keys (for AKD), the Caps Lock and Scroll Lock toggles.
