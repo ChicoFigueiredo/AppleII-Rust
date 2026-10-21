@@ -11,3 +11,6 @@ apple2-core = { path = "../apple2-core" }
 serde.workspace = true
 toml = "0.8"
 directories = "6"
+
+[dev-dependencies]
+apple2-cpu = { path = "../apple2-cpu" }
