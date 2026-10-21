@@ -55,6 +55,7 @@ impl InputRouter {
     pub fn new(settings: &Settings) -> Self {
         let mut kbd = KeyboardState::with_caps(settings.keyboard.caps_lock);
         kbd.set_altgr_sends_char(settings.keyboard.altgr_sends_char);
+        kbd.set_hook_altgr_control(settings.keyboard.hook_altgr_control);
         InputRouter {
             kbd,
             joy: JoySystem::new(JoyConfig::from_settings(settings)),

@@ -25,7 +25,7 @@ Algumas imagens `.po` na verdade têm setores na ordem DOS. Renomeie para `.do` 
 
 Algumas teclas dependem do AltGr (Alt direito), por exemplo `@` em teclado franco-canadense (AltGr+2) ou `[` em teclado italiano (AltGr+è). O Alt direito é também a Solid Apple (botão 1 do joystick). Alguns programas usam o botão ou Ctrl+@ (Lode Runner usa Ctrl+@ para ganhar vidas), e AppleLogo // e AppleWorks 5.1 têm problemas com teclados italianos.
 
-Por padrão, como no AppleWin, a tecla digitada com o AltGr apertado é descartada. Para digitar esses caracteres, use a opção `-altgr-sends-wmchar` (ou marque "AltGr sends characters" na configuração).
+Como no AppleWin, o caractere que o layout define para AltGr + tecla (`@`, `[`, `/` no ABNT2...) é digitado normalmente, sem opção. Só as combinações sem caractere no layout (AltGr+A no layout americano) são descartadas por padrão; para que digitem a tecla base, use `-altgr-sends-wmchar` (ou marque "AltGr sends characters" na configuração).
 
 Se o uso duplo do AltGr impedir de digitar um caractere, a saída é a opção `-no-hook-alt` com o Joystick 1 em "Teclado (numérico)", usando `0` e `.` como Open Apple e Solid Apple.
 

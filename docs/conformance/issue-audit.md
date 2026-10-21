@@ -4,13 +4,7 @@ Gerado por `tools/conformance/summarize_issue_matrix.py` a partir de `docs/confo
 
 ## Coleta
 
-- Data da coleta (UTC): 2026-10-21T00:47:54Z
-- SHA do upstream (HEAD de AppleWin/AppleWin): `a8f0d1d40f551ad9e010522c29c2891e33c88275`
-- Itens coletados: 1516 (1115 issues e 401 PRs)
-- Issues: 358 abertas e 757 fechadas
-- PRs: 11 abertos, 324 mesclados, 66 fechados sem merge
-- Issues fechadas com commit de correção identificado: 445 (141 por evento `closed`, 304 por `referenced`)
-- Issues com PR vinculado (heurístico): 16
+Metadados indisponíveis (`issues.json` ausente); rode `tools/conformance/fetch_upstream_issues.py`.
 
 ## Contagens (total de issues na matriz: 1115)
 

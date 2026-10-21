@@ -77,4 +77,4 @@ O AppleWin intercepta Alt+Tab, Alt+Esc, Alt+Espaço e Ctrl+Esc no Windows. Este 
 
 ## Teclados não americanos
 
-Como o AppleWin, o port descarta por padrão a tecla digitada com o AltGr (Alt direito) apertado; para que caracteres como `@` ou `[` de alguns idiomas entrem, ligue `-altgr-sends-wmchar` (ou "AltGr sends characters" na página Input da configuração). Como o Alt direito também é a Solid Apple, a combinação pode ser percebida pelo programa do Apple como um botão pressionado. Veja "Solução de problemas".
+Como o AppleWin, o port entrega o caractere que o seu layout define para AltGr + tecla (`@` no alemão, `/` no ABNT2, `[` no italiano), sem precisar de opção. Só a combinação que o layout não define (AltGr+A no layout americano) é descartada; para que ela digite a tecla base, ligue `-altgr-sends-wmchar` (ou "AltGr sends characters" na página Input da configuração). Caracteres acima de `$7F` (`€`, `°`, `ã`) seguem a regra do modelo: a //e não clone os descarta. Como o Alt direito também é a Solid Apple, a combinação pode ser percebida pelo programa do Apple como um botão pressionado. Veja "Solução de problemas".
