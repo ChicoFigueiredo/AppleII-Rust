@@ -91,21 +91,20 @@ Observação: uma issue com vários modelos conta em cada um, então a soma pode
 
 | Valor | Quantidade | % |
 |---|---:|---:|
-| NOT_APPLICABLE | 469 | 42.1 |
-| PASS | 449 | 40.3 |
+| NOT_APPLICABLE | 489 | 43.9 |
+| PASS | 478 | 42.9 |
 | BLOCKED | 133 | 11.9 |
-| UNVERIFIED | 49 | 4.4 |
 | FAIL | 15 | 1.3 |
 
 ## Taxas
 
-Taxa geral: PASS 449 / aplicáveis 646 = 69.5%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
+Taxa geral: PASS 478 / aplicáveis 626 = 76.4%. Aplicável = estado diferente de NOT_APPLICABLE. Issues ainda não classificadas contam como aplicáveis.
 
 ### Por modelo
 
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
-| todos | 1004 | 565 | 376 | 13 | 49 | 66.5% |
+| todos | 1004 | 545 | 405 | 13 | 0 | 74.3% |
 | apple2e | 59 | 50 | 44 | 1 | 0 | 88.0% |
 | apple2e-enhanced | 59 | 45 | 40 | 0 | 0 | 88.9% |
 | apple2plus | 29 | 23 | 21 | 2 | 0 | 91.3% |
@@ -130,7 +129,7 @@ Taxa geral: PASS 449 / aplicáveis 646 = 69.5%. Aplicável = estado diferente de
 | video | 137 | 75 | 58 | 1 | 0 | 77.3% |
 | debugger | 136 | 86 | 72 | 9 | 0 | 83.7% |
 | outra | 120 | 11 | 9 | 0 | 0 | 81.8% |
-| ui | 83 | 49 | 0 | 0 | 49 | 0.0% |
+| ui | 83 | 29 | 29 | 0 | 0 | 100.0% |
 | config | 58 | 34 | 34 | 0 | 0 | 100.0% |
 | cpu | 55 | 38 | 29 | 0 | 0 | 76.3% |
 | teclado | 53 | 25 | 21 | 1 | 0 | 84.0% |
@@ -154,13 +153,13 @@ Taxa geral: PASS 449 / aplicáveis 646 = 69.5%. Aplicável = estado diferente de
 | Valor | Total | Aplicável | PASS | FAIL | UNVERIFIED | Taxa PASS/aplicável |
 |---|---:|---:|---:|---:|---:|---:|
 | runtime | 388 | 339 | 243 | 2 | 0 | 71.7% |
-| feature-futura | 146 | 51 | 44 | 0 | 6 | 86.3% |
-| ui | 122 | 97 | 43 | 3 | 37 | 44.3% |
+| feature-futura | 146 | 46 | 45 | 0 | 0 | 97.8% |
+| ui | 122 | 83 | 66 | 3 | 0 | 79.5% |
 | pergunta-suporte | 118 | 0 | 0 | 0 | 0 | n/a |
 | debugger | 86 | 78 | 62 | 10 | 0 | 79.5% |
 | formato | 77 | 74 | 56 | 0 | 0 | 75.7% |
 | plataforma-windows | 61 | 0 | 0 | 0 | 0 | n/a |
 | build | 33 | 0 | 0 | 0 | 0 | n/a |
-| documentacao | 30 | 7 | 1 | 0 | 6 | 14.3% |
+| documentacao | 30 | 6 | 6 | 0 | 0 | 100.0% |
 | duplicada | 28 | 0 | 0 | 0 | 0 | n/a |
 | invalida | 26 | 0 | 0 | 0 | 0 | n/a |
