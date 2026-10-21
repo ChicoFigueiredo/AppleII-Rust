@@ -1,0 +1,2 @@
+in_progress=false
+diag @0 [1B 44 05 0A] lista de tabulação sem NUL final no fim do fluxo (truncada); valores lidos foram aplicados
