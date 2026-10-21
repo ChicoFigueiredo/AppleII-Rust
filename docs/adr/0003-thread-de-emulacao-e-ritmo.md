@@ -1,6 +1,6 @@
 # Thread de emulação, ritmo e fronteiras do frontend
 
-O frontend (`crates/applewin`) roda a Máquina numa thread própria (`emulation`). A thread de UI (winit, wgpu, egui) nunca toca a Máquina: ela só manda `Command`s por um canal `mpsc` e lê o último Quadro e o `EmuStatus` de um `Shared` (mutex + contador de sequência). Quando um Quadro novo sai, a thread de emulação acorda a UI por um callback (`EventLoopProxy`).
+O frontend (`crates/apple2-rust`) roda a Máquina numa thread própria (`emulation`). A thread de UI (winit, wgpu, egui) nunca toca a Máquina: ela só manda `Command`s por um canal `mpsc` e lê o último Quadro e o `EmuStatus` de um `Shared` (mutex + contador de sequência). Quando um Quadro novo sai, a thread de emulação acorda a UI por um callback (`EventLoopProxy`).
 
 **Por que thread separada.** `Card` não é `Send`, então a Máquina nasce dentro da thread, criada por um `BackendFactory` (`Send`). Isso também impede que um diálogo de arquivo, o redimensionamento da janela ou o compositor atrasem a CPU emulada ou o áudio. O núcleo continua headless e determinístico (ADR 0001): a thread só decide *quando* rodar quadros, nunca *o que* acontece neles.
 

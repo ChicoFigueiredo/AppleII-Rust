@@ -31,7 +31,7 @@ Fora do escopo desta HU, e que **não** foi testado: `apple2-cards` (relógio da
 
 **Nenhuma.** Nem `cfg` nem feature. O "sem mudar o comportamento no desktop" está garantido por construção: o diff do núcleo é vazio.
 
-## 2. Protótipo `crates/applewin-web`
+## 2. Protótipo `crates/apple2-rust-web`
 
 - Membro do workspace, `publish = false`, `crate-type = ["cdylib", "rlib"]`.
 - `wasm-bindgen` (`=0.2.129`, a versão já travada no `Cargo.lock` por outras dependências do projeto) e `wasm-bindgen-test` ficam em `[target.'cfg(target_arch = "wasm32")'.dependencies]`. **No build desktop o crate não puxa nenhuma dependência nova**: `cargo build --workspace` só compila Rust puro a mais. Por isso não foi preciso `default-members`.
@@ -50,17 +50,17 @@ Fora do escopo desta HU, e que **não** foi testado: `apple2-cards` (relógio da
 | `insert_disk(drive, nome, bytes)` | `insert_disk` | Insere imagem de disco a partir de bytes (`.dsk`, `.do`, `.po`, `.nib`, `.woz`, `.gz`, `.zip`); o `nome` só define o formato. |
 | `reset()`, `frames()`, `framebuffer_hash()` | idem | Reset a quente, contador de Quadros, hash FNV-1a 64 do framebuffer. |
 
-A página `crates/applewin-web/www/index.html` desenha o framebuffer num `<canvas>`, trata teclado, aceita arrastar um disco e permite escolher uma ROM própria.
+A página `crates/apple2-rust-web/www/index.html` desenha o framebuffer num `<canvas>`, trata teclado, aceita arrastar um disco e permite escolher uma ROM própria.
 
 ### Como construir e abrir
 
 ```
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.129      # mesma versão do Cargo.lock
-cargo build -p applewin-web --target wasm32-unknown-unknown --release
-wasm-bindgen --target web --out-dir crates/applewin-web/www/pkg \
-  target/wasm32-unknown-unknown/release/applewin_web.wasm
-cd crates/applewin-web/www && python3 -m http.server 8000     # abra http://localhost:8000
+cargo build -p apple2-rust-web --target wasm32-unknown-unknown --release
+wasm-bindgen --target web --out-dir crates/apple2-rust-web/www/pkg \
+  target/wasm32-unknown-unknown/release/apple2_rust_web.wasm
+cd crates/apple2-rust-web/www && python3 -m http.server 8000     # abra http://localhost:8000
 ```
 
 `www/pkg/` está no `.gitignore`. A página foi escrita para o navegador, mas **não foi aberta num navegador real nesta sessão**: só a API foi exercitada em Node.
@@ -80,8 +80,8 @@ Dois níveis, o mesmo golden:
 
 | Arquivo | Onde roda | O que prova |
 |---|---|---|
-| `crates/applewin-web/tests/boot.rs` | nativo (`cargo test`) | Hash do framebuffer da API web após 60 Quadros de boot a frio do //e Enhanced == hash pelo caminho direto do desktop (`Machine` + `Renderer`, mesmo Disk II no slot 6); hash dourado `0x4f1dc409f736b225`; tamanho 560×384; ~17.030 Ciclos por Quadro; ROM do usuário; disco a partir de bytes; modelo inválido. |
-| `crates/applewin-web/tests/wasm.rs` | WASM, Node, `wasm-bindgen-test` | O **mesmo** hash dourado calculado dentro do .wasm; a API JavaScript (`Apple2`) roda 60 Quadros e devolve RGBA do tamanho certo; disco por bytes. |
+| `crates/apple2-rust-web/tests/boot.rs` | nativo (`cargo test`) | Hash do framebuffer da API web após 60 Quadros de boot a frio do //e Enhanced == hash pelo caminho direto do desktop (`Machine` + `Renderer`, mesmo Disk II no slot 6); hash dourado `0x4f1dc409f736b225`; tamanho 560×384; ~17.030 Ciclos por Quadro; ROM do usuário; disco a partir de bytes; modelo inválido. |
+| `crates/apple2-rust-web/tests/wasm.rs` | WASM, Node, `wasm-bindgen-test` | O **mesmo** hash dourado calculado dentro do .wasm; a API JavaScript (`Apple2`) roda 60 Quadros e devolve RGBA do tamanho certo; disco por bytes. |
 
 **Resultado:** o hash em WASM é idêntico ao do desktop (`0x4f1dc409f736b225`). A emulação em WASM é bit a bit a do desktop para esse boot.
 
@@ -90,7 +90,7 @@ Como rodar os testes WASM (Node 20 já instalado):
 ```
 cargo install wasm-bindgen-cli --version 0.2.129
 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
-  cargo test -p applewin-web --target wasm32-unknown-unknown --release --test wasm
+  cargo test -p apple2-rust-web --target wasm32-unknown-unknown --release --test wasm
 ```
 
 No desktop `tests/wasm.rs` compila vazio (`#![cfg(target_arch = "wasm32")]`), então `cargo test --workspace` não depende de Node nem do target WASM.
@@ -101,8 +101,8 @@ No desktop `tests/wasm.rs` compila vazio (`#![cfg(target_arch = "wasm32")]`), en
 
 | Artefato | Bytes |
 |---|---:|
-| `applewin_web.wasm` (saída do cargo) | 845.189 |
-| `applewin_web_bg.wasm` (depois do `wasm-bindgen`) | 799.763 |
+| `apple2_rust_web.wasm` (saída do cargo) | 845.189 |
+| `apple2_rust_web_bg.wasm` (depois do `wasm-bindgen`) | 799.763 |
 | Mesmo arquivo com gzip | ≈ 281.000 |
 
 Quase todo o tamanho é código; as ROMs embutidas somam algumas centenas de KB e comprimem bem. `wasm-opt -Oz` e `lto = "fat"` com `opt-level = "s"` devem reduzir; não foram medidos (`wasm-opt` não está instalado).

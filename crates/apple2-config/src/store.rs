@@ -31,11 +31,73 @@ impl From<std::io::Error> for StoreError {
     }
 }
 
-/// Platform config directory for the emulator (`~/.config/applewin-rs`, `%APPDATA%\...`,
+/// Platform config directory for the emulator (`~/.config/apple2-rust`, `%APPDATA%\...`,
 /// `~/Library/Application Support/...`), `None` when no home directory exists.
 pub fn config_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("org", "AppleII-Rust", "apple2-rust")
+        .map(|d| d.config_dir().to_path_buf())
+}
+
+/// Config directory used before the product was renamed to `apple2-rust` (ADR 0007).
+pub fn legacy_config_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("org", "AppleII-Rust", "applewin-rs")
         .map(|d| d.config_dir().to_path_buf())
+}
+
+/// Files the emulator keeps in the config directory (copied by the migration).
+pub const MIGRATED_FILES: [&str; 2] = [FILE_NAME, "recent_disks.txt"];
+
+/// Result of [`migrate_legacy_dir`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum Migration {
+    /// Nothing to do: the new directory already has settings, or the old one has none.
+    NotNeeded,
+    /// Files copied from the old directory (which is never touched).
+    Migrated { copied: Vec<&'static str> },
+    /// A copy failed; the message says which.
+    Failed(String),
+}
+
+/// First-run migration: when `new` has no `settings.toml` and `old` has one, copies the
+/// emulator's files from `old` to `new` (never overwriting, never deleting anything in `old`).
+pub fn migrate_legacy_dir(old: &Path, new: &Path) -> Migration {
+    if new.join(FILE_NAME).exists() || !old.join(FILE_NAME).is_file() {
+        return Migration::NotNeeded;
+    }
+    if let Err(e) = std::fs::create_dir_all(new) {
+        return Migration::Failed(format!("cannot create {}: {e}", new.display()));
+    }
+    let mut copied = Vec::new();
+    for name in MIGRATED_FILES {
+        let (from, to) = (old.join(name), new.join(name));
+        if from.is_file() && !to.exists() {
+            if let Err(e) = std::fs::copy(&from, &to) {
+                return Migration::Failed(format!("cannot copy {}: {e}", from.display()));
+            }
+            copied.push(name);
+        }
+    }
+    Migration::Migrated { copied }
+}
+
+/// Runs the migration between the platform directories and returns the warning to show the
+/// user (`None` when nothing happened). Call once at startup, before loading the settings.
+pub fn migrate_legacy_default() -> Option<String> {
+    let (old, new) = (legacy_config_dir()?, config_dir()?);
+    migration_notice(&old, &new, &migrate_legacy_dir(&old, &new))
+}
+
+/// The user-facing text for a migration result.
+pub fn migration_notice(old: &Path, new: &Path, result: &Migration) -> Option<String> {
+    match result {
+        Migration::NotNeeded => None,
+        Migration::Migrated { .. } => Some(format!(
+            "Settings copied from {} to {} (apple2-rust); the old directory was kept",
+            old.display(),
+            new.display()
+        )),
+        Migration::Failed(e) => Some(format!("Settings migration failed: {e}")),
+    }
 }
 
 static PATH_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
@@ -173,5 +235,75 @@ mod tests {
         s.save(&path).unwrap();
         assert_eq!(Settings::load(&path).unwrap(), s);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn tmp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("apple2-mig-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn migration_copies_old_settings_when_new_has_none() {
+        let root = tmp("copy");
+        let (old, new) = (root.join("applewin-rs"), root.join("apple2-rust"));
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join(FILE_NAME), "[video]\nwindow_scale = 3\n").unwrap();
+        std::fs::write(old.join("recent_disks.txt"), "a.dsk\n").unwrap();
+        let r = migrate_legacy_dir(&old, &new);
+        assert_eq!(
+            r,
+            Migration::Migrated {
+                copied: vec![FILE_NAME, "recent_disks.txt"]
+            }
+        );
+        assert_eq!(
+            Settings::load(&new.join(FILE_NAME))
+                .unwrap()
+                .video
+                .window_scale,
+            3
+        );
+        assert_eq!(
+            std::fs::read_to_string(new.join("recent_disks.txt")).unwrap(),
+            "a.dsk\n"
+        );
+        // the old directory is never removed or altered
+        assert!(old.join(FILE_NAME).is_file() && old.join("recent_disks.txt").is_file());
+        assert!(migration_notice(&old, &new, &r)
+            .unwrap()
+            .contains("old directory was kept"));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn migration_leaves_everything_alone_when_both_exist() {
+        let root = tmp("both");
+        let (old, new) = (root.join("applewin-rs"), root.join("apple2-rust"));
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(old.join(FILE_NAME), "old").unwrap();
+        std::fs::write(old.join("recent_disks.txt"), "old.dsk\n").unwrap();
+        std::fs::write(new.join(FILE_NAME), "new").unwrap();
+        let r = migrate_legacy_dir(&old, &new);
+        assert_eq!(r, Migration::NotNeeded);
+        assert_eq!(std::fs::read_to_string(new.join(FILE_NAME)).unwrap(), "new");
+        assert!(!new.join("recent_disks.txt").exists());
+        assert_eq!(migration_notice(&old, &new, &r), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn migration_with_neither_directory_does_nothing() {
+        let root = tmp("none");
+        let (old, new) = (root.join("applewin-rs"), root.join("apple2-rust"));
+        assert_eq!(migrate_legacy_dir(&old, &new), Migration::NotNeeded);
+        assert!(!new.exists() && !old.exists());
+        assert_eq!(
+            Settings::load(&new.join(FILE_NAME)).unwrap(),
+            Settings::default()
+        );
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -1,7 +1,7 @@
 //! Auditoria wave0 (HU-0801): comportamento do depurador sem teclado, contra o AppleWin a8f0d1d.
 //!
 //! Os atalhos de teclado (`DebuggerProcessKey`, Debug.cpp:9653) vivem no frontend e são testados
-//! em `crates/applewin/tests/audit_wave0_peripherals.rs`; aqui ficam as funções da biblioteca
+//! em `crates/apple2-rust/tests/audit_wave0_peripherals.rs`; aqui ficam as funções da biblioteca
 //! que os atalhos chamariam, e a garantia de que desenhar a tela não mexe no emulador.
 
 use apple2_core::{Machine, MachineConfig, Model};

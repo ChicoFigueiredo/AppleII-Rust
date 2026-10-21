@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Abre a GUI por alguns segundos, fecha via WM_DELETE_WINDOW e confere codigo de saida 0.
 #   tools/package/smoke-gui.sh <rotulo> <cmd...>      (variaveis de ambiente herdadas)
-# Ex.: DISPLAY=:0 WINIT_UNIX_BACKEND=x11 tools/package/smoke-gui.sh x11 target/release/applewin -power-on
+# Ex.: DISPLAY=:0 WINIT_UNIX_BACKEND=x11 tools/package/smoke-gui.sh x11 target/release/apple2-rust -power-on
 # Requer sessao X11 (ou XWayland) e python3; sem xdotool/wmctrl.
 set -uo pipefail
 label=$1; shift

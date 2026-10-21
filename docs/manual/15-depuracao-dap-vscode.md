@@ -1,6 +1,6 @@
 # Depuração no VS Code (DAP)
 
-O programa `applewin-dap` é um servidor do Debug Adapter Protocol. Ele deixa o VS Code (ou qualquer cliente DAP) depurar um programa 6502 numa Máquina sem janela e sem áudio. **É uma extensão do AppleII-Rust: o AppleWin não tem nada parecido.**
+O programa `apple2-rust-dap` é um servidor do Debug Adapter Protocol. Ele deixa o VS Code (ou qualquer cliente DAP) depurar um programa 6502 numa Máquina sem janela e sem áudio. **É uma extensão do AppleII-Rust: o AppleWin não tem nada parecido.**
 
 O adaptador cria e controla a própria Máquina. Ele não se liga à janela do emulador que está aberta. `attach` significa "ligue-se a uma Máquina headless que o adaptador mesmo cria".
 
@@ -10,11 +10,11 @@ O adaptador cria e controla a própria Máquina. Ele não se liga à janela do e
 cargo build --release -p apple2-dap
 ```
 
-O executável fica em `target/release/applewin-dap`. A pasta `tools/vscode-applewin/` tem uma extensão mínima, que não é publicada. Para usá-la, abra a pasta no VS Code e pressione F5, ou copie a pasta para `~/.vscode/extensions`. A configuração `applewin.adapterPath` aponta para o executável.
+O executável fica em `target/release/apple2-rust-dap`. A pasta `tools/vscode-apple2-rust/` tem uma extensão mínima, que não é publicada. Para usá-la, abra a pasta no VS Code e pressione F5, ou copie a pasta para `~/.vscode/extensions`. A configuração `applewin.adapterPath` aponta para o executável.
 
 ## launch.json
 
-Um exemplo completo está em `tools/vscode-applewin/examples/launch.json`.
+Um exemplo completo está em `tools/vscode-apple2-rust/examples/launch.json`.
 
 | Campo | Significado |
 | --- | --- |

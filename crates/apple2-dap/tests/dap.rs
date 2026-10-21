@@ -1,4 +1,4 @@
-//! Automated DAP client: starts `applewin-dap`, talks to it over stdio and checks breakpoints,
+//! Automated DAP client: starts `apple2-rust-dap`, talks to it over stdio and checks breakpoints,
 //! stepping, registers, memory, consistency with the native debugger and the shutdown.
 
 use apple2_core::{Machine, MachineConfig, Model};
@@ -41,12 +41,12 @@ struct Client {
 
 impl Client {
     fn start() -> Client {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_applewin-dap"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_apple2-rust-dap"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
-            .expect("spawn applewin-dap");
+            .expect("spawn apple2-rust-dap");
         let stdin = child.stdin.take().unwrap();
         let mut out = BufReader::new(child.stdout.take().unwrap());
         let (tx, rx) = mpsc::channel();
@@ -155,7 +155,7 @@ impl Client {
                 .unwrap()
                 .push(json!({"path": p.to_str().unwrap(), "address": addr}));
         }
-        let caps = self.ok("initialize", json!({"adapterID": "applewin"}));
+        let caps = self.ok("initialize", json!({"adapterID": "apple2-rust"}));
         assert_eq!(caps["supportsReadMemoryRequest"], true);
         self.ok("launch", args);
         self.wait_event("initialized");

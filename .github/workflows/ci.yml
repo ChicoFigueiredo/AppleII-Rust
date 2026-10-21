@@ -39,14 +39,14 @@ jobs:
       - name: Tests
         run: cargo test --workspace --release
 
-      - name: Build applewin (release)
-        run: cargo build -p applewin --release
+      - name: Build apple2-rust (release)
+        run: cargo build -p apple2-rust --release
 
       # Headless mode needs no display, GPU or audio device: runs the emulator core and video
       # renderer and writes a PNG. The release exe on Windows is a GUI-subsystem program.
       - name: Smoke test (headless)
         shell: bash
         run: |
-          EXE=target/release/applewin; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          EXE=target/release/apple2-rust; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
           "$EXE" --headless-frames 300 --dump-screen out.png
           test -s out.png

@@ -2,12 +2,12 @@
 
 ## Iniciando
 
-Execute o programa `applewin` (veja o README para compilar ou instalar). Abre-se uma janela com a tela do Apple (560x384 pixels, escalável), uma barra de botões à esquerda e uma linha de status embaixo. A Máquina inicial é um Apple //e Enhanced com Disk II no slot 6, a menos que a sua configuração salva diga outra coisa.
+Execute o programa `apple2-rust` (veja o README para compilar ou instalar). Abre-se uma janela com a tela do Apple (560x384 pixels, escalável), uma barra de botões à esquerda e uma linha de status embaixo. A Máquina inicial é um Apple //e Enhanced com Disk II no slot 6, a menos que a sua configuração salva diga outra coisa.
 
 Para começar já ligado e com um disco:
 
 ```
-applewin -d1 meu-disco.dsk -power-on
+apple2-rust -d1 meu-disco.dsk -power-on
 ```
 
 ## Início rápido

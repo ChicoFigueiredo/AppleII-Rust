@@ -4,7 +4,7 @@
 # Wayland nativo: o fechamento por protocolo nao e automatizavel aqui (roteiro manual).
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-exe=${1:-target/release/applewin}
+exe=${1:-target/release/apple2-rust}
 gui=$here/smoke-gui.sh
 fail=0
 run() { "$@" || fail=1; }

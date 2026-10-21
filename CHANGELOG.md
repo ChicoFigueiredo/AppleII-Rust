@@ -1,5 +1,12 @@
 # Changelog
 
+## Não lançado
+
+### Alterado
+- O programa passa a se chamar **apple2-rust** (ADR 0007): executável `apple2-rust`, crates `apple2-rust`, `apple2-rust-dap` e `apple2-rust-web`, pacotes `apple2-rust-<versão>-<plataforma>.*`, SBOM `apple2-rust-<versão>.cdx.json` e diretório de configuração `apple2-rust`. Não há alias `applewin`. O AppleWin segue como origem e oráculo, e a linha de comando, a importação de Registro/INI e o formato `.aws.yaml` continuam compatíveis.
+- `cargo run` na raiz do repositório abre o emulador.
+- Migração automática da configuração: na primeira execução, o `settings.toml` (e `recent_disks.txt`) do diretório antigo `applewin-rs` é copiado para o novo, com aviso na linha de status. O diretório antigo não é apagado.
+
 ## v0.1.0 — 2026-10-20
 
 Primeira versão: reescrita em Rust do [AppleWin](https://github.com/AppleWin/AppleWin), com paridade de funcionalidades em Windows, Linux e macOS. As diferenças conhecidas estão em [docs/manual/12-diferencas-em-relacao-ao-applewin.md](docs/manual/12-diferencas-em-relacao-ao-applewin.md).

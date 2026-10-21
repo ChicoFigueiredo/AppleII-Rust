@@ -24,7 +24,7 @@ def render(src, size):
 
 
 out.mkdir(parents=True, exist_ok=True)
-for ico, name in (("APPLEWIN.ICO", "applewin"), ("DISK.ICO", "disk")):
+for ico, name in (("APPLEWIN.ICO", "apple2-rust"), ("DISK.ICO", "disk")):
     src = base(res / ico)
     for s in SIZES:
         render(src, s).save(out / f"{name}-{s}.png")

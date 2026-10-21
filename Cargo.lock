@@ -116,8 +116,8 @@ dependencies = [
  "apple2-audio",
  "apple2-config",
  "apple2-core",
+ "apple2-rust",
  "apple2-video",
- "applewin",
  "serde_json",
 ]
 
@@ -242,6 +242,51 @@ name = "apple2-roms"
 version = "0.1.0"
 
 [[package]]
+name = "apple2-rust"
+version = "0.1.0"
+dependencies = [
+ "apple2-audio",
+ "apple2-cards",
+ "apple2-config",
+ "apple2-core",
+ "apple2-cpu",
+ "apple2-debugger",
+ "apple2-hostio",
+ "apple2-roms",
+ "apple2-savestate",
+ "apple2-storage",
+ "apple2-video",
+ "arboard",
+ "chrono",
+ "cpal",
+ "ctrlc",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "gilrs",
+ "image",
+ "pollster",
+ "resvg",
+ "rfd",
+ "serde",
+ "serde_json",
+ "wgpu",
+ "winit",
+ "winresource",
+]
+
+[[package]]
+name = "apple2-rust-web"
+version = "0.1.0"
+dependencies = [
+ "apple2-core",
+ "apple2-storage",
+ "apple2-video",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "apple2-savestate"
 version = "0.1.0"
 dependencies = [
@@ -276,51 +321,6 @@ dependencies = [
  "apple2-roms",
  "apple2-savestate",
  "apple2-storage",
-]
-
-[[package]]
-name = "applewin"
-version = "0.1.0"
-dependencies = [
- "apple2-audio",
- "apple2-cards",
- "apple2-config",
- "apple2-core",
- "apple2-cpu",
- "apple2-debugger",
- "apple2-hostio",
- "apple2-roms",
- "apple2-savestate",
- "apple2-storage",
- "apple2-video",
- "arboard",
- "chrono",
- "cpal",
- "ctrlc",
- "egui",
- "egui-wgpu",
- "egui-winit",
- "gilrs",
- "image",
- "pollster",
- "resvg",
- "rfd",
- "serde",
- "serde_json",
- "wgpu",
- "winit",
- "winresource",
-]
-
-[[package]]
-name = "applewin-web"
-version = "0.1.0"
-dependencies = [
- "apple2-core",
- "apple2-storage",
- "apple2-video",
- "wasm-bindgen",
- "wasm-bindgen-test",
 ]
 
 [[package]]

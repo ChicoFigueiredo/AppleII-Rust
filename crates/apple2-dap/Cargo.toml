@@ -11,7 +11,7 @@ name = "apple2_dap"
 path = "src/lib.rs"
 
 [[bin]]
-name = "applewin-dap"
+name = "apple2-rust-dap"
 path = "src/main.rs"
 
 [dependencies]

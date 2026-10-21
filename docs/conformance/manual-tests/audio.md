@@ -5,7 +5,7 @@
 ## Antes de começar
 
 - Hardware: placa de som do computador, fones ou caixas. Volume do sistema em nível médio.
-- Executável: `cargo run --release -p applewin` (Linux, Windows ou macOS; anote qual).
+- Executável: `cargo run --release -p apple2-rust` (Linux, Windows ou macOS; anote qual).
 - Configuração: Configuration > Sound, volume do Mockingboard e do alto-falante em 0 (mais alto). Sem silenciar nada.
 - Anote: sistema operacional, dispositivo de áudio, taxa de amostragem do dispositivo e o SHA do AppleII-Rust (`git rev-parse HEAD`).
 - O mesmo roteiro, quando possível, no AppleWin de referência (`a8f0d1d`, no Wine ou no Windows) com as mesmas imagens, para comparar de ouvido.

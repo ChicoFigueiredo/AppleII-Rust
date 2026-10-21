@@ -5,8 +5,8 @@
   <key>CFBundleName</key><string>AppleII-Rust</string>
   <key>CFBundleDisplayName</key><string>AppleII-Rust</string>
   <key>CFBundleIdentifier</key><string>io.github.chicofigueiredo.appleii-rust</string>
-  <key>CFBundleExecutable</key><string>applewin</string>
-  <key>CFBundleIconFile</key><string>applewin</string>
+  <key>CFBundleExecutable</key><string>apple2-rust</string>
+  <key>CFBundleIconFile</key><string>apple2-rust</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>@VERSION@</string>
   <key>CFBundleVersion</key><string>@VERSION@</string>

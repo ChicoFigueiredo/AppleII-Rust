@@ -111,7 +111,7 @@ Passos para reproduzir 010, 060 e 020/022:
 ```
 cargo test -p apple2-savestate --test audit_robustness -- --include-ignored
 cargo test -p apple2-savestate --test audit_cycles_this_frame -- --include-ignored
-cargo test -p applewin --test audit_persistence -- --include-ignored
+cargo test -p apple2-rust --test audit_persistence -- --include-ignored
 ```
 
 Para o arquivo real (fora do repositório):

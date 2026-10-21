@@ -28,7 +28,7 @@ Repositórios: [GitHub](https://github.com/ChicoFigueiredo/AppleII-Rust) · [Git
 | 6 | `apple2-cards` e `apple2-hostio`: mouse, Z80, relógios, 4Play, SNES MAX, VidHD, SSC, impressora, Uthernet | feito |
 | 7 | `apple2-config` e `apple2-savestate`: configuração, linha de comando, YAML do AppleWin | feito |
 | 8 | `apple2-debugger`: depurador completo sem interface | feito |
-| 9 | `applewin`: frontend (janela, barra, som, joystick, depurador na tela) | feito: todas as Cartas do AppleWin ligadas; diferenças em [docs/manual/12](docs/manual/12-diferencas-em-relacao-ao-applewin.md) |
+| 9 | `apple2-rust`: frontend (janela, barra, som, joystick, depurador na tela) | feito: todas as Cartas do AppleWin ligadas; diferenças em [docs/manual/12](docs/manual/12-diferencas-em-relacao-ao-applewin.md) |
 | 10 | Manual em português, ajuda no programa (F1), CONTRIBUTING | feito |
 | 11 | CI e empacotamento nas três plataformas | feito: CI e pacotes de release existem para Windows, Linux e macOS. Um CI verde não prova paridade com o AppleWin (veja "Conformidade e auditoria") |
 
@@ -79,7 +79,7 @@ Instale as ferramentas de linha de comando (`xcode-select --install`) e o Rust. 
 cargo build --release
 ```
 
-O executável é `target/release/applewin` (`applewin.exe` no Windows). As versões publicadas (releases do GitHub) trazem arquivos prontos para as três plataformas, gerados pelo CI.
+O executável é `target/release/apple2-rust` (`apple2-rust.exe` no Windows). As versões publicadas (releases do GitHub) trazem arquivos prontos para as três plataformas, gerados pelo CI.
 
 ### Dependências opcionais por sistema
 
@@ -87,7 +87,7 @@ O executável publicado não precisa de nada além do sistema: ROMs, símbolos e
 
 | Recurso | Para quê | Estado no binário da release | Linux | Windows | macOS |
 |---|---|---|---|---|---|
-| `serialport` (feature de `applewin`, ligada por padrão) | porta serial real na Super Serial Card | incluído | sem biblioteca extra para usar; o usuário precisa estar no grupo `dialout` (ou `uucp`) | portas COM; sem biblioteca extra | `/dev/cu.*`; sem biblioteca extra |
+| `serialport` (feature de `apple2-rust`, ligada por padrão) | porta serial real na Super Serial Card | incluído | sem biblioteca extra para usar; o usuário precisa estar no grupo `dialout` (ou `uucp`) | portas COM; sem biblioteca extra | `/dev/cu.*`; sem biblioteca extra |
 | `pcap` (feature opcional, desligada) | Ethernet bruta do Uthernet I | **não incluído** (compile com `--features pcap`) | `libpcap-dev` para compilar; `libpcap` e privilégio de captura (root ou `setcap cap_net_raw,cap_net_admin`) para usar | Npcap (instalador, modo compatível com WinPcap) e o Npcap SDK para compilar; WinPcap antigo não serve | libpcap já vem no sistema; permissão de acesso a `/dev/bpf*` |
 | Uthernet II com sockets TCP e UDP | rede sem pcap | incluído | nada | nada | nada |
 | Gamepad | joystick do Apple II pelo controle | incluído (gilrs) | `libudev` | XInput/DirectInput do sistema | IOKit do sistema (não testado) |
@@ -109,7 +109,7 @@ Regras da release:
 
 - Versão com sufixo SemVer (`0.2.0-alpha.1`, `1.0.0-rc.1`) publica como **pre-release**; só `X.Y.Z` puro é release estável.
 - Antes de qualquer build, o job `verify` roda `cargo fmt --check`, `clippy -D warnings` e `cargo test --workspace --release` em Linux, Windows e macOS. Se algum falhar, nada é publicado.
-- A release traz os pacotes, o `SHA256SUMS`, a SBOM CycloneDX (`applewin-<versão>.cdx.json`) e, dentro de cada pacote, `THIRD-PARTY-LICENSES.html`.
+- A release traz os pacotes, o `SHA256SUMS`, a SBOM CycloneDX (`apple2-rust-<versão>.cdx.json`) e, dentro de cada pacote, `THIRD-PARTY-LICENSES.html`.
 - Para conferir um download: `sha256sum --check --ignore-missing SHA256SUMS`.
 
 Reprodução local do pacote Linux (sem CI): `tools/package/linux.sh` gera o pacote, a SBOM e o `SHA256SUMS` em `dist/` e testa o pacote extraído num diretório temporário. Requer `cargo install cargo-about --features cli cargo-cyclonedx`.
@@ -117,19 +117,19 @@ Reprodução local do pacote Linux (sem CI): `tools/package/linux.sh` gera o pac
 ## Executando
 
 ```sh
-cargo run --release -p applewin                      # janela vazia, Disk II no slot 6
-cargo run --release -p applewin -- -d1 meu.dsk -power-on
+cargo run --release -p apple2-rust                      # janela vazia, Disk II no slot 6
+cargo run --release -p apple2-rust -- -d1 meu.dsk -power-on
 ```
 
 Ou o executável direto:
 
 ```sh
-applewin -d1 dos33.dsk -d2 dados.dsk -power-on
-applewin -model apple2p -s0 lc -50hz
-applewin --headless-frames 300 --dump-screen boot.png   # sem janela, para testes
+apple2-rust -d1 dos33.dsk -d2 dados.dsk -power-on
+apple2-rust -model apple2p -s0 lc -50hz
+apple2-rust --headless-frames 300 --dump-screen boot.png   # sem janela, para testes
 ```
 
-Todas as opções de linha de comando estão em [docs/manual/08-linha-de-comando.md](docs/manual/08-linha-de-comando.md). As configurações ficam em `settings.toml` no diretório de configuração do sistema (`~/.config/applewin-rs` no Linux).
+Todas as opções de linha de comando estão em [docs/manual/08-linha-de-comando.md](docs/manual/08-linha-de-comando.md). As configurações ficam em `settings.toml` no diretório de configuração do sistema (`~/.config/apple2-rust` no Linux; quem usava o nome antigo `applewin-rs` tem o `settings.toml` copiado na primeira execução, sem apagar o original).
 
 ## Teclado
 
@@ -170,7 +170,7 @@ Workspace Cargo com um crate por responsabilidade. O núcleo não faz E/S do com
 | `apple2-debugger` | Depurador sem interface | `Debugger/` |
 | `apple2-config` | Configuração, linha de comando, importação do Registro | `CmdLine`, `Registry`, `Configuration/` |
 | `apple2-savestate` | YAML `.aws.yaml` do AppleWin | `SaveState`, `YamlHelper` |
-| `applewin` | Frontend: janela, barra, som, joystick, ajuda, depurador na tela | `Windows/` |
+| `apple2-rust` | Frontend: janela, barra, som, joystick, ajuda, depurador na tela | `Windows/` |
 
 O vocabulário do projeto está no [GLOSSARY.md](GLOSSARY.md).
 
@@ -181,7 +181,7 @@ cargo test --workspace --release
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Os testes cobrem a CPU (suíte funcional de Klaus Dormann), o boot de cada Modelo até o prompt `]` ou `*`, os formatos de disco, o áudio, o depurador (com uma tela de referência) e os arquivos YAML. Os testes que medem tempo real do frontend (`crates/applewin/tests/threaded.rs`) devem ser rodados em `--release`.
+Os testes cobrem a CPU (suíte funcional de Klaus Dormann), o boot de cada Modelo até o prompt `]` ou `*`, os formatos de disco, o áudio, o depurador (com uma tela de referência) e os arquivos YAML. Os testes que medem tempo real do frontend (`crates/apple2-rust/tests/threaded.rs`) devem ser rodados em `--release`.
 
 ## Contribuindo
 

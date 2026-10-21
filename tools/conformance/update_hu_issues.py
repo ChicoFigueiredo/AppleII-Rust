@@ -122,7 +122,7 @@ HU = {
          "Crate `apple2-rewind` com testes de ida e volta determinísticos; extensão sem equivalente no AppleWin.",
          [CM]),
     41: ("HU-1202", "PASS",
-         "Crates `apple2-dap` e `applewin-dap` com cliente DAP de teste automatizado; extensão sem equivalente no AppleWin.",
+         "Crates `apple2-dap` e `apple2-rust-dap` com cliente DAP de teste automatizado; extensão sem equivalente no AppleWin.",
          [CM]),
     42: ("HU-1203", "PASS",
          "Crate `apple2-lab` com exercícios reproduzíveis e sem ROM proprietária; manual cap. 14.",
@@ -131,7 +131,7 @@ HU = {
          "Investigação entregue (ADR 0005 e estudo): Apple I fica fora do escopo até decisão do dono; nenhum suporte prometido.",
          [C + "apple1-investigation.md", "docs/adr/0005-apple-i-fora-do-escopo-ate-decisao.md"]),
     44: ("HU-1205", "PASS",
-         "Estudo e protótipo opt-in: o núcleo compila para `wasm32-unknown-unknown` sem mudanças; crate `applewin-web`.",
+         "Estudo e protótipo opt-in: o núcleo compila para `wasm32-unknown-unknown` sem mudanças; crate `apple2-rust-web`.",
          [C + "wasm-estudo.md", CM]),
 }
 

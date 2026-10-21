@@ -2,14 +2,14 @@
 
 - Escopo: HU-0701 (#31) e HU-0703 (#33). Achados: AUD-P-023, 030, 031, 032 e 033 de `docs/conformance/audit/wave0-peripherals.md`.
 - Estado de todos os roteiros: **BLOCKED** até o dono executar em hardware real e preencher os campos de resultado. Este ambiente não tem adaptador USB-serial, Npcap nem acesso a Windows e macOS.
-- Os testes automáticos que cobrem a parte sem hardware estão em `crates/apple2-hostio` (`printer.rs`, `serial.rs`, `pcap_backend.rs`, `interfaces.rs`, `tests/uthernet2.rs`) e em `crates/applewin/tests/host_io_errors.rs`.
+- Os testes automáticos que cobrem a parte sem hardware estão em `crates/apple2-hostio` (`printer.rs`, `serial.rs`, `pcap_backend.rs`, `interfaces.rs`, `tests/uthernet2.rs`) e em `crates/apple2-rust/tests/host_io_errors.rs`.
 - Os testes do AppleWin de referência (C++ `a8f0d1d`) servem de comparação: o AppleWin não mostra nenhum destes erros ao usuário, só grava no log. Aqui a mensagem aparece na barra de status e em `stderr` (prefixo `warning:`), e a emulação continua com a carta desconectada.
 
 Como preencher: cada roteiro termina com uma tabela. Marque o resultado como `PASS`, `FAIL` ou `N/A` e anote qualquer desvio em "Observações". Para `FAIL`, guarde o texto exato da mensagem.
 
 Preparação comum:
 
-1. Compile com os recursos necessários: `cargo build --release -p applewin --features pcap` (o recurso `serialport` já vem ligado no frontend). No Windows, o Npcap SDK precisa estar instalado para compilar com `pcap`; no Linux, `libpcap-dev`; no macOS a libpcap já vem com o sistema.
+1. Compile com os recursos necessários: `cargo build --release -p apple2-rust --features pcap` (o recurso `serialport` já vem ligado no frontend). No Windows, o Npcap SDK precisa estar instalado para compilar com `pcap`; no Linux, `libpcap-dev`; no macOS a libpcap já vem com o sistema.
 2. Rode a partir de um terminal, para ver o `stderr`.
 3. Para o AppleWin de comparação, use o AppleWin 1.32.1.0 (Windows, ou Wine no Linux).
 
@@ -75,7 +75,7 @@ Configuração: slot 3 (ou outro) com Uthernet II, interface escolhida na lista;
 | 1 | Compile com `--features pcap`. Abra as opções do Uthernet. | A lista mostra as interfaces do libpcap (`eth0`, `wlan0`, `any`, `lo`...), cada uma com descrição. |
 | 2 | Compile **sem** `--features pcap` e abra as mesmas opções. | A lista ainda aparece (via `if-addrs`), com os endereços IP como descrição. Ao aplicar uma interface, a barra de status avisa que a rede precisa do recurso `pcap`. |
 | 3 | Como usuário comum, sem `CAP_NET_RAW`, selecione `eth0` e reinicie. | Mensagem `Uthernet: cannot open network interface 'eth0': ... (capturing needs root or CAP_NET_RAW; ...)`. A emulação continua; o DNS virtual e os sockets TCP/UDP do Uthernet II continuam funcionando. |
-| 4 | `sudo setcap cap_net_raw,cap_net_admin=eip target/release/applewin` e repita. | A interface abre. Sem mensagem de erro. |
+| 4 | `sudo setcap cap_net_raw,cap_net_admin=eip target/release/apple2-rust` e repita. | A interface abre. Sem mensagem de erro. |
 | 5 | Rode um programa de rede no Apple (por exemplo o `ping` do pacote de utilitários do Uthernet II, ou ADT Pro com o driver Uthernet) para um host da rede. | Resposta recebida. No host: `sudo tcpdump -i eth0 ether host <MAC do Apple>` mostra os quadros. |
 | 6 | Digite um nome de interface inexistente no arquivo de configuração e inicie. | `Uthernet: network interface 'xxx' does not exist`. |
 

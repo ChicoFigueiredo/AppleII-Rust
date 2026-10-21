@@ -4,9 +4,11 @@ A janela de configuração abre com **F8** (botão Config). A janela tem as abas
 
 | Sistema | Local |
 |---|---|
-| Linux | `~/.config/applewin-rs/settings.toml` |
-| macOS | `~/Library/Application Support/org.AppleII-Rust.applewin-rs/settings.toml` |
-| Windows | `%APPDATA%\AppleII-Rust\applewin-rs\config\settings.toml` |
+| Linux | `~/.config/apple2-rust/settings.toml` |
+| macOS | `~/Library/Application Support/org.AppleII-Rust.apple2-rust/settings.toml` |
+| Windows | `%APPDATA%\AppleII-Rust\apple2-rust\config\settings.toml` |
+
+**Migração do diretório antigo.** Até a versão `0.2.0-rc.1` o diretório se chamava `applewin-rs` (mesmo caminho, trocando o último nome). Na primeira execução, se o diretório novo não tem `settings.toml` e o antigo tem, o programa copia `settings.toml` e `recent_disks.txt` para o novo e mostra um aviso na linha de status. O diretório antigo nunca é apagado nem alterado, e, se os dois existirem, vale o novo. Com `-conf arquivo` a migração não roda.
 
 Chaves desconhecidas são ignoradas e chaves ausentes assumem os valores padrão do AppleWin. O arquivo pode ser editado à mão. As opções de linha de comando prevalecem sobre o arquivo, mas só valem para aquela execução se você não salvar a configuração.
 

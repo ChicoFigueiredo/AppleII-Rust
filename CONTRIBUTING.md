@@ -40,8 +40,8 @@ cargo fmt --all -- --check      # obrigatório; bloqueia a CI
 
 - Escreva os testes primeiro sempre que possível (TDD): um teste que falha, a correção mínima, e depois a limpeza.
 - O clippy precisa passar **sem avisos**. Valide localmente (`cargo test --workspace --release` e `cargo clippy --workspace --all-targets -- -D warnings`). A CI (Linux, Windows e macOS no GitHub; Linux no GitLab) é **somente manual**: roda apenas quando o dono do repositório a dispara, porque a cota de minutos é limitada. Pushes e PRs não disparam CI.
-- Os testes de desempenho e de ritmo do frontend (`crates/applewin/tests/threaded.rs`) só são confiáveis com `--release`.
-- Um teste de integração que dá boot numa Máquina e verifica a memória de texto vale mais do que muitos testes unitários isolados. Veja `crates/apple2-core/tests` e `crates/applewin/tests`.
+- Os testes de desempenho e de ritmo do frontend (`crates/apple2-rust/tests/threaded.rs`) só são confiáveis com `--release`.
+- Um teste de integração que dá boot numa Máquina e verifica a memória de texto vale mais do que muitos testes unitários isolados. Veja `crates/apple2-core/tests` e `crates/apple2-rust/tests`.
 - Mantenha o determinismo: nada de relógio do computador, de threads nem de E/S de arquivo dentro do núcleo (ADR 0001). O que precisa do computador entra por uma trait.
 - O núcleo deve continuar sem alocações por passo (`tests/no_alloc.rs`).
 
@@ -77,7 +77,7 @@ O código de referência está em https://github.com/AppleWin/AppleWin (pasta `s
 
 ## Manual e ajuda do programa
 
-O manual fica em `docs/manual/*.md`, em português do Brasil, e é embutido no programa por `include_str!` em `crates/applewin/src/help.rs` (tecla F1). O visualizador entende apenas um subconjunto de Markdown: títulos `#`, parágrafos, listas com `-` e `1.`, blocos de código com três crases, tabelas com `|` (exibidas em fonte monoespaçada) e os trechos `**negrito**`, `` `código` `` e `[texto](link)`. Ao acrescentar uma página, inclua-a na lista `MANUAL` de `help.rs` e comece o arquivo com um título `#`.
+O manual fica em `docs/manual/*.md`, em português do Brasil, e é embutido no programa por `include_str!` em `crates/apple2-rust/src/help.rs` (tecla F1). O visualizador entende apenas um subconjunto de Markdown: títulos `#`, parágrafos, listas com `-` e `1.`, blocos de código com três crases, tabelas com `|` (exibidas em fonte monoespaçada) e os trechos `**negrito**`, `` `código` `` e `[texto](link)`. Ao acrescentar uma página, inclua-a na lista `MANUAL` de `help.rs` e comece o arquivo com um título `#`.
 
 ## Licença
 

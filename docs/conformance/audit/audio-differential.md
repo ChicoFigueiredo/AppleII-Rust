@@ -102,7 +102,7 @@ Cada uma com causa raiz, correção (ou o motivo de não haver) e teste de regre
 
 ### D-7 (nota, frontend): relógio do barramento de áudio ao carregar um estado PAL
 
-- A fixture SSI263-4x é PAL (20 280 Ciclos por quadro). O relógio do `AudioBus` só é ajustado depois do carregamento; o fonema reiniciado no carregamento (`rearm_events`) usa o relógio antigo (NTSC) e dura ~0,5 % a mais que os seguintes (122 923 contra 122 338 Ciclos). Dentro da tolerância; a correção é do frontend (`crates/applewin`, fora desta fronteira): criar o barramento com o padrão de vídeo do estado antes de reconstruir as cartas.
+- A fixture SSI263-4x é PAL (20 280 Ciclos por quadro). O relógio do `AudioBus` só é ajustado depois do carregamento; o fonema reiniciado no carregamento (`rearm_events`) usa o relógio antigo (NTSC) e dura ~0,5 % a mais que os seguintes (122 923 contra 122 338 Ciclos). Dentro da tolerância; a correção é do frontend (`crates/apple2-rust`, fora desta fronteira): criar o barramento com o padrão de vídeo do estado antes de reconstruir as cartas.
 
 ### D-8 (nota): rótulo de ciclo dos eventos
 

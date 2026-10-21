@@ -13,8 +13,8 @@
 use crate::scenarios::spec;
 use crate::sys;
 use apple2_audio::{AudioBus, Mixer};
-use applewin_shell::backend::{Backend, DefaultBackend};
-use applewin_shell::video::Frame;
+use apple2_rust_shell::backend::{Backend, DefaultBackend};
+use apple2_rust_shell::video::Frame;
 use serde_json::{json, Value};
 use std::path::Path;
 

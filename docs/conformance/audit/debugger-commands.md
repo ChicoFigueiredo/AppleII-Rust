@@ -1,7 +1,7 @@
 # Debugger: comandos, atalhos e estado do port (wave0)
 
 Oráculo: AppleWin `a8f0d1d`, `source/Debugger/Debugger_Commands.cpp:40-403` (`g_aCommands[]`) e `source/Debugger/Debug.cpp:9653-10122` (`DebuggerProcessKey`).
-Port: `crates/apple2-debugger/src/cmdtable.rs` (tabela gerada), `commands.rs:260` (`dispatch`), `crates/applewin/src/keymap.rs:148` (`debug_key`), `crates/applewin/src/emu.rs:626` (`Command::Debug`).
+Port: `crates/apple2-debugger/src/cmdtable.rs` (tabela gerada), `commands.rs:260` (`dispatch`), `crates/apple2-rust/src/keymap.rs:148` (`debug_key`), `crates/apple2-rust/src/emu.rs:626` (`Command::Debug`).
 Estados: IMPLEMENTED (código existe), PASS (teste concorda com o oráculo), FAIL (discorda ou ausente), N/A (o AppleWin também não implementa). Nenhum comando está PASS por teste diferencial contra o C++: os testes existentes (`crates/apple2-debugger/tests/*.rs`) foram escritos a partir do código.
 
 ## 1. Atalhos de teclado (`DebuggerProcessKey`)
@@ -23,7 +23,7 @@ Estados: IMPLEMENTED (código existe), PASS (teste concorda com o oráculo), FAI
 | PgUp/PgDn | Cursor por página; Shift = 256 bytes, Ctrl = 4K; com texto: rolar 3 linhas do console; Shift+texto ou janela do console: página do console (:9929-9987) | PASS | `page_keys_move_the_cursor_or_scroll_the_console` | AUD-P-036 |
 | Home / End | Cursor em $0000 / $8000; na janela do console ou Shift+texto: rolar ao início/fim (:9869-9927) | PASS | `home_and_end_go_to_zero_and_8000`, `console_window_keys_only_scroll` | AUD-P-035 |
 | Enter (vazio) | Alterna console em tela cheia; no montador sai dele (:9788-9799) | PASS | `aud_p_035_empty_enter_toggles_the_full_screen_console` | AUD-P-035 |
-| Enter (com texto) | Executa o comando | PASS | `crates/applewin/tests/debugger.rs` |  |
+| Enter (com texto) | Executa o comando | PASS | `crates/apple2-rust/tests/debugger.rs` |  |
 | Backspace / Esc | Apagar caractere / limpar linha (Esc com paginação do console: pula) | IMPLEMENTED | `keys.rs`. A paginação de saída longa (`g_nConsoleBuffer`, `ConsoleBufferTryUnpause`) não existe no port: o console é um buffer rolável e nada fica retido | |
 | ~ | Insere "~" (:9822) | PASS | `ctrl_digits_are_bookmarks_and_ctrl_tilde_toggles_the_console` | AUD-P-035 |
 | Ctrl+~ | Console em tela cheia (:9816) | PASS | idem | AUD-P-035 |
@@ -302,6 +302,6 @@ Contagem: 0 FAIL, 249 IMPLEMENTED, 2 N/A (total 251). Atualizado pela HU-0801: o
 ## 4. Reprodução
 
 ```
-cargo test -p applewin --test audit_wave0_peripherals aud_p_035 aud_p_036
+cargo test -p apple2-rust --test audit_wave0_peripherals aud_p_035 aud_p_036
 cargo test -p apple2-debugger --test audit_wave0_debugger --test hu0801
 ```
