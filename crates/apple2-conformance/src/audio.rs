@@ -185,7 +185,10 @@ impl apple2_savestate::LoadHost for FixtureHost<'_> {
         &mut self,
         req: &apple2_savestate::ImageRequest,
     ) -> Result<apple2_storage::image::DiskImage, String> {
-        Err(format!("{}: images are not loaded by audio cases", req.filename))
+        Err(format!(
+            "{}: images are not loaded by audio cases",
+            req.filename
+        ))
     }
 
     fn make_card(&mut self, name: &str, slot: u8, model: Model) -> Option<Box<dyn Card>> {
@@ -218,9 +221,11 @@ pub fn run(
     let mut warnings = Vec::new();
     let mut m = if let Some(fx) = &case.fixture {
         let path = env.workspace.join(&fx.path);
-        let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let mut host = FixtureHost { bus: &bus };
-        let loaded = apple2_savestate::load_aws_yaml(&text, &mut host).map_err(|e| e.to_string())?;
+        let loaded =
+            apple2_savestate::load_aws_yaml(&text, &mut host).map_err(|e| e.to_string())?;
         warnings = loaded.warnings;
         loaded.machine
     } else {
@@ -247,6 +252,7 @@ pub fn run(
         }
         m
     };
+    let speaker_only = spec.pcm.as_deref() == Some("speaker");
     let start = m.cycles();
     bus.record_events(true);
     let mut mixer = Mixer::new(&bus);
@@ -271,13 +277,13 @@ pub fn run(
             let t: Vec<u64> = m.drain_speaker_toggles().collect();
             toggles.extend(&t);
             let out = mixer.produce(m.cycles(), t);
-            push_pcm(&out, &mut mb, &mut spk, spec.card.is_some());
+            push_pcm(&out, &mut mb, &mut spk, speaker_only);
         }
     }
     let t: Vec<u64> = m.drain_speaker_toggles().collect();
     toggles.extend(&t);
     let out = mixer.produce(m.cycles(), t);
-    push_pcm(&out, &mut mb, &mut spk, spec.card.is_some());
+    push_pcm(&out, &mut mb, &mut spk, speaker_only);
 
     let mut events = bus.take_events();
     events.extend(toggles.iter().map(|&c| (c, AudioEvent::Speaker)));
@@ -299,10 +305,10 @@ fn to_i16(f: f32) -> i16 {
     (f * 32768.0).round().clamp(-32768.0, 32767.0) as i16
 }
 
-/// The mixer returns speaker + cards; with a card present the speaker is silent in these
-/// programs, without one the output is the speaker alone (left channel).
-fn push_pcm(out: &[f32], mb: &mut Vec<i16>, spk: &mut Vec<i16>, has_card: bool) {
-    if has_card {
+/// The mixer returns speaker + cards. The programs never use both, so a case compares either the
+/// cards' stereo mix or the speaker alone (left channel).
+fn push_pcm(out: &[f32], mb: &mut Vec<i16>, spk: &mut Vec<i16>, speaker_only: bool) {
+    if !speaker_only {
         mb.extend(out.iter().map(|&f| to_i16(f)));
     } else {
         spk.extend(out.chunks(2).map(|c| to_i16(c[0])));
@@ -332,7 +338,10 @@ fn kind(line: &str) -> &str {
 }
 
 fn cycle_of(line: &str) -> u64 {
-    line.split(',').next().and_then(|c| c.parse().ok()).unwrap_or(0)
+    line.split(',')
+        .next()
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0)
 }
 
 fn strip_cycle(line: &str) -> &str {
@@ -421,7 +430,10 @@ pub fn compare_events(
                     longer[at]
                 ));
             }
-            Ok(format!("{} eventos idênticos (ciclo incluído)", expected.len()))
+            Ok(format!(
+                "{} eventos idênticos (ciclo incluído)",
+                expected.len()
+            ))
         }
         Timing::Ssi { tolerance } => {
             let cut = exact_until.min(expected.len()).min(actual.len());
@@ -451,7 +463,12 @@ pub fn compare_events(
                     da.len()
                 ));
             }
-            let worst = de.iter().zip(&da).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+            let worst = de
+                .iter()
+                .zip(&da)
+                .map(|(a, b)| a.abs_diff(*b))
+                .max()
+                .unwrap_or(0);
             if worst > tolerance {
                 return Err(format!(
                     "duração de fonema fora da tolerância: pior diferença {worst} ciclos > {tolerance}\n  oráculo: {de:?}\n  Rust:    {da:?}"

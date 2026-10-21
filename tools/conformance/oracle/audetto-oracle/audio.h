@@ -7,7 +7,9 @@
 #include <string>
 
 #include "StdAfx.h"
+#include "Card.h"
 #include "Interface.h"
+#include "SoundBuffer.h"
 
 namespace audio_oracle
 {

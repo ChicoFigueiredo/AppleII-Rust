@@ -1,0 +1,21 @@
+id = "audio-speaker-clicks"
+story = "HU-0501"
+criterion = "Cliques do alto-falante (leitura e escrita em $C030, três cadências e pausa do filtro DC): toques com ciclo e PCM iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/speaker-clicks.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+program = "audio/programs/speaker-clicks.bin"
+pcm = "speaker"
+
+[run]
+cycles = 900000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-speaker-clicks"
+events = "reference-audio/audio-speaker-clicks.events"
+pcm = "reference-audio/audio-speaker-clicks.spkr.pcm"
+pcm_limits = { e_max = 0, r_max = 0.0, f_tol = 0.0, rms_tol = 0.0 }  # PLACEHOLDER: calibrar (audit/audio-differential.md)

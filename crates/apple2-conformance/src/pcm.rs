@@ -134,7 +134,9 @@ pub fn measure(expected: &[i16], actual: &[i16], channels: usize, limits: &Limit
         let n = e.len().min((a.len() as i64 - lag).max(0) as usize);
         let mut es: BTreeSet<i16> = BTreeSet::new();
         let mut as_: BTreeSet<i16> = BTreeSet::new();
-        for i in 0..n {
+        // With a negative lag the first `-lag` expected samples have no counterpart.
+        let lo = (-lag).max(0) as usize;
+        for i in lo..n {
             let (x, y) = (e[i], a[(i as i64 + lag) as usize]);
             es.insert(x);
             as_.insert(y);
@@ -145,7 +147,7 @@ pub fn measure(expected: &[i16], actual: &[i16], channels: usize, limits: &Limit
         if es != as_ {
             m.value_sets_equal = false;
         }
-        for (w, start) in (0..n).step_by(WINDOW).enumerate() {
+        for (w, start) in (lo..n).step_by(WINDOW).enumerate() {
             let end = (start + WINDOW).min(n);
             if e[start..end].iter().all(|&s| s == 0)
                 && (start..end).all(|i| a[(i as i64 + lag) as usize] == 0)
@@ -157,11 +159,15 @@ pub fn measure(expected: &[i16], actual: &[i16], channels: usize, limits: &Limit
             // Best local lag: the first one that meets the limits, else the least error.
             let mut best: Option<(i32, f64, i64)> = None;
             for step in 0..=LOCAL_LAG {
-                for l in if step == 0 { vec![0] } else { vec![step, -step] } {
+                for l in if step == 0 {
+                    vec![0]
+                } else {
+                    vec![step, -step]
+                } {
                     let mut max_e = 0i32;
                     let mut sq = 0f64;
-                    for i in start..end {
-                        let d = (e[i] as i32 - get(&a, i as i64 + lag + l)).abs();
+                    for (i, &ev) in e.iter().enumerate().take(end).skip(start) {
+                        let d = (ev as i32 - get(&a, i as i64 + lag + l)).abs();
                         max_e = max_e.max(d);
                         sq += (d as f64) * (d as f64);
                     }
@@ -244,8 +250,10 @@ pub fn decide(m: &Measures, limits: &Limits) -> Verdict {
 /// Reads raw little-endian 16-bit samples.
 pub fn read_s16le(bytes: &[u8]) -> Vec<i16> {
     bytes
-        .chunks_exact(2)
-        .map(|c| i16::from_le_bytes([c[0], c[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| i16::from_le_bytes(*c))
         .collect()
 }
 
@@ -262,7 +270,13 @@ mod tests {
 
     fn square(n: usize, half: usize, amp: i16) -> Vec<i16> {
         (0..n)
-            .map(|i| if (i / half) % 2 == 0 { amp } else { -amp })
+            .map(|i| {
+                if (i / half).is_multiple_of(2) {
+                    amp
+                } else {
+                    -amp
+                }
+            })
             .collect()
     }
 

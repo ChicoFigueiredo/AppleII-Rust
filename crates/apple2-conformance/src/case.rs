@@ -306,7 +306,9 @@ impl Case {
                 match o.timing.as_deref() {
                     None | Some("exact") => {}
                     Some("ssi") if o.ssi_tolerance.is_some() => {}
-                    Some("ssi") => return Err("oracle.ssi_tolerance required with timing `ssi`".into()),
+                    Some("ssi") => {
+                        return Err("oracle.ssi_tolerance required with timing `ssi`".into())
+                    }
                     Some(t) => return Err(format!("oracle.timing `{t}`: expected exact or ssi")),
                 }
                 if o.pcm.is_some() != o.pcm_limits.is_some() {

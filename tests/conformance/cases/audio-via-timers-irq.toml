@@ -1,0 +1,20 @@
+id = "audio-via-timers-irq"
+story = "HU-0501"
+criterion = "Timers do 6522 e IRQ (T1 contínuo e uma vez, T2 por polling, leituras de IFR/IER/ACR): escritas, leituras, IRQs e ciclos iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/via-timers-irq.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/via-timers-irq.bin"
+
+[run]
+cycles = 100000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-via-timers-irq"
+events = "reference-audio/audio-via-timers-irq.events"

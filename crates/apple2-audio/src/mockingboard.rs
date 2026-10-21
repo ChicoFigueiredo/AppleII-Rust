@@ -9,8 +9,8 @@
 
 use crate::ay8910::{Ay, AyType};
 use crate::bus::{lock, AudioBus, CardVolume, Source};
-use crate::events::{AudioEvent, IrqLine};
 use crate::clock::SampleClock;
+use crate::events::{AudioEvent, IrqLine};
 use crate::snapshot::{MockingboardSnapshot, UnitSnapshot, ViaSnapshot};
 use crate::ssi263::{Ssi263, SsiNote, SsiOut, SsiType, PH_ECHO_PLUS, PH_MOCKINGBOARD, PH_PHASOR};
 use crate::via6522::{reg, TimerSched, Via};
@@ -62,14 +62,35 @@ const TOKEN_SSI: u16 = 4;
 const SAVE_VERSION: u8 = 1;
 
 #[allow(clippy::too_many_arguments)]
-fn log_ay(bus: &AudioBus, now: u64, write: bool, slot: u8, unit: usize, ay: usize, reg: u8, value: u8) {
+fn log_ay(
+    bus: &AudioBus,
+    now: u64,
+    write: bool,
+    slot: u8,
+    unit: usize,
+    ay: usize,
+    reg: u8,
+    value: u8,
+) {
     let (unit, ay, reg) = (unit as u8, ay as u8, reg & 0xF);
     bus.log(
         now,
         if write {
-            AudioEvent::AyWrite { slot, unit, ay, reg, value }
+            AudioEvent::AyWrite {
+                slot,
+                unit,
+                ay,
+                reg,
+                value,
+            }
         } else {
-            AudioEvent::AyRead { slot, unit, ay, reg, value }
+            AudioEvent::AyRead {
+                slot,
+                unit,
+                ay,
+                reg,
+                value,
+            }
         },
     );
 }
@@ -113,6 +134,9 @@ pub struct MockingboardCard {
     clock: SampleClock,
     produced: u64,
     pending_ssi: Option<(usize, SsiOut)>,
+    /// `CardCtx::access_cycle` of the access being served: the label of conformance events (the
+    /// Cycle AppleWin's `g_nCumulativeCycles` shows to the I/O handler).
+    access_cycle: u64,
 }
 
 impl MockingboardCard {
@@ -158,6 +182,7 @@ impl MockingboardCard {
             clock: bus.clock(),
             produced: 0,
             pending_ssi: None,
+            access_cycle: 0,
         };
         card.set_ay_clocks();
         for s in &mut card.subs {
@@ -287,11 +312,11 @@ impl MockingboardCard {
         let m = self.bus.irq_bits(1 << slot, via);
         ctx.set_irq(IrqSource::Mockingboard6522, m & 0xFF != 0);
         self.bus
-            .log_irq(ctx.cycles, IrqLine::Via6522, m & 0xFF != 0);
+            .log_irq(ctx.access_cycle, IrqLine::Via6522, m & 0xFF != 0);
         let m = self.bus.irq_bits(1 << (8 + slot), speech);
         ctx.set_irq(IrqSource::Speech, m & 0xFF00 != 0);
         self.bus
-            .log_irq(ctx.cycles, IrqLine::Speech, m & 0xFF00 != 0);
+            .log_irq(ctx.access_cycle, IrqLine::Speech, m & 0xFF00 != 0);
     }
 
     fn apply_ssi(&mut self, unit: usize, out: SsiOut, ctx: &mut CardCtx) {
@@ -309,7 +334,7 @@ impl MockingboardCard {
                     device: unit as u8,
                 },
             };
-            self.bus.log(ctx.cycles, ev);
+            self.bus.log(ctx.access_cycle, ev);
         }
         if out.deassert_irq {
             s.speech_irq = false;
@@ -350,7 +375,8 @@ impl MockingboardCard {
         }
     }
 
-    fn ay_write(&mut self, unit: usize, ay: usize, value: u8, now: u64) {
+    fn ay_write(&mut self, unit: usize, ay: usize, value: u8) {
+        let now = self.access_cycle;
         let slot = self.slot;
         let bus = self.bus.clone();
         let sd = self.variant == Variant::SdMusic;
@@ -447,10 +473,10 @@ impl MockingboardCard {
             }
             // Selecting both AYs: order matters (AY1 latch deselects AY2, AY2 latch selects both).
             if cs & KAY1 != 0 {
-                self.ay_write(unit, 0, value, now);
+                self.ay_write(unit, 0, value);
             }
             if cs & KAY2 != 0 {
-                self.ay_write(unit, 1, value, now);
+                self.ay_write(unit, 1, value);
             }
             if cs == 0 {
                 self.subs[unit].set_bus(false);
@@ -465,21 +491,32 @@ impl MockingboardCard {
                 self.ay_reset(u);
                 return;
             }
-            self.ay_write(u, 0, value, now);
+            self.ay_write(u, 0, value);
         }
     }
 
     // ---- bus access ----
 
+    /// Where the 6522 sees an access: AppleWin updates the chip to the first cycle of the
+    /// executing opcode (`access_cycle`) and compensates for the opcode's `adj` cycles
+    /// (`GetOpcodeCyclesForRead/Write`). The bus access itself is the opcode's last cycle.
+    fn opcode_span(ctx: &CardCtx) -> (u64, u16) {
+        (
+            ctx.access_cycle,
+            (ctx.cycles.saturating_sub(ctx.access_cycle) + 1).min(u16::MAX as u64) as u16,
+        )
+    }
+
     fn pre(&mut self, ctx: &CardCtx) {
         self.slot = ctx.slot;
+        self.access_cycle = ctx.access_cycle;
         self.advance_audio(ctx.cycles);
     }
 
     /// `IOReadInternal` (cpp:671). `a` = low byte of the address.
     fn read_io(&mut self, a: u8, ctx: &mut CardCtx) -> u8 {
         self.pre(ctx);
-        let now = ctx.cycles;
+        let (start, adj) = Self::opcode_span(ctx);
         let r = a & 0xF;
         if self.is_phasor() {
             let cs = match self.phasor_mode {
@@ -490,10 +527,10 @@ impl MockingboardCard {
             };
             let mut res = 0;
             if cs & 1 != 0 {
-                res |= self.subs[0].via.read(r, now);
+                res |= self.subs[0].via.read_at(r, start, adj);
             }
             if cs & 2 != 0 {
-                res |= self.subs[1].via.read(r, now);
+                res |= self.subs[1].via.read_at(r, start, adj);
             }
             let mut accessed = cs & 3 != 0;
             // SSI263 D7 at $Cs2x/$Cs4x (Phasor native only; not readable in Mockingboard mode).
@@ -515,7 +552,7 @@ impl MockingboardCard {
         } else {
             1
         };
-        let v = self.subs[unit].via.read(r, now);
+        let v = self.subs[unit].via.read_at(r, start, adj);
         self.sync_irq(ctx);
         v
     }
@@ -525,6 +562,7 @@ impl MockingboardCard {
         self.pre(ctx);
         self.false_read(a, ctx);
         let now = ctx.cycles;
+        let (start, adj) = Self::opcode_span(ctx);
         let r = a & 0xF;
         if self.is_phasor() {
             let cs = match self.phasor_mode {
@@ -535,7 +573,7 @@ impl MockingboardCard {
             };
             for unit in 0..2 {
                 if cs & (1 << unit) != 0 {
-                    let t = self.subs[unit].via.write(r, v, now);
+                    let t = self.subs[unit].via.write_at(r, v, start, adj);
                     self.schedule_timer(unit, t, ctx);
                     self.sync_gates(unit, r, ctx);
                     if r == reg::ORB {
@@ -552,7 +590,7 @@ impl MockingboardCard {
             } else {
                 ((a & 0x80 != 0) as usize, 0)
             };
-            let t = self.subs[unit].via.write(r, v, now);
+            let t = self.subs[unit].via.write_at(r, v, start, adj);
             self.schedule_timer(unit, t, ctx);
             self.sync_gates(unit, r, ctx);
             if r == reg::ORB {
@@ -606,7 +644,7 @@ impl MockingboardCard {
     /// Conformance log of a `$C0(8+slot)x` access: the oracle logs `nAddr & 0xFF`.
     fn log_phasor_io(&self, lo: u8, write: bool, ctx: &CardCtx) {
         self.bus.log(
-            ctx.cycles,
+            ctx.access_cycle,
             AudioEvent::PhasorIo {
                 slot: ctx.slot,
                 addr: 0x80 + (ctx.slot << 4) + (lo & 0xF),
@@ -791,7 +829,7 @@ impl Card for MockingboardCard {
     fn slot_rom_read(&mut self, offset: u8, ctx: &mut CardCtx) -> u8 {
         let value = self.read_io(offset, ctx);
         self.bus.log(
-            ctx.cycles,
+            ctx.access_cycle,
             AudioEvent::IoRead {
                 slot: ctx.slot,
                 addr: offset,
@@ -804,7 +842,7 @@ impl Card for MockingboardCard {
     fn slot_rom_write(&mut self, offset: u8, value: u8, ctx: &mut CardCtx) {
         self.write_io(offset, value, ctx);
         self.bus.log(
-            ctx.cycles,
+            ctx.access_cycle,
             AudioEvent::IoWrite {
                 slot: ctx.slot,
                 addr: offset,

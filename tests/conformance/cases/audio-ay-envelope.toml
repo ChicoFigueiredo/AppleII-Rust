@@ -1,0 +1,23 @@
+id = "audio-ay-envelope"
+story = "HU-0501"
+criterion = "Gerador de envelope do AY (oito formas e um zumbido de envelope rápido): eventos e PCM iguais ao AppleWin"
+model = "apple2plus"
+cards = []
+notes = "Programa 6502 próprio (audio/programs/ay-envelope.s) carregado em $0300 com PC=$0300 nos dois lados; ROM do Apple ][+ real nos dois (a rotina de IRQ da ROM roda dos dois lados)."
+
+[audio]
+card = "mockingboard"
+slot = 4
+program = "audio/programs/ay-envelope.bin"
+pcm = "mockingboard"
+
+[run]
+cycles = 320000
+
+[oracle]
+kind = "audio-events"
+authority = "applewin"
+source = "audetto-oracle (fork Linux do AppleWin, SHA fixo) com audetto-audio.patch; regenerar com: tools/conformance/audio/run-oracle-case.py audio-ay-envelope"
+events = "reference-audio/audio-ay-envelope.events"
+pcm = "reference-audio/audio-ay-envelope.mb.pcm"
+pcm_limits = { e_max = 0, r_max = 0.0, f_tol = 0.0, rms_tol = 0.0 }  # PLACEHOLDER: calibrar (audit/audio-differential.md)

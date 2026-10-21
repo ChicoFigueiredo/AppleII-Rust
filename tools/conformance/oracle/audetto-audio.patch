@@ -60,10 +60,12 @@ index e348d339..758e5008 100644
  }
  
  BYTE MockingboardCard::IOWriteInternal(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nExecutedCycles)
-@@ -872,6 +877,7 @@ BYTE __stdcall MockingboardCard::PhasorIO(WORD PC, WORD nAddr, BYTE bWrite, BYTE
+@@ -872,6 +877,9 @@ BYTE __stdcall MockingboardCard::PhasorIO(WORD PC, WORD nAddr, BYTE bWrite, BYTE
  {
  	UINT slot = ((nAddr & 0xff) >> 4) - 8;
  	MockingboardCard* pCard = (MockingboardCard*)MemGetSlotParameters(slot);
++	if (g_pfnOracleAudioEvent)
++		CpuCalcCycles(nExecutedCycles);	// PhasorIOInternal never syncs g_nCumulativeCycles itself
 +	ORACLE_AUDIO_EVENT(OAE_PHASOR_IO, slot, nAddr & 0xFF, bWrite, 0);
  	return pCard->PhasorIOInternal(PC, nAddr, bWrite, nValue, nExecutedCycles);
  }

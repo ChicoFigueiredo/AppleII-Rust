@@ -711,7 +711,7 @@ fn audio_verdict(env: &Env, case: &Case, artifacts: &mut Vec<(String, Vec<u8>)>)
         Ok(b) => String::from_utf8_lossy(&b).into_owned(),
         Err(e) => {
             return Verdict::Blocked(format!(
-                "referência do oráculo ausente: {e} (gere com tools/conformance/audio/run-oracle-case.sh)"
+                "referência do oráculo ausente: {e} (gere com tools/conformance/audio/run-oracle-case.py)"
             ))
         }
     };
@@ -730,18 +730,18 @@ fn audio_verdict(env: &Env, case: &Case, artifacts: &mut Vec<(String, Vec<u8>)>)
         },
         _ => Timing::Exact,
     };
-    let mut summary = match audio::compare_events(&audio::lines_of(&expected), &actual_lines, timing)
-    {
-        Ok(s) => s,
-        Err(report) => {
-            let name = format!("{}.events-diff.txt", case.id);
-            artifacts.push((name.clone(), report.clone().into_bytes()));
-            return Verdict::Fail(
-                format!("eventos: {}", report.lines().next().unwrap_or("")),
-                Some(name),
-            );
-        }
-    };
+    let mut summary =
+        match audio::compare_events(&audio::lines_of(&expected), &actual_lines, timing) {
+            Ok(s) => s,
+            Err(report) => {
+                let name = format!("{}.events-diff.txt", case.id);
+                artifacts.push((name.clone(), report.clone().into_bytes()));
+                return Verdict::Fail(
+                    format!("eventos: {}", report.lines().next().unwrap_or("")),
+                    Some(name),
+                );
+            }
+        };
     if let (Some(rel), Some(l)) = (&o.pcm, o.pcm_limits) {
         let limits: crate::pcm::Limits = l.into();
         let bytes = match audio::read_reference(&env.root, rel) {

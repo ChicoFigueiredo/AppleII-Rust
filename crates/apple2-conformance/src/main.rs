@@ -2,8 +2,8 @@
 
 use apple2_conformance::audio;
 use apple2_conformance::case::{parse_model, InputEvent, RunSpec};
-use apple2_conformance::pcm;
 use apple2_conformance::manifest::TestResult;
+use apple2_conformance::pcm;
 use apple2_conformance::report::{counts, write_report};
 use apple2_conformance::runner::{generate_trace, load_cases, read_trace, run_case, Env};
 use apple2_conformance::trace::{compare_with, parse_field_list, CompareOptions};
@@ -273,12 +273,18 @@ fn cmd_audio_run(rest: &[String]) -> Result<u8, String> {
     let w = |name: String, bytes: &[u8]| {
         std::fs::write(out.join(&name), bytes).map_err(|e| format!("{name}: {e}"))
     };
-    w(format!("{id}.events"), audio::render_lines(&lines).as_bytes())?;
+    w(
+        format!("{id}.events"),
+        audio::render_lines(&lines).as_bytes(),
+    )?;
     let le = |v: &[i16]| v.iter().flat_map(|s| s.to_le_bytes()).collect::<Vec<u8>>();
     w(format!("{id}.mb.pcm"), &le(&run.mb_pcm))?;
     w(format!("{id}.spkr.pcm"), &le(&run.spkr_pcm))?;
     if let Some(t) = tw {
-        w(format!("{id}.trace.csv"), &t.finish().map_err(|e| e.to_string())?)?;
+        w(
+            format!("{id}.trace.csv"),
+            &t.finish().map_err(|e| e.to_string())?,
+        )?;
     }
     println!(
         "{id}: {} eventos, {} quadros de PCM do Mockingboard, {} do alto-falante, {} ciclos",
@@ -307,7 +313,12 @@ fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
     while let Some(arg) = a.next() {
         let num = |v: &str| v.parse::<f64>().map_err(|e| e.to_string());
         match arg {
-            "--channels" => channels = a.value(arg)?.parse().map_err(|e: std::num::ParseIntError| e.to_string())?,
+            "--channels" => {
+                channels = a
+                    .value(arg)?
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| e.to_string())?
+            }
             "--e-max" => l.e_max = num(a.value(arg)?)? as i32,
             "--r-max" => l.r_max = num(a.value(arg)?)?,
             "--f-tol" => l.f_tol = num(a.value(arg)?)?,
@@ -319,7 +330,11 @@ fn cmd_pcm_compare(rest: &[String]) -> Result<u8, String> {
     let [e, o] = files.as_slice() else {
         return Err("pcm-compare precisa de ESPERADO.pcm e OBTIDO.pcm".into());
     };
-    let rd = |p: &PathBuf| std::fs::read(p).map(|b| pcm::read_s16le(&b)).map_err(|e| format!("{}: {e}", p.display()));
+    let rd = |p: &PathBuf| {
+        std::fs::read(p)
+            .map(|b| pcm::read_s16le(&b))
+            .map_err(|e| format!("{}: {e}", p.display()))
+    };
     let m = pcm::measure(&rd(e)?, &rd(o)?, channels, &l);
     println!("{}", audio::describe_measures(&m));
     let v = pcm::decide(&m, &l);
