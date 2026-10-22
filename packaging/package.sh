@@ -49,6 +49,9 @@ case "$os" in
     root=$(mktemp -d)/$name
     mkdir -p "$root"
     cp "$bindir/apple2-rust.exe" "$root/"
+    # Console twin: `apple2-rust` typed in cmd/PowerShell finds the .com first (PATHEXT), so
+    # output can be redirected and the shell waits; double click stays on the GUI .exe (#107).
+    cp "$bindir/apple2-rust-console.exe" "$root/apple2-rust.com"
     copy_common "$root"
     zip_dir "$(dirname "$root")" "$name" "$dist/$name.zip"
     ;;

@@ -8,6 +8,8 @@ A linha de comando segue a do AppleWin (`ProcessCmdLine`), com as grafias de um 
 
 Argumentos que não começam com `-` são tratados como arquivos a abrir: um arquivo que termina em `.aws.json` ou `.aws.yaml` é carregado como save-state, qualquer outro é inserido no drive 1 (e a Máquina reinicia).
 
+No Windows, a pasta do programa tem dois executáveis. O `apple2-rust.exe` é o do duplo clique: abre só a janela, sem console. O `apple2-rust.com` é o mesmo programa para o terminal. Digitando `apple2-rust` (sem extensão) no `cmd` ou no PowerShell, o Windows escolhe o `.com`: o terminal espera o programa terminar, e a saída de `--help`, `--version` e `--dump-text` pode ir para um arquivo (`> saida.txt`) ou para outro programa (`| more`). Chamando `apple2-rust.exe` direto no terminal, a ajuda aparece no console, mas não pode ser redirecionada.
+
 Um argumento desconhecido é guardado na lista de "comandos não suportados" e não aborta o programa; uma opção que exige valor sem o valor faz o programa terminar com a mensagem `option X requires a value`.
 
 ## Modelo e máquina

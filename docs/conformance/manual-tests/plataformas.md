@@ -55,7 +55,7 @@ Material: Windows 10 ou 11, o `apple2-rust-<versão>-windows-x64.zip` da release
 | W1 | Baixe o `.zip` e verifique o SHA-256 contra o `SHA256SUMS`. | |
 | W2 | Extraia para uma pasta (por exemplo `C:\AppleII-Rust`), sem espaços e depois com espaços e acentos no caminho. | |
 | W3 | Abra `apple2-rust.exe` com duplo clique. Anote se o SmartScreen ou o antivírus avisou (o executável não é assinado). Use "Mais informações" > "Executar assim mesmo". | |
-| W4 | De um `cmd` ou PowerShell: `apple2-rust.exe --help`. A ajuda aparece? (O exe é do subsistema GUI e anexa ao console pai; o prompt volta antes do fim: esperado.) | |
+| W4 | Na pasta do programa, de um `cmd` (`apple2-rust`) e de um PowerShell (`.\apple2-rust`): `--help` (acha o `apple2-rust.com`): a ajuda aparece e o prompt só volta no fim. `apple2-rust --help > ajuda.txt` e `apple2-rust --help \| more` entregam a ajuda inteira. `apple2-rust.exe --help` (o GUI) mostra a ajuda no console, sem redirecionamento (#107). | |
 | W5 | Passos P1 a P14. | |
 | W6 | Pasta `disks\` presente com os três discos. `THIRD-PARTY-LICENSES.html` e `LICENSE` presentes. | |
 | W7 | DPI por monitor (manifesto PerMonitorV2): arraste entre monitores de escalas diferentes, sem ficar borrado. | |

@@ -1,9 +1,12 @@
-//! Windows release builds use the GUI subsystem (no console window when double-clicked).
-//! To keep `--help`, `--headless-frames ... --dump-text` and error messages visible when launched
-//! from cmd/PowerShell, attach to the parent console and point stdout/stderr at it.
-//! Trade-off: GUI-subsystem programs do not make the shell wait, so the prompt returns
-//! immediately and output may appear after it; redirected/piped output (`> file`, `| more`)
-//! works as usual because those handles are inherited untouched.
+//! Windows release builds of `apple2-rust.exe` use the GUI subsystem (no console window when
+//! double-clicked). To keep `--help`, `--headless-frames ... --dump-text` and error messages
+//! visible when the `.exe` is launched from cmd/PowerShell, attach to the parent console and
+//! point stdout/stderr at it.
+//! Limits: the shell does not wait for a GUI-subsystem program, and cmd's `> file` and `| more`
+//! do not reach it (a GUI process does not inherit the handles cmd redirects), so the output goes
+//! to the console instead. Redirection and pipes need `apple2-rust.com`, the console-subsystem
+//! twin in the package (`apple2-rust-console.exe` in `target/`), which `apple2-rust` typed without
+//! an extension finds first (#107). In that binary `AttachConsole` fails and this is a no-op.
 
 #[cfg(all(windows, not(debug_assertions)))]
 #[allow(unsafe_code)]
