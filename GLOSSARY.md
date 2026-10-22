@@ -236,6 +236,14 @@ _Avoid_: log, dump
 O registro de uma execução de teste com tudo que a reproduz: história, critério, SHAs, hashes de Fixture e ROM, Modelo, cartas, sistema hospedeiro, comando, esperado, obtido e resultado.
 _Avoid_: relatório de teste
 
+**Windows nativo**:
+O `apple2-rust.exe` rodando direto no Windows, sem camada de tradução, numa máquina física ou numa VM. Contrasta com o Windows sob Wine, que não vale como Windows nativo.
+_Avoid_: Windows real
+
+**Windows nativo em VM**:
+Windows nativo numa máquina virtual (por exemplo, QEMU/KVM). GPU, áudio e periféricos são virtuais, e os passos que dependem de hardware físico ficam BLOCKED no roteiro.
+_Avoid_: emulado, virtualizado (sem dizer a VM)
+
 **Gate**:
 Um patamar de prontidão (G0 inventário, G1 alpha, G2 beta, G3 stable candidata) que só é atingido quando todos os seus critérios objetivos estão em PASS.
 _Avoid_: milestone, fase
