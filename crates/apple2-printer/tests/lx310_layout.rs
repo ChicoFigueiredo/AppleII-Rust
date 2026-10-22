@@ -328,6 +328,33 @@ fn adjacent_dots_are_dropped_for_esc_y_and_z_only() {
     );
 }
 
+/// A pin that did not fire in the previous column may fire in this one: a continuous stroke in a
+/// no-adjacent mode comes out as every other column (the dot ignored is the second of a pair, and
+/// the comparison is against what was PRINTED, not what was asked for).
+#[test]
+fn continuous_stroke_prints_every_other_column_in_no_adjacent_modes() {
+    for (cmd, step) in [
+        (&[0x1B, b'Y'][..], 18u32),
+        (&[0x1B, b'Z'][..], 9),
+        (&[0x1B, b'*', 2][..], 18),
+        (&[0x1B, b'*', 3][..], 9),
+    ] {
+        let mut v = cmd.to_vec();
+        v.extend_from_slice(&[8, 0]);
+        v.extend_from_slice(&[0xFF; 8]);
+        let d = run(&v);
+        let dots = dots_of(&d, 0);
+        assert_eq!(dots.len(), 4 * 8, "{cmd:?}");
+        let xs: std::collections::BTreeSet<_> = dots.iter().map(|p| p.0).collect();
+        let want: std::collections::BTreeSet<_> = (0..4).map(|i| X0 + 2 * i * step).collect();
+        assert_eq!(xs, want, "{cmd:?}");
+        // Alternating pattern: AA 55 AA 55 ... pins that differ never collide.
+        let mut v = cmd.to_vec();
+        v.extend_from_slice(&[6, 0, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55]);
+        assert_eq!(dots_of(&run(&v), 0).len(), 24, "{cmd:?}");
+    }
+}
+
 #[test]
 fn graphics_two_contiguous_lines_no_transposition() {
     // Line 1 at y=0 with pattern, LF 1/6" (360) and line 2; each column keeps its own bits.

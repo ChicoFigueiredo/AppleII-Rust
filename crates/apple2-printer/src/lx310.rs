@@ -769,11 +769,12 @@ impl Lx310 {
             if !nine_pin {
                 bits = u16::from(b0) << 1;
             }
-            let this = bits;
             if !adjacent_ok {
+                // The head ignores a dot whose pin fired in the previous column; the comparison
+                // is against what was PRINTED, so a continuous stroke prints every other column.
                 bits &= !prev;
             }
-            prev = this;
+            prev = bits;
             let dx = c as u32 * step;
             if self.x_pos.saturating_add(dx) >= self.fmt.right {
                 dropped += bits.count_ones().max(1);
