@@ -214,6 +214,8 @@ dependencies = [
  "if-addrs",
  "pcap",
  "serialport",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

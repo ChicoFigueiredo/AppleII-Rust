@@ -1,0 +1,10 @@
+pages=2 diagnostics=0
+page 1 size=20520x23760 dots=2846 dots_hash=12884091407a09f0
+  text x=1620 y=567 "RELATORIO DE ACEITE LX-310"
+  text x=1620 y=927 "LINHA EM NEGRITO"
+  text x=1620 y=1287 "LINHA SUBLINHADA"
+  text x=1620 y=1647 "LINHA A DOZE CPI"
+  text x=1620 y=2007 "LINHA CONDENSADA"
+  text x=1620 y=2367 "LINHA NLQ"
+page 2 size=20520x23760 dots=364 dots_hash=647542f838dff654
+  text x=1620 y=567 "SEGUNDA PAGINA"

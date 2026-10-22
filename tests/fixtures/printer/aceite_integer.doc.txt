@@ -1,0 +1,8 @@
+pages=1 diagnostics=0
+page 1 size=20520x23760 dots=1568 dots_hash=bd07732437c6960a
+  text x=1620 y=927 ">LIST"
+  text x=1620 y=1287 "   10 PRINT \"OLA MUNDO\""
+  text x=1620 y=1647 "   20 FOR I=1 TO 3: PRINT I: NEXT "
+  text x=1620 y=2007 "      I"
+  text x=1620 y=2367 "   30 END "
+  text x=1620 y=3087 ">PR#0"
