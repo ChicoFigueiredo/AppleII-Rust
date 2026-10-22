@@ -74,7 +74,7 @@ fn demo() -> Vec<u8> {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let Some(out) = args.first() else {
+    let Some(out) = args.first().filter(|a| !a.starts_with('-')) else {
         eprintln!("uso: imprimir <saida.pdf> [bytes.raw]");
         std::process::exit(2);
     };
