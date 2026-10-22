@@ -20,3 +20,7 @@ A especificação [docs/prompts/AppleII_Rust_Prompt_Impressoras_Virtuais_LX310.m
 - Um programa que mande bytes com bit 7 ligado para texto (sem ser gráfico) pode imprimir diferente na virtual e no Printer.txt; a opção de 7 bits resolve.
 - O Arquivo de impressões cresce sem limite; o aviso de tamanho é a única proteção.
 - Escopo desta entrega: fases A a D, só a LX-310. FX-80, MX-80 e ImageWriter II (serial, pela SSC) ficam para depois, cada um com seu protocolo e seus goldens.
+
+## Aceite (22/10/2026)
+
+O dono aprovou as fases A–D como entrega Linux da v0.3.0 com base no parecer independente final (93/100, [docs/printer/parecer-independente.md](../printer/parecer-independente.md)), com três pendências declaradas: o T-025 (tela cheia do Apple II com a Central no segundo monitor) fica pendente de evidência humana pelo roteiro [docs/conformance/manual-tests/impressora.md](../conformance/manual-tests/impressora.md); Windows e macOS não foram validados nativamente; o aceite com AppleWorks, Print Shop e dBase II (#104) aguarda os discos do dono em `target/conformance-cache/printer-apps/`. As notas da v0.3.0 dizem isso explicitamente.
