@@ -27,6 +27,15 @@ fn cases() -> Vec<(&'static str, &'static [u8])> {
         ("bold_and_double_strike", b"\x1bEbold\x1bF \x1bGstrike\x1bH"),
         ("expanded_so", b"\x0eWIDE"),
         ("brazilian_437", b"\x1bR\x00\x87\xa0\xc6"),
+        (
+            "frame_draft",
+            b"\x1bt\x01\xda\xc4\xbf\r\n\xb3 \xb3\r\n\xc0\xc4\xd9\r\n\xc9\xcd\xbb\r\n\xba \xba\r\n\xc8\xcd\xbc",
+        ),
+        (
+            "frame_nlq",
+            b"\x1bx\x01\x1bt\x01\xda\xc4\xbf\r\n\xb3 \xb3\r\n\xc0\xc4\xd9\r\n\xc9\xcd\xbb\r\n\xba \xba\r\n\xc8\xcd\xbc",
+        ),
+        ("portuguese_symbols", b"\xa8 \xa6\xa7 \xf8 \xf1 \xfd\xfc \xf6 \x9e \xe6"),
     ]
 }
 
