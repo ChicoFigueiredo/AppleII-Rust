@@ -120,7 +120,7 @@ struct Format {
 }
 
 impl Format {
-    fn initial(printable: u32, page_length: u32) -> Format {
+    fn initial(printable: u32, page_length: u32, table: CharTable, country: u8) -> Format {
         Format {
             line_spacing: DEFAULT_LINE_SPACING,
             page_length,
@@ -142,9 +142,9 @@ impl Format {
             underline: false,
             italic: false,
             nlq: false,
-            tables: [CharTable::Italic, CharTable::Pc437],
+            tables: [CharTable::Italic, table],
             slot: 1,
-            country: 0,
+            country: country.min(12),
             // Graphic tables (PC437...) print codes 128..159 as characters; ESC 7 makes them
             // control codes (ignored), ESC 6 prints them again.
             upper_print: true,
@@ -265,7 +265,12 @@ impl Lx310 {
         let (x0, printable) = printable_area(&options.paper);
         Lx310 {
             parser: Parser::new(config.limits),
-            fmt: Format::initial(printable, options.paper.height),
+            fmt: Format::initial(
+                printable,
+                options.paper.height,
+                options.table,
+                options.country,
+            ),
             config,
             options,
             x0,
@@ -822,7 +827,12 @@ impl Lx310 {
             }
             Command::Reset => {
                 let page_length = self.options.paper.height;
-                self.fmt = Format::initial(self.printable, page_length);
+                self.fmt = Format::initial(
+                    self.printable,
+                    page_length,
+                    self.options.table,
+                    self.options.country,
+                );
                 self.x_pos = 0;
             }
             Command::LineSpacing216(n) => self.fmt.line_spacing = u32::from(n) * units::PER_216,
@@ -998,7 +1008,12 @@ impl PrinterEngine for Lx310 {
         self.options = options;
         self.x0 = x0;
         self.printable = printable;
-        self.fmt = Format::initial(printable, options.paper.height);
+        self.fmt = Format::initial(
+            printable,
+            options.paper.height,
+            options.table,
+            options.country,
+        );
         self.parser.reset();
         self.x_pos = 0;
         self.y_pos = 0;

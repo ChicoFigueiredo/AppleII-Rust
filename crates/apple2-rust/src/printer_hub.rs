@@ -23,6 +23,7 @@ use apple2_printer::archive::{self, Archive, JobState as ArchiveJobState, Manife
 use apple2_printer::capture::CaptureEvent;
 use apple2_printer::document::PageDocument;
 use apple2_printer::engine::PrinterEngine;
+use apple2_printer::font::CharTable;
 use apple2_printer::lx310::{Lx310, Lx310Config};
 use apple2_printer::paper::{InkColor, Paper, PaperKind, RenderOptions, Ribbon};
 use apple2_printer::pdf::{self, PageSelection, PdfDate, PdfMeta};
@@ -32,7 +33,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -81,6 +82,30 @@ pub fn render_options(spec: &PrinterSpec) -> RenderOptions {
             PrinterInk::Blue => InkColor::Blue,
             PrinterInk::Purple => InkColor::Purple,
         },
+        table: char_table(spec.table),
+        country: spec.country.min(12),
+    }
+}
+
+pub fn char_table(t: PrinterTable) -> CharTable {
+    match t {
+        PrinterTable::Pc437 => CharTable::Pc437,
+        PrinterTable::Pc850 => CharTable::Pc850,
+        PrinterTable::Pc860 => CharTable::Pc860,
+        PrinterTable::Brascii => CharTable::Brascii,
+        PrinterTable::Abicomp => CharTable::Abicomp,
+        PrinterTable::Italic => CharTable::Italic,
+    }
+}
+
+pub fn printer_table(t: CharTable) -> PrinterTable {
+    match t {
+        CharTable::Pc437 => PrinterTable::Pc437,
+        CharTable::Pc850 => PrinterTable::Pc850,
+        CharTable::Pc860 => PrinterTable::Pc860,
+        CharTable::Brascii => PrinterTable::Brascii,
+        CharTable::Abicomp => PrinterTable::Abicomp,
+        CharTable::Italic => PrinterTable::Italic,
     }
 }
 
@@ -96,8 +121,8 @@ pub fn store_setup(spec: &mut PrinterSpec, s: &PrintSetup) {
         InkColor::Blue => PrinterInk::Blue,
         InkColor::Purple => PrinterInk::Purple,
     };
-    spec.table = s.table;
-    spec.country = s.country.min(12);
+    spec.table = printer_table(s.options.table);
+    spec.country = s.options.country.min(12);
 }
 
 /// What the hub needs from the settings: the printer card, its look and its behaviour.
@@ -127,8 +152,6 @@ impl PrinterConfig {
                 machine: crate::factory::machine_label(settings.machine.model),
                 setup: PrintSetup {
                     options: render_options(p),
-                    table: p.table,
-                    country: p.country.min(12),
                 },
                 auto_open: p.auto_open_window,
             })
@@ -143,75 +166,8 @@ pub fn archive_root() -> Option<PathBuf> {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Engine with the default character table
-// ---------------------------------------------------------------------------------------------
-
-type TableCell = Arc<Mutex<(PrinterTable, u8)>>;
-
-fn table_id(t: PrinterTable) -> u8 {
-    match t {
-        PrinterTable::Italic => 0,
-        PrinterTable::Pc437 => 1,
-        PrinterTable::Pc850 => 3,
-        PrinterTable::Pc860 => 7,
-        PrinterTable::Brascii => 25,
-        PrinterTable::Abicomp => 26,
-    }
-}
-
-/// ESC sequences that make a freshly reset LX-310 start with the chosen table and international
-/// set. Empty for the printer's own defaults.
-pub fn table_preamble(table: PrinterTable, country: u8) -> Vec<u8> {
-    let mut b = Vec::new();
-    if table != PrinterTable::Pc437 {
-        // ESC ( t 3 0 d1 d2 d3: assign registered table d2/d3 to slot d1 (slot 1 is the active one).
-        b.extend_from_slice(&[0x1B, b'(', b't', 3, 0, 1, table_id(table), 0]);
-    }
-    if country != 0 {
-        b.extend_from_slice(&[0x1B, b'R', country.min(12)]);
-    }
-    b
-}
-
-/// An `Lx310` that starts each job with the table chosen in the settings (the program can still
-/// change it; ESC @ returns to the printer's own default).
-struct ConfiguredLx310 {
-    inner: Lx310,
-    table: TableCell,
-}
-
-impl PrinterEngine for ConfiguredLx310 {
-    fn begin(&mut self, options: RenderOptions) {
-        self.inner.begin(options);
-        let (t, c) = *self.table.lock().unwrap_or_else(|e| e.into_inner());
-        let pre = table_preamble(t, c);
-        if !pre.is_empty() {
-            self.inner.feed(0, &pre);
-            self.inner.take_revision();
-        }
-    }
-    fn feed(&mut self, offset: u64, data: &[u8]) {
-        self.inner.feed(offset, data);
-    }
-    fn document(&self) -> &PageDocument {
-        self.inner.document()
-    }
-    fn take_revision(&mut self) -> u64 {
-        self.inner.take_revision()
-    }
-    fn finish(&mut self) {
-        self.inner.finish();
-    }
-}
-
-fn engine_factory(table: TableCell) -> apple2_printer::spool::EngineFactory {
-    Box::new(move || {
-        Box::new(ConfiguredLx310 {
-            inner: Lx310::new(Lx310Config::default()),
-            table: table.clone(),
-        })
-    })
+fn engine_factory() -> apple2_printer::spool::EngineFactory {
+    Box::new(|| Box::new(Lx310::new(Lx310Config::default())))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -325,7 +281,6 @@ pub fn render_job(
     id: &str,
     total: u64,
     options: RenderOptions,
-    table: (PrinterTable, u8),
 ) -> Result<PageDocument, String> {
     if !safe_id(id) {
         return Err(format!("identificador de trabalho inválido: {id}"));
@@ -333,11 +288,7 @@ pub fn render_job(
     let path = root.join(id).join(archive::RAW_FILE);
     let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut file = file.take(total);
-    let cell: TableCell = Arc::new(Mutex::new(table));
-    let mut engine = ConfiguredLx310 {
-        inner: Lx310::new(Lx310Config::default()),
-        table: cell,
-    };
+    let mut engine = Lx310::new(Lx310Config::default());
     engine.begin(options);
     let mut buf = vec![0u8; 16 * 1024];
     let mut offset = 0u64;
@@ -451,7 +402,6 @@ pub struct PrinterHub {
     spool: SpoolHandle,
     service: Option<SpoolService>,
     bridge: Bridge,
-    table: TableCell,
     config: Option<PrinterConfig>,
     seen_opens: u64,
     seen_bytes: u64,
@@ -497,8 +447,7 @@ impl PrinterHub {
     ) -> Result<PrinterHub, String> {
         let archive = Archive::open(&root).map_err(|e| format!("{}: {e}", root.display()))?;
         let initial = config.as_ref().map(|c| c.setup).unwrap_or_default();
-        let table: TableCell = Arc::new(Mutex::new((initial.table, initial.country)));
-        let spool = Spool::new(archive, engine_factory(table.clone()), initial.options);
+        let spool = Spool::new(archive, engine_factory(), initial.options);
         let (tx, rx) = channel::<CaptureEvent>();
         let service = SpoolService::spawn(spool, rx);
         let bridge = Bridge::spawn(events, tx, wake);
@@ -508,7 +457,6 @@ impl PrinterHub {
             spool: service.handle(),
             service: Some(service),
             bridge,
-            table,
             config: None,
             seen_opens: 0,
             seen_bytes: 0,
@@ -543,8 +491,6 @@ impl PrinterHub {
     /// Settings changed (or the first configuration). `None`: no virtual printer card.
     pub fn configure(&mut self, config: Option<PrinterConfig>) {
         if let Some(c) = &config {
-            *self.table.lock().unwrap_or_else(|e| e.into_inner()) =
-                (c.setup.table, c.setup.country);
             self.spool.send(SpoolCommand::SetOptions(c.setup.options));
         }
         if self.config != config {
@@ -972,12 +918,11 @@ impl PrinterHub {
         self.rendering = Some(key.clone());
         let (root, id, total) = (self.root.clone(), key.0.clone(), m.total_bytes);
         let version = key.1;
-        let table = *self.table.lock().unwrap_or_else(|e| e.into_inner());
         let tx = self.done_tx.clone();
         std::thread::Builder::new()
             .name("apple2-printer-render".into())
             .spawn(move || {
-                let result = render_job(&root, &id, total, options, table).map(Arc::new);
+                let result = render_job(&root, &id, total, options).map(Arc::new);
                 let _ = tx.send(Done::Rendered {
                     job: id,
                     version,
@@ -1005,7 +950,6 @@ impl PrinterHub {
                 if let Some(c) = &mut self.config {
                     c.setup = s;
                 }
-                *self.table.lock().unwrap_or_else(|e| e.into_inner()) = (s.table, s.country);
                 self.spool.send(SpoolCommand::SetOptions(s.options));
             }
             CenterEvent::FinishJob => {
@@ -1130,7 +1074,6 @@ impl PrinterHub {
             req.job.clone(),
             manifest.as_ref().map_or(0, |m| m.total_bytes),
         );
-        let table = *self.table.lock().unwrap_or_else(|e| e.into_inner());
         let tx = self.done_tx.clone();
         let range = req.range.clone();
         let report_version = req.version;
@@ -1139,7 +1082,7 @@ impl PrinterHub {
             .spawn(move || {
                 let doc = match live.or(cached) {
                     Some(d) => Ok(d),
-                    None => render_job(&root, &id, total, options, table).map(Arc::new),
+                    None => render_job(&root, &id, total, options).map(Arc::new),
                 };
                 let result = doc.and_then(|doc| {
                     export_pdf_blocking(&ExportJob {

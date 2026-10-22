@@ -5,7 +5,7 @@
 use crate::printer_model::{
     CenterEvent, JobEntry, JobState, PageRange, PdfRequest, PrintSetup, PrinterViewModel, Status,
 };
-use apple2_config::card::PrinterTable;
+use apple2_printer::font::CharTable;
 use apple2_printer::paper::{InkColor, Paper, PaperKind, RenderOptions, Ribbon};
 use egui::{Color32, Ui};
 
@@ -80,14 +80,23 @@ pub fn ink_label(i: InkColor) -> &'static str {
     }
 }
 
-pub fn table_label(t: PrinterTable) -> &'static str {
+pub const ALL_TABLES: [CharTable; 6] = [
+    CharTable::Pc437,
+    CharTable::Pc850,
+    CharTable::Pc860,
+    CharTable::Brascii,
+    CharTable::Abicomp,
+    CharTable::Italic,
+];
+
+pub fn table_label(t: CharTable) -> &'static str {
     match t {
-        PrinterTable::Pc437 => "PC437",
-        PrinterTable::Pc850 => "PC850",
-        PrinterTable::Pc860 => "PC860",
-        PrinterTable::Brascii => "BRASCII",
-        PrinterTable::Abicomp => "ABICOMP",
-        PrinterTable::Italic => "Itálico",
+        CharTable::Pc437 => "PC437",
+        CharTable::Pc850 => "PC850",
+        CharTable::Pc860 => "PC860",
+        CharTable::Brascii => "BRASCII",
+        CharTable::Abicomp => "ABICOMP",
+        CharTable::Italic => "Itálico",
     }
 }
 
@@ -203,18 +212,18 @@ pub fn setup_bar(ui: &mut Ui, vm: &PrinterViewModel) -> Option<PrintSetup> {
                 });
             ui.label("Tabela:");
             egui::ComboBox::from_id_salt("printer-table")
-                .selected_text(table_label(s.table))
+                .selected_text(table_label(s.options.table))
                 .show_ui(ui, |ui| {
-                    for t in PrinterTable::ALL {
-                        ui.selectable_value(&mut s.table, t, table_label(t));
+                    for t in ALL_TABLES {
+                        ui.selectable_value(&mut s.options.table, t, table_label(t));
                     }
                 });
             ui.label("País:");
             egui::ComboBox::from_id_salt("printer-country")
-                .selected_text(COUNTRIES[usize::from(s.country.min(12))])
+                .selected_text(COUNTRIES[usize::from(s.options.country.min(12))])
                 .show_ui(ui, |ui| {
                     for (i, name) in COUNTRIES.iter().enumerate() {
-                        ui.selectable_value(&mut s.country, i as u8, *name);
+                        ui.selectable_value(&mut s.options.country, i as u8, *name);
                     }
                 });
         });
@@ -494,7 +503,7 @@ fn archive_detail(
         ));
     }
     ui.separator();
-    ui.strong("Reimprimir com outro papel, fita ou cor (gera uma nova versão)");
+    ui.strong("Reimprimir com outro papel, fita, cor, tabela ou país (gera uma nova versão)");
     let base = vm.shown.options.paper.kind;
     let opts = ui_state.reprint.get_or_insert_with(|| {
         let mut o = vm.shown.options;
@@ -528,6 +537,23 @@ fn archive_detail(
                     ui.selectable_value(&mut opts.ink, i, ink_label(i));
                 }
             });
+        egui::ComboBox::from_id_salt("reprint-table")
+            .selected_text(format!("Tabela {}", table_label(opts.table)))
+            .show_ui(ui, |ui| {
+                for t in ALL_TABLES {
+                    ui.selectable_value(&mut opts.table, t, table_label(t));
+                }
+            });
+        egui::ComboBox::from_id_salt("reprint-country")
+            .selected_text(format!(
+                "País {}",
+                COUNTRIES[usize::from(opts.country.min(12))]
+            ))
+            .show_ui(ui, |ui| {
+                for (i, name) in COUNTRIES.iter().enumerate() {
+                    ui.selectable_value(&mut opts.country, i as u8, *name);
+                }
+            });
         let ok = !job.active && job.state == JobState::Finished;
         if button(
             ui,
@@ -543,7 +569,8 @@ fn archive_detail(
         }
     });
     ui.weak(
-        "A tabela de caracteres é a do próprio trabalho; reimprimir não altera os bytes gravados.",
+        "Tabela e país são as chaves da impressora para esta versão (o programa ainda pode trocá-los \
+         por comandos); reimprimir não altera os bytes gravados.",
     );
     ui.separator();
     delete_button(ui, job, ui_state);

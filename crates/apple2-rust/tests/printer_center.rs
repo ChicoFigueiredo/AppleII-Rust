@@ -253,30 +253,86 @@ fn no_virtual_printer_means_no_button() {
 }
 
 #[test]
-fn the_default_table_and_country_change_what_a_job_prints() {
-    use apple2_config::card::PrinterTable;
-    use apple2_rust_shell::printer_hub::{render_job, table_preamble};
-    assert!(table_preamble(PrinterTable::Pc437, 0).is_empty());
-    assert!(!table_preamble(PrinterTable::Brascii, 2).is_empty());
+fn the_job_table_and_country_change_what_a_job_prints() {
+    use apple2_printer::font::CharTable;
+    use apple2_printer::paper::RenderOptions;
+    use apple2_rust_shell::printer_hub::render_job;
     let dir = temp_dir("table");
     std::fs::create_dir_all(dir.join("j")).unwrap();
     std::fs::write(dir.join("j/raw.bin"), b"[#]{|}@\r\n").unwrap();
-    let text = |t, c| {
-        let d = render_job(&dir, "j", 9, Default::default(), (t, c)).unwrap();
+    let text = |table, country| {
+        let o = RenderOptions {
+            table,
+            country,
+            ..RenderOptions::default()
+        };
+        let d = render_job(&dir, "j", 9, o).unwrap();
         d.pages[0]
             .text
             .iter()
             .map(|r| r.text.clone())
             .collect::<String>()
     };
-    assert_ne!(text(PrinterTable::Pc437, 0), text(PrinterTable::Pc437, 2));
-    assert!(render_job(
-        &dir,
-        "../x",
-        1,
-        Default::default(),
-        (PrinterTable::Pc437, 0)
-    )
-    .is_err());
+    assert_ne!(text(CharTable::Pc437, 0), text(CharTable::Pc437, 2));
+    assert!(render_job(&dir, "../x", 1, Default::default()).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn settings_table_and_country_become_render_options_and_back() {
+    use apple2_config::card::PrinterTable;
+    use apple2_printer::font::CharTable;
+    use apple2_rust_shell::printer_hub::{render_options, store_setup};
+    let spec = PrinterSpec {
+        table: PrinterTable::Abicomp,
+        country: 5,
+        ..PrinterSpec::default()
+    };
+    let o = render_options(&spec);
+    assert_eq!((o.table, o.country), (CharTable::Abicomp, 5));
+    let mut back = PrinterSpec::default();
+    store_setup(
+        &mut back,
+        &apple2_rust_shell::printer_model::PrintSetup { options: o },
+    );
+    assert_eq!((back.table, back.country), (PrinterTable::Abicomp, 5));
+}
+
+#[test]
+fn an_old_job_keeps_the_table_it_was_printed_with() {
+    use apple2_config::card::PrinterTable;
+    use apple2_printer::font::CharTable;
+    use apple2_rust_shell::printer_model::PrintSetup;
+    let spec = PrinterSpec {
+        table: PrinterTable::Brascii,
+        country: 2,
+        ..PrinterSpec::default()
+    };
+    let (mut emu, mut hub, dir, _) = start("oldtable", spec);
+    print_hello(&emu);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        page_text(&hub).contains("OLA, IMPRESSORA")
+    }));
+    hub.handle(CenterEvent::FinishJob);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_none() && !hub.view_model().shown.loading
+    }));
+    let mut now = hub.view_model().setup;
+    now.options.table = CharTable::Pc850;
+    now.options.country = 0;
+    hub.handle(CenterEvent::SetNextSetup(PrintSetup {
+        options: now.options,
+    }));
+    hub.poll(Instant::now());
+    let vm = hub.view_model();
+    assert_eq!(vm.setup.options.table, CharTable::Pc850);
+    let job = &vm.jobs[0];
+    assert_eq!(job.versions[0].options.table, CharTable::Brascii);
+    assert_eq!(job.versions[0].options.country, 2);
+    assert_eq!(vm.shown.options.table, CharTable::Brascii);
+    emu.shutdown();
+    hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }

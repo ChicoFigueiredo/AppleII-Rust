@@ -1,6 +1,7 @@
 //! Papel and Fita (GLOSSARY): size, printable area and look. Only the PDF/preview look depends on
 //! the decoration; the dot positions depend only on size and margins (R01).
 
+use crate::font::CharTable;
 use crate::units;
 use serde::{Deserialize, Serialize};
 
@@ -81,4 +82,11 @@ pub struct RenderOptions {
     pub paper: Paper,
     pub ribbon: Ribbon,
     pub ink: InkColor,
+    /// Character table in slot 1 after power-on and after ESC @ (the printer's DIP switches).
+    /// Manifests written before this field existed read as the default (PC437).
+    #[serde(default)]
+    pub table: CharTable,
+    /// International set (ESC R, 0..=12) after power-on and after ESC @.
+    #[serde(default)]
+    pub country: u8,
 }

@@ -2,7 +2,6 @@
 //! no threads. [`crate::printer_hub`] fills the view model from the spool; [`crate::printer_window`]
 //! draws it and turns clicks into [`CenterEvent`]s.
 
-use apple2_config::card::PrinterTable;
 use apple2_printer::document::PageDocument;
 use apple2_printer::paper::{InkColor, PaperKind, RenderOptions, Ribbon};
 use std::sync::Arc;
@@ -88,12 +87,11 @@ pub struct JobEntry {
     pub exports: Vec<(u32, String)>,
 }
 
-/// Paper, ribbon, colour and table chosen for the next jobs.
+/// Paper, ribbon, colour, character table and international set chosen for the next jobs (all in
+/// the render options: the table and set stand for the printer's DIP switches).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PrintSetup {
     pub options: RenderOptions,
-    pub table: PrinterTable,
-    pub country: u8,
 }
 
 /// The pages shown in the preview.
