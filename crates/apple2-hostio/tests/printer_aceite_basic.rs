@@ -53,7 +53,7 @@ fn run_applesoft(transport: Transport) -> Rig {
 
 #[test]
 fn applesoft_listing_one_job_two_pages_pdf_and_goldens() {
-    let r = run_applesoft(Transport::SevenBitAppleWin);
+    let r = run_applesoft(Transport::Auto);
 
     // One job: Open, Bytes..., Close(Idle). Nothing else.
     let opens = r
@@ -127,8 +127,17 @@ fn applesoft_listing_one_job_two_pages_pdf_and_goldens() {
 }
 
 #[test]
+fn applesoft_seven_bit_fixed_matches_auto_for_firmware_output() {
+    // Through the card firmware, Auto clears bit 7 exactly like the fixed 7-bit Transport.
+    let auto = run_applesoft(Transport::Auto).raw();
+    let seven = run_applesoft(Transport::SevenBitAppleWin).raw();
+    assert_eq!(auto, seven);
+    assert!(auto.starts_with(&[0x1B, 0x40]));
+}
+
+#[test]
 fn applesoft_eight_bit_transport_keeps_bit_7_and_applesoft_sets_it_on_everything() {
-    // Limitation documented in docs/printer/README.md: Applesoft (like the monitor) emits every
+    // Why Auto is the default (docs/printer/README.md): with the fixed 8-bit Transport, Applesoft (like the monitor) emits every
     // character, controls included, with bit 7 set. In the 8-bit Transport that is what the
     // virtual printer receives, so ESC arrives as 0x9B and is not a command. Programs that
     // talk ESC/P (AppleWorks, Print Shop) send 7-bit data or choose the 7-bit Transport.
@@ -145,7 +154,7 @@ fn applesoft_eight_bit_transport_keeps_bit_7_and_applesoft_sets_it_on_everything
 
 #[test]
 fn integer_basic_list_goes_to_the_printer() {
-    let mut r = Rig::new(Model::Apple2, Transport::SevenBitAppleWin);
+    let mut r = Rig::new(Model::Apple2, Transport::Auto);
     r.type_line("E000G");
     r.type_line("10 PRINT \"OLA MUNDO\"");
     r.type_line("20 FOR I=1 TO 3: PRINT I: NEXT I");

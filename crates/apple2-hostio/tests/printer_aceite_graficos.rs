@@ -1,4 +1,4 @@
-//! Acceptance of the 8-bit Transport with ESC K bit-image. An Applesoft program loads a 14-byte
+//! Acceptance of the Transports with ESC K bit-image. An Applesoft program loads a 14-byte
 //! machine-code loop (`LDX #0 / LDA $0320,X / JSR $FDED / INX / CPX #n / BNE / RTS`) and the data
 //! `ESC K 8 0 <8 columns> CR LF`, then calls it with `PR#1` active, exactly like a driver would.
 //! With bit 7 kept the top pin of each column prints; the 7-bit Transport (the AppleWin Generic
@@ -13,17 +13,28 @@ use printer_aceite_common::*;
 
 const COLUMNS: [u8; 8] = [0xFF, 0x80, 0xAA, 0x55, 0x81, 0xFF, 0x01, 0x7F];
 
-fn run(transport: Transport) -> Rig {
+fn run(transport: Transport, direct: bool) -> Rig {
     let mut r = Rig::new(Model::Apple2eEnhanced, transport);
     // Loop: 14 bytes at $0300 (768); data at $0320 (800): ESC K nL nH, columns, CR LF.
-    r.type_line("10 DATA 162,0,189,32,3,32,237,253,232,224,14,208,245,96");
+    // Through the firmware: JSR $FDED (COUT). Direct: STA $C090 (the card's data port, slot 1).
+    let code = if direct {
+        "162,0,189,32,3,141,144,192,232,224,14,208,245,96"
+    } else {
+        "162,0,189,32,3,32,237,253,232,224,14,208,245,96"
+    };
+    r.type_line(&format!("10 DATA {code}"));
     r.type_line("20 FOR I=0 TO 13:READ A:POKE 768+I,A:NEXT");
     let data = "27,75,8,0,255,128,170,85,129,255,1,127,13,10";
     r.type_line(&format!("30 DATA {data}"));
     r.type_line("40 FOR I=0 TO 13:READ A:POKE 800+I,A:NEXT");
     // CTRL-I 255N turns the card firmware's line formatting off; without it the firmware pads
     // the stream with spaces to match the monitor cursor column ($24) and corrupts the graphics.
-    r.type_line("50 PR#1:PRINT CHR$(9);\"255N\";:CALL 768:PR#0");
+    if direct {
+        // A driver writing to the port does not go through the firmware: no PR#1, no Ctrl-I.
+        r.type_line("50 CALL 768");
+    } else {
+        r.type_line("50 PR#1:PRINT CHR$(9);\"255N\";:CALL 768:PR#0");
+    }
     r.type_line("RUN");
     r.run_until_closed(1500);
     r
@@ -37,9 +48,23 @@ fn dots_of(r: &Rig) -> Vec<(u32, u32)> {
 }
 
 #[test]
-fn eight_bit_transport_prints_the_top_pin_seven_bit_loses_it() {
-    let r8 = run(Transport::EightBit);
-    let r7 = run(Transport::SevenBitAppleWin);
+fn auto_direct_driver_keeps_bit_7_firmware_path_loses_it() {
+    // Auto: a driver writing straight to $C090 arrives whole (all 8 bits); the same bytes sent
+    // through the card firmware (COUT) have bit 7 cleared.
+    let r8 = run(Transport::Auto, true);
+    let r7 = run(Transport::Auto, false);
+    let fixed8 = run(Transport::EightBit, false);
+    let fixed7 = run(Transport::SevenBitAppleWin, true);
+    assert_eq!(
+        fixed8.raw()[..12],
+        r8.raw()[..12],
+        "8 bits fixo = Auto direto"
+    );
+    assert_eq!(
+        fixed7.raw()[..12],
+        r7.raw()[..12],
+        "7 bits fixo = Auto via firmware"
+    );
 
     let mut want8 = vec![0x1B, 0x4B, 0x08, 0x00];
     want8.extend_from_slice(&COLUMNS);

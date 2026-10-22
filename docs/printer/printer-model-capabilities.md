@@ -13,8 +13,8 @@ Um **Perfil de impressora** decide quais comandos existem e como cada byte vira 
 
 | Perfil | Carta | Transporte 8 bits | Transporte 7 bits |
 |---|---|---|---|
-| LX-310 | Generic Printer paralela | Sim (padrão da virtual): bit 7 é a agulha de cima nos gráficos | Sim (regra do AppleWin) |
-| FX-80 / MX-80 | Generic Printer paralela | Previsto (mesmo caminho) | Previsto |
+| LX-310 | Generic Printer paralela | Sim (fixo) e **Automático (padrão)**: firmware da Carta com bit 7 apagado, escrita direta na porta com 8 bits; o bit 7 é a agulha de cima nos gráficos | Sim (fixo, regra do AppleWin) |
+| FX-80 / MX-80 | Generic Printer paralela | Previsto (mesmo caminho, incluindo Automático) | Previsto |
 | ImageWriter II | Super Serial Card | Previsto (fluxo serial 8N1) | Não se aplica |
 
 O Printer.txt é sempre 7 bits e filtrado, qualquer que seja o Perfil. O Transporte escolhido fica gravado no manifesto de cada Trabalho.

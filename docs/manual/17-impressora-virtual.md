@@ -29,12 +29,13 @@ Os programas (AppleWorks, Print Shop, dBase II no CP/M) escolhem a impressora e 
 - Fechar a janela não perde nada.
 - Sequências que a impressora não entende aparecem como diagnósticos, nunca em silêncio.
 
-## 8 bits ou 7 bits
+## Transporte dos bytes
 
-- **8 bits** (padrão) entrega o byte inteiro e é necessário para os gráficos (a agulha de cima de cada coluna é o bit 7).
-- **7 bits (AppleWin)** apaga o bit 7, como o AppleWin.
+- **Automático** (padrão): o que passa pelo firmware da Carta (`PR#1`, `PRINT`, `LIST`) perde o bit 7, e o que um programa escreve direto na porta da Carta chega inteiro. Serve para BASIC e para os gráficos do Print Shop.
+- **8 bits**: sempre o byte inteiro. Estraga o texto do BASIC (o BASIC liga o bit 7 de tudo).
+- **7 bits (AppleWin)**: sempre sem o bit 7. Use se um driver direto mandar texto com o bit 7 ligado e sair com símbolos.
 
-Para **listagens e programas BASIC**, escolha **7 bits**: o BASIC liga o bit 7 de todo caractere, e em 8 bits o texto sai como símbolos. Para **gráficos** (Print Shop), use 8 bits. O `Printer.txt` é sempre de 7 bits.
+O `Printer.txt` é sempre de 7 bits.
 
 ## Papel, Fita e PDF
 

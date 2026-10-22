@@ -4,7 +4,7 @@
 
 ### Adicionado
 - **Impressora virtual Epson LX-310** (ADR 0008; guia em [docs/printer/README.md](docs/printer/README.md)): a Generic Printer do slot 1 entrega os bytes a uma impressora de 9 agulhas emulada (ESC/P, Draft e NLQ, gráficos de bit-image, tabelas PC437/PC850/PC860/BRASCII/ABICOMP). A **Central de Impressoras** abre sozinha no primeiro byte, mostra as Páginas ao vivo em papel contínuo zebrado (ou A4/Carta), com Fita nova ou usada, e **Salvar PDF** grava pontos vetoriais com camada de texto invisível e metadados. Cada Trabalho de impressão fica no **Arquivo de impressões** permanente (`apple2-rust/impressoes`), com os bytes brutos e reimpressão em versões; nada é apagado sozinho.
-- Transporte de 8 bits na impressora virtual (necessário para gráficos ESC K/L), com opção de 7 bits; o `Printer.txt` continua como no AppleWin (7 bits, filtrado). Destino configurável: virtual, arquivo ou ambos (padrão).
+- **Transporte Automático** (padrão) na impressora virtual: o que passa pelo firmware da Carta (`PR#1`, `PRINT`, `LIST`) perde o bit 7 e o que um programa escreve direto na porta chega com 8 bits (necessário para gráficos ESC K/L), com opções fixas de 8 e de 7 bits; o `Printer.txt` continua como no AppleWin (7 bits, filtrado). Destino configurável: virtual, arquivo ou ambos (padrão).
 - Testes de aceite sem interface gráfica (`crates/apple2-hostio/tests/printer_aceite_*.rs`) e roteiro com AppleWorks, Print Shop e dBase II ([docs/printer/aceite.md](docs/printer/aceite.md)). Capítulo "Impressora virtual" no manual (F1).
 
 ### Corrigido

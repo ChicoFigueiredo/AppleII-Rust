@@ -26,7 +26,7 @@ Pela linha de comando ou pelo `settings.toml` também funciona; o slot 1 é o co
 |---|---|
 | **Printer dump filename** | Arquivo de texto do AppleWin (`Printer.txt`). |
 | **Send output to** | **Virtual printer + file** (padrão), **File only** (como o AppleWin) ou **Virtual printer only**. |
-| **Transport** | **8 bits** (padrão) ou **7 bits (AppleWin)**; veja a seção 4. |
+| **Transport** | **Automático** (padrão), **8 bits** ou **7 bits (AppleWin)**; veja a seção 4. |
 | **Open the printer window at the first byte printed** | A Central abre sozinha no primeiro byte, sem roubar o foco do Apple II. Desligue se preferir abri-la pelo botão. |
 | Opções avançadas | Conversão para clones, filtro de não imprimíveis, tempo ocioso: valem **só para o Printer.txt**. |
 
@@ -48,14 +48,15 @@ O firmware da Carta (Apple Parallel Interface) formata a linha: se o programa n�
 
 Um **Trabalho de impressão** começa no primeiro byte e termina quando passam 10 "segundos" da Carta sem imprimir (regra do AppleWin), no reset, ao carregar um estado, ao retirar a Carta ou quando você o conclui na Central. Cada Trabalho vira uma entrada própria no Arquivo. Um **FF** (form feed) só muda de Página; não separa Trabalhos.
 
-## 4. 8 bits ou 7 bits
+## 4. Transporte: Automático, 8 bits ou 7 bits
 
-O Apple II costuma enviar os caracteres com o **bit 7 ligado**. O AppleWin apaga esse bit na Carta (7 bits); a Impressora virtual pode receber o byte inteiro (8 bits), o que é necessário para os gráficos ESC K/L: a **agulha de cima** de cada coluna é o bit 7.
+O Apple II costuma enviar os caracteres com o **bit 7 ligado**. O AppleWin apaga esse bit na Carta (7 bits); os gráficos ESC K/L, porém, precisam do byte inteiro: a **agulha de cima** de cada coluna é o bit 7.
 
-- **8 bits (padrão)**: preserva os gráficos. Mas programas que mandam **texto e comandos com o bit 7 ligado** (o Applesoft `PRINT`, o `LIST` do Integer BASIC, o monitor) chegam à impressora como `0xC8` em vez de `H` e `0x9B` em vez de ESC: o texto sai como símbolos da tabela alta e os comandos ESC/P não funcionam.
-- **7 bits (AppleWin)**: texto e comandos de BASIC saem certos; gráficos perdem a agulha de cima.
+- **Automático (padrão)**: o que passa pelo **firmware da Carta** (`PR#1`, `PRINT`, `LIST`, o monitor) tem o bit 7 apagado; o que um programa escreve **direto na porta** da Carta ($C090 no slot 1) chega com os 8 bits. É o que se quer em quase todos os casos: o BASIC imprime texto e comandos ESC certos, e drivers de impressora de programas como o Print Shop mandam gráficos inteiros.
+- **8 bits fixo**: sempre o byte inteiro. Estraga o BASIC: o Applesoft liga o bit 7 de todo caractere, então ESC chega como `0x9B` e o texto como símbolos. Use só se um programa que passa pelo firmware precisar mesmo de bit 7 (raro).
+- **7 bits (AppleWin) fixo**: sempre sem o bit 7, como o AppleWin. Use se um driver que escreve direto na porta mandar texto com o bit 7 ligado (os caracteres saem como símbolos) e você não precisa de gráficos.
 
-Regra prática: **listagens e programas BASIC: use 7 bits.** Programas que têm driver de impressora próprio e mandam gráficos (Print Shop, AppleWorks com gráficos): 8 bits. Na dúvida, imprima de novo com a outra opção; o Arquivo guarda os bytes e o Transporte usado de cada Trabalho. Os testes de aceite automáticos (`crates/apple2-hostio/tests/printer_aceite_*.rs`) provam os dois lados.
+Se uma impressão sair estranha, mude o Transporte e imprima de novo: o Arquivo guarda os bytes e o Transporte de cada Trabalho. O `Printer.txt` é sempre 7 bits. Os testes de aceite (`crates/apple2-hostio/tests/printer_aceite_*.rs`) provam os três modos.
 
 ## 5. A Central de Impressoras
 

@@ -13,9 +13,9 @@ cargo test -p apple2-hostio --test printer_aceite_basic --test printer_aceite_gr
 | Teste | O que prova |
 |---|---|
 | `printer_aceite_basic::applesoft_listing_one_job_two_pages_pdf_and_goldens` | Applesoft com `PR#1`, ESC E (negrito), ESC - (sublinhado), ESC M (12 cpi), SI (condensado), ESC x 1 (NLQ), FF e `PR#0`: um único Trabalho, fechado por inatividade (a Carta recebe `update`), 2 Páginas, SHA-256 do `raw.bin` igual ao do fluxo, texto invisível com todas as linhas, zero diagnósticos, PDF de 2 Páginas com estrutura válida, golden do documento lógico |
-| `printer_aceite_basic::applesoft_eight_bit_transport_...` | Documenta o limite do Applesoft em 8 bits (tudo chega com o bit 7 ligado) |
+| `printer_aceite_basic::applesoft_seven_bit_fixed_...` e `..._eight_bit_transport_...` | 7 bits fixo = Automático via firmware; 8 bits fixo estraga o BASIC (tudo chega com o bit 7 ligado) |
 | `printer_aceite_basic::integer_basic_list_...` | `LIST` do Integer BASIC numa Apple ][ vira Página, texto e PDF |
-| `printer_aceite_graficos::eight_bit_transport_prints_the_top_pin_seven_bit_loses_it` | ESC K com bytes de 0x80 a 0xFF: em 8 bits cada coluna sai inteira; em 7 bits cinco pontos da agulha de cima somem (uma agulha, 30 unidades, de diferença no topo) |
+| `printer_aceite_graficos::auto_direct_driver_keeps_bit_7_firmware_path_loses_it` | ESC K com bytes de 0x80 a 0xFF: driver direto em Automático sai inteiro; pelo firmware cinco pontos da agulha de cima somem (uma agulha, 30 unidades, de diferença no topo) |
 | `printer_aceite_apps::*` | AppleWorks, Print Shop e dBase II: **BLOCKED** sem disco (veja a seção 2) |
 
 Os fixtures são gerados pelo projeto, sem software de terceiros, em `tests/fixtures/printer/`:
@@ -25,9 +25,14 @@ Os fixtures são gerados pelo projeto, sem software de terceiros, em `tests/fixt
 
 Se uma mudança legítima alterar um golden, regenere com `UPDATE_GOLDEN=1 cargo test -p apple2-hostio --test printer_aceite_basic --test printer_aceite_graficos` e confira o diff antes de aceitar.
 
-### Achado: BASIC e o Transporte de 8 bits
+### Transporte Automático
 
-O Applesoft liga o bit 7 de **todo** caractere que manda para `PR#1`, controles inclusos (ESC chega como `0x9B`). Em 8 bits a LX-310 não reconhece o comando e imprime símbolos; por isso os testes de listagem BASIC usam o Transporte de **7 bits**, e os gráficos usam uma rotina em linguagem de máquina (como um driver faz) para controlar o bit 7. Também é preciso `PRINT CHR$(9);"255N"` para o firmware da Carta não inserir espaços. Detalhes e recomendação ao usuário em [README.md](README.md), seção 4.
+O Applesoft liga o bit 7 de **todo** caractere que manda para `PR#1`, controles inclusos (ESC chega como `0x9B` no Transporte de 8 bits fixo). Por isso o padrão é o Transporte **Automático** (ADR 0008): firmware da Carta (`PR#1`, `PRINT`, `LIST`) tem o bit 7 apagado, e escrita direta na porta (`STA $C090`) chega inteira. Os testes cobrem:
+
+- BASIC (Applesoft e Integer) em Automático: ESC e texto corretos, igual ao 7 bits fixo;
+- 8 bits fixo estraga o BASIC (teste que documenta ESC = `0x9B`);
+- ESC K por uma rotina em linguagem de máquina que escreve direto em `$C090`: em Automático chega inteira (agulha de cima impressa), sem `PR#1` e sem Ctrl-I;
+- a mesma faixa pelo firmware (`JSR $FDED`): perde o bit 7, e é preciso `PRINT CHR$(9);"255N"` para o firmware não inserir espaços.
 
 ## 2. Roteiro manual com programas da época
 
@@ -52,14 +57,14 @@ O Applesoft liga o bit 7 de **todo** caractere que manda para `PR#1`, controles 
 2. No menu principal escolha **Other Activities**, depois **Specify information about your printer(s)** e acrescente uma impressora. Escolha **Epson** (FX-80 ou o modelo mais próximo da lista); em *interface*, **Apple Parallel Interface Card** (ou "Other", se o seu disco não listar), **slot 1**. A quantidade de colunas e o *line feed after carriage return* são perguntados: responda **No** para o LF (o firmware da Carta já acrescenta o LF; veja o resultado e inverta se as linhas se sobrepuserem).
 3. Crie um documento de processador de texto com pelo menos 70 linhas (para ter 2 Páginas), usando negrito e sublinhado (pelos comandos de formatação do próprio programa).
 4. Imprima: **Print** (Open-Apple P), destino **Printer**.
-5. Resultado esperado: um Trabalho com 2 ou mais Páginas, texto legível, negrito mais escuro, sublinhado contínuo, quebra de Página no ponto certo. Transporte **7 bits** costuma ser o certo para texto.
+5. Resultado esperado: um Trabalho com 2 ou mais Páginas, texto legível, negrito mais escuro, sublinhado contínuo, quebra de Página no ponto certo. O Transporte **Automático** deve servir; se acentos saírem errados, tente 7 bits fixo.
 
 ### Print Shop
 
 1. Inicie o Print Shop (disco do programa; faz boot no slot 6).
 2. Na primeira execução ele pede a configuração: **Graphics/Printer setup**. Em *Printer*, escolha **Epson FX** (famílias FX/MX/RX); em *Interface*, **Apple Parallel** (Apple Parallel Interface Card ou o item "Grappler" se o disco só tiver esse), **slot 1**.
 3. Crie um cartão simples (**Greeting Card**) ou uma faixa (**Banner**) com um gráfico do disco e um texto, e imprima.
-4. Resultado esperado: gráficos de bit-image (ESC L ou ESC K), com a imagem reconhecível e proporção coerente; sem faixas em branco entre as linhas de gráfico. Transporte **8 bits**: com 7 bits o desenho perde a agulha de cima e fica "esburacado". Repita com os dois e compare.
+4. Resultado esperado: gráficos de bit-image (ESC L ou ESC K), com a imagem reconhecível e proporção coerente; sem faixas em branco entre as linhas de gráfico. Transporte **Automático** (o driver do Print Shop escreve direto na porta, então os 8 bits chegam): com 7 bits fixo o desenho perde a agulha de cima e fica "esburacado". Repita com os dois e compare.
 
 ### dBase II (CP/M, Z80 SoftCard)
 
