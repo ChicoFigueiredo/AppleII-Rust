@@ -8,6 +8,25 @@ use apple2_printer::lx310::{Lx310, Lx310Config};
 use apple2_printer::paper::RenderOptions;
 use apple2_printer::pdf::{self, PageSelection, PdfMeta};
 
+/// A three-row frame (`[top-left, horizontal, top-right, vertical, bottom-left, bottom-right]`)
+/// around `text`, as raw PC437 bytes with CR LF at the end of every row.
+fn frame(c: [u8; 6], text: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let edge = |l: u8, r: u8, out: &mut Vec<u8>| {
+        out.push(l);
+        out.extend(std::iter::repeat_n(c[1], text.len()));
+        out.extend_from_slice(&[r, b'\r', b'\n']);
+    };
+    edge(c[0], c[2], &mut out);
+    for _ in 0..2 {
+        out.push(c[3]);
+        out.extend_from_slice(text);
+        out.extend_from_slice(&[c[3], b'\r', b'\n']);
+    }
+    edge(c[4], c[5], &mut out);
+    out
+}
+
 fn demo() -> Vec<u8> {
     let mut b = Vec::new();
     b.extend_from_slice(b"\x1b@");
@@ -24,6 +43,23 @@ fn demo() -> Vec<u8> {
         b"\x0fCondensado: The quick brown fox jumps over the lazy dog 0123456789.\x12\r\n",
     );
     b.extend_from_slice(b"\x1bx1NLQ: Near Letter Quality - The quick brown fox.\x1bx0\r\n\r\n");
+    // Frame in PC437 (single and double lines): vertical strokes continue between the lines.
+    b.extend_from_slice(b"\x1bt\x01");
+    b.extend(frame(
+        [0xDA, 0xC4, 0xBF, 0xB3, 0xC0, 0xD9],
+        b" Moldura PC437 ",
+    ));
+    b.extend(frame(
+        [0xC9, 0xCD, 0xBB, 0xBA, 0xC8, 0xBC],
+        b" Linha dupla   ",
+    ));
+    // PC850 assigned to slot 1 (ESC ( t), then selected (ESC t 1): accents in Portuguese.
+    b.extend_from_slice(b"\x1b(t\x03\x00\x01\x03\x00\x1bt\x01");
+    b.extend_from_slice(
+        b"\r\nPC850: A\x87\xC6o, cora\x87\xC6o, \x93nibus, \xA1ndio, \x82 \xA3til, \xA8Quem? 1\xA6 2\xA7 25\xF8C \xF1 \xFD \xF6 \xFC \x9E \xE6 \xF5\r\n",
+    );
+    // Double width (ESC W 1) line.
+    b.extend_from_slice(b"\x1bW1Largura dupla\x1bW0\r\n\r\n");
     // A bit-image band: a sine-like wave in 8-pin 120 dpi graphics (ESC L).
     let cols = 480u16;
     b.extend_from_slice(&[0x1b, b'L', (cols & 0xff) as u8, (cols >> 8) as u8]);

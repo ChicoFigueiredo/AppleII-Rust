@@ -23,6 +23,7 @@ use crate::escp::{Parser, ParserLimits, DIAG_BYTES};
 use crate::font::{self, CharTable, Glyph, Quality};
 use crate::paper::{Paper, RenderOptions};
 use crate::units;
+use std::collections::HashMap;
 
 /// Printable width of the LX-310: 8" (80 columns at 10 cpi), manual "Recommended printable area".
 pub const PRINTABLE_WIDTH: u32 = 17_280;
@@ -47,6 +48,8 @@ pub const DEFAULT_LINE_SPACING: u32 = 360;
 const MAX_PAGE_LENGTH: u32 = 22 * units::PER_INCH;
 /// Emphasis (bold) prints the second pass 1/240" to the right.
 const BOLD_SHIFT: u32 = 9;
+/// Largest line distance (1/4") over which frame strokes are continued between lines.
+const MAX_BRIDGE_GAP: u32 = 540;
 /// Double strike prints the second pass 1/216" lower.
 const DOUBLE_STRIKE_SHIFT: u32 = 10;
 
@@ -148,15 +151,20 @@ impl Format {
         }
     }
 
-    fn advance(&self) -> u32 {
-        let base = match (self.pitch, self.condensed) {
+    /// Width of one character cell at the active pitch, before double width and ESC SP spacing.
+    fn cell_width(&self) -> u32 {
+        match (self.pitch, self.condensed) {
             (Pitch::Cpi10, false) => 216,
             (Pitch::Cpi10, true) => 126,
             (Pitch::Cpi12, false) => 180,
             (Pitch::Cpi12, true) => 108,
             // The manual gives no condensed 15 cpi; condensed is ignored there.
             (Pitch::Cpi15, _) => 144,
-        };
+        }
+    }
+
+    fn advance(&self) -> u32 {
+        let base = self.cell_width();
         let mult = if self.double_width || self.double_width_line {
             2
         } else {
@@ -179,6 +187,16 @@ struct LastRun {
     advance: u32,
 }
 
+/// A glyph printed on a recent line, kept so a frame character below it can continue its vertical
+/// strokes through the gap between the lines (`font::line_bridge`).
+struct LineGlyph {
+    page: usize,
+    y: u32,
+    glyph: Glyph,
+    cell: u32,
+    mult: u32,
+}
+
 /// The Epson LX-310 virtual printer engine.
 pub struct Lx310 {
     config: Lx310Config,
@@ -199,6 +217,9 @@ pub struct Lx310 {
     diag_overflow: bool,
     /// Dots of the line in progress that fell below a continuous form: they land on the next page.
     spill: Vec<Dot>,
+    /// Glyphs of the line in progress and of the line above, by `x_pos` (frame continuity).
+    line_cur: HashMap<u32, LineGlyph>,
+    line_prev: HashMap<u32, LineGlyph>,
 }
 
 impl Default for Lx310 {
@@ -259,6 +280,8 @@ impl Lx310 {
             limit_notes: 0,
             diag_overflow: false,
             spill: Vec::new(),
+            line_cur: HashMap::new(),
+            line_prev: HashMap::new(),
         }
     }
 
@@ -478,12 +501,7 @@ impl Lx310 {
         } else {
             Quality::Draft
         };
-        let single = self.fmt.advance()
-            / if self.fmt.double_width || self.fmt.double_width_line {
-                2
-            } else {
-                1
-            };
+        let single = self.fmt.cell_width();
         let ph = || Self::placeholder(single / DRAFT_COLUMN);
         match self.config.glyphs {
             Glyphs::PlaceholderOnly => Some(ph()),
@@ -534,14 +552,20 @@ impl Lx310 {
         let mut dropped = 0u32;
         if code != b' ' {
             if let Some(g) = self.glyph_for(code, offset) {
-                let (col_unit, ru) = match g.quality {
-                    Quality::Draft => (DRAFT_COLUMN, PIN_PITCH),
-                    Quality::Nlq => (NLQ_COLUMN, NLQ_ROW),
+                let ru = match g.quality {
+                    Quality::Draft => PIN_PITCH,
+                    Quality::Nlq => NLQ_ROW,
                 };
+                // The glyph matrix is the same at every pitch: the dot columns are spaced
+                // proportionally to the cell width (10 cpi: 1/120" per Draft column; 17 cpi:
+                // 7/12 of that), so a narrower cell never makes a glyph invade its neighbour.
+                let cell = self.fmt.cell_width();
+                let ncols = font::cell_columns(g.quality) as u32;
+                let bold_shift = BOLD_SHIFT * cell / 216;
                 // Passes: emphasis shifts right, double strike shifts down (not in NLQ).
                 let mut passes: Vec<(u32, u32)> = vec![(0, 0)];
                 if self.fmt.bold {
-                    passes.push((BOLD_SHIFT, 0));
+                    passes.push((bold_shift, 0));
                 }
                 if self.fmt.double_strike && g.quality == Quality::Draft {
                     let again: Vec<(u32, u32)> = passes
@@ -549,6 +573,9 @@ impl Lx310 {
                         .map(|&(x, y)| (x, y + DOUBLE_STRIKE_SHIFT))
                         .collect();
                     passes.extend(again);
+                }
+                if !self.fmt.italic {
+                    self.bridge_frame(&g, cell, mult, ru, &mut dots, &mut dropped);
                 }
                 for &(px, py) in &passes {
                     for (ci, &col) in g.columns.iter().enumerate() {
@@ -562,8 +589,14 @@ impl Lx310 {
                                 0
                             };
                             // Double width: every matrix column becomes `mult` adjacent columns.
-                            for k in 0..mult {
-                                let dx = (ci as u32 * mult + k) * col_unit + px + shear;
+                            // Double width also fills the empty matrix column between two dots
+                            // of the same row (a stroke drawn as `#.#.#`), so horizontal strokes
+                            // stay continuous instead of breaking into dashes.
+                            let fill = mult > 1
+                                && g.columns.get(ci + 2).is_some_and(|&n| n & (1 << r) != 0);
+                            let span = if fill { 2 * mult } else { mult };
+                            for k in 0..span {
+                                let dx = (ci as u32 * mult + k) * cell / ncols + px + shear;
                                 self.dot(
                                     i64::from(dx),
                                     i64::from(r * ru + py),
@@ -580,7 +613,7 @@ impl Lx310 {
             // Pin 9 across the whole cell, following the active passes.
             let mut passes: Vec<(u32, u32)> = vec![(0, 0)];
             if self.fmt.bold {
-                passes.push((BOLD_SHIFT, 0));
+                passes.push((BOLD_SHIFT * self.fmt.cell_width() / 216, 0));
             }
             if self.fmt.double_strike && !self.fmt.nlq {
                 let again: Vec<(u32, u32)> = passes
@@ -610,6 +643,71 @@ impl Lx310 {
             self.add_text(c, adv, TEXT_BASELINE, offset);
         }
         self.x_pos = self.x_pos.saturating_add(adv);
+    }
+
+    /// Remembers `g` (printed now at `x_pos`) and, when the glyph printed on the line above at the
+    /// same position leaves a vertical stroke ending at its last pin row while this one starts at
+    /// its first, continues the stroke through the gap between the lines (one dot per pin row, as
+    /// the real printer's frame looks at 1/6" line pitch with the pins' ink spread).
+    fn bridge_frame(
+        &mut self,
+        g: &Glyph,
+        cell: u32,
+        mult: u32,
+        ru: u32,
+        dots: &mut Vec<Dot>,
+        dropped: &mut u32,
+    ) {
+        let key = self.x_pos;
+        let page = self.page_no;
+        // Rotate the line maps when the print position moved to another line.
+        let moved = self.line_cur.values().next().map(|e| (e.page, e.y));
+        if let Some((pg, y)) = moved {
+            if pg != page || y > self.y_pos {
+                self.line_cur.clear();
+                self.line_prev.clear();
+            } else if y < self.y_pos {
+                self.line_prev = std::mem::take(&mut self.line_cur);
+            }
+        }
+        if let Some(up) = self.line_prev.get(&key) {
+            let same = up.page == page
+                && up.cell == cell
+                && up.mult == mult
+                && up.glyph.quality == g.quality
+                && up.glyph.columns.len() == g.columns.len();
+            let last_row = font::cell_rows(g.quality) as u32 - 1;
+            let dist = self.y_pos.saturating_sub(up.y);
+            if same && dist > last_row * ru && dist <= MAX_BRIDGE_GAP {
+                let ncols = font::cell_columns(g.quality) as u32;
+                let bridge = font::line_bridge(&up.glyph, g);
+                let mut gap_y = last_row * ru + ru;
+                while gap_y + ru <= dist {
+                    for (ci, _) in bridge.iter().enumerate().filter(|(_, &b)| b) {
+                        for k in 0..mult {
+                            let dx = (ci as u32 * mult + k) * cell / ncols;
+                            self.dot(
+                                i64::from(dx),
+                                i64::from(gap_y) - i64::from(dist),
+                                dots,
+                                dropped,
+                            );
+                        }
+                    }
+                    gap_y += ru;
+                }
+            }
+        }
+        self.line_cur.insert(
+            key,
+            LineGlyph {
+                page,
+                y: self.y_pos,
+                glyph: g.clone(),
+                cell,
+                mult,
+            },
+        );
     }
 
     // ---- graphics --------------------------------------------------------------------------
@@ -912,6 +1010,8 @@ impl PrinterEngine for Lx310 {
         self.limit_notes = 0;
         self.diag_overflow = false;
         self.spill.clear();
+        self.line_cur.clear();
+        self.line_prev.clear();
     }
 
     fn feed(&mut self, offset: u64, data: &[u8]) {

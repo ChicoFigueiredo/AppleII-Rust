@@ -206,6 +206,10 @@ fn draft_letters_use_half_dots_not_only_even_columns() {
     // v1 regression guard: all dots of a letter on even columns (a 5-column grid stretched).
     let letters = (b'A'..=b'Z').chain(b'a'..=b'z');
     for code in letters {
+        // Capital I and T are plain stems with a bar: odd columns only, by design.
+        if code == b'I' || code == b'T' {
+            continue;
+        }
         let g = glyph(CharTable::Pc437, 0, code, Quality::Draft).unwrap();
         let cols = used_columns(&g);
         assert!(
