@@ -246,7 +246,7 @@ fn two_cards_printing_alternately_never_mix_their_jobs() {
     }
 
     // Archive level: whatever the spool keeps for a job comes from a single origin.
-    let archive = Archive::open(&dir.join("archive")).unwrap();
+    let archive = Archive::open(dir.join("archive")).unwrap();
     let mut spool = Spool::new(
         archive,
         Box::new(|| Box::new(Lx310::new(Lx310Config::default()))),
