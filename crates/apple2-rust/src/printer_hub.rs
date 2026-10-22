@@ -46,6 +46,8 @@ pub const POLL_PERIOD: Duration = Duration::from_millis(33);
 /// How long the card has to answer a close request before the spool closes the job itself.
 pub const CLOSE_FALLBACK: Duration = Duration::from_millis(1500);
 const MAX_MESSAGES: usize = 8;
+/// Largest raw job "Salvar RAW" copies (it is held in memory while the file is written).
+pub const MAX_RAW_COPY: u64 = 512 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------------------------
 // Settings <-> printer crate mapping
@@ -1008,6 +1010,13 @@ impl PrinterHub {
     /// Saves a PDF of `req` to `path` on a worker thread. Title and note go to the manifest too.
     pub fn export_pdf(&mut self, req: PdfRequest, path: PathBuf) {
         let manifest = self.job_summary(&req.job).cloned();
+        if let Some(why) = manifest.as_ref().and_then(|m| m.damaged.as_ref()) {
+            self.message(
+                format!("Falha ao salvar o PDF: o trabalho está danificado ({why})"),
+                true,
+            );
+            return;
+        }
         let current_title = self
             .vm
             .jobs
@@ -1110,6 +1119,17 @@ impl PrinterHub {
     /// Copies the job's raw printer bytes to `path` (worker thread).
     pub fn save_raw(&mut self, job: &str, path: PathBuf) {
         if !safe_id(job) {
+            self.message(
+                format!("Falha ao salvar os bytes brutos: identificador de trabalho inválido: {job}"),
+                true,
+            );
+            return;
+        }
+        if let Some(why) = self.job_summary(job).and_then(|m| m.damaged.clone()) {
+            self.message(
+                format!("Falha ao salvar os bytes brutos: o trabalho está danificado ({why})"),
+                true,
+            );
             return;
         }
         let total = self
@@ -1132,6 +1152,15 @@ impl PrinterHub {
                 let result = (|| -> Result<u64, String> {
                     let f =
                         std::fs::File::open(&src).map_err(|e| format!("{}: {e}", src.display()))?;
+                    // The copy is built in memory: refuse a raw file no real job reaches.
+                    let size = f.metadata().map_or(0, |m| m.len().min(total));
+                    if size > MAX_RAW_COPY {
+                        return Err(format!(
+                            "{}: {size} bytes passam do limite de {} MiB para cópia",
+                            src.display(),
+                            MAX_RAW_COPY / (1024 * 1024)
+                        ));
+                    }
                     let mut buf = Vec::new();
                     f.take(total)
                         .read_to_end(&mut buf)
