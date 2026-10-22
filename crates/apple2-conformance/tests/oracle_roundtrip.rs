@@ -226,6 +226,10 @@ fn gh413_ramworks_with_0x7f_banks_matches_the_oracle() {
 /// file with bytes that are not UTF-8 is refused by the oracle (libyaml) and by the port.
 #[test]
 fn gh838_bom_and_invalid_utf8_agree_with_the_oracle() {
+    if !oracle_available() {
+        println!("BLOCKED: oráculo não compilado");
+        return;
+    }
     let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
     install_probe(&mut m);
     m.run_cycles(5_000);

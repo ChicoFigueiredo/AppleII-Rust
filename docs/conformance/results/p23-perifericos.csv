@@ -53,7 +53,7 @@ upstream_id,estado_verificacao,teste,evidencia,tipo_oraculo
 1062,NOT_APPLICABLE,,"perguntas sobre erratas do W5100 (buffer de TX, ARP, SPI) sem defeito reportado; o AppleWin a8f0d1d usa o ARP do sistema operacional e o port faz o mesmo (uthernet2.rs)",
 1075,PASS,crates/apple2-hostio/tests/audit_perifericos.rs::gh1075_ssc_expansion_rom_is_released_only_by_cfff,"issue aberta no AppleWin: a ROM de expansao da SSC em $C800 so some com acesso a $CFFF (Memory.cpp:1013), nao com $CF00; o port repete",cpp-transcrito
 1080,PASS,crates/apple2-savestate/tests/audit_perifericos.rs::gh1080_phasor_and_mouse_coexist_and_survive_a_state_round_trip,Phasor no slot 4 e mouse no slot 5 na mesma maquina e no arquivo de estado,regressao
-1095,NOT_APPLICABLE,,"WSAECONNRESET do Winsock (filtro TDI do Windows 7/2008 R2 segundo a analise da issue); sem equivalente no soquete do port, que usa std::net",
+1095,NOT_APPLICABLE,,"WSAECONNRESET do Winsock no TCP (filtro TDI do Windows 7/2008 R2 segundo a analise da issue); o port tambem usa Winsock via std::net no Windows e fecha o soquete TCP como o AppleWin; o defeito e do sistema, nao do emulador (no UDP o port ignora o WSAECONNRESET, Rust #82)",
 1113,PASS,crates/apple2-hostio/tests/audit_perifericos.rs::gh1113_uthernet2_registers_repeat_every_four_addresses,"os 4 registradores do W5100 repetem em todo o DEVICE SELECT (U2_C0X_MASK 0x03, W5100.h:6; IO_C0, Uthernet2.cpp:1419)",cpp-transcrito
 1114,BLOCKED,,ADTpro com par de portas COM virtuais (com0com) no Windows: software de terceiros e driver do Windows; mesmo motivo do #707,
 1183,PASS,tests/conformance/cases/audio-phasor-two-ay.toml,"Phasor em modo Echo+ ($C0C7, ORB bits 4:3 escolhem os AY): 76 eventos 6522/AY identicos ao AppleWin, ciclo incluido",executavel
