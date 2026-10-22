@@ -163,17 +163,22 @@ impl VideoRenderer {
 impl FrameSource for VideoRenderer {
     fn run_frame(&mut self, m: &mut Machine) -> u64 {
         let slot = vidhd_slot(m);
-        if slot.is_none() {
-            return self.renderer.run_frame(m);
-        }
-        self.renderer.resync(m.cycles_in_frame());
-        let target = m.frames() + 1;
-        let mut done = 0u64;
-        while m.frames() < target {
-            let c = m.step();
-            done += u64::from(c);
-            self.feed(m, slot, c);
-        }
+        let done = if slot.is_none() {
+            self.renderer.run_frame(m)
+        } else {
+            self.renderer.resync(m.cycles_in_frame());
+            let target = m.frames() + 1;
+            let mut done = 0u64;
+            while m.frames() < target {
+                let c = m.step();
+                done += u64::from(c);
+                self.feed(m, slot, c);
+            }
+            done
+        };
+        // The renderer steps the machine itself, bypassing `Machine::run_frame`: tell the cards how
+        // many cycles ran (AppleWin's `CardManager::Update`; SSC, Uthernet, printer idle limit).
+        m.update_cards(done);
         done
     }
     fn step(&mut self, m: &mut Machine) -> u32 {

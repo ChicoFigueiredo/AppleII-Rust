@@ -433,6 +433,12 @@ impl Emulator {
             RunMode::Stepping => self.debugger.run(&mut self.machine, cpf),
             RunMode::Debug => 0,
         };
+        // The debugger single-steps the machine, so no `Machine::run_frame` told the cards how many
+        // cycles ran: do it here (AppleWin's `CardManager::Update`). The frame sources do it
+        // themselves (`FrameSource::run_frame`).
+        if self.debugger.mode == RunMode::Stepping && cycles > 0 {
+            self.machine.update_cards(cycles);
+        }
         let audio = self.mixer.produce_machine(&mut self.machine);
         let (drive, sector) = self.disks.guest_sector(&self.machine);
         self.sectors[drive.min(1)] = sector;
