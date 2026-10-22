@@ -6,8 +6,12 @@ use serde::{Deserialize, Serialize};
 /// Transporte (GLOSSARY): what the card does to the byte before the printer sees it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Transport {
-    /// The whole byte from the bus (default for the virtual printer, ADR 0008).
+    /// Like the 8-bit cards of the time (Grappler): a byte the card's own firmware writes (PR#1,
+    /// PRINT, LIST: Apple II text has bit 7 set) loses bit 7; a byte a program writes straight to
+    /// the port (graphics drivers such as Print Shop's) arrives whole. Default (ADR 0008).
     #[default]
+    Auto,
+    /// The whole byte from the bus.
     EightBit,
     /// AppleWin's Generic Printer rule: bit 7 cleared (`value & 0x7F`).
     SevenBitAppleWin,
