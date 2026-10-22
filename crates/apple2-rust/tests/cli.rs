@@ -36,6 +36,28 @@ fn help_prints_usage_and_exits() {
 }
 
 #[test]
+fn a_closed_stdout_pipe_ends_quietly_without_a_panic() {
+    // `apple2-rust --help | head -1`: the reader goes away before the output is written (#108).
+    for args in [
+        &["--help"][..],
+        &["--version"],
+        &["--headless-frames", "1", "--dump-text"],
+    ] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_apple2-rust"))
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn apple2-rust");
+        drop(child.stdout.take());
+        let out = child.wait_with_output().unwrap();
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(!err.contains("panicked"), "{args:?}: {err}");
+        assert_eq!(out.status.code(), Some(0), "{args:?}: {err}");
+    }
+}
+
+#[test]
 fn bad_rom_options_exit_with_the_applewin_message_and_no_window() {
     let run = |args: &[&str]| {
         let o = Command::new(env!("CARGO_BIN_EXE_apple2-rust"))

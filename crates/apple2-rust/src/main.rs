@@ -18,14 +18,14 @@ fn main() {
         .iter()
         .any(|a| matches!(a.as_str(), "--help" | "-help" | "-?" | "-h"))
     {
-        print!("{}", apple2_config::cmdline::HELP);
+        print_out(apple2_config::cmdline::HELP);
         return;
     }
     if argv
         .iter()
         .any(|a| matches!(a.as_str(), "--version" | "-version" | "-V"))
     {
-        println!("apple2-rust {}", env!("CARGO_PKG_VERSION"));
+        print_out(&format!("apple2-rust {}\n", env!("CARGO_PKG_VERSION")));
         return;
     }
     let (opts, gui, rest) = match shell_args(argv) {
@@ -97,9 +97,7 @@ fn main() {
         match headless::run(settings, Box::new(DefaultBackend), &h) {
             Ok(text) => {
                 if h.dump_text {
-                    for l in text {
-                        println!("{l}");
-                    }
+                    print_out(&text.iter().map(|l| format!("{l}\n")).collect::<String>());
                 }
             }
             Err(e) => {
@@ -134,6 +132,19 @@ fn main() {
     if let Err(e) = run {
         eprintln!("{e}");
         std::process::exit(1);
+    }
+}
+
+/// Writes the program's text output to stdout. A reader that went away (`| head -1`, a closed
+/// pipe) ends the output quietly with exit code 0, like the Unix tools; `print!` would panic (#108).
+fn print_out(text: &str) {
+    use std::io::Write;
+    let mut out = std::io::stdout().lock();
+    if let Err(e) = out.write_all(text.as_bytes()).and_then(|()| out.flush()) {
+        if e.kind() != std::io::ErrorKind::BrokenPipe {
+            eprintln!("stdout: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
