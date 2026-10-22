@@ -74,3 +74,16 @@ Fluxo ESC L denso de 16,5 MB (900 colunas cheias por linha, 4.096 bytes por even
 | Depois (`Vec<Arc<Page>>`) | 769 MiB |
 
 O documento passou a guardar `Arc<Page>` (serde `rc`, serialização idêntica): a cópia da prévia e o clone ao fechar o Trabalho só copiam ponteiros; só a Página em andamento é duplicada (no máximo 2 M pontos, ~24 MiB) quando o motor escreve nela depois de publicada (`Arc::make_mut`). O teto documentado do Trabalho é, portanto, o do motor: 64 M pontos x 12 bytes = 768 MiB, mais a fila de captura (até 256 MiB) e a ponte (32 MiB) que são contadas à parte. O teste falha se o pico passar de 850 MiB.
+
+## Latência ponta a ponta até a tela (HU-IMP-032, G2)
+
+A sonda `apple2_printer::latency` carimba três instantes sem alterar o contrato de captura: o primeiro byte de cada lote retido na Carta (`io_write`), a publicação do snapshot cujo documento já cobre esse byte (Spool) e o `present()` do quadro da janela da Central que desenhou esse documento (wgpu). Desligada por padrão (uma leitura atômica no caminho quente); `APPLE2_RUST_PRINTER_LATENCY=1` liga e imprime P50/P95 uma vez ao fechar o programa. A medida inclui o lote da Carta (~20 ms), a fila, o Spool, a ponte (20 ms), o poll do hub, a rasterização da Página e o limitador de 60 quadros por segundo.
+
+Medição (Linux, Wayland, Vulkan NVIDIA GeForce RTX 4080 SUPER, Ryzen 7 3700X, `--release`, Apple //e com DOS 3.3 imprimindo 600 linhas de BASIC em 72 colunas, Central aberta sozinha no primeiro byte, três execuções, cerca de 1.080 amostras cada):
+
+| Trecho | P50 | P95 |
+|---|---|---|
+| Byte na Carta até o snapshot com o ponto | 35,2 a 35,8 ms | 70,6 a 71,1 ms |
+| **Byte na Carta até o quadro apresentado** | **137,5 a 139,4 ms** | **198,2 a 199,2 ms** (máx. 225,9 a 230,9 ms) |
+
+O P95 de 199 ms fica abaixo dos 250 ms de HU-IMP-032 (que contam do evento no Spool; aqui contam do byte na Carta, mais rigoroso). A diferença entre o snapshot (35 ms) e a tela (138 ms) está no poll do hub, na rasterização da Página em andamento e no limitador de quadros. Com a Central fechada o tempo corre até a reabertura (execução de T-018: P95 de 5 s), por isso a medida só vale com a Central aberta. Máquina e GPU de referência: a desta tabela; Windows e macOS sem medição (roteiro em [../conformance/manual-tests/impressora.md](../conformance/manual-tests/impressora.md)).
