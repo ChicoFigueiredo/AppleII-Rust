@@ -25,3 +25,7 @@ if-addrs = "0.15"
 
 [dev-dependencies]
 apple2-cpu = { path = "../apple2-cpu" }
+# Acceptance tests drive the whole path: card -> capture -> spool -> LX-310 -> PDF (default features).
+apple2-printer = { path = "../apple2-printer" }
+tempfile = "3"
+sha2 = "0.11"

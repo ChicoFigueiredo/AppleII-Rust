@@ -124,10 +124,11 @@ fn dot_and_background_samples() {
 }
 
 #[test]
-fn dot_diameter_is_about_029_mm() {
+fn dot_diameter_matches_the_public_constant() {
     need_poppler!();
-    // A row of 600 dots 1/2160" apart makes a bar as thick as one dot: ~0.83 pt = 1.7 px at 150 dpi.
-    // At 600 dpi it is 7 px, within one pixel of 25/2160*600.
+    // A row of 600 dots 1/2160" apart makes a bar as thick as one dot. At 600 dpi it is
+    // DOT_DIAMETER / 2160 * 600 px (8.3 px for 30 units), within one pixel.
+    let expect = (apple2_printer::pdf::DOT_DIAMETER * 600 / 2160) as usize;
     let mut page = blank_page(W, H);
     for i in 0..600u32 {
         page.dots.push(Dot {
@@ -142,7 +143,7 @@ fn dot_diameter_is_about_029_mm() {
     let x = at(1300, 600);
     let thick = (0..img.1).filter(|&y| px(&img, x, y)[0] < 128).count();
     assert!(
-        (6..=8).contains(&thick),
+        (expect..=expect + 2).contains(&thick),
         "bar thickness {thick}px at 600 dpi"
     );
 }
@@ -183,7 +184,8 @@ fn paper_decoration_never_moves_dots() {
             .zip(&g)
             .filter(|(a, b)| **a < 255 && a.abs_diff(**b) > 60)
             .count();
-        assert!(edge <= 4, "{kind:?}: {edge} edge pixels differ a lot");
+        // A handful of anti-aliased edge pixels may blend with the tint (a few more with the 30-unit dot).
+        assert!(edge <= 8, "{kind:?}: {edge} edge pixels differ a lot");
     }
 }
 

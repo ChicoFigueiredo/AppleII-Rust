@@ -4,6 +4,7 @@
 
 mod lx310_common;
 use apple2_printer::document::{PageDocument, TextRun};
+use apple2_printer::lx310::Lx310Config;
 use apple2_printer::paper::PaperKind;
 use lx310_common::*;
 
@@ -733,12 +734,21 @@ fn double_width_doubles_every_matrix_column() {
     let plain = dots_of(&run(b"X"), 0);
     for stream in [&b"\x1bW\x01X"[..], b"\x0eX", b"\x1b!\x20X"] {
         let wide = dots_of(&run(stream), 0);
+        // Every matrix column becomes two adjacent columns; a dot with a row-mate two matrix
+        // columns to its right also fills that empty column pair (continuous strokes).
         let mut expect = Vec::new();
         for &(x, y) in &plain {
-            let c = x - X0; // multiple of 18: the matrix column index * 18
-            expect.push((X0 + c * 2, y));
-            expect.push((X0 + c * 2 + 18, y));
+            let i = (x - X0) / 18; // matrix column index
+            let fill = plain.contains(&(x + 36, y));
+            for k in 0..(if fill { 4 } else { 2 }) {
+                expect.push((X0 + (2 * i + k) * 18, y));
+            }
         }
+        expect.sort_unstable();
+        expect.dedup();
+        let mut wide = wide;
+        wide.sort_unstable();
+        wide.dedup();
         assert_eq!(wide, expect, "{stream:02X?}");
     }
 }
@@ -773,4 +783,43 @@ fn line_66_of_a_form_prints_on_the_next_form_without_loss() {
         .pages
         .iter()
         .all(|p| p.dots.iter().all(|q| q.y < p.height)));
+}
+
+/// Runs `stream` with the real font.
+fn run_font(stream: &[u8]) -> PageDocument {
+    run_chunks(Lx310Config::default(), PaperKind::GreenBar, &[stream])
+}
+
+#[test]
+fn condensed_and_narrow_pitches_keep_every_glyph_inside_its_cell() {
+    // The same matrix at a smaller pitch: columns are spaced proportionally, so the dots of one
+    // character never reach the next cell (126 units at 17 cpi, 144 at 15 cpi).
+    for (pre, adv) in [
+        (&b"\x0f"[..], 126u32),
+        (b"\x1bP", 216),
+        (b"\x1bM", 180),
+        (b"\x1bg", 144),
+    ] {
+        let mut s = pre.to_vec();
+        s.extend_from_slice(b"W");
+        let d = run_font(&s);
+        let xs: Vec<u32> = d.pages[0].dots.iter().map(|q| q.x).collect();
+        let (lo, hi) = (*xs.iter().min().unwrap(), *xs.iter().max().unwrap());
+        assert!(lo >= X0 && hi < X0 + adv, "{pre:02X?}: {lo}..{hi} vs {adv}");
+    }
+}
+
+#[test]
+fn frame_strokes_continue_through_the_gap_between_lines() {
+    // CP437 0xB3 on two consecutive lines at 1/6": the pins above and below the gap are joined
+    // by one dot per pin row, so the stroke has a dot every 30 units from top to bottom.
+    let d = run_font(b"\x1bt\x01\xb3\r\n\xb3");
+    let ys: Vec<u32> = d.pages[0].dots.iter().map(|q| q.y).collect();
+    let mut sorted = ys.clone();
+    sorted.sort_unstable();
+    let expect: Vec<u32> = (0..9 + 12).map(|i| Y0 + 30 * i).collect();
+    assert_eq!(sorted, expect);
+    // A line pitch over 1/4" is left open.
+    let d = run_font(b"\x1bt\x01\x1b3\x60\xb3\r\n\xb3");
+    assert_eq!(d.pages[0].dots.len(), 18);
 }

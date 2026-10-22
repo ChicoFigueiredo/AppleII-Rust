@@ -20,10 +20,14 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::Write as _;
 
-/// Diameter of a drawn dot, in units: 25 units = 0.294 mm = 0.833 pt. The Epson 9-pin print head
-/// leaves a dot of roughly 0.29 mm (0.0114") on paper; the exact size depends on ribbon, paper and
-/// head wear, so this is an approximation (documented in `docs/printer/pdf.md`).
-pub const DOT_DIAMETER_UNITS: u32 = 25;
+/// Effective diameter of a drawn dot, in units of 1/2160": 30 units = 0.353 mm = 1 pt. Public so
+/// the on-screen preview draws the same dots as the PDF.
+///
+/// Approximation (see `docs/printer/pdf.md`): the print wire of a 9-pin head is about 0.3 mm (the
+/// manuals consulted give no figure), and the ribbon ink spreads on the paper fibres, so a dot on
+/// paper measures roughly 0.33-0.36 mm. 30 units equals the pin pitch (1/72"), so vertical strokes
+/// of Draft text come out continuous, as on a real printout, while the columns (1/120") overlap.
+pub const DOT_DIAMETER: u32 = 30;
 
 /// Tractor hole diameter: 5/32" = 337.5 units (drawn as radius 168.75).
 const HOLE_RADIUS_UNITS: f64 = 168.75;
@@ -628,7 +632,7 @@ fn dots(c: &mut String, page: &Page, opts: &RenderOptions, meta: &PdfMeta) {
     let (r, g, b) = ink_rgb(opts.ink);
     let _ = writeln!(
         c,
-        "{} {} {} RG 1 J {DOT_DIAMETER_UNITS} w",
+        "{} {} {} RG 1 J {DOT_DIAMETER} w",
         num(r),
         num(g),
         num(b)

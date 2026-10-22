@@ -6,7 +6,7 @@
 > (ADR 0008). Correções são bem-vindas (ver "Como corrigir um glifo").
 
 Código: `crates/apple2-printer/src/font.rs` (API), `src/font/draft.txt` (desenhos Draft),
-`src/font/nlq.txt` (traços NLQ), `src/font/legacy5.txt` (símbolos raros ainda no desenho da v1),
+`src/font/nlq.txt` (traços NLQ), `src/font/legacy5.txt` (símbolos raros ainda no desenho da v1; ¿ º ° § ± ¹ ² ³ µ × ÷ » foram redesenhados no Draft 9×12 e no NLQ 18×24),
 `src/font/tables.rs` (Unicode das metades superiores). Testes: `tests/font_*.rs`, golden em
 `tests/golden/font/`. Amostra visual: `cargo run -p apple2-printer --example amostra_fonte -- saida.pdf`.
 
@@ -34,7 +34,7 @@ letras. Acento de maiúscula: 1 linha (linha 0); de minúscula: 2 linhas (3 no a
 elípticos, formato em `nlq.txt`) rasterizados em pontos, no estilo "Roman": hastes grossas (duas
 colunas), traços finos (uma coluna) e serifas leves em pés e topos. Maiúsculas nas linhas 2..=14,
 altura-x 6..=14, descendentes até a 17, acentos de maiúscula nas linhas 0..=1. Como as duas passadas
-sobrepõem pontos (o ponto impresso mede ~0,29 mm contra 1/240" = 0,1 mm de passo de coluna e 1/144"
+sobrepõem pontos (o ponto impresso mede ~0,35 mm contra 1/240" = 0,1 mm de passo de coluna e 1/144"
 = 0,18 mm de passo de linha), os traços parecem contínuos. Letras acentuadas são o glifo-base
 mais a marca (traços), também nativos. Caracteres de moldura e blocos, e uns poucos símbolos raros
 (letras gregas, matemática, ¼ ½ ¾ © ® ¤ ƒ ¶ Æ æ Ø ø Œ œ Ð ð Þ þ), **não** têm desenho NLQ próprio:

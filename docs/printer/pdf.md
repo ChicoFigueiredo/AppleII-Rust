@@ -39,10 +39,13 @@ byte entre duas exportações.
 - Sistema de coordenadas da página: 1 unidade = 1/2160", y para baixo (uma matriz `cm` de 1/30). As
   coordenadas dos pontos são escritas como os inteiros exatos do documento, sem arredondar.
 - Cada ponto é um traço de comprimento zero com ponta redonda (`1 J`) e espessura
-  `DOT_DIAMETER_UNITS` = 25 unidades = 0,294 mm = 0,83 pt. O ponto de agulha das impressoras
-  matriciais Epson de 9 agulhas fica perto de 0,29 mm (0,0114"); o tamanho real depende de fita,
-  papel e desgaste, portanto é **aproximação** (não consegui citar o valor em manual da LX-310 e
-  não copiei nada da Epson). Todos os pontos de um balde vão em um único caminho (a cada 4000
+  `DOT_DIAMETER` (`pub const` em `pdf.rs`, a prévia da Central usa o mesmo valor) = 30 unidades =
+  0,353 mm = 1 pt. A agulha de uma cabeça de 9 agulhas tem cerca de 0,3 mm e a tinta se espalha nas
+  fibras do papel, então o ponto impresso mede ~0,33–0,36 mm; 30 unidades igualam o passo vertical
+  das agulhas (1/72"), de modo que os traços verticais do Draft saem contínuos como numa impressão
+  real (com 25 unidades, 0,29 mm, ficavam frestas e o texto saía claro demais). É **aproximação**:
+  não encontrei o diâmetro da agulha nos manuais da LX-310 consultados e não copiei nada da Epson.
+  Todos os pontos de um balde vão em um único caminho (a cada 4000
   pontos, um novo), o que mantém o arquivo pequeno (25 páginas esparsas ficam bem abaixo de 200 KB).
 - **Fita nova (`Ribbon::New`)**: preto uniforme e opaco. Pontos repetidos na mesma posição
   (ênfase, dupla impressão) coincidem e não mudam o visual; as posições repetidas são desenhadas uma vez.
@@ -98,5 +101,5 @@ antialiasing fino) e regenerar com `UPDATE_GOLDEN=1`. Goldens gerados com popple
 
 - **Fiel**: tamanho da página, posição de cada ponto (inteiros em 1/2160"), ordem/contagem de
   batidas, texto pesquisável, propriedades.
-- **Aproximação**: diâmetro e forma do ponto (círculo perfeito de 0,29 mm), aparência da fita usada,
+- **Aproximação**: diâmetro e forma do ponto (círculo perfeito de 0,35 mm (`DOT_DIAMETER`)), aparência da fita usada,
   cores da fita, cores e proporções do papel, furos como discos cinza, picote como traço.
