@@ -7,8 +7,7 @@ use super::pages::{browse_save, combo, group, path_row};
 use super::{HostLists, SettingsDialog, AUX};
 use apple2_config::card::{
     AyChip, HdcFirmware, PrinterDestination, PrinterInk, PrinterPaper, PrinterRibbon, PrinterTable,
-    PrinterTransport, SlotCardSpec, SoundSockets,
-    Ssi263Chip,
+    PrinterTransport, SlotCardSpec, SoundSockets, Ssi263Chip,
 };
 use egui::{Context, Ui};
 
@@ -313,10 +312,7 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                 ui.horizontal(|ui| {
                     ui.label("International set (ESC R):");
                     let mut c = u32::from(p.country);
-                    if ui
-                        .add(egui::DragValue::new(&mut c).range(0..=12))
-                        .changed()
-                    {
+                    if ui.add(egui::DragValue::new(&mut c).range(0..=12)).changed() {
                         p.country = c as u8;
                     }
                 });

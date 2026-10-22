@@ -95,7 +95,12 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
         activity |= p.activity;
         page_text(&hub).contains("OLA, IMPRESSORA")
     });
-    assert!(ok, "text: {:?} vm: {:?}", page_text(&hub), hub.view_model().status);
+    assert!(
+        ok,
+        "text: {:?} vm: {:?}",
+        page_text(&hub),
+        hub.view_model().status
+    );
     assert_eq!(opens, 1, "automatic opening fires once per job");
     assert!(activity);
     assert!(wakes.load(Ordering::SeqCst) > 0);
@@ -122,10 +127,14 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
             && !hub.view_model().shown.loading
             && page_text(&hub).contains("OLA")
     }));
-    assert_eq!(hub.view_model().jobs[0].state, apple2_rust_shell::printer_model::JobState::Finished);
+    assert_eq!(
+        hub.view_model().jobs[0].state,
+        apple2_rust_shell::printer_model::JobState::Finished
+    );
 
     // Salvar PDF with title and note going to the manifest
     let job = hub.view_model().jobs[0].id.clone();
+    // APPLE2_CENTRAL_SMOKE_PDF keeps a copy of the exported PDF for manual inspection.
     let pdf = dir.join("saida.pdf");
     hub.export_pdf(
         PdfRequest {
@@ -148,6 +157,9 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
                 .any(|m| m.text.starts_with("PDF salvo"))
     }));
     let bytes = std::fs::read(&pdf).unwrap();
+    if let Some(keep) = std::env::var_os("APPLE2_CENTRAL_SMOKE_PDF") {
+        std::fs::write(keep, &bytes).unwrap();
+    }
     assert!(bytes.starts_with(b"%PDF-"));
     assert!(bytes.windows(5).any(|w| w == b"%%EOF"));
     assert!(wait_for(|| {
@@ -251,9 +263,20 @@ fn the_default_table_and_country_change_what_a_job_prints() {
     std::fs::write(dir.join("j/raw.bin"), b"[#]{|}@\r\n").unwrap();
     let text = |t, c| {
         let d = render_job(&dir, "j", 9, Default::default(), (t, c)).unwrap();
-        d.pages[0].text.iter().map(|r| r.text.clone()).collect::<String>()
+        d.pages[0]
+            .text
+            .iter()
+            .map(|r| r.text.clone())
+            .collect::<String>()
     };
     assert_ne!(text(PrinterTable::Pc437, 0), text(PrinterTable::Pc437, 2));
-    assert!(render_job(&dir, "../x", 1, Default::default(), (PrinterTable::Pc437, 0)).is_err());
+    assert!(render_job(
+        &dir,
+        "../x",
+        1,
+        Default::default(),
+        (PrinterTable::Pc437, 0)
+    )
+    .is_err());
     let _ = std::fs::remove_dir_all(dir);
 }

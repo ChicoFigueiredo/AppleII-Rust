@@ -543,7 +543,8 @@ impl PrinterHub {
     /// Settings changed (or the first configuration). `None`: no virtual printer card.
     pub fn configure(&mut self, config: Option<PrinterConfig>) {
         if let Some(c) = &config {
-            *self.table.lock().unwrap_or_else(|e| e.into_inner()) = (c.setup.table, c.setup.country);
+            *self.table.lock().unwrap_or_else(|e| e.into_inner()) =
+                (c.setup.table, c.setup.country);
             self.spool.send(SpoolCommand::SetOptions(c.setup.options));
         }
         if self.config != config {
@@ -643,7 +644,9 @@ impl PrinterHub {
                     Ok(doc) => {
                         self.rendered.insert((job, version), doc);
                     }
-                    Err(e) => self.message(format!("Não foi possível ler o trabalho {job}: {e}"), true),
+                    Err(e) => {
+                        self.message(format!("Não foi possível ler o trabalho {job}: {e}"), true)
+                    }
                 }
             }
             Done::Exported {
@@ -666,7 +669,10 @@ impl PrinterHub {
                 Err(e) => self.message(format!("Falha ao salvar o PDF: {e}"), true),
             },
             Done::Raw { path, result } => match result {
-                Ok(n) => self.message(format!("Bytes brutos salvos em {} ({n} bytes)", path.display()), false),
+                Ok(n) => self.message(
+                    format!("Bytes brutos salvos em {} ({n} bytes)", path.display()),
+                    false,
+                ),
                 Err(e) => self.message(format!("Falha ao salvar os bytes brutos: {e}"), true),
             },
         }
@@ -711,7 +717,10 @@ impl PrinterHub {
                     version: Some(key.1),
                 });
                 self.message(
-                    format!("Reimpressão pronta: versão {} do trabalho {}", r.version, r.job_id),
+                    format!(
+                        "Reimpressão pronta: versão {} do trabalho {}",
+                        r.version, r.job_id
+                    ),
                     false,
                 );
             }
@@ -738,7 +747,11 @@ impl PrinterHub {
         if self.config.is_none() {
             return Status::Offline;
         }
-        if snap.active.as_ref().is_some_and(|a| a.storage_error.is_some()) {
+        if snap
+            .active
+            .as_ref()
+            .is_some_and(|a| a.storage_error.is_some())
+        {
             return Status::Error;
         }
         if snap.active.is_some() {
@@ -837,7 +850,9 @@ impl PrinterHub {
             id: j.id.clone(),
             title,
             note: manifest.map(|m| m.note.clone()).unwrap_or_default(),
-            machine: manifest.map(|m| m.origin.machine.clone()).unwrap_or_default(),
+            machine: manifest
+                .map(|m| m.origin.machine.clone())
+                .unwrap_or_default(),
             slot: manifest.map_or(0, |m| m.origin.slot),
             transport: manifest
                 .map(|m| transport_label(m.transport).to_string())
@@ -875,7 +890,11 @@ impl PrinterHub {
             return Shown::default();
         };
         let manifest = self.manifests.get(&sel.id).map(|(_, m)| m.clone());
-        let default_opts = self.config.as_ref().map(|c| c.setup.options).unwrap_or_default();
+        let default_opts = self
+            .config
+            .as_ref()
+            .map(|c| c.setup.options)
+            .unwrap_or_default();
         let job_opts = manifest.as_ref().map_or(default_opts, |m| m.options);
         let is_active = active.is_some_and(|i| jobs[i].id == sel.id);
         if is_active {
@@ -937,7 +956,12 @@ impl PrinterHub {
         }
     }
 
-    fn start_render(&mut self, key: &(String, u32), manifest: Option<&Manifest>, options: RenderOptions) {
+    fn start_render(
+        &mut self,
+        key: &(String, u32),
+        manifest: Option<&Manifest>,
+        options: RenderOptions,
+    ) {
         if self.rendering.as_ref() == Some(key) {
             return;
         }
@@ -988,20 +1012,32 @@ impl PrinterHub {
                 self.spool.send(SpoolCommand::FinishActive);
             }
             CenterEvent::CancelJob => {
-                if let Some(id) = self.prev_snap.as_ref().and_then(|s| s.active.as_ref()).map(|a| a.job_id.clone()) {
+                if let Some(id) = self
+                    .prev_snap
+                    .as_ref()
+                    .and_then(|s| s.active.as_ref())
+                    .map(|a| a.job_id.clone())
+                {
                     self.spool.send(SpoolCommand::FinishActive);
                     self.spool.send(SpoolCommand::Delete { job_id: id });
                     self.pick = None;
                     self.live = None;
                     self.last_shown = None;
-                    self.message("Trabalho cancelado e removido do Arquivo de impressões.", false);
+                    self.message(
+                        "Trabalho cancelado e removido do Arquivo de impressões.",
+                        false,
+                    );
                 }
             }
             CenterEvent::Reprint { job, options } => {
-                self.spool.send(SpoolCommand::Reprint { job_id: job, options });
+                self.spool.send(SpoolCommand::Reprint {
+                    job_id: job,
+                    options,
+                });
             }
             CenterEvent::SetTitle { job, title } => {
-                self.spool.send(SpoolCommand::SetTitle { job_id: job, title });
+                self.spool
+                    .send(SpoolCommand::SetTitle { job_id: job, title });
             }
             CenterEvent::SetNote { job, note } => {
                 self.stale_manifests.push(job.clone());
@@ -1047,7 +1083,11 @@ impl PrinterHub {
             .as_ref()
             .filter(|(id, _)| *id == req.job && req.version == 0)
             .map(|(_, d)| d.clone());
-        let default_opts = self.config.as_ref().map(|c| c.setup.options).unwrap_or_default();
+        let default_opts = self
+            .config
+            .as_ref()
+            .map(|c| c.setup.options)
+            .unwrap_or_default();
         let version = if req.version == 0 && live.is_none() {
             manifest
                 .as_ref()
@@ -1058,7 +1098,12 @@ impl PrinterHub {
         };
         let options = manifest
             .as_ref()
-            .and_then(|m| m.versions.iter().find(|v| v.id == version).map(|v| v.options))
+            .and_then(|m| {
+                m.versions
+                    .iter()
+                    .find(|v| v.id == version)
+                    .map(|v| v.options)
+            })
             .or(manifest.as_ref().map(|m| m.options))
             .unwrap_or(default_opts);
         let meta = PdfMeta {
@@ -1123,7 +1168,12 @@ impl PrinterHub {
         let total = self
             .prev_snap
             .as_ref()
-            .and_then(|s| s.active.as_ref().filter(|a| a.job_id == job).map(|a| a.bytes))
+            .and_then(|s| {
+                s.active
+                    .as_ref()
+                    .filter(|a| a.job_id == job)
+                    .map(|a| a.bytes)
+            })
             .or_else(|| self.manifests.get(job).map(|(_, m)| m.total_bytes))
             .unwrap_or(u64::MAX);
         let src = self.root.join(job).join(archive::RAW_FILE);
@@ -1132,12 +1182,14 @@ impl PrinterHub {
             .name("apple2-printer-raw".into())
             .spawn(move || {
                 let result = (|| -> Result<u64, String> {
-                    let f = std::fs::File::open(&src).map_err(|e| format!("{}: {e}", src.display()))?;
+                    let f =
+                        std::fs::File::open(&src).map_err(|e| format!("{}: {e}", src.display()))?;
                     let mut buf = Vec::new();
                     f.take(total)
                         .read_to_end(&mut buf)
                         .map_err(|e| format!("{}: {e}", src.display()))?;
-                    pdf::write_atomic(&path, &buf, true).map_err(|e| format!("{}: {e}", path.display()))?;
+                    pdf::write_atomic(&path, &buf, true)
+                        .map_err(|e| format!("{}: {e}", path.display()))?;
                     Ok(buf.len() as u64)
                 })();
                 let _ = tx.send(Done::Raw { path, result });

@@ -94,6 +94,7 @@ struct App {
     /// Spool, bridge and view model of the virtual printer; started once a Generic Printer that
     /// feeds it exists. Declared after `emu` so the emulator stops first on drop.
     hub: Option<PrinterHub>,
+    pending_type: Option<(String, Instant)>,
     proxy: EventLoopProxy<UserEvent>,
     /// The main window has keyboard focus (decides whether an automatic opening gives it back).
     main_focused: bool,
@@ -178,9 +179,8 @@ impl App {
         for p in open {
             emu.send(open_command(&p));
         }
-        if let Some(t) = type_text {
-            emu.send(Command::Paste(t));
-        }
+        // Typed after the Apple II has booted (the keyboard buffer is cleared by the boot).
+        let pending_type = type_text.map(|t| (t, Instant::now() + Duration::from_millis(3000)));
         let mut app = App {
             dump_window,
             exit_after_capture: false,
@@ -196,6 +196,7 @@ impl App {
             printer: PrinterWindow::default(),
             printer_vm: PrinterViewModel::default(),
             hub: None,
+            pending_type,
             proxy,
             main_focused: false,
             demo_script: None,
@@ -1034,7 +1035,18 @@ impl App {
             }
         }
         let now = Instant::now();
-        let hub_wake = self.hub.as_ref().and_then(|h| h.next_wake(now));
+        if self.pending_type.as_ref().is_some_and(|(_, t)| now >= *t) {
+            if let Some((text, _)) = self.pending_type.take() {
+                self.emu.send(Command::Paste(text));
+            }
+        }
+        let hub_wake = self
+            .hub
+            .as_ref()
+            .and_then(|h| h.next_wake(now))
+            .into_iter()
+            .chain(self.pending_type.as_ref().map(|(_, t)| *t))
+            .min();
         let wake = match (self.printer.drive(now), hub_wake) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),

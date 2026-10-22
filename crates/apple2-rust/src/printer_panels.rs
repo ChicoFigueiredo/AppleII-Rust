@@ -7,7 +7,7 @@ use crate::printer_model::{
 };
 use apple2_config::card::PrinterTable;
 use apple2_printer::paper::{InkColor, Paper, PaperKind, RenderOptions, Ribbon};
-use egui::{Color32, RichText, Ui};
+use egui::{Color32, Ui};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tab {
@@ -131,7 +131,9 @@ fn status_color(s: Status) -> Color32 {
 /// Status line: state, Apple II, slot and profile.
 pub fn status_bar(ui: &mut Ui, vm: &PrinterViewModel) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("●").color(status_color(vm.status)));
+        let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+        ui.painter()
+            .circle_filled(r.center(), 5.0, status_color(vm.status));
         ui.strong(format!("Impressora {}", vm.status.label()));
         if !vm.detail.is_empty() {
             ui.label(format!("— {}", vm.detail));
@@ -323,7 +325,10 @@ pub fn archive_tab(
     let mut show_preview = false;
     ui.horizontal(|ui| {
         ui.heading("Arquivo de impressões");
-        ui.weak(format!("{} trabalho(s); nada é apagado sem o seu pedido", vm.jobs.len()));
+        ui.weak(format!(
+            "{} trabalho(s); nada é apagado sem o seu pedido",
+            vm.jobs.len()
+        ));
     });
     ui.separator();
     egui::TopBottomPanel::bottom("archive-detail")
@@ -332,37 +337,47 @@ pub fn archive_tab(
         .show_inside(ui, |ui| {
             show_preview = archive_detail(ui, vm, ui_state, events);
         });
-    egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| {
-        egui::Grid::new("archive-grid")
-            .striped(true)
-            .num_columns(7)
-            .show(ui, |ui| {
-                for h in ["Título", "Data", "Máquina", "Transporte", "Páginas", "Estado", "Versões"] {
-                    ui.strong(h);
-                }
-                ui.end_row();
-                for (i, j) in vm.jobs.iter().enumerate() {
-                    let sel = vm.selected_job == Some(i);
-                    if ui.selectable_label(sel, &j.title).clicked() && !sel {
-                        events.push(CenterEvent::SelectJob(j.id.clone()));
+    egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            egui::Grid::new("archive-grid")
+                .striped(true)
+                .num_columns(7)
+                .show(ui, |ui| {
+                    for h in [
+                        "Título",
+                        "Data",
+                        "Máquina",
+                        "Transporte",
+                        "Páginas",
+                        "Estado",
+                        "Versões",
+                    ] {
+                        ui.strong(h);
                     }
-                    ui.label(&j.started);
-                    ui.label(if j.slot > 0 || !j.machine.is_empty() {
-                        format!("{} (slot {})", j.machine, j.slot)
-                    } else {
-                        "—".into()
-                    });
-                    ui.label(&j.transport);
-                    ui.label(j.pages.to_string());
-                    ui.label(match &j.damaged {
-                        Some(_) => "danificado".to_string(),
-                        None => j.state.label().to_string(),
-                    });
-                    ui.label(j.versions.len().to_string());
                     ui.end_row();
-                }
-            });
-    });
+                    for (i, j) in vm.jobs.iter().enumerate() {
+                        let sel = vm.selected_job == Some(i);
+                        if ui.selectable_label(sel, &j.title).clicked() && !sel {
+                            events.push(CenterEvent::SelectJob(j.id.clone()));
+                        }
+                        ui.label(&j.started);
+                        ui.label(if j.slot > 0 || !j.machine.is_empty() {
+                            format!("{} (slot {})", j.machine, j.slot)
+                        } else {
+                            "—".into()
+                        });
+                        ui.label(&j.transport);
+                        ui.label(j.pages.to_string());
+                        ui.label(match &j.damaged {
+                            Some(_) => "danificado".to_string(),
+                            None => j.state.label().to_string(),
+                        });
+                        ui.label(j.versions.len().to_string());
+                        ui.end_row();
+                    }
+                });
+        });
     show_preview
 }
 
@@ -378,7 +393,10 @@ fn archive_detail(
         return false;
     };
     if let Some(why) = &job.damaged {
-        ui.colored_label(Color32::from_rgb(220, 60, 60), format!("Trabalho danificado: {why}"));
+        ui.colored_label(
+            Color32::from_rgb(220, 60, 60),
+            format!("Trabalho danificado: {why}"),
+        );
         delete_button(ui, job, ui_state);
         return false;
     }
@@ -405,8 +423,17 @@ fn archive_detail(
     });
     ui.horizontal(|ui| {
         ui.label("Nota:");
-        ui.add(egui::TextEdit::multiline(&mut edit.note).desired_rows(2).desired_width(320.0));
-        if button(ui, "Salvar nota", edit.note != job.note, "A nota não foi alterada.") {
+        ui.add(
+            egui::TextEdit::multiline(&mut edit.note)
+                .desired_rows(2)
+                .desired_width(320.0),
+        );
+        if button(
+            ui,
+            "Salvar nota",
+            edit.note != job.note,
+            "A nota não foi alterada.",
+        ) {
             events.push(CenterEvent::SetNote {
                 job: job.id.clone(),
                 note: edit.note.clone(),
@@ -461,15 +488,14 @@ fn archive_detail(
         });
     }
     for (v, path) in &job.exports {
-        ui.weak(format!("PDF salvo nesta sessão (versão {}): {path}", (*v).max(1)));
+        ui.weak(format!(
+            "PDF salvo nesta sessão (versão {}): {path}",
+            (*v).max(1)
+        ));
     }
     ui.separator();
     ui.strong("Reimprimir com outro papel, fita ou cor (gera uma nova versão)");
-    let base = vm
-        .shown
-        .options
-        .paper
-        .kind;
+    let base = vm.shown.options.paper.kind;
     let opts = ui_state.reprint.get_or_insert_with(|| {
         let mut o = vm.shown.options;
         o.paper = Paper::preset(base);
@@ -480,7 +506,10 @@ fn archive_detail(
             .selected_text(paper_label(opts.paper.kind))
             .show_ui(ui, |ui| {
                 for k in ALL_PAPERS {
-                    if ui.selectable_label(opts.paper.kind == k, paper_label(k)).clicked() {
+                    if ui
+                        .selectable_label(opts.paper.kind == k, paper_label(k))
+                        .clicked()
+                    {
                         opts.paper = Paper::preset(k);
                     }
                 }
@@ -513,7 +542,9 @@ fn archive_detail(
             show_preview = true;
         }
     });
-    ui.weak("A tabela de caracteres é a do próprio trabalho; reimprimir não altera os bytes gravados.");
+    ui.weak(
+        "A tabela de caracteres é a do próprio trabalho; reimprimir não altera os bytes gravados.",
+    );
     ui.separator();
     delete_button(ui, job, ui_state);
     show_preview
@@ -587,7 +618,11 @@ pub fn dialogs(ctx: &egui::Context, ui_state: &mut CenterUi, events: &mut Vec<Ce
                 });
                 ui.horizontal(|ui| {
                     ui.label("Nota:");
-                    ui.add(egui::TextEdit::multiline(&mut f.note).desired_rows(2).desired_width(280.0));
+                    ui.add(
+                        egui::TextEdit::multiline(&mut f.note)
+                            .desired_rows(2)
+                            .desired_width(280.0),
+                    );
                 });
                 ui.horizontal(|ui| {
                     ui.label("Páginas:");

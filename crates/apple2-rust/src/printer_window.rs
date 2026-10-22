@@ -251,11 +251,13 @@ pub fn raster_ppi(page: &Page, zoom: f32, pixels_per_point: f32) -> u32 {
 
 /// Draws one page with the paper of a plain form (`zebra`: green bars) or a white sheet.
 pub fn rasterize_page(page: &Page, ppi: u32, zebra: bool) -> ColorImage {
-    let mut look = Look::default();
-    look.paper = if zebra {
-        PaperKind::GreenBar
-    } else {
-        PaperKind::A4
+    let look = Look {
+        paper: if zebra {
+            PaperKind::GreenBar
+        } else {
+            PaperKind::A4
+        },
+        ..Look::default()
     };
     rasterize_page_look(page, ppi, &look)
 }
@@ -287,7 +289,8 @@ pub fn rasterize_page_look(page: &Page, ppi: u32, look: &Look) -> ColorImage {
     let h = (to_px(page.height).ceil() as usize).max(1);
     let mut ink = vec![0u8; w * h];
     // LX-310 dot diameter is roughly 0.28 mm; never thinner than one pixel.
-    let r = (ppi * 0.0065).max(0.75);
+    // Same diameter as the PDF's dots (`pdf::DOT_DIAMETER`), so preview and file agree.
+    let r = (apple2_printer::pdf::DOT_DIAMETER as f32 / 2.0 / PER_INCH as f32 * ppi).max(0.75);
     let r2 = r * r;
     let worn = look.ribbon == Ribbon::Worn;
     for d in &page.dots {
@@ -354,8 +357,14 @@ pub fn rasterize_page_look(page: &Page, ppi: u32, look: &Look) -> ColorImage {
         for &cx in &[ppi * 0.25, w as f32 - ppi * 0.25] {
             let mut cy = ppi * 0.25;
             while cy < h as f32 {
-                let (xa, xb) = ((cx - hole_r).floor().max(0.0) as usize, (cx + hole_r).ceil() as usize);
-                let (ya, yb) = ((cy - hole_r).floor().max(0.0) as usize, (cy + hole_r).ceil() as usize);
+                let (xa, xb) = (
+                    (cx - hole_r).floor().max(0.0) as usize,
+                    (cx + hole_r).ceil() as usize,
+                );
+                let (ya, yb) = (
+                    (cy - hole_r).floor().max(0.0) as usize,
+                    (cy + hole_r).ceil() as usize,
+                );
                 for y in ya..=yb {
                     for x in xa..=xb {
                         let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
@@ -593,6 +602,20 @@ fn draw_preview(
             preview.zoom_out();
         }
     }
+    let diags = &vm.document().diagnostics;
+    if !diags.is_empty() {
+        egui::CollapsingHeader::new(format!("Diagnósticos ({})", diags.len()))
+            .id_salt("printer-diagnostics")
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(120.0)
+                    .show(ui, |ui| {
+                        for d in diags.iter().take(200) {
+                            ui.label(format!("@{}: {} {:02X?}", d.offset, d.message, d.bytes));
+                        }
+                    });
+            });
+    }
     ui.separator();
     let Some(page) = vm.document().pages.get(preview.page) else {
         ui.centered_and_justified(|ui| ui.weak("Nenhuma página para mostrar."));
@@ -815,9 +838,9 @@ impl PrinterWindow {
         let cache = &mut n.cache;
         let events = &mut self.events;
         let ui_state = &mut self.ui_state;
-        let output = n
-            .egui_ctx
-            .run(input, |ctx| draw_center(ctx, preview, cache, ui_state, vm, events));
+        let output = n.egui_ctx.run(input, |ctx| {
+            draw_center(ctx, preview, cache, ui_state, vm, events)
+        });
         n.egui_state
             .handle_platform_output(&n.window, output.platform_output.clone());
         let delay = output.viewport_output.get(&vid).map(|v| v.repaint_delay);
@@ -942,7 +965,6 @@ pub fn demo_view_model(pages: usize) -> PrinterViewModel {
         versions: Vec::new(),
         exports: Vec::new(),
     };
-    let mut doc = doc;
     doc.last_in_progress = true;
     PrinterViewModel {
         status: Status::Receiving,
@@ -1171,7 +1193,10 @@ mod tests {
         let ctx = Context::default();
         let mut cache = PreviewCache::default();
         let mut ui_state = CenterUi::default();
-        let run = |cache: &mut PreviewCache, ui_state: &mut CenterUi, page: usize, vm: &PrinterViewModel| {
+        let run = |cache: &mut PreviewCache,
+                   ui_state: &mut CenterUi,
+                   page: usize,
+                   vm: &PrinterViewModel| {
             let mut pv = PreviewState {
                 page,
                 ..Default::default()
@@ -1207,10 +1232,18 @@ mod tests {
         let page = Page {
             width: PER_INCH * 19 / 2,
             height: PER_INCH * 11,
-            dots: vec![apple2_printer::document::Dot { x: 1080, y: 1080, ink: 0 }],
+            dots: vec![apple2_printer::document::Dot {
+                x: 1080,
+                y: 1080,
+                ink: 0,
+            }],
             ..Default::default()
         };
-        let look = |paper, ink| Look { paper, ink, ribbon: Ribbon::New };
+        let look = |paper, ink| Look {
+            paper,
+            ink,
+            ribbon: Ribbon::New,
+        };
         let green = rasterize_page_look(&page, 48, &look(PaperKind::GreenBar, InkColor::Black));
         let blue = rasterize_page_look(&page, 48, &look(PaperKind::BlueBar, InkColor::Black));
         let a4 = rasterize_page_look(&page, 48, &look(PaperKind::A4, InkColor::Black));
