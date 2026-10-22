@@ -193,3 +193,109 @@ fn portuguese_accents_exist_in_every_portuguese_table() {
         }
     }
 }
+
+/// Columns (0-based) that carry at least one dot.
+fn used_columns(g: &Glyph) -> Vec<usize> {
+    (0..g.columns.len())
+        .filter(|&i| g.columns[i] != 0)
+        .collect()
+}
+
+#[test]
+fn draft_letters_use_half_dots_not_only_even_columns() {
+    // v1 regression guard: all dots of a letter on even columns (a 5-column grid stretched).
+    let letters = (b'A'..=b'Z').chain(b'a'..=b'z');
+    for code in letters {
+        let g = glyph(CharTable::Pc437, 0, code, Quality::Draft).unwrap();
+        let cols = used_columns(&g);
+        assert!(
+            cols.iter().any(|c| c % 2 == 0) && cols.iter().any(|c| c % 2 == 1),
+            "{} is confined to columns of one parity: {cols:?}",
+            code as char
+        );
+    }
+}
+
+#[test]
+fn draft_vertical_metrics_follow_the_9_pin_head() {
+    let rows = |ch: u8, q| {
+        let g = glyph(CharTable::Pc437, 0, ch, q).unwrap();
+        g.columns.iter().fold(0u32, |a, &c| a | c)
+    };
+    // Capitals and digits: rows 1..=7 (7 pins above the base), nothing in row 0 or 8.
+    for ch in (b'A'..=b'Z').chain(b'0'..=b'9') {
+        let m = rows(ch, Quality::Draft);
+        assert_eq!(m & 1, 0, "{} touches row 0", ch as char);
+        assert_eq!(m & (1 << 8), 0, "{} touches row 8", ch as char);
+        assert_ne!(m & (1 << 1), 0, "{} must reach row 1", ch as char);
+        assert_ne!(m & (1 << 7), 0, "{} must reach row 7", ch as char);
+    }
+    // Descenders use the two lowest rows.
+    for ch in *b"gjpqy" {
+        let m = rows(ch, Quality::Draft);
+        assert_ne!(m & (1 << 7), 0);
+        assert_ne!(m & (1 << 8), 0);
+    }
+}
+
+#[test]
+fn nlq_is_native_not_a_pair_stretch_of_draft() {
+    // The NLQ uses odd columns and single (unpaired) rows, which a doubled Draft never does.
+    let mut odd_columns = 0;
+    let mut unpaired_rows = 0;
+    for code in (b'A'..=b'Z').chain(b'a'..=b'z') {
+        let g = glyph(CharTable::Pc437, 0, code, Quality::Nlq).unwrap();
+        odd_columns += used_columns(&g).iter().filter(|c| *c % 2 == 1).count();
+        for &c in &g.columns {
+            // A pin row pair (2r, 2r+1) with exactly one of the two firing.
+            for r in (0..18).step_by(2) {
+                if (c >> r) & 1 != (c >> (r + 1)) & 1 {
+                    unpaired_rows += 1;
+                }
+            }
+        }
+    }
+    assert!(odd_columns > 100, "{odd_columns}");
+    assert!(unpaired_rows > 500, "{unpaired_rows}");
+}
+
+#[test]
+fn nlq_letters_have_serifs_and_reach_the_descender_rows() {
+    let all = |ch: u8| {
+        glyph(CharTable::Pc437, 0, ch, Quality::Nlq)
+            .unwrap()
+            .columns
+            .iter()
+            .fold(0u32, |a, &c| a | c)
+    };
+    for ch in *b"gjpqy" {
+        assert_ne!(all(ch) & (1 << 17), 0, "{} descender", ch as char);
+    }
+    for ch in *b"aeoxZ" {
+        assert_eq!(all(ch) & (1 << 17), 0, "{} must stay above", ch as char);
+    }
+    // Roman serif: the foot of an 'I' is wider than its stem.
+    let i = glyph(CharTable::Pc437, 0, b'I', Quality::Nlq).unwrap();
+    let cols = used_columns(&i);
+    let span = cols.last().unwrap() - cols[0];
+    assert!(span >= 8, "serifed I spans {span} columns");
+}
+
+#[test]
+fn frame_continues_through_the_gap_between_lines() {
+    let find = |ch: char| {
+        (0x80..=0xFFu8)
+            .find(|&c| to_unicode(CharTable::Pc437, 0, c) == Some(ch))
+            .unwrap()
+    };
+    for q in [Quality::Draft, Quality::Nlq] {
+        let v = glyph(CharTable::Pc437, 0, find('│'), q).unwrap();
+        let bridge = line_bridge(&v, &v);
+        assert_eq!(bridge.iter().filter(|&&b| b).count(), 1);
+        let top = glyph(CharTable::Pc437, 0, find('┌'), q).unwrap();
+        assert!(line_bridge(&top, &v).iter().any(|&b| b));
+        // Letters never bridge.
+        let a = glyph(CharTable::Pc437, 0, b'A', q).unwrap();
+        assert!(!line_bridge(&a, &a).iter().any(|&b| b));
+    }
+}

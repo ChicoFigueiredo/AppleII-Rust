@@ -58,12 +58,11 @@ pub const fn cell_rows(quality: Quality) -> usize {
 
 const DRAFT_COLS: usize = 12;
 const DRAFT_ROWS: usize = 9;
-const BASE_W: usize = 5;
+const NLQ_COLS: usize = 2 * DRAFT_COLS;
+const NLQ_ROWS: usize = 2 * DRAFT_ROWS;
 
-/// Design lattice in Draft coordinates: `[row][column]`, 9 rows by 12 columns.
+/// Design lattice in Draft coordinates: `[row][column]`, 9 rows by 12 columns (1/72" x 1/120").
 type Lattice = [[bool; DRAFT_COLS]; DRAFT_ROWS];
-/// A hand-drawn 5-column bitmap: `[row][column]`.
-type Bitmap = [[bool; BASE_W]; DRAFT_ROWS];
 
 /// ESC R international variants: the 12 codes they replace, in order.
 const NATIONAL_CODES: [u8; 12] = [
@@ -93,8 +92,16 @@ const NATIONAL: [[char; 12]; 13] = [
 /// `None`. The ESC R `country` replaces the 12 national codes in every table.
 pub fn glyph(table: CharTable, country: u8, code: u8, quality: Quality) -> Option<Glyph> {
     let ch = to_unicode(table, country, code)?;
-    let lattice = lattice_for(ch)?;
-    let mut g = lattice_to_glyph(&lattice, quality);
+    let mut g = match quality {
+        Quality::Draft => lattice_to_draft(&lattice_for(ch)?),
+        // Letters, digits, punctuation and the accented letters are drawn natively on the NLQ
+        // grid; the rest (rule-based box/block characters and a few rare symbols) is derived from
+        // the Draft lattice.
+        Quality::Nlq => match nlq_glyph(ch) {
+            Some(g) => g,
+            None => lattice_to_nlq(&lattice_for(ch)?),
+        },
+    };
     if table == CharTable::Italic && !is_box_or_block(ch) {
         g = italicize(&g);
     }
@@ -159,6 +166,22 @@ pub fn italicize(g: &Glyph) -> Glyph {
     }
 }
 
+/// Columns whose pin fires on the last pin row of `upper` and on the first pin row of `lower`: a
+/// vertical stroke that crosses the line break (box drawing). With the 9-pin head the line pitch of
+/// 1/6" (12 rows of 1/72") leaves 3 unprinted rows between consecutive lines, so the layout (or
+/// the sample generator) continues those columns through the gap, one dot per Draft row (two per
+/// 1/144" row in NLQ), to make the frame continuous like the real printer does with a graphics
+/// line pitch of 9/72" or less.
+pub fn line_bridge(upper: &Glyph, lower: &Glyph) -> Vec<bool> {
+    let last = cell_rows(upper.quality) - 1;
+    upper
+        .columns
+        .iter()
+        .zip(&lower.columns)
+        .map(|(&u, &l)| u & (1 << last) != 0 && l & 1 != 0)
+        .collect()
+}
+
 /// Renders a glyph as ASCII art (`#` dot, `.` blank), one line per pin row, top first.
 pub fn ascii_art(g: &Glyph) -> String {
     let mut s = String::new();
@@ -183,64 +206,62 @@ fn is_box_or_block(c: char) -> bool {
     ('\u{2500}'..='\u{259F}').contains(&c)
 }
 
-fn lattice_to_glyph(lat: &Lattice, quality: Quality) -> Glyph {
-    match quality {
-        Quality::Draft => {
-            let mut cols = vec![0u32; DRAFT_COLS];
-            for (r, row) in lat.iter().enumerate() {
-                for (x, &d) in row.iter().enumerate() {
-                    if d {
-                        cols[x] |= 1 << r;
-                    }
-                }
-            }
-            enforce_no_adjacent(&mut cols);
-            Glyph {
-                quality,
-                columns: cols,
-                baseline_row: 8,
+fn lattice_to_draft(lat: &Lattice) -> Glyph {
+    let mut cols = vec![0u32; DRAFT_COLS];
+    for (r, row) in lat.iter().enumerate() {
+        for (x, &d) in row.iter().enumerate() {
+            if d {
+                cols[x] |= 1 << r;
             }
         }
-        Quality::Nlq => {
-            // Each Draft dot becomes a 1x2 vertical pair (both passes) at the doubled column, and
-            // every pair of dots two Draft columns apart is bridged by a midpoint, so strokes
-            // are continuous. All NLQ dots land on even columns, which satisfies the same
-            // adjacency rule as Draft (see docs).
-            let mut cols = vec![0u32; 2 * DRAFT_COLS];
-            let mut put = |x: usize, r0: usize| {
-                cols[x] |= 0b11 << r0;
-            };
-            for r in 0..DRAFT_ROWS {
-                for x in 0..DRAFT_COLS {
-                    if !lat[r][x] {
-                        continue;
-                    }
-                    put(2 * x, 2 * r);
-                    // A horizontal run that reaches the cell edge keeps its 2-column rhythm into
-                    // the next cell (box drawing).
-                    if x == DRAFT_COLS - 2 && lat[r][x - 2] {
-                        put(2 * x + 2, 2 * r);
-                    }
-                    if x + 2 < DRAFT_COLS {
-                        if lat[r][x + 2] {
-                            put(2 * x + 2, 2 * r);
-                        }
-                        if r + 1 < DRAFT_ROWS && lat[r + 1][x + 2] {
-                            put(2 * x + 2, 2 * r + 1);
-                        }
-                        if r >= 1 && lat[r - 1][x + 2] {
-                            put(2 * x + 2, 2 * r - 1);
-                        }
-                    }
+    }
+    enforce_no_adjacent(&mut cols);
+    Glyph {
+        quality: Quality::Draft,
+        columns: cols,
+        baseline_row: 8,
+    }
+}
+
+/// NLQ glyph derived from a Draft lattice (box/block characters and rare symbols only).
+fn lattice_to_nlq(lat: &Lattice) -> Glyph {
+    // Each Draft dot becomes a 1x2 vertical pair (both passes) at the doubled column, and
+    // every pair of dots two Draft columns apart is bridged by a midpoint, so strokes
+    // are continuous. All NLQ dots land on even columns, which satisfies the same
+    // adjacency rule as Draft (see docs).
+    let mut cols = vec![0u32; 2 * DRAFT_COLS];
+    let mut put = |x: usize, r0: usize| {
+        cols[x] |= 0b11 << r0;
+    };
+    for r in 0..DRAFT_ROWS {
+        for x in 0..DRAFT_COLS {
+            if !lat[r][x] {
+                continue;
+            }
+            put(2 * x, 2 * r);
+            // A horizontal run that reaches the cell edge keeps its 2-column rhythm into
+            // the next cell (box drawing).
+            if x == DRAFT_COLS - 2 && lat[r][x - 2] {
+                put(2 * x + 2, 2 * r);
+            }
+            if x + 2 < DRAFT_COLS {
+                if lat[r][x + 2] {
+                    put(2 * x + 2, 2 * r);
+                }
+                if r + 1 < DRAFT_ROWS && lat[r + 1][x + 2] {
+                    put(2 * x + 2, 2 * r + 1);
+                }
+                if r >= 1 && lat[r - 1][x + 2] {
+                    put(2 * x + 2, 2 * r - 1);
                 }
             }
-            enforce_no_adjacent(&mut cols);
-            Glyph {
-                quality,
-                columns: cols,
-                baseline_row: 16,
-            }
         }
+    }
+    enforce_no_adjacent(&mut cols);
+    Glyph {
+        quality: Quality::Nlq,
+        columns: cols,
+        baseline_row: 16,
     }
 }
 
@@ -248,29 +269,43 @@ fn lattice_to_glyph(lat: &Lattice, quality: Quality) -> Glyph {
 // Glyph designs
 // ---------------------------------------------------------------------------------------------
 
-fn base_glyphs() -> &'static HashMap<char, Bitmap> {
-    static MAP: OnceLock<HashMap<char, Bitmap>> = OnceLock::new();
+/// Hand-drawn Draft designs: `font/draft.txt` (native 9 x 12 lattice, half-dots allowed) plus the
+/// older 5-column designs of `font/legacy5.txt` for rare symbols that were not redrawn
+/// (they sit on the odd columns of the lattice).
+fn base_glyphs() -> &'static HashMap<char, Lattice> {
+    static MAP: OnceLock<HashMap<char, Lattice>> = OnceLock::new();
     MAP.get_or_init(|| {
         let mut map = HashMap::new();
-        for line in include_str!("font/glyphs.txt").lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with("//") {
-                continue;
-            }
-            let mut toks = line.split_whitespace();
-            let ch = toks.next().and_then(single_char).expect("glyph char");
-            let top: usize = toks.next().and_then(|t| t.parse().ok()).expect("top row");
-            let mut bm: Bitmap = [[false; BASE_W]; DRAFT_ROWS];
-            for (i, row) in toks.enumerate() {
-                assert!(
-                    top + i < DRAFT_ROWS && row.len() == BASE_W,
-                    "bad glyph {ch}"
-                );
-                for (c, b) in row.bytes().enumerate() {
-                    bm[top + i][c] = b == b'#';
+        for (src, native) in [
+            (include_str!("font/draft.txt"), true),
+            (include_str!("font/legacy5.txt"), false),
+        ] {
+            for line in src.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with("//") {
+                    continue;
+                }
+                let mut toks = line.split_whitespace();
+                let ch = toks.next().and_then(single_char).expect("glyph char");
+                let top: usize = toks.next().and_then(|t| t.parse().ok()).expect("top row");
+                let mut lat: Lattice = [[false; DRAFT_COLS]; DRAFT_ROWS];
+                for (i, row) in toks.enumerate() {
+                    let width = if native { 10 } else { 5 };
+                    assert!(top + i < DRAFT_ROWS && row.len() == width, "bad glyph {ch}");
+                    for (c, b) in row.bytes().enumerate() {
+                        if b == b'#' {
+                            let x = if native { c + 1 } else { 2 * c + 1 };
+                            lat[top + i][x] = true;
+                        }
+                    }
+                }
+                if native {
+                    assert!(map.insert(ch, lat).is_none(), "duplicate glyph {ch}");
+                } else {
+                    // The legacy file only supplies what draft.txt does not draw.
+                    map.entry(ch).or_insert(lat);
                 }
             }
-            assert!(map.insert(ch, bm).is_none(), "duplicate glyph {ch}");
         }
         map
     })
@@ -282,49 +317,57 @@ fn single_char(t: &str) -> Option<char> {
     it.next().is_none().then_some(c)
 }
 
-fn bitmap_from_rows(top: usize, rows: &[&str], bm: &mut Bitmap) {
-    for (i, row) in rows.iter().enumerate() {
-        for (c, b) in row.bytes().enumerate() {
-            if b == b'#' {
-                bm[top + i][c] = true;
-            }
+fn put_row(lat: &mut Lattice, row: usize, pattern: &str) {
+    for (c, b) in pattern.bytes().enumerate() {
+        if b == b'#' {
+            lat[row][c + 1] = true;
         }
     }
 }
 
-fn first_row(bm: &Bitmap) -> usize {
-    bm.iter().position(|r| r.iter().any(|&d| d)).unwrap_or(0)
+fn first_row(lat: &Lattice) -> usize {
+    lat.iter().position(|r| r.iter().any(|&d| d)).unwrap_or(0)
 }
 
-fn compose(ch: char, base: char, mark: Mark) -> Option<Bitmap> {
-    let mut bm = *base_glyphs().get(&base)?;
-    let top = first_row(&bm);
+/// Draft accent marks (10-char rows like draft.txt). Capitals have a single free row above them;
+/// lowercase letters have two (three for the ring), above the x-height.
+fn draft_mark(mark: Mark, capital: bool) -> &'static [&'static str] {
+    if capital {
+        match mark {
+            Mark::Acute => &[".....#...."],
+            Mark::Grave => &["...#......"],
+            Mark::Circ => &["...#.#...."],
+            Mark::Tilde => &["..#.#.#..."],
+            Mark::Diaer => &["..#...#..."],
+            Mark::Ring => &["....#....."],
+            Mark::Cedilla => &["....#....."],
+        }
+    } else {
+        match mark {
+            Mark::Acute => &[".....#....", "....#....."],
+            Mark::Grave => &["...#......", "....#....."],
+            Mark::Circ => &["....#.....", "...#.#...."],
+            Mark::Tilde => &["...#.#....", "..#.#.#..."],
+            Mark::Diaer => &["..#...#...", "..#...#..."],
+            Mark::Ring => &["....#.....", "...#.#....", "....#....."],
+            Mark::Cedilla => &["....#....."],
+        }
+    }
+}
+
+fn compose_draft(ch: char, base: char, mark: Mark) -> Option<Lattice> {
+    let mut lat = *base_glyphs().get(&base)?;
+    let top = first_row(&lat);
     let capital = !ch.is_lowercase();
-    match mark {
-        Mark::Cedilla => bitmap_from_rows(8, &[".##.."], &mut bm),
-        _ if capital => {
-            let row = match mark {
-                Mark::Acute => "...#.",
-                Mark::Grave => ".#...",
-                Mark::Circ | Mark::Ring => "..#..",
-                Mark::Tilde => ".##.#",
-                _ => ".#.#.",
-            };
-            bitmap_from_rows(top.saturating_sub(1), &[row], &mut bm);
-        }
-        _ => {
-            let rows: &[&str] = match mark {
-                Mark::Acute => &["...#.", "..#.."],
-                Mark::Grave => &[".#...", "..#.."],
-                Mark::Circ => &["..#..", ".#.#."],
-                Mark::Tilde => &[".##.#", "#..#."],
-                Mark::Diaer => &[".#.#.", "....."],
-                _ => &["..#..", ".#.#.", "..#.."],
-            };
-            bitmap_from_rows(top - rows.len(), rows, &mut bm);
-        }
+    if matches!(mark, Mark::Cedilla) {
+        put_row(&mut lat, 8, draft_mark(mark, capital)[0]);
+        return Some(lat);
     }
-    Some(bm)
+    let rows = draft_mark(mark, capital);
+    for (i, pattern) in rows.iter().enumerate() {
+        put_row(&mut lat, top - rows.len() + i, pattern);
+    }
+    Some(lat)
 }
 
 fn lattice_for(ch: char) -> Option<Lattice> {
@@ -334,20 +377,134 @@ fn lattice_for(ch: char) -> Option<Lattice> {
     if is_box_or_block(ch) {
         return box_or_block(ch);
     }
-    let bm = match base_glyphs().get(&ch) {
-        Some(b) => *b,
+    if let Some(l) = base_glyphs().get(&ch) {
+        return Some(*l);
+    }
+    let &(_, base, mark) = COMPOSED.iter().find(|(c, _, _)| *c == ch)?;
+    compose_draft(ch, base, mark)
+}
+
+// ---------------------------------------------------------------------------------------------
+// NLQ: strokes rasterised on the native 24 x 18 grid
+// ---------------------------------------------------------------------------------------------
+
+/// Stroke programs of `font/nlq.txt` (command format in the file header), by character.
+fn nlq_strokes() -> &'static HashMap<char, &'static str> {
+    static MAP: OnceLock<HashMap<char, &'static str>> = OnceLock::new();
+    MAP.get_or_init(|| {
+        let mut map = HashMap::new();
+        for line in include_str!("font/nlq.txt").lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+            let (head, rest) = line.split_once(char::is_whitespace).expect("nlq line");
+            let ch = single_char(head).expect("nlq glyph char");
+            assert!(map.insert(ch, rest.trim()).is_none(), "duplicate nlq {ch}");
+        }
+        map
+    })
+}
+
+/// NLQ accent marks as stroke programs: capitals use rows 0..=1, lowercase rows 1..=5 above the
+/// x-height (row 6); the cedilla hangs below the baseline (row 14).
+fn nlq_mark(mark: Mark, capital: bool) -> &'static str {
+    match (mark, capital) {
+        (Mark::Cedilla, _) => "m 10 14 l 11 15 l 12 16 l 10 17 l 8 16",
+        (Mark::Acute, true) => "m 9 1 l 13 0",
+        (Mark::Grave, true) => "m 7 0 l 11 1",
+        (Mark::Circ, true) => "m 7 1 l 10 0 l 13 1",
+        (Mark::Tilde, true) => "m 6 1 l 8 0 l 12 1 l 14 0",
+        (Mark::Diaer, true) => "M 7 0 L 7 1 M 13 0 L 13 1",
+        (Mark::Ring, true) => "e 10 0.8 2 0.9 0 360",
+        (Mark::Acute, false) => "m 9 5 l 13 2",
+        (Mark::Grave, false) => "m 7 2 l 11 5",
+        (Mark::Circ, false) => "m 7 5 l 10 2 l 13 5",
+        (Mark::Tilde, false) => "e 8 3.5 2.5 1.2 180 360 e 13 3.5 2.5 1.2 180 0",
+        (Mark::Diaer, false) => "M 7 3 L 7 4 M 13 3 L 13 4",
+        (Mark::Ring, false) => "E 10 3 2 1.8 0 360",
+    }
+}
+
+/// The natively drawn NLQ glyph of `ch`, or `None` when it has no NLQ design (box/block characters,
+/// rare symbols): those are derived from the Draft lattice.
+fn nlq_glyph(ch: char) -> Option<Glyph> {
+    let program = match nlq_strokes().get(&ch) {
+        Some(p) => (*p).to_string(),
         None => {
             let &(_, base, mark) = COMPOSED.iter().find(|(c, _, _)| *c == ch)?;
-            compose(ch, base, mark)?
+            let base = nlq_strokes().get(&base)?;
+            format!("{base} {}", nlq_mark(mark, !ch.is_lowercase()))
         }
     };
-    let mut lat: Lattice = [[false; DRAFT_COLS]; DRAFT_ROWS];
-    for (r, row) in bm.iter().enumerate() {
-        for (c, &d) in row.iter().enumerate() {
-            lat[r][2 * c + 1] = d;
+    Some(rasterize_nlq(&program).0)
+}
+
+/// Rasterises a stroke program on the NLQ grid. Returns the glyph and how many dots fell outside the
+/// cell (a design error, checked by the unit tests).
+fn rasterize_nlq(program: &str) -> (Glyph, usize) {
+    let mut cols = vec![0u32; NLQ_COLS];
+    let mut clipped = 0usize;
+    let mut plot = |x: f64, y: f64, thick: bool| {
+        let (xi, yi) = ((x + 0.5).floor() as i32, (y + 0.5).floor() as i32);
+        let xs: &[i32] = if thick { &[-1, 1] } else { &[0] };
+        for dx in xs {
+            let xx = xi + dx;
+            if (0..NLQ_COLS as i32).contains(&xx) && (0..NLQ_ROWS as i32).contains(&yi) {
+                cols[xx as usize] |= 1 << yi;
+            } else {
+                clipped += 1;
+            }
+        }
+    };
+    let toks: Vec<&str> = program.split_whitespace().collect();
+    let num = |i: usize| -> f64 { toks[i].parse().expect("number in nlq program") };
+    let (mut cx, mut cy) = (0.0f64, 0.0f64);
+    let mut i = 0;
+    while i < toks.len() {
+        let cmd = toks[i];
+        let thick = cmd.chars().all(|c| c.is_ascii_uppercase());
+        match cmd {
+            "m" | "M" => {
+                (cx, cy) = (num(i + 1), num(i + 2));
+                plot(cx, cy, thick);
+                i += 3;
+            }
+            "l" | "L" => {
+                let (x1, y1) = (num(i + 1), num(i + 2));
+                let steps = ((x1 - cx).abs().max((y1 - cy).abs()) * 4.0).ceil().max(1.0) as u32;
+                for k in 0..=steps {
+                    let t = f64::from(k) / f64::from(steps);
+                    plot(cx + (x1 - cx) * t, cy + (y1 - cy) * t, thick);
+                }
+                (cx, cy) = (x1, y1);
+                i += 3;
+            }
+            "e" | "E" => {
+                let (ox, oy, rx, ry) = (num(i + 1), num(i + 2), num(i + 3), num(i + 4));
+                let (a0, a1) = (num(i + 5), num(i + 6));
+                let steps = (((a1 - a0).abs().to_radians()) * rx.max(ry) * 4.0)
+                    .ceil()
+                    .max(8.0) as u32;
+                for k in 0..=steps {
+                    let a = (a0 + (a1 - a0) * f64::from(k) / f64::from(steps)).to_radians();
+                    (cx, cy) = (ox + rx * a.cos(), oy + ry * a.sin());
+                    plot(cx, cy, thick);
+                }
+                i += 7;
+            }
+            other => panic!("unknown nlq command {other}"),
         }
     }
-    Some(lat)
+    enforce_no_adjacent(&mut cols);
+    (
+        Glyph {
+            quality: Quality::Nlq,
+            columns: cols,
+            baseline_row: 16,
+        },
+        clipped,
+    )
 }
 
 /// (up, down, left, right) line styles: 0 none, 1 single, 2 double.
@@ -526,4 +683,24 @@ fn box_or_block(c: char) -> Option<Lattice> {
         }
     }
     Some(lat)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nlq_designs_stay_inside_the_cell() {
+        for (ch, program) in nlq_strokes() {
+            assert_eq!(rasterize_nlq(program).1, 0, "NLQ glyph {ch} is clipped");
+        }
+        for (_, base, mark) in COMPOSED {
+            if let Some(b) = nlq_strokes().get(base) {
+                for cap in [true, false] {
+                    let p = format!("{b} {}", nlq_mark(*mark, cap));
+                    assert_eq!(rasterize_nlq(&p).1, 0, "{base} with a mark is clipped");
+                }
+            }
+        }
+    }
 }
