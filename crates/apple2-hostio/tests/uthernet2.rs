@@ -680,6 +680,32 @@ fn udp_oversized_and_empty_datagrams_stay_inside_the_ring() {
 }
 
 #[test]
+fn udp_send_to_a_closed_port_does_not_close_the_socket() {
+    let mut c = Chip::with_null();
+    c.open(0, 0x02);
+    let peer = UdpSocket::bind("127.0.0.1:0").unwrap();
+    peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    c.set_dest(0, [127, 0, 0, 1], peer.local_addr().unwrap().port());
+    c.send(0, b"probe");
+    let mut b = [0u8; 16];
+    let (_, card) = peer.recv_from(&mut b).unwrap();
+
+    // Nobody listens there: Winsock reports the ICMP "port unreachable" as
+    // WSAECONNRESET on the next recv_from.
+    let closed = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    c.set_dest(0, [127, 0, 0, 1], closed_port);
+    c.send(0, b"lost");
+    std::thread::sleep(Duration::from_millis(50)); // let the ICMP arrive
+
+    peer.send_to(b"hello", card).unwrap();
+    assert_eq!(c.wait_rx(0, 13), 13);
+    assert_eq!(c.sr(0), SR_UDP);
+    assert_eq!(&c.recv(0, 13)[8..], b"hello");
+}
+
+#[test]
 fn register_lengths_out_of_range_never_panic_or_overflow() {
     let (mut c, h) = Chip::with_mock();
     // TX and RX pointers far beyond the 2 KB ring on a closed socket: ignored.
