@@ -244,9 +244,18 @@ impl ActivityIndicator {
 /// Pixels per inch for a page drawn at `zoom` on a display with `pixels_per_point`, bounded so
 /// that neither side exceeds [`MAX_RASTER_SIDE`]. Whole numbers: the texture cache key.
 pub fn raster_ppi(page: &Page, zoom: f32, pixels_per_point: f32) -> u32 {
+    raster_ppi_within(page, zoom, pixels_per_point, MAX_RASTER_SIDE as usize)
+}
+
+/// [`raster_ppi`] also bounded by the GPU's largest texture side (`max_texture_side` of egui), so
+/// a high zoom on a small GPU never asks for a texture the device cannot hold.
+pub fn raster_ppi_within(page: &Page, zoom: f32, pixels_per_point: f32, max_side: usize) -> u32 {
     let wanted = POINTS_PER_INCH_AT_100 * zoom * pixels_per_point;
     let longest_in = page.width.max(page.height).max(1) as f32 / PER_INCH as f32;
-    wanted.min(MAX_RASTER_SIDE / longest_in).round().max(8.0) as u32
+    let side = (max_side as f32).min(MAX_RASTER_SIDE);
+    // floor, not round: the rasterised side must not pass `side` by a pixel.
+    let bound = (side / longest_in).floor();
+    wanted.round().min(bound).max(8.0) as u32
 }
 
 /// Draws one page with the paper of a plain form (`zebra`: green bars) or a white sheet.
@@ -625,7 +634,8 @@ fn draw_preview(
     let avail_w = (ui.available_width() - ui.spacing().scroll.bar_width - 12.0).max(32.0);
     let zoom = preview.effective_zoom(avail_w, page_w_in);
     let ppp = ctx.pixels_per_point();
-    let ppi = raster_ppi(page, zoom, ppp);
+    let max_side = ctx.input(|i| i.max_texture_side);
+    let ppi = raster_ppi_within(page, zoom, ppp, max_side);
     // The paper comes from the job (its frozen options), not from the page shape.
     let look = Look::from(vm.shown.options);
     let tex = cache.get(ctx, preview.page, &vm.shown.document, ppi, look);
@@ -1188,6 +1198,25 @@ mod tests {
         assert_ne!(a, b);
         assert!(raster_ppi(&page, MAX_ZOOM, 2.0) as f32 * 11.0 <= MAX_RASTER_SIDE + 11.0);
         assert_eq!(raster_ppi(&page, 1.0, 1.0), 96);
+    }
+
+    #[test]
+    fn the_raster_never_exceeds_the_gpu_texture_limit() {
+        // A 400 % zoom on a HiDPI display, on a GPU that only takes 2048-pixel textures.
+        let page = Page {
+            width: apple2_printer::units::steps(19, 2),
+            height: apple2_printer::units::steps(11, 1),
+            ..Default::default()
+        };
+        for side in [1024usize, 2048, 4096, 16384] {
+            let ppi = raster_ppi_within(&page, MAX_ZOOM, 2.0, side);
+            let img = rasterize_page(&page, ppi, true);
+            assert!(
+                img.width() <= side && img.height() <= side,
+                "{side}: {:?}",
+                img.size
+            );
+        }
     }
 
     #[test]
