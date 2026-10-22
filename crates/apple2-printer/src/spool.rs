@@ -23,6 +23,8 @@ use std::time::{Duration, Instant};
 pub type EngineFactory = Box<dyn Fn() -> Box<dyn PrinterEngine> + Send>;
 
 const MAX_NOTICES: usize = 30;
+/// How long the followed job must be silent before another job's bytes take the preview.
+const FOCUS_QUIET: Duration = Duration::from_millis(500);
 const REPRINT_CHUNK: usize = 8 * 1024;
 const TITLE_CHARS: usize = 60;
 
@@ -153,13 +155,19 @@ struct ActiveJob {
     storage_error: Option<String>,
     last_pages: u32,
     last_diags: usize,
+    /// Card slot the job came from (one open job per slot).
+    slot: u8,
+    last_bytes_at: Instant,
 }
 
 pub struct Spool {
     archive: Archive,
     factory: EngineFactory,
     options: RenderOptions,
+    /// The job the preview follows ("foco de prévia").
     active: Option<ActiveJob>,
+    /// Other open jobs, one per card slot (several Generic Printers can print at once).
+    background: Vec<ActiveJob>,
     snapshot: SnapshotHandle,
     snap_rev: u64,
     notices: VecDeque<String>,
@@ -265,6 +273,7 @@ impl Spool {
             factory,
             options,
             active: None,
+            background: Vec::new(),
             snapshot: SnapshotHandle::new(),
             snap_rev: 0,
             notices: VecDeque::new(),
@@ -345,11 +354,34 @@ impl Spool {
                 origin,
                 transport,
             } => {
-                if let Some(prev) = self.active.as_ref().map(|a| a.capture_job) {
+                // One open job per card: an Open from a slot that still has one means the earlier
+                // job never closed.
+                let slot = origin.slot;
+                if let Some(prev) = self
+                    .active
+                    .as_ref()
+                    .filter(|a| a.slot == slot)
+                    .map(|a| a.capture_job)
+                {
                     self.notice(format!(
                         "trabalho {prev} sem fechamento; fechado como Reset ao abrir o {job}"
                     ));
                     self.finish_active(CloseReason::Reset);
+                }
+                if let Some(prev) = self
+                    .background
+                    .iter()
+                    .find(|a| a.slot == slot)
+                    .map(|a| a.capture_job)
+                {
+                    self.notice(format!(
+                        "trabalho {prev} sem fechamento; fechado como Reset ao abrir o {job}"
+                    ));
+                    self.finish_background(prev, CloseReason::Reset);
+                }
+                // The new job takes the preview; the one it replaces keeps printing in background.
+                if let Some(prev) = self.active.take() {
+                    self.background.push(prev);
                 }
                 self.open_job(NewJob {
                     capture_job: job,
@@ -361,12 +393,20 @@ impl Spool {
                 self.publish(true);
             }
             CaptureEvent::Bytes { job, offset, data } => {
-                self.on_bytes(job, offset, &data);
+                if self.active.as_ref().map(|a| a.capture_job) == Some(job) {
+                    self.on_bytes(job, offset, &data);
+                } else if let Some(i) = self.background.iter().position(|a| a.capture_job == job) {
+                    self.bytes_in_background(i, job, offset, &data);
+                } else {
+                    self.on_bytes(job, offset, &data);
+                }
                 self.publish(false);
             }
             CaptureEvent::Close { job, reason } => {
                 if self.active.as_ref().map(|a| a.capture_job) == Some(job) {
                     self.finish_active(reason);
+                } else if self.background.iter().any(|a| a.capture_job == job) {
+                    self.finish_background(job, reason);
                 } else {
                     self.notice(format!("Close do trabalho {job} ignorado (não está ativo)"));
                 }
@@ -377,6 +417,7 @@ impl Spool {
 
     fn open_job(&mut self, new: NewJob) {
         let capture_job = new.capture_job;
+        let slot = new.origin.slot;
         let options = new.options;
         let mut engine = (self.factory)();
         engine.begin(options);
@@ -408,6 +449,8 @@ impl Spool {
             storage_error,
             last_pages: 0,
             last_diags: 0,
+            slot,
+            last_bytes_at: Instant::now(),
         });
     }
 
@@ -420,6 +463,7 @@ impl Spool {
             ));
             return;
         };
+        a.last_bytes_at = Instant::now();
         let mut data = data;
         if offset < a.fed {
             let skip = ((a.fed - offset) as usize).min(data.len());
@@ -470,8 +514,68 @@ impl Spool {
         }
     }
 
-    /// Ends the active job (if any) with `reason`.
+    /// Ends the job the preview follows (if any) with `reason`; another open job, if there is
+    /// one, takes the preview.
     pub fn finish_active(&mut self, reason: CloseReason) {
+        self.finish_focus(reason);
+        if let Some(next) = self.background.pop() {
+            self.focus(next);
+        }
+    }
+
+    /// Makes `job` the one the preview follows (the document is copied once).
+    fn focus(&mut self, job: ActiveJob) {
+        self.doc = Arc::new(job.engine.document().clone());
+        self.doc_rev += 1;
+        self.doc_dirty = false;
+        self.active = Some(job);
+    }
+
+    /// Feeds bytes to an open job that is not the preview's. It takes the preview when the
+    /// current one has been quiet for half a second (alternating printers do not thrash it).
+    fn bytes_in_background(&mut self, i: usize, job: u64, offset: u64, data: &[u8]) {
+        let quiet = self
+            .active
+            .as_ref()
+            .is_none_or(|a| a.last_bytes_at.elapsed() >= FOCUS_QUIET);
+        let (rev, dirty) = (self.doc_rev, self.doc_dirty);
+        let focus = self.active.take();
+        self.active = Some(self.background.swap_remove(i));
+        self.on_bytes(job, offset, data);
+        let fed = self.active.take();
+        if quiet {
+            if let Some(f) = focus {
+                self.background.push(f);
+            }
+            if let Some(j) = fed {
+                self.focus(j);
+            }
+        } else {
+            self.doc_rev = rev;
+            self.doc_dirty = dirty;
+            self.active = focus;
+            if let Some(j) = fed {
+                self.background.push(j);
+            }
+        }
+    }
+
+    /// Closes an open job that is not the preview's, leaving the preview as it is.
+    fn finish_background(&mut self, job: u64, reason: CloseReason) {
+        let Some(i) = self.background.iter().position(|a| a.capture_job == job) else {
+            return;
+        };
+        let (doc, rev, dirty) = (self.doc.clone(), self.doc_rev, self.doc_dirty);
+        let focus = self.active.take();
+        self.active = Some(self.background.remove(i));
+        self.finish_focus(reason);
+        self.doc = doc;
+        self.doc_rev = rev;
+        self.doc_dirty = dirty;
+        self.active = focus;
+    }
+
+    fn finish_focus(&mut self, reason: CloseReason) {
         let Some(mut a) = self.active.take() else {
             return;
         };
@@ -523,7 +627,9 @@ impl Spool {
 
     /// Ends the active job as `Shutdown` and publishes (emulator exit).
     pub fn shutdown(&mut self) {
-        self.finish_active(CloseReason::Shutdown);
+        while self.active.is_some() || !self.background.is_empty() {
+            self.finish_active(CloseReason::Shutdown);
+        }
         self.publish(true);
     }
 
@@ -564,13 +670,15 @@ impl Spool {
         // every user action); between them only the active job's row can have moved.
         if force || self.jobs_cache.is_empty() {
             self.jobs_cache = self.archive.jobs().iter().map(summary).collect();
-        } else if let Some(a) = &self.active {
-            if let Some(e) = self.archive.get(&a.id) {
-                if let Some(row) = self.jobs_cache.iter_mut().find(|j| j.id == a.id) {
-                    let title = std::mem::take(&mut row.title);
-                    *row = summary(e);
-                    if row.title.is_empty() {
-                        row.title = title;
+        } else {
+            for a in self.active.iter().chain(self.background.iter()) {
+                if let Some(e) = self.archive.get(&a.id) {
+                    if let Some(row) = self.jobs_cache.iter_mut().find(|j| j.id == a.id) {
+                        let title = std::mem::take(&mut row.title);
+                        *row = summary(e);
+                        if row.title.is_empty() {
+                            row.title = title;
+                        }
                     }
                 }
             }
