@@ -182,6 +182,7 @@ pub fn printer_card_for(
                 slot,
             },
             match spec.transport {
+                PrinterTransport::Auto => Transport::Auto,
                 PrinterTransport::EightBit => Transport::EightBit,
                 PrinterTransport::SevenBitAppleWin => Transport::SevenBitAppleWin,
             },

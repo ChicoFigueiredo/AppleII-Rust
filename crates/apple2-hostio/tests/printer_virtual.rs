@@ -334,3 +334,42 @@ fn virtual_only_card_has_no_legacy_output() {
     assert_eq!(flatten(&rx.drain()), b"z");
     assert!(!m.card::<ParallelPrinterCard>(1).unwrap().is_open());
 }
+
+/// Transport::Auto (ADR 0008): text through the card's firmware (PR#1 + PRINT) loses bit 7, so
+/// the LX-310 sees plain ASCII and real ESC codes; the legacy file is unchanged.
+#[test]
+fn auto_transport_clears_bit_7_on_firmware_text() {
+    let (mut m, sink, rx) = machine(PrinterOptions::default(), Transport::Auto);
+    m.reset();
+    run_frames(&mut m, 200);
+    assert!(m.paste("PR#1\r"));
+    run_frames(&mut m, 30);
+    assert!(m.paste("PRINT CHR$(27);\"E\";\"HELLO PRINTER\"\r"));
+    run_frames(&mut m, 60);
+    m.reset();
+    let data = flatten(&rx.drain());
+    assert!(data.iter().all(|&c| c < 0x80), "{data:?}");
+    assert!(data.windows(2).any(|w| w == [0x1B, b'E']), "{data:?}");
+    assert!(String::from_utf8_lossy(&data).contains("HELLO PRINTER"));
+    assert_eq!(data, sink.contents());
+}
+
+/// Transport::Auto: a program that writes the port itself (a graphics driver) sends all 8 bits.
+#[test]
+fn auto_transport_keeps_8_bits_from_programs_writing_the_port() {
+    let (mut m, _sink, rx) = machine(PrinterOptions::default(), Transport::Auto);
+    m.reset();
+    run_frames(&mut m, 200);
+    // $0300: LDA #$C1 / STA $C090 / LDA #$FF / STA $C090 / RTS
+    let prog = [
+        0xA9, 0xC1, 0x8D, 0x90, 0xC0, 0xA9, 0xFF, 0x8D, 0x90, 0xC0, 0x60,
+    ];
+    for (i, b) in prog.iter().enumerate() {
+        m.poke(0x0300 + i as u16, *b);
+    }
+    assert!(m.paste("CALL 768\r"));
+    run_frames(&mut m, 30);
+    m.reset();
+    let data = flatten(&rx.drain());
+    assert_eq!(data, vec![0xC1, 0xFF]);
+}
