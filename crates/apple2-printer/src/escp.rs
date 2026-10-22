@@ -781,6 +781,15 @@ mod tests {
     }
 
     #[test]
+    fn esc_percent_is_recognised_with_one_parameter_and_reported() {
+        let (o, d) = run(&[0x1B, b'%', 1, b'A']);
+        assert_eq!(o.len(), 2);
+        assert!(matches!(o[0].command, Command::Unsupported { .. }));
+        assert_eq!(o[1].command, Command::Char(b'A'));
+        assert_eq!(d.len(), 1);
+    }
+
+    #[test]
     fn esc_amp_split_anywhere_is_equivalent() {
         let mut d = vec![0x1B, b'x', 1, 0x1B, b'&', 0, 61, 61, 0, 3, 0];
         d.extend(0..9u8);
