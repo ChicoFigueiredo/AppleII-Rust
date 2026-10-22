@@ -387,3 +387,15 @@ fn in_progress_document_exports_consistently() {
     need_poppler!();
     assert!(pdfinfo(&write("inprog", &b)).contains("Pages: 1"));
 }
+
+/// The PDF names the version it was built from (the workspace package version, resolved at
+/// compile time), in /Creator, /Producer and the XMP tool.
+#[test]
+fn the_pdf_names_the_crate_version_it_was_built_from() {
+    let meta = PdfMeta::default();
+    assert_eq!(meta.app_version, env!("CARGO_PKG_VERSION"));
+    let bytes = export(&a_doc(1), &green(), &meta, &PageSelection::All);
+    let text = String::from_utf8_lossy(&bytes);
+    let want = format!("apple2-rust {}", env!("CARGO_PKG_VERSION"));
+    assert!(text.contains(&format!("/Creator ({want})")), "{want}");
+}

@@ -456,3 +456,13 @@ fn if_the_card_never_answers_the_spool_closes_the_job_after_the_fallback() {
     hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// The version in the PDF metadata is the application's: the printer crate and the app share the
+/// workspace version.
+#[test]
+fn the_printer_crate_and_the_app_share_the_version_written_in_the_pdf() {
+    assert_eq!(
+        apple2_printer::pdf::PdfMeta::default().app_version,
+        env!("CARGO_PKG_VERSION")
+    );
+}
