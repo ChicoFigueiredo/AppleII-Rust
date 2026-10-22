@@ -854,6 +854,10 @@ impl PrinterWindow {
             }
         }
         n.gfx.render(&n.egui_ctx, output);
+        // Right after the surface's present(): the frame with these dots is on its way to the screen.
+        if let Some((job, bytes)) = vm.shown.probe {
+            apple2_printer::latency::presented(job, bytes);
+        }
         if self.dump_requested && n.gfx.captured {
             self.dump_requested = false;
             eprintln!("printer window dump saved");
@@ -948,7 +952,7 @@ pub fn demo_view_model(pages: usize) -> PrinterViewModel {
                 }
             }
         }
-        doc.pages.push(page);
+        doc.pages.push(std::sync::Arc::new(page));
     }
     let entry = |n: u32, state: JobState| JobEntry {
         id: format!("demo-{n}"),
@@ -988,6 +992,7 @@ pub fn demo_view_model(pages: usize) -> PrinterViewModel {
             options: Default::default(),
             loading: false,
             live: true,
+            probe: None,
         },
         messages: Vec::new(),
         revision: 1,

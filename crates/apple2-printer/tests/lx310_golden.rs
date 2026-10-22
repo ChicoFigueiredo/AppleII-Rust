@@ -141,6 +141,38 @@ fn cases() -> Vec<Case> {
         paper: PaperKind::A4,
         data: b"\x1bC\x03\x1bN\x01A\nB\nC".to_vec(),
     });
+    // Long sequences in the no-adjacent modes: a solid stroke, an alternating pattern and
+    // pseudo-random bytes (xorshift, fixed seed). Each is 64 columns.
+    for (tag, head) in [
+        ("esc_y", &[0x1B, b'Y'][..]),
+        ("esc_z", &[0x1B, b'Z'][..]),
+        ("esc_star2", &[0x1B, b'*', 2][..]),
+        ("esc_star3", &[0x1B, b'*', 3][..]),
+    ] {
+        let mut seed = 0x2545_F491u32;
+        let mut random = Vec::new();
+        for _ in 0..64 {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            random.push(seed as u8);
+        }
+        let solid = vec![0xFF; 64];
+        let alt: Vec<u8> = (0..64)
+            .map(|i| if i % 2 == 0 { 0xAA } else { 0x55 })
+            .collect();
+        for (kind, bytes) in [("solid", solid), ("alternating", alt), ("random", random)] {
+            let mut data = head.to_vec();
+            data.extend_from_slice(&[64, 0]);
+            data.extend_from_slice(&bytes);
+            let name: &'static str = Box::leak(format!("long_{tag}_{kind}").into_boxed_str());
+            v.push(Case {
+                name,
+                paper: PaperKind::GreenBar,
+                data,
+            });
+        }
+    }
     v
 }
 

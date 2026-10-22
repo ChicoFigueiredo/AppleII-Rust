@@ -24,6 +24,7 @@ use crate::font::{self, CharTable, Glyph, Quality};
 use crate::paper::{Paper, RenderOptions};
 use crate::units;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Printable width of the LX-310: 8" (80 columns at 10 cpi), manual "Recommended printable area".
 pub const PRINTABLE_WIDTH: u32 = 17_280;
@@ -379,12 +380,12 @@ impl Lx310 {
             return false;
         }
         while self.doc.pages.len() <= n {
-            self.doc.pages.push(Page {
+            self.doc.pages.push(Arc::new(Page {
                 width: self.options.paper.width,
                 height: self.options.paper.height,
                 dots: Vec::new(),
                 text: Vec::new(),
-            });
+            }));
             self.changes += 1;
         }
         self.doc.last_in_progress = true;
@@ -433,7 +434,7 @@ impl Lx310 {
         }
         self.dot_total += dots.len();
         self.changes += dots.len() as u64;
-        self.doc.pages[page].dots.extend(dots);
+        Arc::make_mut(&mut self.doc.pages[page]).dots.extend(dots);
     }
 
     /// A dot at `(x_pos + dx, y_pos + dy)` (plus the top-of-form offset). Off the printable width
@@ -479,7 +480,7 @@ impl Lx310 {
         }
         if let Some(l) = self.last_run {
             if l.page == page && l.y == line_y && l.advance == advance && l.end_x == x {
-                if let Some(run) = self.doc.pages[page].text.get_mut(l.idx) {
+                if let Some(run) = Arc::make_mut(&mut self.doc.pages[page]).text.get_mut(l.idx) {
                     run.text.push(c);
                     self.last_run = Some(LastRun {
                         end_x: x + advance,
@@ -490,7 +491,7 @@ impl Lx310 {
                 }
             }
         }
-        let text = &mut self.doc.pages[page].text;
+        let text = &mut Arc::make_mut(&mut self.doc.pages[page]).text;
         text.push(TextRun {
             x,
             y,
@@ -769,11 +770,12 @@ impl Lx310 {
             if !nine_pin {
                 bits = u16::from(b0) << 1;
             }
-            let this = bits;
             if !adjacent_ok {
+                // The head ignores a dot whose pin fired in the previous column; the comparison
+                // is against what was PRINTED, so a continuous stroke prints every other column.
                 bits &= !prev;
             }
-            prev = this;
+            prev = bits;
             let dx = c as u32 * step;
             if self.x_pos.saturating_add(dx) >= self.fmt.right {
                 dropped += bits.count_ones().max(1);

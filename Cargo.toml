@@ -11,7 +11,7 @@ repository = "https://github.com/ChicoFigueiredo/AppleII-Rust"
 authors = ["Chico Figueiredo", "Contributors of AppleWin (https://github.com/AppleWin/AppleWin)"]
 
 [workspace.dependencies]
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 
 [profile.release]
 opt-level = 3

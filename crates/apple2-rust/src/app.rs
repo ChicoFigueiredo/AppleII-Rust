@@ -100,6 +100,9 @@ struct App {
     main_focused: bool,
     /// `APPLE2_RUST_PRINTER_DEMO=script`: scripted close / reopen smoke (stage, start, frames).
     demo_script: Option<(u8, Instant, u64)>,
+    /// `APPLE2_RUST_PRINTER_T018=close,reopen,exit` (seconds since start): closes the Central while
+    /// a real job is printing, reopens it, and logs the Pages the view model holds at each step.
+    t018: Option<(f32, f32, f32, u8)>,
     quit: bool,
     egui_ctx: egui::Context,
     egui_state: Option<egui_winit::State>,
@@ -200,6 +203,7 @@ impl App {
             proxy,
             main_focused: false,
             demo_script: None,
+            t018: None,
             quit: false,
             egui_ctx: egui::Context::default(),
             egui_state: None,
@@ -1096,6 +1100,48 @@ impl App {
         ));
     }
 
+    /// Development flag `APPLE2_RUST_PRINTER_T018` (native evidence for T-018, no human input).
+    fn run_t018(&mut self, el: &ActiveEventLoop) {
+        let Some((close, reopen, exit, stage)) = self.t018 else {
+            return;
+        };
+        let secs = self.started.elapsed().as_secs_f32();
+        let pages = self.printer_vm.document().pages.len();
+        let dots: usize = self
+            .printer_vm
+            .document()
+            .pages
+            .iter()
+            .map(|p| p.dots.len())
+            .sum();
+        match stage {
+            0 if secs >= close => {
+                self.printer.close();
+                eprintln!("T018: Central closed at {secs:.1} s; {pages} page(s), {dots} dots");
+                self.t018 = Some((close, reopen, exit, 1));
+            }
+            1 if secs >= reopen => {
+                eprintln!("T018: while closed the view model grew to {pages} page(s), {dots} dots");
+                self.printer.open(false);
+                self.t018 = Some((close, reopen, exit, 2));
+            }
+            2 if secs >= exit => {
+                eprintln!(
+                    "T018: Central reopened; {pages} page(s), {dots} dots, window open: {}",
+                    self.printer.is_open()
+                );
+                self.emu.shutdown();
+                self.release_gpu();
+                el.exit();
+                self.t018 = None;
+            }
+            _ => {}
+        }
+        el.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(100),
+        ));
+    }
+
     /// Development flag `APPLE2_RUST_PRINTER_DEMO` (see [`printer_window::DEMO_ENV`]).
     fn start_printer_demo(&mut self) {
         let Ok(v) = std::env::var(printer_window::DEMO_ENV) else {
@@ -1116,6 +1162,7 @@ impl App {
     fn release_gpu(&mut self) {
         // The secondary window goes first: its surface was created from the shared instance.
         self.printer.shutdown();
+        apple2_printer::latency::print_report_once();
         self.gfx = None;
         self.gpu = None;
         self.egui_state = None;
@@ -1179,6 +1226,15 @@ impl ApplicationHandler<UserEvent> for App {
         self.window = Some(window);
         self.main_focused = true;
         self.printer.dump = std::env::var_os("APPLE2_RUST_PRINTER_DUMP").map(PathBuf::from);
+        if std::env::var_os(apple2_printer::latency::ENV).is_some_and(|v| v != "0") {
+            apple2_printer::latency::enable();
+        }
+        self.t018 = std::env::var("APPLE2_RUST_PRINTER_T018")
+            .ok()
+            .and_then(|v| {
+                let n: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+                (n.len() == 3).then(|| (n[0], n[1], n[2], 0))
+            });
         self.start_printer_demo();
     }
 
@@ -1308,5 +1364,6 @@ impl ApplicationHandler<UserEvent> for App {
         }
         self.drive_printer(el);
         self.run_demo_script(el);
+        self.run_t018(el);
     }
 }

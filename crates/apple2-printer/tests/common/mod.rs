@@ -37,21 +37,23 @@ impl DummyEngine {
 
     fn end_line(&mut self) {
         if self.lines.is_multiple_of(LINES_PER_PAGE) {
-            self.doc.pages.push(Page {
+            self.doc.pages.push(Arc::new(Page {
                 width: self.options.paper.width,
                 height: self.options.paper.height,
                 ..Page::default()
-            });
+            }));
         }
         let text = String::from_utf8_lossy(&self.line).into_owned();
         let y = (self.lines % LINES_PER_PAGE) as u32 * 100;
-        self.doc.pages.last_mut().unwrap().text.push(TextRun {
-            x: 0,
-            y,
-            advance: 10,
-            height: 10,
-            text,
-        });
+        Arc::make_mut(self.doc.pages.last_mut().unwrap())
+            .text
+            .push(TextRun {
+                x: 0,
+                y,
+                advance: 10,
+                height: 10,
+                text,
+            });
         self.lines += 1;
         self.line.clear();
         self.doc.last_in_progress = true;

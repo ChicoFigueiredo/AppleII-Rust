@@ -177,7 +177,7 @@ fn main() {
             cpi,
         );
     }
-    doc.pages.push(s.page);
+    doc.pages.push(std::sync::Arc::new(s.page));
 
     // Page 2: Portuguese accents in four tables, then a frame.
     let mut s = Sheet::new(paper);
@@ -218,7 +218,7 @@ fn main() {
         }
         s.y += LINE;
     }
-    doc.pages.push(s.page);
+    doc.pages.push(std::sync::Arc::new(s.page));
 
     let opts = RenderOptions {
         paper,

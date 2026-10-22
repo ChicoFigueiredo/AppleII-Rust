@@ -110,6 +110,8 @@ pub struct Shown {
     /// The pages are being rendered from the archive.
     pub loading: bool,
     pub live: bool,
+    /// Latency probe: (capture job, bytes the live document covers); `None` for archived pages.
+    pub probe: Option<(u64, u64)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

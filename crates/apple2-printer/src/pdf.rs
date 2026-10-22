@@ -155,15 +155,18 @@ pub fn export_with_report(
     selection: &PageSelection,
 ) -> (Vec<u8>, ExportReport) {
     let selected: Vec<&Page> = match selection {
-        PageSelection::All => doc.pages.iter().collect(),
+        PageSelection::All => doc.pages.iter().map(|p| &**p).collect(),
         PageSelection::Range { start, end } => doc
             .pages
             .iter()
             .enumerate()
             .filter(|(i, _)| i >= start && i < end)
-            .map(|(_, p)| p)
+            .map(|(_, p)| &**p)
             .collect(),
-        PageSelection::List(l) => l.iter().filter_map(|&i| doc.pages.get(i)).collect(),
+        PageSelection::List(l) => l
+            .iter()
+            .filter_map(|&i| doc.pages.get(i).map(|p| &**p))
+            .collect(),
     };
 
     let mut report = ExportReport {

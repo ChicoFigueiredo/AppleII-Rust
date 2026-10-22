@@ -301,9 +301,10 @@ fn t009_esc_star_payload_with_esc_and_lf_respects_density() {
         let c3: Vec<_> = all.iter().filter(|p| p.0 == X0 + 3 * step).collect();
         assert_eq!(c1.len(), 8, "m={m}");
         // 0x1B 0x0A would be a bare ESC and a line feed; as data they are ordinary columns
-        // (0x1B: 4 pins, 0x0A: 2 pins). ESC Y/Z (m = 2, 3) ignore a dot right after a printed one.
+        // (0x1B: 4 pins, 0x0A: 2 pins). ESC Y/Z (m = 2, 3) ignore a dot right after a printed
+        // one: 0x1B follows the printed 0xFF (all ignored); 0x0A follows a column that printed nothing.
         if m == 2 || m == 3 {
-            assert_eq!((c2.len(), c3.len()), (0, 0), "m={m}");
+            assert_eq!((c2.len(), c3.len()), (0, 2), "m={m}");
         } else {
             assert_eq!((c2.len(), c3.len()), (4, 2), "m={m}");
         }
@@ -326,6 +327,33 @@ fn adjacent_dots_are_dropped_for_esc_y_and_z_only() {
         dots_of(&run(&[0x1B, b'Y', 3, 0, 0xFF, 0x00, 0xFF]), 0).len(),
         16
     );
+}
+
+/// A pin that did not fire in the previous column may fire in this one: a continuous stroke in a
+/// no-adjacent mode comes out as every other column (the dot ignored is the second of a pair, and
+/// the comparison is against what was PRINTED, not what was asked for).
+#[test]
+fn continuous_stroke_prints_every_other_column_in_no_adjacent_modes() {
+    for (cmd, step) in [
+        (&[0x1B, b'Y'][..], 18u32),
+        (&[0x1B, b'Z'][..], 9),
+        (&[0x1B, b'*', 2][..], 18),
+        (&[0x1B, b'*', 3][..], 9),
+    ] {
+        let mut v = cmd.to_vec();
+        v.extend_from_slice(&[8, 0]);
+        v.extend_from_slice(&[0xFF; 8]);
+        let d = run(&v);
+        let dots = dots_of(&d, 0);
+        assert_eq!(dots.len(), 4 * 8, "{cmd:?}");
+        let xs: std::collections::BTreeSet<_> = dots.iter().map(|p| p.0).collect();
+        let want: std::collections::BTreeSet<_> = (0..4).map(|i| X0 + 2 * i * step).collect();
+        assert_eq!(xs, want, "{cmd:?}");
+        // Alternating pattern: AA 55 AA 55 ... pins that differ never collide.
+        let mut v = cmd.to_vec();
+        v.extend_from_slice(&[6, 0, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55]);
+        assert_eq!(dots_of(&run(&v), 0).len(), 24, "{cmd:?}");
+    }
 }
 
 #[test]

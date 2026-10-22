@@ -2,6 +2,7 @@
 //! layer for search/copy in the PDF. The preview and the PDF draw the same PageDocument.
 
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// One pin impact. `x`, `y` are the dot centre in units (1/2160"), from the paper's top-left corner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -50,7 +51,10 @@ pub struct Diagnostic {
 /// The whole job as printed so far. `pages.last()` may be in progress.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PageDocument {
-    pub pages: Vec<Page>,
+    /// Shared Pages: copying the document for the preview clones pointers, and only the page in
+    /// progress is duplicated when the engine writes to it again (`Arc::make_mut`). Serialises
+    /// exactly as a plain `Vec<Page>` (serde `rc`).
+    pub pages: Vec<Arc<Page>>,
     /// True while the last page can still receive dots.
     pub last_in_progress: bool,
     pub diagnostics: Vec<Diagnostic>,
