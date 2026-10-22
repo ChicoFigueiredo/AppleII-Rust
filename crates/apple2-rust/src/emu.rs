@@ -435,10 +435,10 @@ impl Emulator {
             RunMode::Stepping => self.debugger.run(&mut self.machine, cpf),
             RunMode::Debug => 0,
         };
-        // The video renderer steps the machine itself, so `Machine::run_frame` (which tells the
-        // cards how many cycles ran) is bypassed: do it here. The virtual printer needs it to
-        // deliver its bytes and to close an idle job (AppleWin's `CardManager::Update`).
-        if cycles > 0 {
+        // The debugger single-steps the machine, so no `Machine::run_frame` told the cards how many
+        // cycles ran: do it here (AppleWin's `CardManager::Update`). The frame sources do it
+        // themselves (`FrameSource::run_frame`).
+        if self.debugger.mode == RunMode::Stepping && cycles > 0 {
             self.machine.update_cards(cycles);
         }
         let audio = self.mixer.produce_machine(&mut self.machine);
