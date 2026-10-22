@@ -366,6 +366,10 @@ impl VirtualOutput {
             since_flush: 0,
         });
         job.inactivity = 0;
+        if job.pending.is_empty() {
+            // Latency probe (off unless APPLE2_RUST_PRINTER_LATENCY=1): the oldest byte of a block.
+            apple2_printer::latency::written(job.id, job.delivered + 1);
+        }
         job.pending.push(byte);
         if job.pending.len() >= VIRTUAL_FLUSH_BYTES {
             self.flush();

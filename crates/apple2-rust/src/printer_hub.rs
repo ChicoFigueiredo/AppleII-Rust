@@ -889,6 +889,7 @@ impl PrinterHub {
                 .as_ref()
                 .map(|a| a.document.clone())
                 .unwrap_or_default();
+            let probe = snap.active.as_ref().map(|a| (a.capture_job, a.doc_bytes));
             self.last_shown = Some((sel.id.clone(), doc.clone()));
             return Shown {
                 job: Some(sel.id.clone()),
@@ -898,6 +899,7 @@ impl PrinterHub {
                 options: job_opts,
                 loading: false,
                 live: true,
+                probe,
             };
         }
         let version = self
@@ -939,6 +941,7 @@ impl PrinterHub {
             options,
             loading,
             live: false,
+            probe: None,
         }
     }
 

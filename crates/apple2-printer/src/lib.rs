@@ -20,6 +20,7 @@ pub mod document;
 pub mod engine;
 pub mod escp;
 pub mod font;
+pub mod latency;
 pub mod lx310;
 pub mod paper;
 #[cfg(feature = "pdf")]

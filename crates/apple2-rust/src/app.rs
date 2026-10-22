@@ -1116,6 +1116,7 @@ impl App {
     fn release_gpu(&mut self) {
         // The secondary window goes first: its surface was created from the shared instance.
         self.printer.shutdown();
+        apple2_printer::latency::print_report_once();
         self.gfx = None;
         self.gpu = None;
         self.egui_state = None;
@@ -1179,6 +1180,9 @@ impl ApplicationHandler<UserEvent> for App {
         self.window = Some(window);
         self.main_focused = true;
         self.printer.dump = std::env::var_os("APPLE2_RUST_PRINTER_DUMP").map(PathBuf::from);
+        if std::env::var_os(apple2_printer::latency::ENV).is_some_and(|v| v != "0") {
+            apple2_printer::latency::enable();
+        }
         self.start_printer_demo();
     }
 

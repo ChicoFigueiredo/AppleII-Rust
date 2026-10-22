@@ -68,6 +68,8 @@ pub struct ActiveView {
     pub bytes: u64,
     /// Shared, immutable copy: cloning the view is cheap.
     pub document: Arc<PageDocument>,
+    /// Bytes of the job that `document` already shows (it can lag `bytes`: copies are throttled).
+    pub doc_bytes: u64,
     /// Changes only when the document changed, so the preview redraws only then.
     pub doc_revision: u64,
     /// Set when bytes could no longer be saved (disk full, read-only folder).
@@ -173,6 +175,8 @@ pub struct Spool {
     notices: VecDeque<String>,
     doc: Arc<PageDocument>,
     doc_rev: u64,
+    /// Bytes of the active job the shared `doc` covers.
+    doc_bytes: u64,
     doc_dirty: bool,
     reprint: Option<ReprintView>,
     last_doc_publish: Instant,
@@ -279,6 +283,7 @@ impl Spool {
             notices: VecDeque::new(),
             doc: Arc::new(PageDocument::default()),
             doc_rev: 0,
+            doc_bytes: 0,
             doc_dirty: false,
             reprint: None,
             last_doc_publish: Instant::now(),
@@ -526,6 +531,7 @@ impl Spool {
     /// Makes `job` the one the preview follows (the document is copied once).
     fn focus(&mut self, job: ActiveJob) {
         self.doc = Arc::new(job.engine.document().clone());
+        self.doc_bytes = job.fed;
         self.doc_rev += 1;
         self.doc_dirty = false;
         self.active = Some(job);
@@ -565,11 +571,17 @@ impl Spool {
         let Some(i) = self.background.iter().position(|a| a.capture_job == job) else {
             return;
         };
-        let (doc, rev, dirty) = (self.doc.clone(), self.doc_rev, self.doc_dirty);
+        let (doc, rev, dirty, doc_bytes) = (
+            self.doc.clone(),
+            self.doc_rev,
+            self.doc_dirty,
+            self.doc_bytes,
+        );
         let focus = self.active.take();
         self.active = Some(self.background.remove(i));
         self.finish_focus(reason);
         self.doc = doc;
+        self.doc_bytes = doc_bytes;
         self.doc_rev = rev;
         self.doc_dirty = dirty;
         self.active = focus;
@@ -607,6 +619,7 @@ impl Spool {
             }
         }
         self.doc = Arc::new(doc);
+        self.doc_bytes = a.fed;
         self.doc_dirty = false;
         self.doc_rev += 1;
     }
@@ -647,6 +660,7 @@ impl Spool {
             if let Some(a) = &self.active {
                 let t = Instant::now();
                 self.doc = Arc::new(a.engine.document().clone());
+                self.doc_bytes = a.fed;
                 self.last_copy = t.elapsed();
             }
             self.doc_dirty = false;
@@ -663,9 +677,13 @@ impl Spool {
             title: a.title.clone(),
             bytes: a.fed,
             document: self.doc.clone(),
+            doc_bytes: self.doc_bytes,
             doc_revision: self.doc_rev,
             storage_error: a.storage_error.clone(),
         });
+        if let Some(v) = &active {
+            crate::latency::published(v.capture_job, v.doc_bytes);
+        }
         // The list of the Arquivo only grows: rebuild it on forced publications (open, close and
         // every user action); between them only the active job's row can have moved.
         if force || self.jobs_cache.is_empty() {
