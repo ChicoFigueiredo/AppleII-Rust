@@ -351,9 +351,11 @@ struct VirtualJob {
 }
 
 impl VirtualOutput {
-    fn write(&mut self, value: u8) {
+    /// `from_firmware`: the writing instruction is in the card's ROM (see [`Transport::Auto`]).
+    fn write(&mut self, value: u8, from_firmware: bool) {
         let byte = match self.transport {
-            Transport::EightBit => value,
+            Transport::Auto if from_firmware => value & 0x7F,
+            Transport::Auto | Transport::EightBit => value,
             Transport::SevenBitAppleWin => value & 0x7F,
         };
         let job = self.job.get_or_insert_with(|| VirtualJob {
@@ -583,10 +585,14 @@ impl Card for ParallelPrinterCard {
         0xFF // status: always ready (:125)
     }
 
-    fn io_write(&mut self, lo: u8, value: u8, _ctx: &mut CardCtx) {
+    fn io_write(&mut self, lo: u8, value: u8, ctx: &mut CardCtx) {
         if lo == 0 {
             if let Some(v) = &mut self.virtual_out {
-                v.write(value);
+                // The card's firmware: its slot ROM page or the shared $C800-$CFFF space.
+                let pc = ctx.opcode.pc;
+                let from_firmware =
+                    (pc >> 8) as u8 == 0xC0 | ctx.slot || (0xC800..=0xCFFF).contains(&pc);
+                v.write(value, from_firmware);
             }
         }
         if !self.check_print() || lo != 0 {

@@ -197,8 +197,11 @@ impl PrinterDestination {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PrinterTransport {
-    /// The whole byte from the bus.
+    /// Bit 7 cleared on text the card's firmware sends, whole bytes from programs that write the
+    /// port directly (graphics), like the 8-bit cards of the time (ADR 0008).
     #[default]
+    Auto,
+    /// The whole byte from the bus.
     EightBit,
     /// AppleWin's rule: bit 7 cleared.
     SevenBitAppleWin,
@@ -653,7 +656,7 @@ idle_limit = 3
         assert!(!p.convert_encoding);
         assert_eq!(p.idle_limit, 3);
         assert_eq!(p.destination, PrinterDestination::VirtualAndFile);
-        assert_eq!(p.transport, PrinterTransport::EightBit);
+        assert_eq!(p.transport, PrinterTransport::Auto);
         assert!(p.auto_open_window);
     }
 

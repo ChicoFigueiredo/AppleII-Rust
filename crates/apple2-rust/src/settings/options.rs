@@ -264,6 +264,11 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                 });
                 ui.horizontal(|ui| {
                     ui.label("Transport:");
+                    ui.radio_value(&mut p.transport, PrinterTransport::Auto, "Automatic")
+                        .on_hover_text(
+                            "Text sent through the card's firmware (PR#1, PRINT, LIST) loses bit 7; \
+                             programs writing the port directly (graphics) send all 8 bits",
+                        );
                     ui.radio_value(&mut p.transport, PrinterTransport::EightBit, "8 bits");
                     ui.radio_value(
                         &mut p.transport,
