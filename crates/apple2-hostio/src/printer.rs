@@ -401,6 +401,10 @@ impl VirtualOutput {
 
     fn update(&mut self, cycles: u64, idle_cycles: u64) {
         let Some(j) = &mut self.job else { return };
+        if self.tx.take_close_request(j.id) {
+            self.close(CloseReason::User);
+            return;
+        }
         j.inactivity += cycles;
         j.since_flush += cycles;
         if j.inactivity > idle_cycles {

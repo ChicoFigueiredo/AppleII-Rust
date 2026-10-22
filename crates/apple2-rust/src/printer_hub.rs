@@ -43,6 +43,8 @@ pub const ARCHIVE_ENV: &str = "APPLE2_RUST_PRINTER_ARCHIVE";
 pub const WAITING_AFTER: Duration = Duration::from_millis(1500);
 /// How often the UI re-reads the spool while something is happening.
 pub const POLL_PERIOD: Duration = Duration::from_millis(33);
+/// How long the card has to answer a close request before the spool closes the job itself.
+pub const CLOSE_FALLBACK: Duration = Duration::from_millis(1500);
 const MAX_MESSAGES: usize = 8;
 
 // ---------------------------------------------------------------------------------------------
@@ -386,6 +388,11 @@ pub struct PrinterHub {
     spool: SpoolHandle,
     service: Option<SpoolService>,
     bridge: Bridge,
+    /// Asks the card to close a job ("Concluir" / "Cancelar").
+    closer: CaptureReceiver,
+    /// Job the user asked to close and when: if the card does not answer (emulation paused),
+    /// the spool closes it itself after [`CLOSE_FALLBACK`].
+    pending_close: Option<(u64, Instant)>,
     config: Option<PrinterConfig>,
     seen_opens: u64,
     seen_bytes: u64,
@@ -430,6 +437,7 @@ impl PrinterHub {
         let spool = Spool::new(archive, engine_factory(), initial.options);
         let (tx, rx) = channel::<CaptureEvent>();
         let service = SpoolService::spawn(spool, rx);
+        let closer = events.clone();
         let bridge = Bridge::spawn(events, tx, wake);
         let (done_tx, done_rx) = channel();
         let mut hub = PrinterHub {
@@ -437,6 +445,8 @@ impl PrinterHub {
             spool: service.handle(),
             service: Some(service),
             bridge,
+            closer,
+            pending_close: None,
             config: None,
             seen_opens: 0,
             seen_bytes: 0,
@@ -523,6 +533,18 @@ impl PrinterHub {
             self.last_byte = Some(now);
         }
         let snap = self.spool.snapshot();
+        if let Some((job, since)) = self.pending_close {
+            match snap.active.as_ref() {
+                Some(a) if a.capture_job == job => {
+                    if now.saturating_duration_since(since) >= CLOSE_FALLBACK {
+                        // The card did not answer (emulation paused): close at the spool.
+                        self.spool.send(SpoolCommand::FinishActive);
+                        self.pending_close = None;
+                    }
+                }
+                _ => self.pending_close = None,
+            }
+        }
         let snap_moved = self
             .prev_snap
             .as_ref()
@@ -925,22 +947,16 @@ impl PrinterHub {
                 self.spool.send(SpoolCommand::SetOptions(s.options));
             }
             CenterEvent::FinishJob => {
-                self.spool.send(SpoolCommand::FinishActive);
+                self.close_on_card();
             }
             CenterEvent::CancelJob => {
-                if let Some(id) = self
-                    .prev_snap
-                    .as_ref()
-                    .and_then(|s| s.active.as_ref())
-                    .map(|a| a.job_id.clone())
-                {
-                    self.spool.send(SpoolCommand::FinishActive);
-                    self.spool.send(SpoolCommand::Delete { job_id: id });
-                    self.pick = None;
-                    self.live = None;
-                    self.last_shown = None;
+                // Cancel = close on the card like "Concluir" and mark the job as cancelled in the
+                // Arquivo. The bytes stay; nothing is deleted (use "Apagar trabalho" for that).
+                if let Some(id) = self.close_on_card() {
+                    self.spool.send(SpoolCommand::Cancel { job_id: id });
                     self.message(
-                        "Trabalho cancelado e removido do Arquivo de impressões.",
+                        "Trabalho cancelado: fechado na impressora e marcado como cancelado; \
+                         os bytes continuam no Arquivo de impressões.",
                         false,
                     );
                 }
@@ -969,6 +985,19 @@ impl PrinterHub {
             CenterEvent::ExportPdf(_) | CenterEvent::SaveRaw { .. } => {}
         }
         self.dirty = true;
+    }
+
+    /// Asks the card to close the active job as `User` (the next byte opens a new job). Returns the
+    /// Arquivo id of the job it applies to.
+    fn close_on_card(&mut self) -> Option<String> {
+        let (id, capture_job) = self
+            .prev_snap
+            .as_ref()
+            .and_then(|s| s.active.as_ref())
+            .map(|a| (a.job_id.clone(), a.capture_job))?;
+        self.closer.request_close(capture_job);
+        self.pending_close = Some((capture_job, Instant::now()));
+        Some(id)
     }
 
     /// The summary of a job in the latest snapshot the hub absorbed.

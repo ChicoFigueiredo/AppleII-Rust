@@ -598,7 +598,8 @@ pub fn dialogs(ctx: &egui::Context, ui_state: &mut CenterUi, events: &mut Vec<Ce
         let (title, text, yes) = match &c {
             Confirm::Cancel => (
                 "Cancelar trabalho",
-                "Cancelar o trabalho em andamento? O que já foi impresso será apagado do Arquivo."
+                "Cancelar o trabalho em andamento? Ele é fechado na impressora e marcado como cancelado; \
+                 o que já foi impresso continua no Arquivo (nada é apagado)."
                     .to_string(),
                 "Cancelar trabalho",
             ),

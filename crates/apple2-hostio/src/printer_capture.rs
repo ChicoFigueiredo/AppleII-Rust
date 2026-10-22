@@ -30,6 +30,8 @@ struct Shared {
     queue: Mutex<Queue>,
     ready: Condvar,
     next_job: AtomicU64,
+    /// Job the user asked to close (0 = none; ids start at 1). Read by the card on its next tick.
+    close_request: AtomicU64,
     limit: usize,
 }
 
@@ -48,6 +50,7 @@ pub fn capture_channel_with_limit(limit: usize) -> (CaptureSender, CaptureReceiv
         queue: Mutex::default(),
         ready: Condvar::new(),
         next_job: AtomicU64::new(1),
+        close_request: AtomicU64::new(0),
         limit,
     });
     (CaptureSender(shared.clone()), CaptureReceiver(shared))
@@ -75,6 +78,14 @@ impl CaptureSender {
         if !data.is_empty() {
             self.push(CaptureEvent::Bytes { job, offset, data });
         }
+    }
+
+    /// True once if the user asked to close `job` (the card then closes it with `User`).
+    pub fn take_close_request(&self, job: u64) -> bool {
+        self.0
+            .close_request
+            .compare_exchange(job, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 
     pub fn close(&self, job: u64, reason: CloseReason) {
@@ -160,6 +171,13 @@ impl CaptureReceiver {
                 .0;
         }
         self.take(&mut q)
+    }
+
+    /// Asks the card to close `job` as soon as it runs again ("Concluir trabalho" in the Central).
+    /// The card answers with a `Close { reason: User }` event, so the spool never sees bytes of a
+    /// job it already closed. A request for a job that is no longer open is simply never taken.
+    pub fn request_close(&self, job: u64) {
+        self.0.close_request.store(job, Ordering::Release);
     }
 
     /// Everything queued so far, in order.

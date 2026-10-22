@@ -358,3 +358,101 @@ fn an_old_job_keeps_the_table_it_was_printed_with() {
     hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn concluding_a_job_closes_it_on_the_card_and_the_next_print_opens_a_new_one() {
+    use apple2_rust_shell::printer_model::JobState;
+    let (mut emu, mut hub, dir, _) = start("conclude", PrinterSpec::default());
+    print_hello(&emu);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        page_text(&hub).contains("OLA, IMPRESSORA")
+    }));
+    hub.handle(CenterEvent::FinishJob);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_none()
+            && hub.view_model().jobs[0].state == JobState::Finished
+    }));
+    // The card closed it with `User` (not the spool behind its back).
+    let id = hub.view_model().jobs[0].id.clone();
+    let m = std::fs::read_to_string(dir.join("archive").join(&id).join("manifest.json")).unwrap();
+    assert!(m.contains("\"close_reason\": \"User\""), "{m}");
+    // The program prints again: a new job, not "bytes ignored".
+    emu.send(Command::Paste("PRINT \"SEGUNDA\"\r".into()));
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().jobs.len() == 2 && page_text(&hub).contains("SEGUNDA")
+    }));
+    assert!(
+        !hub.view_model()
+            .messages
+            .iter()
+            .any(|m| m.text.contains("ignorado")),
+        "{:?}",
+        hub.view_model().messages
+    );
+    emu.shutdown();
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn cancelling_closes_marks_cancelled_and_deletes_nothing() {
+    use apple2_rust_shell::printer_model::JobState;
+    let (mut emu, mut hub, dir, _) = start("cancel", PrinterSpec::default());
+    print_hello(&emu);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        page_text(&hub).contains("OLA, IMPRESSORA")
+    }));
+    let id = hub.view_model().jobs[0].id.clone();
+    hub.handle(CenterEvent::CancelJob);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_none()
+            && hub.view_model().jobs.first().map(|j| j.state) == Some(JobState::Cancelled)
+    }));
+    assert_eq!(hub.view_model().jobs.len(), 1, "the job is still listed");
+    let job_dir = dir.join("archive").join(&id);
+    let raw = std::fs::read(job_dir.join("raw.bin")).unwrap();
+    assert!(String::from_utf8_lossy(&raw).contains("OLA, IMPRESSORA"));
+    let m = std::fs::read_to_string(job_dir.join("manifest.json")).unwrap();
+    assert!(m.contains("\"cancelled\": true"), "{m}");
+    emu.shutdown();
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn if_the_card_never_answers_the_spool_closes_the_job_after_the_fallback() {
+    use apple2_printer::capture::{JobOrigin, Transport};
+    use apple2_rust_shell::printer_hub::CLOSE_FALLBACK;
+    let dir = temp_dir("fallback");
+    let (tx, rx) = apple2_hostio::capture_channel();
+    let mut hub = PrinterHub::start(dir.join("archive"), rx, None, Arc::new(|| {})).unwrap();
+    let job = tx.open(
+        JobOrigin {
+            machine: "Apple //e".into(),
+            slot: 1,
+        },
+        Transport::EightBit,
+    );
+    tx.bytes(job, 0, b"linha\n".to_vec());
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_some()
+    }));
+    let t0 = Instant::now();
+    hub.handle(CenterEvent::FinishJob);
+    // Nobody runs the card: before the fallback nothing changes...
+    hub.poll(t0);
+    assert!(hub.view_model().active_job.is_some());
+    // ...after it the spool closes the job itself.
+    assert!(wait_for(|| {
+        hub.poll(t0 + CLOSE_FALLBACK + Duration::from_millis(1));
+        hub.view_model().active_job.is_none()
+    }));
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
