@@ -26,12 +26,16 @@ struct Queue {
     reported: bool,
 }
 
+/// Pending close requests kept (jobs never taken, e.g. already closed, are forgotten oldest first).
+const MAX_CLOSE_REQUESTS: usize = 64;
+
 struct Shared {
     queue: Mutex<Queue>,
     ready: Condvar,
     next_job: AtomicU64,
-    /// Job the user asked to close (0 = none; ids start at 1). Read by the card on its next tick.
-    close_request: AtomicU64,
+    /// Jobs the user asked to close, one entry per job (several slots can have a request pending
+    /// at once). Read by each card on its next tick; bounded, oldest forgotten first.
+    close_requests: Mutex<Vec<u64>>,
     limit: usize,
 }
 
@@ -50,7 +54,7 @@ pub fn capture_channel_with_limit(limit: usize) -> (CaptureSender, CaptureReceiv
         queue: Mutex::default(),
         ready: Condvar::new(),
         next_job: AtomicU64::new(1),
-        close_request: AtomicU64::new(0),
+        close_requests: Mutex::default(),
         limit,
     });
     (CaptureSender(shared.clone()), CaptureReceiver(shared))
@@ -82,10 +86,18 @@ impl CaptureSender {
 
     /// True once if the user asked to close `job` (the card then closes it with `User`).
     pub fn take_close_request(&self, job: u64) -> bool {
-        self.0
-            .close_request
-            .compare_exchange(job, 0, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
+        let mut r = self
+            .0
+            .close_requests
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        match r.iter().position(|&j| j == job) {
+            Some(i) => {
+                r.remove(i);
+                true
+            }
+            None => false,
+        }
     }
 
     pub fn close(&self, job: u64, reason: CloseReason) {
@@ -177,7 +189,17 @@ impl CaptureReceiver {
     /// The card answers with a `Close { reason: User }` event, so the spool never sees bytes of a
     /// job it already closed. A request for a job that is no longer open is simply never taken.
     pub fn request_close(&self, job: u64) {
-        self.0.close_request.store(job, Ordering::Release);
+        let mut r = self
+            .0
+            .close_requests
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if !r.contains(&job) {
+            if r.len() >= MAX_CLOSE_REQUESTS {
+                r.remove(0);
+            }
+            r.push(job);
+        }
     }
 
     /// Everything queued so far, in order.

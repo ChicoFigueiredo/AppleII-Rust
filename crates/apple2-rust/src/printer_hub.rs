@@ -414,7 +414,7 @@ pub struct PrinterHub {
     closer: CaptureReceiver,
     /// Job the user asked to close and when: if the card does not answer (emulation paused),
     /// the spool closes it itself after [`CLOSE_FALLBACK`].
-    pending_close: Option<(u64, Instant)>,
+    pending_close: Vec<(u64, Instant)>,
     config: Option<PrinterConfig>,
     seen_opens: u64,
     seen_bytes: u64,
@@ -475,7 +475,7 @@ impl PrinterHub {
             service: Some(service),
             bridge,
             closer,
-            pending_close: None,
+            pending_close: Vec::new(),
             config: None,
             seen_opens: 0,
             seen_bytes: 0,
@@ -573,17 +573,23 @@ impl PrinterHub {
             );
         }
         let snap = self.spool.snapshot();
-        if let Some((job, since)) = self.pending_close {
-            match snap.active.as_ref() {
-                Some(a) if a.capture_job == job => {
-                    if now.saturating_duration_since(since) >= CLOSE_FALLBACK {
-                        // The card did not answer (emulation paused): close at the spool.
-                        self.spool.send(SpoolCommand::FinishActive);
-                        self.pending_close = None;
-                    }
-                }
-                _ => self.pending_close = None,
+        // One pending request per job (two slots can be waiting at once). Only the job the preview
+        // follows can be closed at the spool; the others are dropped once they are not active.
+        let active = snap.active.as_ref().map(|a| a.capture_job);
+        let mut finish = false;
+        self.pending_close.retain(|&(job, since)| {
+            if active != Some(job) {
+                return false;
             }
+            if now.saturating_duration_since(since) >= CLOSE_FALLBACK {
+                // The card did not answer (emulation paused): close at the spool.
+                finish = true;
+                return false;
+            }
+            true
+        });
+        if finish {
+            self.spool.send(SpoolCommand::FinishActive);
         }
         let snap_moved = self
             .prev_snap
@@ -1036,7 +1042,8 @@ impl PrinterHub {
             .and_then(|s| s.active.as_ref())
             .map(|a| (a.job_id.clone(), a.capture_job))?;
         self.closer.request_close(capture_job);
-        self.pending_close = Some((capture_job, Instant::now()));
+        self.pending_close.retain(|&(j, _)| j != capture_job);
+        self.pending_close.push((capture_job, Instant::now()));
         Some(id)
     }
 

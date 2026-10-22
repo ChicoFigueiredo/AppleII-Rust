@@ -428,3 +428,25 @@ fn a_user_close_request_closes_the_job_on_the_card_and_the_next_byte_opens_a_new
     // The bytes before the close were delivered first, in order.
     assert_eq!(flatten(&evs), b"ab");
 }
+
+/// Two "Concluir" in a row for jobs of different slots, before the cards run again: both reach
+/// their card (a single stored request lost the first one).
+#[test]
+fn two_close_requests_before_the_next_tick_both_reach_their_jobs() {
+    let (tx, rx) = capture_channel();
+    rx.request_close(7);
+    rx.request_close(9);
+    assert!(tx.take_close_request(9));
+    assert!(tx.take_close_request(7));
+    assert!(!tx.take_close_request(7), "taken once");
+    assert!(!tx.take_close_request(9));
+    // A request for a job that never opens does not pile up without bound.
+    for j in 100..1000 {
+        rx.request_close(j);
+    }
+    assert!(
+        !tx.take_close_request(100),
+        "the oldest stale request was forgotten"
+    );
+    assert!(tx.take_close_request(999));
+}
