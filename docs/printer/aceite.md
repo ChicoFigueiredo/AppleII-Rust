@@ -17,6 +17,7 @@ cargo test -p apple2-hostio --test printer_aceite_basic --test printer_aceite_gr
 | `printer_aceite_basic::integer_basic_list_...` | `LIST` do Integer BASIC numa Apple ][ vira Página, texto e PDF |
 | `printer_aceite_graficos::auto_direct_driver_keeps_bit_7_firmware_path_loses_it` | ESC K com bytes de 0x80 a 0xFF: driver direto em Automático sai inteiro; pelo firmware cinco pontos da agulha de cima somem (uma agulha, 30 unidades, de diferença no topo) |
 | `printer_aceite_apps::*` | AppleWorks, Print Shop e dBase II: **BLOCKED** sem disco (veja a seção 2) |
+| `printer_aceite_dbase2::dbase_ii_cpm_lst_prints_one_job_with_text_layer_and_pdf` | dBase II no CP/M da Z80 SoftCard (slot 4, carta no slot 1): `SET PRINT ON` + `LIST` gera um Trabalho, texto, PDF e goldens; BLOCKED sem o disco |
 
 Os fixtures são gerados pelo projeto, sem software de terceiros, em `tests/fixtures/printer/`:
 
@@ -68,13 +69,20 @@ O Applesoft liga o bit 7 de **todo** caractere que manda para `PR#1`, controles 
 
 ### dBase II (CP/M, Z80 SoftCard)
 
-1. Máquina: Apple //e (ou ][+), **Z80 SoftCard** no slot 4 (ou o seu) e a Generic Printer no slot 1. Disco CP/M no drive 1.
-2. No CP/M, o `LST:` é o dispositivo de impressão, e o driver da SoftCard usa o slot da impressora configurado no `CONFIG` do disco (impressora paralela no slot 1). Confira com `PIP LST:=A:ARQUIVO.TXT` (um arquivo de texto qualquer) antes de abrir o dBase.
-3. Entre no dBase II (`DBASE`), crie um banco simples (`CREATE`, `APPEND`) e emita `SET PRINT ON`, depois `LIST` (ou `DISPLAY ALL`) e `SET PRINT OFF`.
-4. Resultado esperado: a listagem em colunas no Trabalho, sem caracteres trocados. O CP/M manda texto de 7 bits, em geral seguro nos dois Transportes. Se as linhas se sobrepuserem, o LF não está sendo enviado: ajuste no `CONFIG` do CP/M.
+**Estado: PASS, automatizado** em `crates/apple2-hostio/tests/printer_aceite_dbase2.rs` (roda só com o disco em `target/conformance-cache/printer-apps/dbase2/*.dsk`; sem ele, BLOCKED sem falhar). Disco do dono: `CPM_DBase2.dsk` (SoftCard CP/M 60K 2.23, dBase II 2.3B de 22/02/82; SHA-256 `8b0b2b63...80a3`). O teste lê o disco para a memória, não grava de volta e confere o SHA-256 antes e depois.
+
+Configuração que funcionou (a mesma do teste e do uso manual):
+
+1. Modelo **Apple ][+**, **Z80 SoftCard no slot 4**, **Generic Printer no slot 1**, **Disk II no slot 6** com o disco no drive 1. Boot automático até `A>` em cerca de 600 quadros. O `LST:` do BIOS da SoftCard já escreve na carta paralela do slot 1, sem `CONFIG`; o disco não traz `PIP` nem `STAT`.
+2. O disco vem **cheio** (último bloco usado 127): o `CREATE` do dBase grava o cabeçalho e volta ao CP/M sem mensagem, e um `USE` posterior dá `END OF FILE FOUND UNEXPECTEDLY`. Não é defeito do emulador. Libere espaço (na memória, sem tocar o arquivo do disco): `ERA DBASEII.DOC`, `ERA ZIP.COM`, `ERA INSTALL.COM`. Os `.DBF` que vêm no disco (`A`, `CATALOG`, `SCR38:B`) têm 0 registros.
+3. **Digite devagar**: o CP/M e o dBase consultam o teclado e perdem teclas coladas em rajada (colar a linha inteira perde letras: `USE A` virou `UEA`). O teste manda um caractere por vez, 4 quadros entre eles, e espera o prompt `.` do dBase antes de digitar o primeiro comando.
+4. `DBASE`, RETURN na data, `CREATE TESTE`, campos `NOME,C,12`, `CIDADE,C,10`, `VALOR,N,7,2`, linha vazia, `Y` em *INPUT DATA NOW?*. Cada registro: campo com RETURN, exceto o numérico de largura 7, que avança sozinho quando cheio (digite `0123.45`); campo de largura exata também avança (nome de 12 letras consumiria o RETURN seguinte). Linha vazia termina a entrada.
+5. `USE TESTE`, `SET PRINT ON`, `? "RELATORIO DBASE II"`, `LIST`, `SET PRINT OFF`. O Trabalho fecha por inatividade.
+
+Resultado (Transporte **Automático**; o fluxo é de 7 bits, sem ESC): um Trabalho (`Close(Idle)`), 1 Página, 201 bytes, zero diagnósticos, texto invisível com o título e as três linhas do `LIST`, PDF de estrutura válida, golden do documento lógico (`aceite_dbase2.doc.txt`) e do fluxo (`aceite_dbase2.raw`, só o que o teste digitou e o dBase imprimiu). Observações: o dBase com `SET PRINT ON` também manda o eco dos comandos (`. LIST`) e termina linhas com `CR CR LF`/`CR LF` sem sobreposição; a camada de texto do PDF preserva as linhas, mas um extrator genérico (`pdftotext`) separa as colunas numéricas (texto em posições distintas).
 
 ### O que registrar
 
 Para cada programa: data, versão do disco (nome do arquivo e SHA-256), Transporte, Papel, número de Páginas, diagnósticos e, se possível, o PDF salvo. Falhas viram issue com o `raw.bin` do Trabalho anexado (ele reproduz o problema sem o disco).
 
-Este roteiro **não é automatizado**: exige navegar menus de software de terceiros, e o projeto não distribui esses discos (estado: PARTIAL). Os testes `printer_aceite_apps` só avisam se o disco está presente.
+Este roteiro **não é automatizado**: exige navegar menus de software de terceiros, e o projeto não distribui esses discos (estado: PARTIAL para AppleWorks e Print Shop). O dBase II é automatizado (acima); em `printer_aceite_apps` AppleWorks e Print Shop só avisam se o disco está presente.

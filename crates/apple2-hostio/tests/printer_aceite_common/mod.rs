@@ -25,6 +25,11 @@ pub struct Rig {
 
 impl Rig {
     pub fn new(model: Model, transport: Transport) -> Rig {
+        Rig::with_cards(model, transport, |_| {})
+    }
+
+    /// Like [`Rig::new`], but `setup` may insert more cards (before the first reset).
+    pub fn with_cards(model: Model, transport: Transport, setup: impl FnOnce(&mut Machine)) -> Rig {
         let mut machine = Machine::new(MachineConfig::for_model(model));
         let sink = MemorySink::new();
         let (tx, rx) = capture_channel();
@@ -42,6 +47,7 @@ impl Rig {
                 transport,
             );
         assert!(machine.insert_card(1, Box::new(card)));
+        setup(&mut machine);
         machine.reset();
         let mut r = Rig {
             machine,

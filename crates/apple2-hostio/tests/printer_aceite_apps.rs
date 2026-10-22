@@ -52,5 +52,6 @@ fn print_shop_printer_acceptance_needs_the_disc() {
 
 #[test]
 fn dbase_ii_cpm_lst_acceptance_needs_the_disc() {
+    // Automated in printer_aceite_dbase2.rs; this only reports the disc.
     check("dbase2");
 }
