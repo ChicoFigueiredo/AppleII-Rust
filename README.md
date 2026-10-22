@@ -79,7 +79,7 @@ Instale as ferramentas de linha de comando (`xcode-select --install`) e o Rust. 
 cargo build --release
 ```
 
-O executável é `target/release/apple2-rust` (`apple2-rust.exe` no Windows). As versões publicadas (releases do GitHub) trazem arquivos prontos para as três plataformas, gerados pelo CI.
+O executável é `target/release/apple2-rust` (`apple2-rust.exe` no Windows). No Windows, o `apple2-rust.exe` de release é um programa gráfico (não abre console); para usar no terminal com `>` ou `|`, há o `apple2-rust-console.exe`, o mesmo programa no subsistema de console, que o pacote traz como `apple2-rust.com`. As versões publicadas (releases do GitHub) trazem arquivos prontos para as três plataformas, gerados pelo CI.
 
 ### Dependências opcionais por sistema
 

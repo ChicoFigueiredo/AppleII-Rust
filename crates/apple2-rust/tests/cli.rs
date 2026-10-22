@@ -35,6 +35,47 @@ fn help_prints_usage_and_exits() {
     }
 }
 
+/// #107: on Windows release builds only `apple2-rust` is a GUI-subsystem program; its console
+/// twin (shipped as `apple2-rust.com`) is not.
+#[cfg(windows)]
+#[test]
+fn only_the_gui_binary_uses_the_windows_subsystem() {
+    const GUI: u16 = 2;
+    const CONSOLE: u16 = 3;
+    let subsystem = |exe: &str| {
+        let b = std::fs::read(exe).unwrap();
+        let pe = u32::from_le_bytes(b[0x3C..0x40].try_into().unwrap()) as usize;
+        assert_eq!(&b[pe..pe + 4], b"PE\0\0", "{exe}");
+        u16::from_le_bytes(b[pe + 0x5C..pe + 0x5E].try_into().unwrap())
+    };
+    let gui = if cfg!(debug_assertions) { CONSOLE } else { GUI };
+    assert_eq!(subsystem(env!("CARGO_BIN_EXE_apple2-rust")), gui);
+    assert_eq!(
+        subsystem(env!("CARGO_BIN_EXE_apple2-rust-console")),
+        CONSOLE
+    );
+}
+
+/// #107: cmd's `>` reaches the console binary (it never reached the GUI one).
+#[cfg(windows)]
+#[test]
+fn cmd_redirection_reaches_the_console_binary() {
+    use std::os::windows::process::CommandExt;
+    let out = std::env::temp_dir().join(format!("apple2-rust-help-{}.txt", std::process::id()));
+    let status = Command::new("cmd")
+        .raw_arg(format!(
+            "/d /c \"\"{}\" --help > \"{}\"\"",
+            env!("CARGO_BIN_EXE_apple2-rust-console"),
+            out.display()
+        ))
+        .status()
+        .unwrap();
+    let text = std::fs::read_to_string(&out).unwrap_or_default();
+    let _ = std::fs::remove_file(&out);
+    assert!(status.success());
+    assert!(text.contains("Usage: apple2-rust"), "{text:?}");
+}
+
 #[test]
 fn bad_rom_options_exit_with_the_applewin_message_and_no_window() {
     let run = |args: &[&str]| {

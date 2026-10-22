@@ -1,5 +1,6 @@
-// GUI subsystem on Windows release builds (no console window); see wincon.rs.
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+// Two binaries come from this file. On Windows release builds `apple2-rust` is linked for the GUI
+// subsystem (no console window) and `apple2-rust-console` for the console subsystem; build.rs
+// picks the subsystem per binary. See wincon.rs.
 
 mod wincon;
 
@@ -8,7 +9,7 @@ use apple2_rust_shell::backend::DefaultBackend;
 use apple2_rust_shell::emu::{Command, Emulator};
 use apple2_rust_shell::headless::{self, HeadlessOptions};
 
-fn main() {
+pub fn main() {
     wincon::attach_parent_console();
     let no_audio = std::env::args().any(|a| a == "--no-audio");
     // Informational flags answer before anything touches a window or the saved settings.
