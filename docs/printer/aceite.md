@@ -62,10 +62,39 @@ O Applesoft liga o bit 7 de **todo** caractere que manda para `PR#1`, controles 
 
 ### Print Shop
 
-1. Inicie o Print Shop (disco do programa; faz boot no slot 6).
-2. Na primeira execução ele pede a configuração: **Graphics/Printer setup**. Em *Printer*, escolha **Epson FX** (famílias FX/MX/RX); em *Interface*, **Apple Parallel** (Apple Parallel Interface Card ou o item "Grappler" se o disco só tiver esse), **slot 1**.
-3. Crie um cartão simples (**Greeting Card**) ou uma faixa (**Banner**) com um gráfico do disco e um texto, e imprima.
-4. Resultado esperado: gráficos de bit-image (ESC L ou ESC K), com a imagem reconhecível e proporção coerente; sem faixas em branco entre as linhas de gráfico. Transporte **Automático** (o driver do Print Shop escreve direto na porta, então os 8 bits chegam): com 7 bits fixo o desenho perde a agulha de cima e fica "esburacado". Repita com os dois e compare.
+Aceite real feito com **The New Print Shop** (lados A e B do disco do programa, `.nib`), Apple //e Enhanced, Disk II no slot 6 (lado A no drive 1, lado B no drive 2) e Generic Printer no slot 1.
+
+**Escolha no programa** (Setup or Convert > Printer Setup):
+
+| Item | Escolha | Observação |
+|---|---|---|
+| Printer | **Epson LX 80/86/90/800** (página 6 da lista) | a lista tem ainda Epson FX, MX, RX; o LX é o da família da LX-310 |
+| Interface Card | **Apple II Parallel** | 2º item da lista; a "Epson APL (8 bit)" não é necessária |
+| Slot | **1** | já é o padrão |
+
+Depois de escolher, saia do Setup com **ESC** e **Save and Exit**: o programa só usa a escolha para imprimir depois de gravá-la no lado A. Com o disco protegido contra escrita ele responde "Disk is write-protected" e a impressão trava em "Thinking": use uma **cópia gravável** do lado A (nunca o original).
+
+**Passo a passo** (teclas; Main Menu = Greeting Card, Sign or Poster, Letterhead, Banner, Calendar, Quick Print, Graphic Editor, Setup or Convert, Exit Program):
+
+1. Boot do lado A; na tela de título, **Espaço**. Aguarde o Main Menu.
+2. 7x **Seta abaixo** (Setup or Convert), **Return**, **Return** (Printer Setup), **Return** (Printer), 5x **Seta direita** (página 6), 3x **Seta abaixo**, **Return** (Epson LX 80/86/90/800).
+3. **Return** (Interface Card), **Seta abaixo**, **Return** (Apple II Parallel). A tela mostra "Printer: Epson LX 80/86/90/800, Interface Card: Apple II Parallel, Slot: 1". *Test Printer* imprime a mensagem de boas-vindas ("Welcome to The New Print Shop", 3018 bytes, ESC L com a pena italiana "New").
+4. **ESC**, 2x **Seta abaixo**, **Return** (Save and Exit); de volta ao Main Menu, 6x **Seta abaixo** (Graphic Editor), **Return**, **Seta abaixo** (Create a New Graphic), **Return**.
+5. Desenhe (Espaço liga/desliga o ponto sob o cursor; setas movem) e imprima com **P**. O Trabalho fecha por inatividade.
+
+Os discos entregues são só do programa: Greeting Card, Sign e Banner pedem os discos *Graphics* e *Fonts* ("Please insert disk with Graphics/Fonts"), que não fazem parte deles; por isso o aceite usa o **Graphic Editor**, que imprime o desenho pelo mesmo driver de impressão.
+
+**Transporte:** o driver do Print Shop **escreve direto na porta** (`$C090`), sem passar pelo firmware da Carta, e usa as 8 agulhas (ESC L com bytes como `0xFE`/`0x82`). Resultados com o mesmo desenho:
+
+| Transporte | Fluxo | Resultado |
+|---|---|---|
+| **Automático** | `1B 40 ... 1B 4C 51 00 ... FE 02 ... FE` | correto, caixa e diagonal completas |
+| 8 bits | idêntico ao Automático | correto |
+| 7 bits | `FE` vira `7E`, `82` vira `02` | agulha de cima perdida: a borda superior e parte da diagonal somem |
+
+Use o **Automático** (padrão). ESC @, ESC J (avanço) e CR passam pelo mesmo caminho e chegam inteiros nos três Transportes.
+
+**Automatizado:** `cargo test --release -p apple2-rust --test printer_aceite_printshop` (em debug ele é pulado: ~10 min; só com os discos em `target/conformance-cache/printer-apps/printshop/`; sem eles termina como BLOCKED). Ele copia os discos para uma pasta temporária, repete os passos acima, e afirma: um Trabalho, ESC @ e ESC L, bit 7 inteiro em Automático, pontos > 0, zero diagnósticos, PDF válido e menos pontos no mesmo fluxo em 7 bits. Para inspecionar, a ferramenta `cargo run --release -p apple2-rust --example printshop_drive -- <roteiro> <pasta>` roda um roteiro de teclas (`key`, `run`, `shot` PNG, `peek`...), útil para ver as telas do programa.
 
 ### dBase II (CP/M, Z80 SoftCard)
 
@@ -85,4 +114,4 @@ Resultado (Transporte **Automático**; o fluxo é de 7 bits, sem ESC): um Trabal
 
 Para cada programa: data, versão do disco (nome do arquivo e SHA-256), Transporte, Papel, número de Páginas, diagnósticos e, se possível, o PDF salvo. Falhas viram issue com o `raw.bin` do Trabalho anexado (ele reproduz o problema sem o disco).
 
-Este roteiro **não é automatizado**: exige navegar menus de software de terceiros, e o projeto não distribui esses discos (estado: PARTIAL para AppleWorks e Print Shop). O dBase II é automatizado (acima); em `printer_aceite_apps` AppleWorks e Print Shop só avisam se o disco está presente.
+Só o AppleWorks continua com roteiro **manual** (estado: PARTIAL, falta o disco). O dBase II (`printer_aceite_dbase2`) e o Print Shop (`printer_aceite_printshop`) são automatizados e rodam quando os discos do dono estão em `target/conformance-cache/printer-apps/`; sem eles terminam em BLOCKED. Em `printer_aceite_apps` os três só avisam se o disco está presente.
