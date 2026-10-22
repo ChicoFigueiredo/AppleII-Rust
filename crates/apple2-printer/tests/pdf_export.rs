@@ -166,6 +166,39 @@ fn text_layer_is_searchable() {
 }
 
 #[test]
+fn double_width_text_stays_searchable_as_whole_words() {
+    need_poppler!();
+    let mut page = blank_page(20520, 23760);
+    // Double width at 10 cpi: the advance is twice the 216-unit pitch.
+    for (y, text) in [(1000, "Largura dupla"), (9000, "APPLE II-RUST")] {
+        page.text.push(TextRun {
+            x: 600,
+            y,
+            advance: 432,
+            height: 360,
+            text: text.into(),
+        });
+    }
+    let o = opts(PaperKind::A4, Ribbon::New, InkColor::Black);
+    let (bytes, _) = export_with_report(
+        &doc_of(vec![page]),
+        &o,
+        &PdfMeta::default(),
+        &PageSelection::All,
+    );
+    let s = String::from_utf8_lossy(&all_streams(&bytes)).into_owned();
+    assert!(
+        !s.contains(" Tc") && !s.contains(" Tz"),
+        "no spacing operators: {s}"
+    );
+    let path = write("double", &bytes);
+    let txt = tool_text("pdftotext", &["-enc", "UTF-8", path.to_str().unwrap(), "-"]);
+    for needle in ["Largura dupla", "APPLE II-RUST"] {
+        assert!(txt.contains(needle), "{needle:?} not in {txt:?}");
+    }
+}
+
+#[test]
 fn too_many_distinct_exotic_chars_are_reported_not_silent() {
     let mut page = blank_page(20520, 23760);
     let s: String = (0x4E00u32..0x4E00 + 300)
