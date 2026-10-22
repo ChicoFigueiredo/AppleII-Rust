@@ -43,6 +43,8 @@ pub enum JobState {
     /// Bytes are still arriving (the job is open).
     Receiving,
     Finished,
+    /// The user cancelled it (bytes kept in the Arquivo).
+    Cancelled,
     /// Interrupted by a crash (recovered up to the last checkpoint) or damaged.
     Failed,
 }
@@ -52,6 +54,7 @@ impl JobState {
         match self {
             JobState::Receiving => "recebendo",
             JobState::Finished => "concluído",
+            JobState::Cancelled => "cancelado",
             JobState::Failed => "com erro",
         }
     }
@@ -83,7 +86,7 @@ pub struct JobEntry {
     pub active: bool,
     pub damaged: Option<String>,
     pub versions: Vec<VersionEntry>,
-    /// PDFs exported in this session (path, version).
+    /// Files exported from this job: (version, path); version 0 is a copy of the raw bytes.
     pub exports: Vec<(u32, String)>,
 }
 

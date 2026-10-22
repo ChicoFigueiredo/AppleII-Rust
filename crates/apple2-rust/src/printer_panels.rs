@@ -497,10 +497,11 @@ fn archive_detail(
         });
     }
     for (v, path) in &job.exports {
-        ui.weak(format!(
-            "PDF salvo nesta sessão (versão {}): {path}",
-            (*v).max(1)
-        ));
+        if *v == 0 {
+            ui.weak(format!("Bytes brutos salvos: {path}"));
+        } else {
+            ui.weak(format!("PDF salvo (versão {v}): {path}"));
+        }
     }
     ui.separator();
     ui.strong("Reimprimir com outro papel, fita, cor, tabela ou país (gera uma nova versão)");

@@ -27,8 +27,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// Current manifest schema. v1 had `size` instead of `total_bytes` and no checkpoints, versions,
-/// note or exports (see [`migrate_manifest_value`]).
-pub const SCHEMA_VERSION: u32 = 2;
+/// note or exports; v3 added `cancelled` and `options.table` / `options.country` (see
+/// [`migrate_manifest_value`]).
+pub const SCHEMA_VERSION: u32 = 3;
 pub const MANIFEST_FILE: &str = "manifest.json";
 pub const RAW_FILE: &str = "raw.bin";
 /// Printer profile name stored in every manifest of this crate's LX-310 engine.
@@ -167,6 +168,9 @@ pub struct Manifest {
     pub title_edited: bool,
     #[serde(default)]
     pub note: String,
+    /// The user cancelled the job in the Central: its bytes are kept, nothing is deleted.
+    #[serde(default)]
+    pub cancelled: bool,
     pub state: JobState,
     #[serde(default)]
     pub versions: Vec<JobVersion>,
@@ -377,8 +381,12 @@ pub fn migrate_manifest_value(mut v: serde_json::Value) -> Result<serde_json::Va
         }
         let total = obj.get("total_bytes").cloned().unwrap_or(0.into());
         obj.entry("confirmed_offset").or_insert(total);
-        obj.insert("schema_version".into(), SCHEMA_VERSION.into());
     }
+    if ver <= 2 {
+        // v3 added `cancelled` (absent = false, filled by serde's default).
+        obj.entry("cancelled").or_insert(false.into());
+    }
+    obj.insert("schema_version".into(), SCHEMA_VERSION.into());
     Ok(v)
 }
 
@@ -713,6 +721,7 @@ impl Archive {
             title: String::new(),
             title_edited: false,
             note: String::new(),
+            cancelled: false,
             state: JobState::Active,
             versions: vec![JobVersion {
                 id: 1,
@@ -860,6 +869,15 @@ impl Archive {
         m.title = title.to_string();
         truncate_chars(&mut m.title, MAX_TITLE_CHARS);
         m.title_edited = true;
+        let snap = m.clone();
+        write_manifest(&dir, &snap)
+    }
+
+    /// Marks the job as cancelled by the user (bytes and versions stay; nothing is deleted).
+    pub fn set_cancelled(&mut self, id: &str) -> Result<()> {
+        let dir = self.job_dir(id)?;
+        let m = self.manifest_mut(id)?;
+        m.cancelled = true;
         let snap = m.clone();
         write_manifest(&dir, &snap)
     }

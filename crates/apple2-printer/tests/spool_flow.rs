@@ -322,3 +322,100 @@ fn threaded_service_with_ui_closed() {
         Some(CloseReason::Shutdown)
     );
 }
+
+#[test]
+fn record_export_command_registers_the_file_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (s, _) = spool_in(dir.path());
+    let (tx, rx) = mpsc::channel::<CaptureEvent>();
+    let svc = SpoolService::spawn(s, rx);
+    let h = svc.handle();
+    tx.send(open(1)).unwrap();
+    tx.send(bytes(1, 0, b"a\n")).unwrap();
+    tx.send(close(1, CloseReason::Idle)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while h.snapshot().jobs.first().and_then(|j| j.state) != Some(JobState::Completed) {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let id = h.snapshot().jobs[0].id.clone();
+    assert!(h.send(SpoolCommand::RecordExport {
+        job_id: id.clone(),
+        version: 1,
+        path: "/tmp/saida.pdf".into(),
+    }));
+    // Visible in the snapshot and on disk without shutting the spool down.
+    while h.snapshot().jobs[0].exports.is_empty() {
+        assert!(Instant::now() < deadline, "export not recorded");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let e = &h.snapshot().jobs[0].exports[0];
+    assert_eq!((e.version, e.path.as_str()), (1, "/tmp/saida.pdf"));
+    let on_disk = fs::read_to_string(dir.path().join(&id).join("manifest.json")).unwrap();
+    assert!(on_disk.contains("/tmp/saida.pdf"), "{on_disk}");
+    drop(tx);
+    svc.join().unwrap();
+}
+
+#[test]
+fn job_summary_carries_what_the_central_needs() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut s, _) = spool_in(dir.path());
+    s.handle(open(1));
+    s.handle(bytes(1, 0, b"primeira linha\nsegunda\n"));
+    // While active the list already shows a human title and the origin/options.
+    s.publish_now();
+    let snap = s.snapshot_handle().get();
+    let j = &snap.jobs[0];
+    assert!(j.title.starts_with("primeira linha — 20"), "{}", j.title);
+    assert_eq!(j.origin.as_ref().unwrap().slot, 1);
+    assert_eq!(
+        j.transport,
+        Some(apple2_printer::capture::Transport::EightBit)
+    );
+    assert_eq!(j.options, apple2_printer::paper::RenderOptions::default());
+    assert_eq!(snap.active.as_ref().unwrap().options, j.options);
+    assert_eq!(snap.active.as_ref().unwrap().title, j.title);
+    s.handle(close(1, CloseReason::Idle));
+    let id = s.snapshot_handle().get().jobs[0].id.clone();
+    s.set_note(&id, "minha nota").unwrap();
+    s.reprint(&id, a4()).unwrap();
+    s.record_export(&id, 2, std::path::Path::new("/x/y.pdf"))
+        .unwrap();
+    let j = s.snapshot_handle().get().jobs[0].clone();
+    assert_eq!(j.note, "minha nota");
+    assert_eq!(j.versions.len(), 2);
+    assert_eq!(j.versions[1].options, a4());
+    assert_eq!(j.exports.len(), 1);
+    assert!(j.sha256.is_some());
+    assert!(!j.cancelled);
+    assert!(j.title.starts_with("primeira linha — 20"));
+}
+
+#[test]
+fn cancel_marks_the_job_and_keeps_its_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut s, _) = spool_in(dir.path());
+    s.handle(open(1));
+    s.handle(bytes(1, 0, b"a\n"));
+    let id = s
+        .snapshot_handle()
+        .get()
+        .active
+        .as_ref()
+        .unwrap()
+        .job_id
+        .clone();
+    s.cancel(&id).unwrap();
+    s.handle(close(1, CloseReason::User));
+    let j = s.snapshot_handle().get().jobs[0].clone();
+    assert!(j.cancelled);
+    assert_eq!(j.close_reason, Some(CloseReason::User));
+    assert_eq!(
+        fs::read(dir.path().join(&id).join("raw.bin")).unwrap(),
+        b"a\n"
+    );
+    // The mark survives a reopen.
+    let a = Archive::open(dir.path()).unwrap();
+    assert!(a.manifest(&id).unwrap().cancelled);
+}

@@ -119,6 +119,17 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
     let after = hub.view_model().revision;
     assert!(after <= rev + 2, "no redraw storm: {rev} -> {after}");
 
+    // The list shows a human title (first text line + date), not the archive id, even while
+    // the job is open (the real Lx310 fills the TextRun the title comes from).
+    let j0 = &hub.view_model().jobs[0];
+    // The typed line is echoed to the printer, so it comes first.
+    assert!(
+        j0.title.starts_with("]PRINT \"OLA, IMPRESSORA\" — "),
+        "{}",
+        j0.title
+    );
+    assert_ne!(j0.title, j0.id);
+
     // Concluir trabalho
     hub.handle(CenterEvent::FinishJob);
     assert!(wait_for(|| {
@@ -156,6 +167,17 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
                 .iter()
                 .any(|m| m.text.starts_with("PDF salvo"))
     }));
+    // The export is in the manifest at once (summary and disk), long before shutdown.
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().jobs[0]
+            .exports
+            .iter()
+            .any(|(v, p)| *v >= 1 && p.ends_with("saida.pdf"))
+    }));
+    let on_disk =
+        std::fs::read_to_string(dir.join("archive").join(&job).join("manifest.json")).unwrap();
+    assert!(on_disk.contains("saida.pdf"), "{on_disk}");
     let bytes = std::fs::read(&pdf).unwrap();
     if let Some(keep) = std::env::var_os("APPLE2_CENTRAL_SMOKE_PDF") {
         std::fs::write(keep, &bytes).unwrap();

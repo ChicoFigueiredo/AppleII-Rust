@@ -19,7 +19,7 @@ use apple2_config::card::{
 };
 use apple2_config::Settings;
 use apple2_hostio::CaptureReceiver;
-use apple2_printer::archive::{self, Archive, JobState as ArchiveJobState, Manifest};
+use apple2_printer::archive::{self, Archive, JobState as ArchiveJobState};
 use apple2_printer::capture::CaptureEvent;
 use apple2_printer::document::PageDocument;
 use apple2_printer::engine::PrinterEngine;
@@ -258,23 +258,6 @@ fn safe_id(id: &str) -> bool {
     !id.is_empty() && !id.contains(['/', '\\']) && id != "." && id != ".."
 }
 
-/// Reads a job's manifest straight from the archive folder (read only; the spool thread owns all
-/// writes). `None` when missing, unreadable or newer than this build understands.
-pub fn read_manifest(root: &Path, id: &str) -> Option<Manifest> {
-    if !safe_id(id) {
-        return None;
-    }
-    let path = root.join(id).join(archive::MANIFEST_FILE);
-    let len = std::fs::metadata(&path).ok()?.len();
-    if len > archive::MAX_MANIFEST_BYTES {
-        return None;
-    }
-    let bytes = std::fs::read(&path).ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    let value = archive::migrate_manifest_value(value).ok()?;
-    serde_json::from_value(value).ok()
-}
-
 /// Renders the first `total` raw bytes of an archived job with `options` (a worker thread job).
 pub fn render_job(
     root: &Path,
@@ -320,7 +303,7 @@ fn now_pdf_date() -> PdfDate {
 }
 
 /// Seed of the worn ribbon: the start of the raw bytes' SHA-256, so a job always looks the same.
-fn ribbon_seed(m: Option<&Manifest>) -> Option<u64> {
+fn ribbon_seed(m: Option<&JobSummary>) -> Option<u64> {
     let sha = m?.sha256.as_deref()?;
     u64::from_str_radix(sha.get(..16)?, 16).ok()
 }
@@ -377,6 +360,7 @@ enum Done {
         result: Result<usize, String>,
     },
     Raw {
+        job: String,
         path: PathBuf,
         result: Result<u64, String>,
     },
@@ -407,8 +391,6 @@ pub struct PrinterHub {
     seen_bytes: u64,
     last_byte: Option<Instant>,
     prev_snap: Option<Arc<Snapshot>>,
-    manifests: HashMap<String, (JobSummary, Manifest)>,
-    stale_manifests: Vec<String>,
     /// Newest live document of the active job.
     live: Option<(String, Arc<PageDocument>)>,
     /// Pages of archived versions already rendered.
@@ -419,8 +401,6 @@ pub struct PrinterHub {
     last_shown: Option<(String, Arc<PageDocument>)>,
     seen_notice: Option<String>,
     messages: VecDeque<Message>,
-    exports: HashMap<String, Vec<(u32, String)>>,
-    pending_records: Vec<(String, u32, PathBuf)>,
     done_tx: Sender<Done>,
     done_rx: Receiver<Done>,
     vm: PrinterViewModel,
@@ -462,8 +442,6 @@ impl PrinterHub {
             seen_bytes: 0,
             last_byte: None,
             prev_snap: None,
-            manifests: HashMap::new(),
-            stale_manifests: Vec::new(),
             live: None,
             rendered: HashMap::new(),
             rendering: None,
@@ -472,8 +450,6 @@ impl PrinterHub {
             last_shown: None,
             seen_notice: None,
             messages: VecDeque::new(),
-            exports: HashMap::new(),
-            pending_records: Vec::new(),
             done_tx,
             done_rx,
             vm: PrinterViewModel::default(),
@@ -606,44 +582,36 @@ impl PrinterHub {
                         format!("PDF salvo em {} ({pages} página(s))", path.display()),
                         false,
                     );
-                    self.exports
-                        .entry(job.clone())
-                        .or_default()
-                        .push((version, path.display().to_string()));
-                    self.pending_records.push((job, version.max(1), path));
+                    // Registered in the manifest right away (not only at shutdown).
+                    self.spool.send(SpoolCommand::RecordExport {
+                        job_id: job,
+                        version: version.max(1),
+                        path,
+                    });
                 }
                 Err(e) => self.message(format!("Falha ao salvar o PDF: {e}"), true),
             },
-            Done::Raw { path, result } => match result {
-                Ok(n) => self.message(
-                    format!("Bytes brutos salvos em {} ({n} bytes)", path.display()),
-                    false,
-                ),
+            Done::Raw { job, path, result } => match result {
+                Ok(n) => {
+                    self.message(
+                        format!("Bytes brutos salvos em {} ({n} bytes)", path.display()),
+                        false,
+                    );
+                    // Version 0 stands for the raw bytes (PDFs are versions 1 and up).
+                    self.spool.send(SpoolCommand::RecordExport {
+                        job_id: job,
+                        version: 0,
+                        path,
+                    });
+                }
                 Err(e) => self.message(format!("Falha ao salvar os bytes brutos: {e}"), true),
             },
         }
         self.dirty = true;
     }
 
-    /// Takes in what a new snapshot carries: manifests, live document, reprint result, notices.
+    /// Takes in what a new snapshot carries: live document, reprint result, notices.
     fn absorb(&mut self, snap: &Arc<Snapshot>) {
-        for id in std::mem::take(&mut self.stale_manifests) {
-            self.manifests.remove(&id);
-        }
-        let ids: std::collections::HashSet<&str> =
-            snap.jobs.iter().map(|j| j.id.as_str()).collect();
-        self.manifests.retain(|k, _| ids.contains(k.as_str()));
-        for j in &snap.jobs {
-            if j.damaged.is_some() {
-                continue;
-            }
-            let fresh = self.manifests.get(&j.id).is_some_and(|(s, _)| s == j);
-            if !fresh {
-                if let Some(m) = read_manifest(&self.root, &j.id) {
-                    self.manifests.insert(j.id.clone(), (j.clone(), m));
-                }
-            }
-        }
         if let Some(a) = &snap.active {
             self.live = Some((a.job_id.clone(), a.document.clone()));
             if let Some(e) = &a.storage_error {
@@ -778,10 +746,10 @@ impl PrinterHub {
     }
 
     fn entry(&self, j: &JobSummary) -> JobEntry {
-        let manifest = self.manifests.get(&j.id).map(|(_, m)| m);
         let state = match (j.state, &j.damaged) {
             (_, Some(_)) => JobState::Failed,
             (Some(ArchiveJobState::Active), _) => JobState::Receiving,
+            (Some(ArchiveJobState::Completed), _) if j.cancelled => JobState::Cancelled,
             (Some(ArchiveJobState::Completed), _) => JobState::Finished,
             _ => JobState::Failed,
         };
@@ -795,33 +763,37 @@ impl PrinterHub {
         JobEntry {
             id: j.id.clone(),
             title,
-            note: manifest.map(|m| m.note.clone()).unwrap_or_default(),
-            machine: manifest
-                .map(|m| m.origin.machine.clone())
+            note: j.note.clone(),
+            machine: j
+                .origin
+                .as_ref()
+                .map(|o| o.machine.clone())
                 .unwrap_or_default(),
-            slot: manifest.map_or(0, |m| m.origin.slot),
-            transport: manifest
-                .map(|m| transport_label(m.transport).to_string())
+            slot: j.origin.as_ref().map_or(0, |o| o.slot),
+            transport: j
+                .transport
+                .map(|t| transport_label(t).to_string())
                 .unwrap_or_default(),
             started: local_time(&j.started_at),
             pages: j.pages,
             state,
             active: j.state == Some(ArchiveJobState::Active),
             damaged: j.damaged.clone(),
-            versions: manifest
-                .map(|m| {
-                    m.versions
-                        .iter()
-                        .map(|v| VersionEntry {
-                            id: v.id,
-                            options: v.options,
-                            pages: v.pages,
-                            created: local_time(&v.created_at),
-                        })
-                        .collect()
+            versions: j
+                .versions
+                .iter()
+                .map(|v| VersionEntry {
+                    id: v.id,
+                    options: v.options,
+                    pages: v.pages,
+                    created: local_time(&v.created_at),
                 })
-                .unwrap_or_default(),
-            exports: self.exports.get(&j.id).cloned().unwrap_or_default(),
+                .collect(),
+            exports: j
+                .exports
+                .iter()
+                .map(|e| (e.version, e.path.clone()))
+                .collect(),
         }
     }
 
@@ -835,7 +807,7 @@ impl PrinterHub {
         let Some(sel) = selected.and_then(|i| jobs.get(i)) else {
             return Shown::default();
         };
-        let manifest = self.manifests.get(&sel.id).map(|(_, m)| m.clone());
+        let manifest = snap.jobs.iter().find(|j| j.id == sel.id).cloned();
         let default_opts = self
             .config
             .as_ref()
@@ -905,14 +877,14 @@ impl PrinterHub {
     fn start_render(
         &mut self,
         key: &(String, u32),
-        manifest: Option<&Manifest>,
+        manifest: Option<&JobSummary>,
         options: RenderOptions,
     ) {
         if self.rendering.as_ref() == Some(key) {
             return;
         }
         let Some(m) = manifest else { return };
-        if m.state == ArchiveJobState::Active {
+        if m.state != Some(ArchiveJobState::Completed) {
             return;
         }
         self.rendering = Some(key.clone());
@@ -984,7 +956,6 @@ impl PrinterHub {
                     .send(SpoolCommand::SetTitle { job_id: job, title });
             }
             CenterEvent::SetNote { job, note } => {
-                self.stale_manifests.push(job.clone());
                 self.spool.send(SpoolCommand::SetNote { job_id: job, note });
             }
             CenterEvent::DeleteJob(job) => {
@@ -993,7 +964,6 @@ impl PrinterHub {
                     self.pick = None;
                 }
                 self.last_shown = None;
-                self.exports.remove(&job);
                 self.spool.send(SpoolCommand::Delete { job_id: job });
             }
             CenterEvent::ExportPdf(_) | CenterEvent::SaveRaw { .. } => {}
@@ -1001,9 +971,14 @@ impl PrinterHub {
         self.dirty = true;
     }
 
+    /// The summary of a job in the latest snapshot the hub absorbed.
+    fn job_summary(&self, id: &str) -> Option<&JobSummary> {
+        self.prev_snap.as_ref()?.jobs.iter().find(|j| j.id == id)
+    }
+
     /// Saves a PDF of `req` to `path` on a worker thread. Title and note go to the manifest too.
     pub fn export_pdf(&mut self, req: PdfRequest, path: PathBuf) {
-        let manifest = self.manifests.get(&req.job).map(|(_, m)| m.clone());
+        let manifest = self.job_summary(&req.job).cloned();
         let current_title = self
             .vm
             .jobs
@@ -1060,7 +1035,7 @@ impl PrinterHub {
             date: Some(now_pdf_date()),
             apple2_model: manifest
                 .as_ref()
-                .map(|m| m.origin.machine.clone())
+                .and_then(|m| m.origin.as_ref().map(|o| o.machine.clone()))
                 .unwrap_or_default(),
             printer_profile: "Epson LX-310".into(),
             note: req.note.clone(),
@@ -1117,8 +1092,9 @@ impl PrinterHub {
                     .filter(|a| a.job_id == job)
                     .map(|a| a.bytes)
             })
-            .or_else(|| self.manifests.get(job).map(|(_, m)| m.total_bytes))
+            .or_else(|| self.job_summary(job).map(|j| j.total_bytes))
             .unwrap_or(u64::MAX);
+        let job_id = job.to_string();
         let src = self.root.join(job).join(archive::RAW_FILE);
         let tx = self.done_tx.clone();
         std::thread::Builder::new()
@@ -1135,7 +1111,11 @@ impl PrinterHub {
                         .map_err(|e| format!("{}: {e}", path.display()))?;
                     Ok(buf.len() as u64)
                 })();
-                let _ = tx.send(Done::Raw { path, result });
+                let _ = tx.send(Done::Raw {
+                    job: job_id,
+                    path,
+                    result,
+                });
             })
             .ok();
     }
@@ -1143,7 +1123,7 @@ impl PrinterHub {
     // ---- shutdown ---------------------------------------------------------------------------
 
     /// Ends the pipeline in order: everything the card queued reaches the spool, the open job is
-    /// closed as `Shutdown`, the spool thread stops and the exports are recorded in the manifests.
+    /// closed as `Shutdown` and the spool thread stops (exports were recorded in the manifest when made).
     /// Call after the emulation thread stopped.
     pub fn shutdown(mut self) {
         self.finish();
@@ -1155,11 +1135,7 @@ impl PrinterHub {
         }
         self.bridge.stop();
         if let Some(service) = self.service.take() {
-            if let Some(mut spool) = service.join() {
-                for (job, version, path) in std::mem::take(&mut self.pending_records) {
-                    let _ = spool.archive_mut().record_export(&job, version, &path);
-                }
-            }
+            let _ = service.join();
         }
     }
 }

@@ -3,15 +3,16 @@
 //! snapshots for the UI. With the window closed only this service runs: nothing is lost (T-018).
 
 use crate::archive::{
-    Archive, ArchiveError, DiagnosticSummary, JobEntry, JobState, JobVersion, NewJob,
+    Archive, ArchiveError, DiagnosticSummary, ExportRecord, JobEntry, JobState, JobVersion, NewJob,
     RecoveryEvent, RetentionWarning,
 };
-use crate::capture::{CaptureEvent, CloseReason};
+use crate::capture::{CaptureEvent, CloseReason, JobOrigin, Transport};
 use crate::document::PageDocument;
 use crate::engine::PrinterEngine;
 use crate::paper::RenderOptions;
 use std::collections::VecDeque;
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -35,8 +36,20 @@ pub struct JobSummary {
     pub started_at: String,
     pub total_bytes: u64,
     pub pages: u32,
-    pub versions: u32,
     pub close_reason: Option<CloseReason>,
+    /// Where the job came from (`None` when damaged).
+    pub origin: Option<JobOrigin>,
+    pub transport: Option<Transport>,
+    /// Options frozen when the job started (version 1).
+    pub options: RenderOptions,
+    pub note: String,
+    /// SHA-256 of the raw bytes, once the job is closed.
+    pub sha256: Option<String>,
+    /// The user cancelled the job (bytes kept).
+    pub cancelled: bool,
+    pub versions: Vec<JobVersion>,
+    /// PDFs and raw copies the user exported (most recent last).
+    pub exports: Vec<ExportRecord>,
 }
 
 /// The job being printed now.
@@ -44,6 +57,10 @@ pub struct JobSummary {
 pub struct ActiveView {
     pub job_id: String,
     pub capture_job: u64,
+    /// Options frozen when the job started.
+    pub options: RenderOptions,
+    /// Human title so far (first text line + date), before the job closes.
+    pub title: String,
     /// Bytes received from the card so far.
     pub bytes: u64,
     /// Shared, immutable copy: cloning the view is cheap.
@@ -96,6 +113,10 @@ impl SnapshotHandle {
 struct ActiveJob {
     id: String,
     capture_job: u64,
+    options: RenderOptions,
+    started_at: String,
+    /// Live title, recomputed on each publication while the job is open (the first line grows).
+    title: String,
     engine: Box<dyn PrinterEngine>,
     /// Bytes received (and fed to the engine).
     fed: u64,
@@ -130,8 +151,15 @@ fn summary(e: &JobEntry) -> JobSummary {
             started_at: m.started_at.clone(),
             total_bytes: m.total_bytes,
             pages: m.pages,
-            versions: m.versions.len() as u32,
             close_reason: m.close_reason,
+            origin: Some(m.origin.clone()),
+            transport: Some(m.transport),
+            options: m.options,
+            note: m.note.clone(),
+            sha256: m.sha256.clone(),
+            cancelled: m.cancelled,
+            versions: m.versions.clone(),
+            exports: m.exports.clone(),
         },
         JobEntry::Damaged { id, reason } => JobSummary {
             id: id.clone(),
@@ -141,8 +169,15 @@ fn summary(e: &JobEntry) -> JobSummary {
             started_at: String::new(),
             total_bytes: 0,
             pages: 0,
-            versions: 0,
             close_reason: None,
+            origin: None,
+            transport: None,
+            options: RenderOptions::default(),
+            note: String::new(),
+            sha256: None,
+            cancelled: false,
+            versions: Vec::new(),
+            exports: Vec::new(),
         },
     }
 }
@@ -315,9 +350,17 @@ impl Spool {
         self.doc = Arc::new(PageDocument::default());
         self.doc_rev += 1;
         self.doc_dirty = false;
+        let started_at = self
+            .archive
+            .manifest(&id)
+            .map(|m| m.started_at.clone())
+            .unwrap_or_default();
         self.active = Some(ActiveJob {
             id,
             capture_job,
+            options,
+            started_at,
+            title: String::new(),
             engine,
             fed: 0,
             storage_error,
@@ -456,17 +499,31 @@ impl Spool {
             self.last_doc_publish = Instant::now();
         }
         self.snap_rev += 1;
+        if let Some(a) = self.active.as_mut() {
+            a.title = auto_title(&self.doc, &a.started_at);
+        }
         let active = self.active.as_ref().map(|a| ActiveView {
             job_id: a.id.clone(),
             capture_job: a.capture_job,
+            options: a.options,
+            title: a.title.clone(),
             bytes: a.fed,
             document: self.doc.clone(),
             doc_revision: self.doc_rev,
             storage_error: a.storage_error.clone(),
         });
+        let mut jobs: Vec<JobSummary> = self.archive.jobs().iter().map(summary).collect();
+        if let Some(v) = &active {
+            // The title of an open job is only stored when it closes; show the live one.
+            if let Some(j) = jobs.iter_mut().find(|j| j.id == v.job_id) {
+                if j.title.is_empty() {
+                    j.title = v.title.clone();
+                }
+            }
+        }
         let snap = Snapshot {
             revision: self.snap_rev,
-            jobs: self.archive.jobs().iter().map(summary).collect(),
+            jobs,
             active,
             reprint: self.reprint.clone(),
             notices: self.notices.iter().cloned().collect(),
@@ -565,6 +622,25 @@ impl Spool {
         r
     }
 
+    /// User action "cancelar trabalho": marks it in the Arquivo; nothing is deleted.
+    pub fn cancel(&mut self, job_id: &str) -> Result<(), ArchiveError> {
+        let r = self.archive.set_cancelled(job_id);
+        self.publish(true);
+        r
+    }
+
+    /// Registers an exported file in the manifest (the archive never writes to `path`).
+    pub fn record_export(
+        &mut self,
+        job_id: &str,
+        version: u32,
+        path: &std::path::Path,
+    ) -> Result<(), ArchiveError> {
+        let r = self.archive.record_export(job_id, version, path);
+        self.publish(true);
+        r
+    }
+
     pub fn set_note(&mut self, job_id: &str, note: &str) -> Result<(), ArchiveError> {
         let r = self.archive.set_note(job_id, note);
         self.publish(true);
@@ -582,6 +658,12 @@ impl Spool {
             SpoolCommand::SetTitle { job_id, title } => self.set_title(&job_id, &title),
             SpoolCommand::SetNote { job_id, note } => self.set_note(&job_id, &note),
             SpoolCommand::Delete { job_id } => self.delete(&job_id),
+            SpoolCommand::Cancel { job_id } => self.cancel(&job_id),
+            SpoolCommand::RecordExport {
+                job_id,
+                version,
+                path,
+            } => self.record_export(&job_id, version, &path),
             SpoolCommand::SetOptions(o) => {
                 self.set_options(o);
                 Ok(())
@@ -614,6 +696,17 @@ pub enum SpoolCommand {
     },
     Delete {
         job_id: String,
+    },
+    /// Marks a job as cancelled by the user (bytes are kept; the Central also closes it on the
+    /// card with `CloseReason::User`).
+    Cancel {
+        job_id: String,
+    },
+    /// A PDF or RAW copy was written to `path`: registers it in the manifest right away.
+    RecordExport {
+        job_id: String,
+        version: u32,
+        path: PathBuf,
     },
     SetOptions(RenderOptions),
     /// Closes the active job as `Shutdown` and stops the thread.
@@ -665,6 +758,12 @@ impl SpoolService {
                         Ok(ev) => spool.handle(ev),
                         Err(RecvTimeoutError::Timeout) => spool.tick(),
                         Err(RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+                // Commands sent just before the stop (an export record, a cancel) still count.
+                while let Ok(cmd) = rx.try_recv() {
+                    if !spool.run_command(cmd) {
+                        break;
                     }
                 }
                 spool.shutdown();
