@@ -11,12 +11,16 @@ pub mod network;
 #[cfg(feature = "pcap")]
 pub mod pcap_backend;
 pub mod printer;
+pub mod printer_capture;
 pub mod serial;
 pub mod ssc;
 pub mod uthernet1;
 pub mod uthernet2;
 
 pub use printer::{FileSink, MemorySink, ParallelPrinterCard, PrinterOptions, PrinterSink};
+pub use printer_capture::{
+    capture_channel, capture_channel_with_limit, CaptureReceiver, CaptureSender,
+};
 pub use serial::{LoopbackHandle, LoopbackSerial, SerialBackend, TcpServerSerial};
 pub use ssc::SuperSerialCard;
 pub use uthernet1::Uthernet1;

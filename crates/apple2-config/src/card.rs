@@ -164,6 +164,46 @@ impl Default for DriveSpec {
     }
 }
 
+/// Where the Printer Card sends what the guest prints (ADR 0008: both by default).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrinterDestination {
+    /// Virtual printer (Central de Impressoras) and the legacy `Printer.txt`.
+    #[default]
+    VirtualAndFile,
+    /// Only the legacy file, as AppleWin.
+    FileOnly,
+    /// Only the virtual printer.
+    VirtualOnly,
+}
+
+impl PrinterDestination {
+    pub const ALL: [PrinterDestination; 3] = [
+        PrinterDestination::VirtualAndFile,
+        PrinterDestination::FileOnly,
+        PrinterDestination::VirtualOnly,
+    ];
+
+    pub fn to_file(self) -> bool {
+        self != PrinterDestination::VirtualOnly
+    }
+
+    pub fn to_virtual(self) -> bool {
+        self != PrinterDestination::FileOnly
+    }
+}
+
+/// Transporte (GLOSSARY) of the virtual printer: what the card does to the byte first.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrinterTransport {
+    /// The whole byte from the bus.
+    #[default]
+    EightBit,
+    /// AppleWin's rule: bit 7 cleared.
+    SevenBitAppleWin,
+}
+
 /// Parallel printer options (ParallelPrinter.cpp:186-213).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -175,6 +215,12 @@ pub struct PrinterSpec {
     pub filename: Option<PathBuf>,
     /// Seconds of idle before the file is closed (AppleWin default 10).
     pub idle_limit: u32,
+    /// Where the output goes (older configs without the key get the default).
+    pub destination: PrinterDestination,
+    /// Byte transport for the virtual printer (the legacy file is always 7-bit).
+    pub transport: PrinterTransport,
+    /// Open the Central de Impressoras window at the first byte written.
+    pub auto_open_window: bool,
 }
 
 impl Default for PrinterSpec {
@@ -186,6 +232,9 @@ impl Default for PrinterSpec {
             append: false,
             filename: None,
             idle_limit: 10,
+            destination: PrinterDestination::default(),
+            transport: PrinterTransport::default(),
+            auto_open_window: true,
         }
     }
 }
@@ -505,5 +554,47 @@ mod tests {
                 v
             );
         }
+    }
+
+    #[test]
+    fn printer_spec_old_configs_migrate_to_the_virtual_defaults() {
+        let old = r#"card = "GenericPrinter"
+convert_encoding = false
+idle_limit = 3
+"#;
+        let spec: SlotCardSpec = toml::from_str(old).unwrap();
+        let SlotCardSpec::GenericPrinter(p) = spec else {
+            panic!("not a printer")
+        };
+        assert!(!p.convert_encoding);
+        assert_eq!(p.idle_limit, 3);
+        assert_eq!(p.destination, PrinterDestination::VirtualAndFile);
+        assert_eq!(p.transport, PrinterTransport::EightBit);
+        assert!(p.auto_open_window);
+    }
+
+    #[test]
+    fn printer_spec_round_trips_and_migration_is_idempotent() {
+        let spec = SlotCardSpec::GenericPrinter(PrinterSpec {
+            destination: PrinterDestination::VirtualOnly,
+            transport: PrinterTransport::SevenBitAppleWin,
+            auto_open_window: false,
+            ..PrinterSpec::default()
+        });
+        let text = toml::to_string(&spec).unwrap();
+        let back: SlotCardSpec = toml::from_str(&text).unwrap();
+        assert_eq!(back, spec);
+        // Migrating an old file once or twice gives the same text.
+        let once =
+            toml::to_string(&toml::from_str::<SlotCardSpec>("card = \"GenericPrinter\"").unwrap())
+                .unwrap();
+        let twice = toml::to_string(&toml::from_str::<SlotCardSpec>(&once).unwrap()).unwrap();
+        assert_eq!(once, twice);
+        assert!(
+            PrinterDestination::VirtualAndFile.to_file()
+                && PrinterDestination::VirtualAndFile.to_virtual()
+        );
+        assert!(!PrinterDestination::FileOnly.to_virtual());
+        assert!(!PrinterDestination::VirtualOnly.to_file());
     }
 }
