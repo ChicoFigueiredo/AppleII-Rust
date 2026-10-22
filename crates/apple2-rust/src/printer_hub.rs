@@ -839,6 +839,9 @@ impl PrinterHub {
             note: manifest.map(|m| m.note.clone()).unwrap_or_default(),
             machine: manifest.map(|m| m.origin.machine.clone()).unwrap_or_default(),
             slot: manifest.map_or(0, |m| m.origin.slot),
+            transport: manifest
+                .map(|m| transport_label(m.transport).to_string())
+                .unwrap_or_default(),
             started: local_time(&j.started_at),
             pages: j.pages,
             state,
@@ -1178,6 +1181,15 @@ fn newest(jobs: &[JobSummary]) -> Option<&JobSummary> {
             .cmp(&b.started_at)
             .then_with(|| a.id.cmp(&b.id))
     })
+}
+
+pub fn transport_label(t: apple2_printer::capture::Transport) -> &'static str {
+    use apple2_printer::capture::Transport;
+    match t {
+        Transport::Auto => "Automático",
+        Transport::EightBit => "8 bits",
+        Transport::SevenBitAppleWin => "7 bits (AppleWin)",
+    }
 }
 
 /// "dd/mm/aaaa hh:mm" in the local time zone.

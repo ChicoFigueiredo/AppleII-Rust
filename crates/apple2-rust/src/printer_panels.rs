@@ -147,6 +147,10 @@ pub fn status_bar(ui: &mut Ui, vm: &PrinterViewModel) {
         }
         ui.separator();
         ui.label(format!("Perfil: {}", vm.profile_or_default()));
+        if let Some(j) = vm.selected().filter(|j| !j.transport.is_empty()) {
+            ui.separator();
+            ui.label(format!("Transporte do trabalho: {}", j.transport));
+        }
     });
 }
 
@@ -331,9 +335,9 @@ pub fn archive_tab(
     egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| {
         egui::Grid::new("archive-grid")
             .striped(true)
-            .num_columns(6)
+            .num_columns(7)
             .show(ui, |ui| {
-                for h in ["Título", "Data", "Máquina", "Páginas", "Estado", "Versões"] {
+                for h in ["Título", "Data", "Máquina", "Transporte", "Páginas", "Estado", "Versões"] {
                     ui.strong(h);
                 }
                 ui.end_row();
@@ -348,6 +352,7 @@ pub fn archive_tab(
                     } else {
                         "—".into()
                     });
+                    ui.label(&j.transport);
                     ui.label(j.pages.to_string());
                     ui.label(match &j.damaged {
                         Some(_) => "danificado".to_string(),

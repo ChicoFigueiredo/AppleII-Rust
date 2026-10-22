@@ -75,6 +75,8 @@ pub struct JobEntry {
     /// Apple II model that printed it.
     pub machine: String,
     pub slot: u8,
+    /// Transporte of the job: "Automático", "8 bits" or "7 bits (AppleWin)".
+    pub transport: String,
     /// Local, human date of the start.
     pub started: String,
     pub pages: u32,

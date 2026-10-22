@@ -933,6 +933,7 @@ pub fn demo_view_model(pages: usize) -> PrinterViewModel {
         note: String::new(),
         machine: "Apple //e (enhanced)".into(),
         slot: 1,
+        transport: "Automático".into(),
         started: "01/01/2026 10:00".into(),
         pages: pages as u32,
         state,
