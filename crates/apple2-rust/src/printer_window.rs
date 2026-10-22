@@ -16,6 +16,7 @@
 //! window right after an automatic opening (best effort: the compositor may still refuse).
 
 use apple2_printer::document::{Page, PageDocument};
+use apple2_printer::paper::{InkColor, PaperKind, Ribbon};
 use apple2_printer::units::PER_INCH;
 use egui::{Color32, ColorImage, Context, TextureHandle, TextureOptions, Vec2};
 use std::sync::Arc;
@@ -26,6 +27,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
 use crate::gfx::{Gfx, GpuShared};
+use crate::printer_panels::{self as panels, CenterUi, Tab};
 
 pub const TITLE: &str = "Central de Impressoras — apple2-rust";
 pub const MIN_ZOOM: f32 = 0.25;
@@ -82,58 +84,12 @@ pub fn route<T: PartialEq>(id: T, main: Option<T>, printer: Option<T>) -> Route 
 }
 
 // ---------------------------------------------------------------------------------------------
-// View model (what the integration layer feeds the window)
+// View model (what the integration layer feeds the window; see `printer_model`)
 // ---------------------------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum JobState {
-    /// Bytes are still arriving.
-    Receiving,
-    Finished,
-    Failed,
-}
-
-impl JobState {
-    pub fn label(self) -> &'static str {
-        match self {
-            JobState::Receiving => "recebendo",
-            JobState::Finished => "concluído",
-            JobState::Failed => "com erro",
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct JobEntry {
-    pub title: String,
-    pub state: JobState,
-}
-
-/// Snapshot of the printer subsystem for drawing. The integration layer replaces it as the spool
-/// changes; the window redraws only when [`PrinterViewModel::revision`] moves.
-#[derive(Clone, Debug, Default)]
-pub struct PrinterViewModel {
-    pub status: String,
-    pub jobs: Vec<JobEntry>,
-    /// Index into `jobs` of the job whose pages are shown.
-    pub selected_job: Option<usize>,
-    /// The pages of the selected job.
-    pub document: PageDocument,
-    /// Bumped by the producer whenever anything above changed (also keys the texture cache).
-    pub revision: u64,
-}
-
-impl PrinterViewModel {
-    pub fn bump(&mut self) {
-        self.revision += 1;
-    }
-}
-
-/// Events the Central raises for the integration layer.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CenterEvent {
-    SelectJob(usize),
-}
+pub use crate::printer_model::{
+    CenterEvent, JobEntry, JobState, Look, PrintSetup, PrinterViewModel, Shown, Status,
+};
 
 // ---------------------------------------------------------------------------------------------
 // Preview state (page navigation + zoom)
@@ -293,9 +249,38 @@ pub fn raster_ppi(page: &Page, zoom: f32, pixels_per_point: f32) -> u32 {
     wanted.min(MAX_RASTER_SIDE / longest_in).round().max(8.0) as u32
 }
 
-/// Draws one page: paper (white, or green-bar zebra for continuous forms) plus the dots. Repeated
-/// dots darken (double strike), like the ribbon.
+/// Draws one page with the paper of a plain form (`zebra`: green bars) or a white sheet.
 pub fn rasterize_page(page: &Page, ppi: u32, zebra: bool) -> ColorImage {
+    let mut look = Look::default();
+    look.paper = if zebra {
+        PaperKind::GreenBar
+    } else {
+        PaperKind::A4
+    };
+    rasterize_page_look(page, ppi, &look)
+}
+
+fn ink_rgb(ink: InkColor) -> [u32; 3] {
+    match ink {
+        InkColor::Black => [20, 20, 32],
+        InkColor::Blue => [20, 50, 170],
+        InkColor::Purple => [110, 30, 140],
+    }
+}
+
+/// Deterministic 0..=255 noise from a dot position (worn ribbon).
+fn noise(x: u32, y: u32) -> u32 {
+    let mut h = x.wrapping_mul(0x9E37_79B1) ^ y.wrapping_mul(0x85EB_CA6B);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2C1B_3C6D);
+    h ^= h >> 13;
+    h & 0xFF
+}
+
+/// Draws one page: paper (white, green/blue-bar zebra with tractor holes for continuous forms)
+/// plus the dots in the ribbon's colour. Repeated dots darken (double strike), like the ribbon; a
+/// worn ribbon gives each dot a deterministic, slightly different strength.
+pub fn rasterize_page_look(page: &Page, ppi: u32, look: &Look) -> ColorImage {
     let ppi = ppi as f32;
     let to_px = |u: u32| u as f32 / PER_INCH as f32 * ppi;
     let w = (to_px(page.width).ceil() as usize).max(1);
@@ -304,6 +289,7 @@ pub fn rasterize_page(page: &Page, ppi: u32, zebra: bool) -> ColorImage {
     // LX-310 dot diameter is roughly 0.28 mm; never thinner than one pixel.
     let r = (ppi * 0.0065).max(0.75);
     let r2 = r * r;
+    let worn = look.ribbon == Ribbon::Worn;
     for d in &page.dots {
         let (cx, cy) = (to_px(d.x), to_px(d.y));
         let x0 = (cx - r).floor().max(0.0) as usize;
@@ -311,33 +297,88 @@ pub fn rasterize_page(page: &Page, ppi: u32, zebra: bool) -> ColorImage {
         let y0 = (cy - r).floor().max(0.0) as usize;
         let y1 = ((cy + r).ceil() as usize).min(h - 1);
         let (px, py) = (cx.floor() as usize, cy.floor() as usize);
+        let strength = if worn {
+            (80 + noise(d.x, d.y) * 70 / 255) as u8
+        } else {
+            130
+        };
         for y in y0..=y1 {
             for x in x0..=x1 {
                 let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
                 let inside = dx * dx + dy * dy <= r2 || (x == px && y == py);
                 if inside && x < w && y < h {
                     let p = &mut ink[y * w + x];
-                    *p = p.saturating_add(130);
+                    *p = p.saturating_add(strength);
                 }
             }
         }
     }
-    let band_h = (ppi / 2.0).max(1.0); // green bars: half an inch (3 lines)
+    let continuous = matches!(
+        look.paper,
+        PaperKind::GreenBar | PaperKind::BlueBar | PaperKind::PlainContinuous
+    );
+    let bar: Option<[u32; 3]> = match look.paper {
+        PaperKind::GreenBar => Some([226, 240, 226]),
+        PaperKind::BlueBar => Some([224, 233, 246]),
+        _ => None,
+    };
+    let band_h = (ppi / 2.0).max(1.0); // bars: half an inch (3 lines)
+    let ink_c = ink_rgb(look.ink);
     let mut pixels = Vec::with_capacity(w * h);
     for y in 0..h {
-        let paper = if zebra && ((y as f32 / band_h) as usize) % 2 == 1 {
-            [226u32, 240, 226]
-        } else {
-            [255u32, 255, 255]
+        let paper = match bar {
+            Some(b) if ((y as f32 / band_h) as usize) % 2 == 1 => b,
+            _ => [255u32, 255, 255],
         };
         for x in 0..w {
             let a = u32::from(ink[y * w + x]);
             let mix = |p: u32, i: u32| ((p * (255 - a) + i * a) / 255) as u8;
             pixels.push(Color32::from_rgb(
-                mix(paper[0], 20),
-                mix(paper[1], 20),
-                mix(paper[2], 32),
+                mix(paper[0], ink_c[0]),
+                mix(paper[1], ink_c[1]),
+                mix(paper[2], ink_c[2]),
             ));
+        }
+    }
+    if continuous {
+        // Tractor strips: a hole every half inch, 0.25" from each edge, and a faint perforation.
+        let hole_r = (ppi * 0.055).max(1.0);
+        let grey = Color32::from_gray(150);
+        let perf = Color32::from_gray(205);
+        let strip = ppi * 0.5;
+        let mut put = |x: usize, y: usize, c: Color32| {
+            if x < w && y < h {
+                pixels[y * w + x] = c;
+            }
+        };
+        for &cx in &[ppi * 0.25, w as f32 - ppi * 0.25] {
+            let mut cy = ppi * 0.25;
+            while cy < h as f32 {
+                let (xa, xb) = ((cx - hole_r).floor().max(0.0) as usize, (cx + hole_r).ceil() as usize);
+                let (ya, yb) = ((cy - hole_r).floor().max(0.0) as usize, (cy + hole_r).ceil() as usize);
+                for y in ya..=yb {
+                    for x in xa..=xb {
+                        let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
+                        if dx * dx + dy * dy <= hole_r * hole_r {
+                            put(x, y, grey);
+                        }
+                    }
+                }
+                cy += strip;
+            }
+        }
+        for &px in &[strip as usize, w.saturating_sub(strip as usize)] {
+            for y in (0..h).step_by(4) {
+                put(px, y, perf);
+                put(px, y + 1, perf);
+            }
+        }
+        // Perforation between sheets (top and bottom edge).
+        for x in (0..w).step_by(4) {
+            put(x, 0, perf);
+            put(x + 1, 0, perf);
+            put(x, h - 1, perf);
+            put(x + 1, h - 1, perf);
         }
     }
     ColorImage {
@@ -350,7 +391,10 @@ pub fn rasterize_page(page: &Page, ppi: u32, zebra: bool) -> ColorImage {
 /// the pixel density changes. Pages that are not shown are never rasterised.
 #[derive(Default)]
 pub struct PreviewCache {
-    key: Option<(usize, u64, u32)>,
+    key: Option<(usize, u32, Look)>,
+    /// The document the texture was drawn from (compared by identity: a new publication of the
+    /// spool is a new `Arc`).
+    doc: Option<Arc<PageDocument>>,
     texture: Option<TextureHandle>,
     /// How many times a page was rasterised (tests and diagnostics).
     pub rasterisations: u64,
@@ -361,14 +405,28 @@ impl PreviewCache {
         &mut self,
         ctx: &Context,
         page_index: usize,
-        revision: u64,
-        page: &Page,
+        doc: &Arc<PageDocument>,
         ppi: u32,
-        zebra: bool,
+        look: Look,
     ) -> &TextureHandle {
-        let key = (page_index, revision, ppi);
-        if self.key != Some(key) || self.texture.is_none() {
-            let img = rasterize_page(page, ppi, zebra);
+        let key = (page_index, ppi, look);
+        let same_doc = self.doc.as_ref().is_some_and(|d| Arc::ptr_eq(d, doc));
+        if self.key != Some(key) || !same_doc || self.texture.is_none() {
+            let Some(page) = doc.pages.get(page_index) else {
+                // Nothing to draw: keep (or make) a 1x1 texture.
+                let img = ColorImage::new([1, 1], Color32::WHITE);
+                match &mut self.texture {
+                    Some(t) => t.set(img, TextureOptions::LINEAR),
+                    None => {
+                        self.texture =
+                            Some(ctx.load_texture("printer-page", img, TextureOptions::LINEAR))
+                    }
+                }
+                self.key = None;
+                self.doc = None;
+                return self.texture.as_ref().expect("texture just created");
+            };
+            let img = rasterize_page_look(page, ppi, &look);
             self.rasterisations += 1;
             match &mut self.texture {
                 Some(t) => t.set(img, TextureOptions::LINEAR),
@@ -378,6 +436,7 @@ impl PreviewCache {
                 }
             }
             self.key = Some(key);
+            self.doc = Some(doc.clone());
         }
         self.texture.as_ref().expect("texture just created")
     }
@@ -392,99 +451,118 @@ pub fn draw_center(
     ctx: &Context,
     preview: &mut PreviewState,
     cache: &mut PreviewCache,
+    ui_state: &mut CenterUi,
     vm: &PrinterViewModel,
     events: &mut Vec<CenterEvent>,
 ) {
-    let count = vm.document.pages.len();
+    let count = vm.document().pages.len();
     preview.clamp_page(count);
     egui::TopBottomPanel::top("printer-status").show(ctx, |ui| {
+        panels::status_bar(ui, vm);
+        if let Some(s) = panels::setup_bar(ui, vm) {
+            events.push(CenterEvent::SetNextSetup(s));
+        }
+        panels::action_bar(ui, vm, ui_state, events);
         ui.horizontal(|ui| {
-            ui.label(if vm.status.is_empty() {
-                "Impressora virtual"
-            } else {
-                vm.status.as_str()
-            });
+            ui.selectable_value(&mut ui_state.tab, Tab::Preview, "Visualização");
+            ui.selectable_value(&mut ui_state.tab, Tab::Archive, "Arquivo de impressões");
         });
     });
+    egui::TopBottomPanel::bottom("printer-messages").show(ctx, |ui| {
+        panels::message_bar(ui, vm);
+    });
+    if ui_state.tab == Tab::Archive {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if panels::archive_tab(ui, vm, ui_state, events) {
+                ui_state.tab = Tab::Preview;
+            }
+        });
+        panels::dialogs(ctx, ui_state, events);
+        return;
+    }
     egui::SidePanel::left("printer-jobs")
         .default_width(220.0)
         .resizable(true)
-        .show(ctx, |ui| {
-            ui.heading("Trabalhos");
-            if vm.jobs.is_empty() {
-                ui.weak("Nenhum trabalho de impressão.");
-            }
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for (i, j) in vm.jobs.iter().enumerate() {
-                    let sel = vm.selected_job == Some(i);
-                    let text = format!("{} — {}", j.title, j.state.label());
-                    if ui.selectable_label(sel, text).clicked() && !sel {
-                        events.push(CenterEvent::SelectJob(i));
-                    }
-                }
-            });
-        });
+        .show(ctx, |ui| panels::job_list(ui, vm, events));
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(preview.page > 0, egui::Button::new("⏮"))
-                .on_hover_text("Primeira página (Home)")
-                .clicked()
-            {
-                preview.first();
-            }
-            if ui
-                .add_enabled(preview.page > 0, egui::Button::new("◀"))
-                .on_hover_text("Página anterior (Page Up)")
-                .clicked()
-            {
-                preview.prev();
-            }
-            ui.label(if count == 0 {
-                "—".to_string()
-            } else {
-                format!("Página {} de {}", preview.page + 1, count)
-            });
-            if ui
-                .add_enabled(preview.page + 1 < count, egui::Button::new("▶"))
-                .on_hover_text("Próxima página (Page Down)")
-                .clicked()
-            {
-                preview.next(count);
-            }
-            if ui
-                .add_enabled(preview.page + 1 < count, egui::Button::new("⏭"))
-                .on_hover_text("Última página (End)")
-                .clicked()
-            {
-                preview.last(count);
-            }
-            ui.separator();
-            if ui.button("−").on_hover_text("Reduzir (Ctrl+-)").clicked() {
-                preview.zoom_out();
-            }
-            let mut pct = (preview.zoom * 100.0).round();
-            if ui
-                .add(
-                    egui::DragValue::new(&mut pct)
-                        .range(MIN_ZOOM * 100.0..=MAX_ZOOM * 100.0)
-                        .suffix("%"),
-                )
-                .changed()
-            {
-                preview.set_zoom(pct / 100.0);
-            }
-            if ui.button("+").on_hover_text("Ampliar (Ctrl++)").clicked() {
-                preview.zoom_in();
-            }
-            if ui
-                .selectable_label(preview.fit_width, "Ajustar à largura")
-                .clicked()
-            {
-                preview.fit_width = !preview.fit_width;
-            }
+        draw_preview(ctx, ui, preview, cache, vm, count);
+    });
+    panels::dialogs(ctx, ui_state, events);
+}
+
+fn draw_preview(
+    ctx: &Context,
+    ui: &mut egui::Ui,
+    preview: &mut PreviewState,
+    cache: &mut PreviewCache,
+    vm: &PrinterViewModel,
+    count: usize,
+) {
+    ui.horizontal_wrapped(|ui| {
+        if ui
+            .add_enabled(preview.page > 0, egui::Button::new("⏮"))
+            .on_hover_text("Primeira página (Home)")
+            .clicked()
+        {
+            preview.first();
+        }
+        if ui
+            .add_enabled(preview.page > 0, egui::Button::new("◀"))
+            .on_hover_text("Página anterior (Page Up)")
+            .clicked()
+        {
+            preview.prev();
+        }
+        ui.label(if count == 0 {
+            "—".to_string()
+        } else {
+            format!("Página {} de {}", preview.page + 1, count)
         });
-        // Page navigation / zoom keys act on this window only.
+        if ui
+            .add_enabled(preview.page + 1 < count, egui::Button::new("▶"))
+            .on_hover_text("Próxima página (Page Down)")
+            .clicked()
+        {
+            preview.next(count);
+        }
+        if ui
+            .add_enabled(preview.page + 1 < count, egui::Button::new("⏭"))
+            .on_hover_text("Última página (End)")
+            .clicked()
+        {
+            preview.last(count);
+        }
+        ui.separator();
+        if ui.button("−").on_hover_text("Reduzir (Ctrl+-)").clicked() {
+            preview.zoom_out();
+        }
+        let mut pct = (preview.zoom * 100.0).round();
+        if ui
+            .add(
+                egui::DragValue::new(&mut pct)
+                    .range(MIN_ZOOM * 100.0..=MAX_ZOOM * 100.0)
+                    .suffix("%"),
+            )
+            .changed()
+        {
+            preview.set_zoom(pct / 100.0);
+        }
+        if ui.button("+").on_hover_text("Ampliar (Ctrl++)").clicked() {
+            preview.zoom_in();
+        }
+        if ui
+            .selectable_label(preview.fit_width, "Ajustar à largura")
+            .clicked()
+        {
+            preview.fit_width = !preview.fit_width;
+        }
+        if vm.shown.loading {
+            ui.separator();
+            ui.weak("lendo do Arquivo…");
+        }
+    });
+    // Page navigation / zoom keys act on this window only (and not while typing in a field).
+    if !ctx.wants_keyboard_input() {
         let (go_first, go_last, go_prev, go_next, zin, zout) = ui.input(|i| {
             let c = i.modifiers.command;
             (
@@ -514,41 +592,41 @@ pub fn draw_center(
         if zout {
             preview.zoom_out();
         }
-        ui.separator();
-        let Some(page) = vm.document.pages.get(preview.page) else {
-            ui.centered_and_justified(|ui| ui.weak("Nenhuma página para mostrar."));
-            return;
-        };
-        let page_w_in = page.width as f32 / PER_INCH as f32;
-        let avail_w = (ui.available_width() - ui.spacing().scroll.bar_width - 12.0).max(32.0);
-        let zoom = preview.effective_zoom(avail_w, page_w_in);
-        let ppp = ctx.pixels_per_point();
-        let ppi = raster_ppi(page, zoom, ppp);
-        // zebra when the paper is continuous-form sized (taller than wide is a sheet: plain white)
-        let zebra = page.height >= page.width;
-        let tex = cache.get(ctx, preview.page, vm.revision, page, ppi, zebra);
-        let size = Vec2::new(
-            page_w_in * POINTS_PER_INCH_AT_100 * zoom,
-            page.height as f32 / PER_INCH as f32 * POINTS_PER_INCH_AT_100 * zoom,
-        );
-        let id = tex.id();
-        egui::ScrollArea::both()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-                ui.painter().rect_filled(
-                    rect.translate(Vec2::splat(3.0)),
-                    0.0,
-                    Color32::from_black_alpha(60),
-                );
-                ui.painter().image(
-                    id,
-                    rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                    Color32::WHITE,
-                );
-            });
-    });
+    }
+    ui.separator();
+    let Some(page) = vm.document().pages.get(preview.page) else {
+        ui.centered_and_justified(|ui| ui.weak("Nenhuma página para mostrar."));
+        return;
+    };
+    let page_w_in = page.width as f32 / PER_INCH as f32;
+    let avail_w = (ui.available_width() - ui.spacing().scroll.bar_width - 12.0).max(32.0);
+    let zoom = preview.effective_zoom(avail_w, page_w_in);
+    let ppp = ctx.pixels_per_point();
+    let ppi = raster_ppi(page, zoom, ppp);
+    // The paper comes from the job (its frozen options), not from the page shape.
+    let look = Look::from(vm.shown.options);
+    let tex = cache.get(ctx, preview.page, &vm.shown.document, ppi, look);
+    let size = Vec2::new(
+        page_w_in * POINTS_PER_INCH_AT_100 * zoom,
+        page.height as f32 / PER_INCH as f32 * POINTS_PER_INCH_AT_100 * zoom,
+    );
+    let id = tex.id();
+    egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+            ui.painter().rect_filled(
+                rect.translate(Vec2::splat(3.0)),
+                0.0,
+                Color32::from_black_alpha(60),
+            );
+            ui.painter().image(
+                id,
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -583,6 +661,8 @@ pub struct PrinterWindow {
     limiter: RepaintLimiter,
     wake_at: Option<Instant>,
     events: Vec<CenterEvent>,
+    /// Tab, open forms and confirmations (kept while the window is closed).
+    ui_state: CenterUi,
     /// The last opening was automatic and could not avoid taking focus (see [`NO_ACTIVE_FLAG`]).
     pub opened_auto: bool,
     /// Development: save the Central's first settled frame as a PNG, then quit the app.
@@ -734,13 +814,17 @@ impl PrinterWindow {
         let preview = &mut self.preview;
         let cache = &mut n.cache;
         let events = &mut self.events;
+        let ui_state = &mut self.ui_state;
         let output = n
             .egui_ctx
-            .run(input, |ctx| draw_center(ctx, preview, cache, vm, events));
+            .run(input, |ctx| draw_center(ctx, preview, cache, ui_state, vm, events));
         n.egui_state
             .handle_platform_output(&n.window, output.platform_output.clone());
         let delay = output.viewport_output.get(&vid).map(|v| v.repaint_delay);
-        if self.dump.is_some() && n.egui_ctx.cumulative_pass_nr_for(vid) > 4 {
+        if self.dump.is_some()
+            && n.egui_ctx.cumulative_pass_nr_for(vid) > 4
+            && !vm.document().pages.is_empty()
+        {
             if let Some(path) = self.dump.take() {
                 n.gfx.request_capture(path);
                 self.dump_requested = true;
@@ -843,28 +927,48 @@ pub fn demo_view_model(pages: usize) -> PrinterViewModel {
         }
         doc.pages.push(page);
     }
-    let mut vm = PrinterViewModel {
-        status: "Impressora virtual — Epson LX-310 (dados de demonstração)".into(),
-        jobs: vec![
-            JobEntry {
-                title: "Trabalho 1".into(),
-                state: JobState::Finished,
-            },
-            JobEntry {
-                title: "Trabalho 2".into(),
-                state: JobState::Receiving,
-            },
-            JobEntry {
-                title: "Trabalho 3".into(),
-                state: JobState::Failed,
-            },
-        ],
-        selected_job: Some(1),
-        document: doc,
-        revision: 1,
+    let entry = |n: u32, state: JobState| JobEntry {
+        id: format!("demo-{n}"),
+        title: format!("Trabalho {n}"),
+        note: String::new(),
+        machine: "Apple //e (enhanced)".into(),
+        slot: 1,
+        started: "01/01/2026 10:00".into(),
+        pages: pages as u32,
+        state,
+        active: state == JobState::Receiving,
+        damaged: None,
+        versions: Vec::new(),
+        exports: Vec::new(),
     };
-    vm.document.last_in_progress = true;
-    vm
+    let mut doc = doc;
+    doc.last_in_progress = true;
+    PrinterViewModel {
+        status: Status::Receiving,
+        detail: "dados de demonstração".into(),
+        machine: "Apple //e (enhanced)".into(),
+        slot: Some(1),
+        profile: "Epson LX-310".into(),
+        setup: PrintSetup::default(),
+        jobs: vec![
+            entry(3, JobState::Failed),
+            entry(2, JobState::Receiving),
+            entry(1, JobState::Finished),
+        ],
+        active_job: Some(1),
+        selected_job: Some(1),
+        shown: Shown {
+            job: Some("demo-2".into()),
+            version: 0,
+            label: "Trabalho 2".into(),
+            document: Arc::new(doc),
+            options: Default::default(),
+            loading: false,
+            live: true,
+        },
+        messages: Vec::new(),
+        revision: 1,
+    }
 }
 
 #[cfg(test)]
@@ -919,7 +1023,7 @@ mod tests {
         w.open(false);
         w.close();
         vm.bump();
-        assert_eq!(vm.document.pages.len(), 3);
+        assert_eq!(vm.document().pages.len(), 3);
         assert_eq!(vm.revision, 2);
     }
 
@@ -1062,29 +1166,66 @@ mod tests {
     fn no_per_page_memory_beyond_the_visible_one() {
         // The cache holds a single texture slot, whatever the document size.
         let vm = demo_view_model(100);
-        assert_eq!(vm.document.pages.len(), 100);
+        assert_eq!(vm.document().pages.len(), 100);
         let ctx = Context::default();
         let mut cache = PreviewCache::default();
-        let run = |cache: &mut PreviewCache, page: usize, rev: u64| {
+        let mut ui_state = CenterUi::default();
+        let run = |cache: &mut PreviewCache, ui_state: &mut CenterUi, page: usize, vm: &PrinterViewModel| {
             let mut pv = PreviewState {
                 page,
                 ..Default::default()
             };
             let mut ev = Vec::new();
-            let vm = PrinterViewModel {
-                revision: rev,
-                ..vm.clone()
-            };
             let _ = ctx.run(egui::RawInput::default(), |c| {
-                draw_center(c, &mut pv, cache, &vm, &mut ev)
+                draw_center(c, &mut pv, cache, ui_state, vm, &mut ev)
             });
         };
-        run(&mut cache, 0, 1);
-        run(&mut cache, 0, 1);
-        assert_eq!(cache.rasterisations, 1, "same page+revision is cached");
-        run(&mut cache, 1, 1);
+        run(&mut cache, &mut ui_state, 0, &vm);
+        run(&mut cache, &mut ui_state, 0, &vm);
+        assert_eq!(cache.rasterisations, 1, "same page+document is cached");
+        run(&mut cache, &mut ui_state, 1, &vm);
         assert_eq!(cache.rasterisations, 2);
-        run(&mut cache, 1, 2);
-        assert_eq!(cache.rasterisations, 3, "a new revision rasterises again");
+        // a message does not change the pages: still cached
+        let mut other = vm.clone();
+        other.bump();
+        other.messages.push(crate::printer_model::Message {
+            text: "x".into(),
+            error: false,
+        });
+        run(&mut cache, &mut ui_state, 1, &other);
+        assert_eq!(cache.rasterisations, 2);
+        // a new document (the spool published again) rasterises again
+        let mut newer = vm.clone();
+        newer.shown.document = Arc::new((*vm.shown.document).clone());
+        run(&mut cache, &mut ui_state, 1, &newer);
+        assert_eq!(cache.rasterisations, 3, "a new document rasterises again");
+    }
+
+    #[test]
+    fn the_preview_look_follows_the_jobs_paper_and_ink() {
+        let page = Page {
+            width: PER_INCH * 19 / 2,
+            height: PER_INCH * 11,
+            dots: vec![apple2_printer::document::Dot { x: 1080, y: 1080, ink: 0 }],
+            ..Default::default()
+        };
+        let look = |paper, ink| Look { paper, ink, ribbon: Ribbon::New };
+        let green = rasterize_page_look(&page, 48, &look(PaperKind::GreenBar, InkColor::Black));
+        let blue = rasterize_page_look(&page, 48, &look(PaperKind::BlueBar, InkColor::Black));
+        let a4 = rasterize_page_look(&page, 48, &look(PaperKind::A4, InkColor::Black));
+        let w = green.size[0];
+        let bar_px = |img: &ColorImage| img.pixels[(24 + 5) * w + 100];
+        assert_ne!(bar_px(&green), bar_px(&blue), "green and blue bars differ");
+        assert_ne!(bar_px(&green), Color32::WHITE);
+        // a sheet (even if taller than wide) has no bars
+        let a4_w = a4.size[0];
+        assert_eq!(a4.pixels[(24 + 5) * a4_w + 100], Color32::WHITE);
+        // ink colour
+        let dot = |ink| {
+            let img = rasterize_page_look(&page, 96, &look(PaperKind::A4, ink));
+            img.pixels[img.size[0] * 48 + 48]
+        };
+        assert!(dot(InkColor::Blue).b() > dot(InkColor::Blue).r());
+        assert!(dot(InkColor::Purple).r() > dot(InkColor::Black).r());
     }
 }

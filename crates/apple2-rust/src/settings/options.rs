@@ -6,7 +6,8 @@ use super::model::{self, SscForm};
 use super::pages::{browse_save, combo, group, path_row};
 use super::{HostLists, SettingsDialog, AUX};
 use apple2_config::card::{
-    AyChip, HdcFirmware, PrinterDestination, PrinterTransport, SlotCardSpec, SoundSockets,
+    AyChip, HdcFirmware, PrinterDestination, PrinterInk, PrinterPaper, PrinterRibbon, PrinterTable,
+    PrinterTransport, SlotCardSpec, SoundSockets,
     Ssi263Chip,
 };
 use egui::{Context, Ui};
@@ -29,6 +30,27 @@ const HDC_FW: [(HdcFirmware, &str); 4] = [
     (HdcFirmware::BlockMode2Devices, "Block mode (2 devices)"),
     (HdcFirmware::BlockMode4Devices, "Block mode (4 devices)"),
 ];
+
+fn paper_label(k: PrinterPaper) -> &'static str {
+    match k {
+        PrinterPaper::GreenBar => "Green-bar continuous form 9.5\" x 11\"",
+        PrinterPaper::BlueBar => "Blue-bar continuous form 9.5\" x 11\"",
+        PrinterPaper::PlainContinuous => "Plain continuous 9.5\" x 11\"",
+        PrinterPaper::A4 => "A4 sheet",
+        PrinterPaper::Letter => "Letter sheet",
+    }
+}
+
+fn table_label(t: PrinterTable) -> &'static str {
+    match t {
+        PrinterTable::Pc437 => "PC437",
+        PrinterTable::Pc850 => "PC850",
+        PrinterTable::Pc860 => "PC860",
+        PrinterTable::Brascii => "BRASCII",
+        PrinterTable::Abicomp => "ABICOMP",
+        PrinterTable::Italic => "Italic",
+    }
+}
 
 fn destination_label(d: PrinterDestination) -> &'static str {
     match d {
@@ -254,6 +276,46 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                     "Open the printer window at the first byte printed",
                 );
                 ui.weak("The file above (Printer.txt) always receives 7-bit, filtered text.");
+            });
+            group(ui, |ui| {
+                ui.strong("Printer profile: Epson LX-310");
+                ui.weak("Paper and ribbon changes apply from the next print job.");
+                egui::ComboBox::from_label("Paper")
+                    .selected_text(paper_label(p.paper))
+                    .show_ui(ui, |ui| {
+                        for k in PrinterPaper::ALL {
+                            ui.selectable_value(&mut p.paper, k, paper_label(k));
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    ui.label("Ribbon:");
+                    ui.radio_value(&mut p.ribbon, PrinterRibbon::New, "New");
+                    ui.radio_value(&mut p.ribbon, PrinterRibbon::Worn, "Worn");
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Ribbon colour:");
+                    ui.radio_value(&mut p.ink, PrinterInk::Black, "Black");
+                    ui.radio_value(&mut p.ink, PrinterInk::Blue, "Blue");
+                    ui.radio_value(&mut p.ink, PrinterInk::Purple, "Purple");
+                });
+                egui::ComboBox::from_label("Character table")
+                    .selected_text(table_label(p.table))
+                    .show_ui(ui, |ui| {
+                        for t in PrinterTable::ALL {
+                            ui.selectable_value(&mut p.table, t, table_label(t));
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    ui.label("International set (ESC R):");
+                    let mut c = u32::from(p.country);
+                    if ui
+                        .add(egui::DragValue::new(&mut c).range(0..=12))
+                        .changed()
+                    {
+                        p.country = c as u8;
+                    }
+                });
+                ui.weak("The program can change the table (ESC t, ESC R); ESC @ restores the printer's own.");
             });
             group(ui, |ui| {
                 ui.strong("Advanced");

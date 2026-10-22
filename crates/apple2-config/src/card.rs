@@ -204,6 +204,75 @@ pub enum PrinterTransport {
     SevenBitAppleWin,
 }
 
+/// Papel of the virtual printer (GLOSSARY). Mirrors `apple2_printer::paper::PaperKind`; the
+/// frontend maps one to the other (this crate does not depend on the printer crate).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrinterPaper {
+    /// Continuous 9.5" x 11" form with green bars (default).
+    #[default]
+    GreenBar,
+    BlueBar,
+    PlainContinuous,
+    A4,
+    Letter,
+}
+
+impl PrinterPaper {
+    pub const ALL: [PrinterPaper; 5] = [
+        PrinterPaper::GreenBar,
+        PrinterPaper::BlueBar,
+        PrinterPaper::PlainContinuous,
+        PrinterPaper::A4,
+        PrinterPaper::Letter,
+    ];
+}
+
+/// Fita (ribbon wear) of the virtual printer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrinterRibbon {
+    #[default]
+    New,
+    Worn,
+}
+
+/// Ribbon colour.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrinterInk {
+    #[default]
+    Black,
+    Blue,
+    Purple,
+}
+
+/// Character table the virtual printer starts each job with (ESC @ returns to the engine's own).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrinterTable {
+    /// The LX-310's default table.
+    #[default]
+    Pc437,
+    Pc850,
+    Pc860,
+    Brascii,
+    Abicomp,
+    /// Italic table (ESC t 0).
+    Italic,
+}
+
+impl PrinterTable {
+    pub const ALL: [PrinterTable; 6] = [
+        PrinterTable::Pc437,
+        PrinterTable::Pc850,
+        PrinterTable::Pc860,
+        PrinterTable::Brascii,
+        PrinterTable::Abicomp,
+        PrinterTable::Italic,
+    ];
+}
+
 /// Parallel printer options (ParallelPrinter.cpp:186-213).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -221,6 +290,16 @@ pub struct PrinterSpec {
     pub transport: PrinterTransport,
     /// Open the Central de Impressoras window at the first byte written.
     pub auto_open_window: bool,
+    /// Papel of the next jobs (R05: a running job keeps the one it started with).
+    pub paper: PrinterPaper,
+    /// Fita of the next jobs.
+    pub ribbon: PrinterRibbon,
+    /// Ribbon colour of the next jobs.
+    pub ink: PrinterInk,
+    /// Character table at the start of each job.
+    pub table: PrinterTable,
+    /// ESC R international character set at the start of each job, 0..=12.
+    pub country: u8,
 }
 
 impl Default for PrinterSpec {
@@ -235,6 +314,11 @@ impl Default for PrinterSpec {
             destination: PrinterDestination::default(),
             transport: PrinterTransport::default(),
             auto_open_window: true,
+            paper: PrinterPaper::default(),
+            ribbon: PrinterRibbon::default(),
+            ink: PrinterInk::default(),
+            table: PrinterTable::default(),
+            country: 0,
         }
     }
 }
@@ -579,6 +663,11 @@ idle_limit = 3
             destination: PrinterDestination::VirtualOnly,
             transport: PrinterTransport::SevenBitAppleWin,
             auto_open_window: false,
+            paper: PrinterPaper::A4,
+            ribbon: PrinterRibbon::Worn,
+            ink: PrinterInk::Purple,
+            table: PrinterTable::Brascii,
+            country: 12,
             ..PrinterSpec::default()
         });
         let text = toml::to_string(&spec).unwrap();
