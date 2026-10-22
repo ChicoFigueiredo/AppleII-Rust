@@ -63,7 +63,7 @@ Se uma impressão sair estranha, mude o Transporte e imprima de novo: o Arquivo 
 - O botão **Printer** da barra de ferramentas existe enquanto houver uma Generic Printer que envia à impressora virtual e abre (ou traz para a frente) a Central; para fechá-la use o botão de fechar da própria janela. Ela também abre sozinha no primeiro byte (opção da seção 2).
 - Fechar a Central **não interrompe nada**: o serviço de impressão continua rodando e as Páginas ficam no Arquivo. Ao reabrir, tudo está lá.
 - A prévia mostra a Página como o papel físico: pontos, furos de trator, picote. Há zoom, ajuste à largura e navegação entre Páginas, e a impressão aparece à medida que chega.
-- No alto ficam o **estado** (online, recebendo, aguardando, concluído, erro), o Modelo do Apple II e o slot, o Perfil (Epson LX-310) e o Transporte do Trabalho. Os botões **Salvar PDF…**, **Salvar RAW…**, **Concluir trabalho** e **Cancelar trabalho** (pede confirmação e apaga o Trabalho do Arquivo) ficam desabilitados, com uma dica, quando não se aplicam. As abas são **Visualização** e **Arquivo de impressões**.
+- No alto ficam o **estado** (online, recebendo, aguardando, concluído, erro), o Modelo do Apple II e o slot, o Perfil (Epson LX-310) e o Transporte do Trabalho. Os botões **Salvar PDF…**, **Salvar RAW…**, **Concluir trabalho** e **Cancelar trabalho** (pede confirmação; fecha o Trabalho e o marca como cancelado, sem apagar nada) ficam desabilitados, com uma dica, quando não se aplicam. As abas são **Visualização** e **Arquivo de impressões**.
 - Mostra também os **diagnósticos** (seção "Diagnósticos" sob a barra da prévia): sequências que a LX-310 não entende ou que o projeto não implementa aparecem com o offset e os bytes, nunca em silêncio.
 
 ## 6. Papel e Fita
@@ -75,11 +75,11 @@ Mudam só o **visual**: nunca a posição dos pontos.
 | **Papel** | Formulário contínuo zebrado verde (padrão, 9,5" x 11", furos e picote), zebrado azul, contínuo liso, **A4**, **Carta** |
 | **Fita** | **Nova** (pontos nítidos e uniformes, padrão) ou **usada** (intensidade irregular, sempre igual para o mesmo Trabalho) |
 | **Cor** | Preto (a LX-310 é monocromática); azul e roxo como estilo |
-| **Tabela** e **País** | Tabela de caracteres (PC437 padrão, PC850, PC860, BRASCII, ABICOMP, itálico) e conjunto internacional (ESC R) com que cada Trabalho começa; o programa ainda pode trocá-los, e ESC @ volta à tabela própria da impressora |
+| **Tabela** e **País** | Tabela de caracteres (PC437 padrão, PC850, PC860, BRASCII, ABICOMP, itálico) e conjunto internacional (ESC R) com que cada Trabalho começa; são as chaves DIP da impressora, gravadas nas opções do Trabalho. O programa ainda pode trocá-los, e ESC @ volta a essa tabela e a esse país (não ao padrão de fábrica) |
 
 Papel, Fita, Cor e Tabela se escolhem na Central (linha sob o estado) ou nas opções da Carta, e **valem para o próximo Trabalho**: o Trabalho em andamento continua com o que tinha ao começar. A prévia desenha o Papel e a Cor do próprio Trabalho.
 
-Para ver um Trabalho já impresso com outro Papel, Fita ou Cor use **Reimprimir** na aba **Arquivo de impressões**: gera uma nova **versão** (veja a seção 8). A tabela de caracteres não muda na reimpressão.
+Para ver um Trabalho já impresso com outro Papel, Fita ou Cor use **Reimprimir** na aba **Arquivo de impressões**: gera uma nova **versão** (veja a seção 8). A reimpressão também oferece **Tabela** e **País**; a prévia e a reimpressão de um Trabalho antigo usam as opções gravadas nele, não as atuais da Carta.
 
 ## 7. Salvar PDF
 
@@ -106,8 +106,11 @@ Todo Trabalho fica guardado, na pasta de dados do usuário (`apple2-rust/impress
 - **Nada é apagado sozinho.** Só você apaga (com confirmação). Se o Arquivo ficar grande, o programa apenas avisa.
 - Cada Trabalho tem os **bytes brutos exatos** (`raw.bin`, com SHA-256 no manifesto), título (editável), nota pessoal, data e Modelo do Apple II.
 - Se o programa fechar de repente, o Trabalho volta como "interrompido", até o último ponto de controle gravado (a cada 32 KiB ou 2 s), sem bytes inventados.
+- A lista mostra o **título** (primeira linha impressa + data, editável), não o id; o id do Arquivo aparece em dica e no detalhe.
+- **Concluir trabalho** fecha o Trabalho na própria Carta (motivo `User`): o próximo byte abre um Trabalho novo. Se a emulação estiver pausada e a Carta não responder em 1,5 s, o serviço fecha o Trabalho sozinho. **Cancelar trabalho** faz o mesmo e marca o Trabalho como *cancelado*; os bytes, o título e as versões continuam no Arquivo (só **Apagar trabalho…** remove).
+- Cada PDF ou cópia RAW exportada é registrada no manifesto na hora.
 - Na aba **Arquivo de impressões**: lista (título, data, máquina, Transporte, Páginas, estado), edição de título e nota, versões (**Ver**, **Exportar PDF…**), **Reimprimir** e **Apagar trabalho…** (com confirmação; o Trabalho em andamento não pode ser apagado).
-- **Reimprimir** com outro Papel, Fita ou Cor gera uma **nova versão**; os bytes originais nunca mudam.
+- **Reimprimir** com outro Papel, Fita, Cor, Tabela ou País gera uma **nova versão**; os bytes originais nunca mudam.
 
 Estrutura e manifesto em [arquivo-de-impressoes.md](arquivo-de-impressoes.md).
 

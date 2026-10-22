@@ -26,17 +26,17 @@ impressoes/
 
 O nome do diretório é `AAAAMMDD-HHMMSS` (UTC) + 6 hex de um id curto. Nunca deriva de texto vindo do Apple II (nem de título ou nota). Só `[A-Za-z0-9_-]` é aceito; qualquer outra pasta dentro da raiz é listada como danificada e não é tocada.
 
-## manifest.json (schema 2)
+## manifest.json (schema 3)
 
 | Campo | Significado |
 |---|---|
-| `schema_version` | versão do formato (hoje 2) |
+| `schema_version` | versão do formato (hoje 3) |
 | `id` | igual ao nome da pasta (senão o trabalho é danificado) |
 | `capture_job` | número do trabalho dado pela placa |
 | `origin` | `machine` e `slot` |
 | `transport` | `EightBit` ou `SevenBitAppleWin` |
 | `profile` | `"Epson LX-310"` |
-| `options` | RenderOptions congeladas na abertura (papel, fita, cor) |
+| `options` | RenderOptions congeladas na abertura: `paper`, `ribbon`, `ink`, `table` (tabela de caracteres) e `country` (conjunto internacional 0..=12). `table` e `country` representam as chaves DIP da impressora: são o estado inicial do Trabalho e o que o ESC @ restaura. Ausentes (schemas 1 e 2) valem PC437 e 0 |
 | `started_at`, `completed_at` | RFC 3339 UTC |
 | `close_reason` | `Idle`, `Reset`, `StateLoaded`, `CardRemoved`, `User`, `Shutdown` |
 | `total_bytes` | bytes válidos em `raw.bin` |
@@ -45,11 +45,12 @@ O nome do diretório é `AAAAMMDD-HHMMSS` (UTC) + 6 hex de um id curto. Nunca de
 | `pages`, `diagnostics_total`, `diagnostics` | páginas e resumo (até 100) dos diagnósticos do motor |
 | `title`, `title_edited` | título (padrão: primeira linha de texto não vazia + data); editável |
 | `note` | nota pessoal |
+| `cancelled` | `true` se o usuário cancelou o Trabalho na Central (fechado com `User`; os bytes continuam aqui) |
 | `state` | `active`, `completed` ou `interrupted` |
 | `versions` | lista de versões: `id`, `created_at`, `options`, `pages`, `diagnostics_total`. A versão 1 é a original |
-| `exports` | PDFs exportados: `version`, `path` (só informativo), `exported_at` |
+| `exports` | arquivos exportados: `version` (versão do PDF; **0 = cópia dos bytes brutos**), `path` (só informativo), `exported_at`. Cada exportação é registrada na hora (`SpoolCommand::RecordExport`), não só ao desligar |
 
-Schema 1 (sem checkpoints, versões, nota, exportações; `size` em vez de `total_bytes`) é migrado na leitura (`migrate_manifest_value`). Um schema mais novo que o suportado vira "danificado", sem adivinhação.
+Schema 1 (sem checkpoints, versões, nota, exportações; `size` em vez de `total_bytes`) e schema 2 (sem `cancelled` nem `options.table`/`options.country`) são migrados na leitura (`migrate_manifest_value`): o manifesto passa a schema 3 na memória e só é regravado quando o Arquivo o altera. Um schema mais novo que o suportado vira "danificado", sem adivinhação.
 
 ## Gravação e checkpoints
 
@@ -67,7 +68,11 @@ O Arquivo nunca apaga nada sozinho. `total_size()` informa o espaço usado e, pa
 
 ## Reimpressão
 
-`Spool::reprint(id, RenderOptions)` relê `raw.bin` (conferindo o SHA-256), gera o documento com outro papel/fita/cor/tabela e registra uma nova versão. Os bytes originais e o SHA-256 não mudam. `render_version` redesenha uma versão antiga com as opções dela.
+`Spool::reprint(id, RenderOptions)` relê `raw.bin` (conferindo o SHA-256), gera o documento com outro papel/fita/cor/tabela e registra uma nova versão. Os bytes originais e o SHA-256 não mudam. `render_version` redesenha uma versão antiga com as opções dela, inclusive tabela e país: a prévia e a reimpressão de Trabalhos antigos usam as opções gravadas no manifesto do Trabalho (ou da versão), nunca as configurações atuais da Carta.
+
+## O que a Central lê
+
+A Central não abre `manifest.json`: o snapshot do spool traz um `JobSummary` por Trabalho com origem, Transporte, opções, título, nota, SHA-256, `cancelled`, versões e exportações. O `ActiveView` do Trabalho em andamento traz as opções congeladas e o título provisório (primeira linha de texto até o momento + data).
 
 ## Backup
 
