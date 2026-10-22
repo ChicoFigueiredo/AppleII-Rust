@@ -50,6 +50,9 @@ fn cases() -> Vec<Case> {
             "t007_bold_double_strike",
             b"\x1bEA\x1bFB\x1bGC\x1bHD\x1bE\x1bGE",
         ),
+        case("top_of_form_first_line", b"\x1bE\x1bW\x01AP\x1bW\x00\x1bF"),
+        case("double_width_dots", b"\x1bW\x01X\x1bW\x00X\x0eX"),
+        case("line_66_spills_to_next_form", b"\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nX"),
         case("t007_underline", b"\x1b-\x01AB\x1b-\x00C"),
         case("t007_master_select", b"\x1b!\x88A\x1b!\x00B\x1b!\x01C"),
         case("italic_shear", b"\x1b4A\x1b5B"),
@@ -120,7 +123,7 @@ fn cases() -> Vec<Case> {
             "state_only_tables_country_nlq",
             b"\x1bt\x00\x1bR\x02\x1bx\x01\x1bU\x01\x1bk\x01\x1b(t\x03\x00\x01\x19\x00A",
         ),
-        case("upper_codes_esc6_esc7", b"\x80\x1b6\x80\x1b7\x80"),
+        case("upper_codes_esc6_esc7", b"\x80\x1b7\x80\x1b6\x80"),
         case("double_width_line_cancelled_by_lf", b"\x0eA\nB"),
     ];
     v.push(Case {

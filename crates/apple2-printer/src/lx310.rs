@@ -34,6 +34,9 @@ pub const DRAFT_COLUMN: u32 = 18;
 pub const NLQ_COLUMN: u32 = 9;
 /// NLQ row pitch: 1/144".
 pub const NLQ_ROW: u32 = 15;
+/// Top of form: pin 1 of the first line sits at the manual's minimum top margin, 4.2 mm [M apspe_2]
+/// (357 units), for continuous paper and single sheets alike.
+pub const TOP_OFFSET: u32 = 357;
 /// Baseline of the text layer: pin 8 (index 7); the descender pin is below it.
 const TEXT_BASELINE: u32 = 7 * PIN_PITCH;
 /// Height of a character cell (9 pins).
@@ -139,7 +142,9 @@ impl Format {
             tables: [CharTable::Italic, CharTable::Pc437],
             slot: 1,
             country: 0,
-            upper_print: false,
+            // Graphic tables (PC437...) print codes 128..159 as characters; ESC 7 makes them
+            // control codes (ignored), ESC 6 prints them again.
+            upper_print: true,
         }
     }
 
@@ -192,6 +197,8 @@ pub struct Lx310 {
     overscan_page: Option<usize>,
     limit_notes: u8,
     diag_overflow: bool,
+    /// Dots of the line in progress that fell below a continuous form: they land on the next page.
+    spill: Vec<Dot>,
 }
 
 impl Default for Lx310 {
@@ -251,6 +258,7 @@ impl Lx310 {
             overscan_page: None,
             limit_notes: 0,
             diag_overflow: false,
+            spill: Vec::new(),
         }
     }
 
@@ -319,8 +327,8 @@ impl Lx310 {
 
     // ---- page and dot output ---------------------------------------------------------------
 
-    fn ensure_page(&mut self, offset: u64) -> bool {
-        if self.page_no >= self.config.max_pages {
+    fn ensure_page_n(&mut self, n: usize, offset: u64) -> bool {
+        if n >= self.config.max_pages {
             if self.limit_notes & 1 == 0 {
                 self.limit_notes |= 1;
                 self.note(
@@ -331,7 +339,7 @@ impl Lx310 {
             }
             return false;
         }
-        while self.doc.pages.len() <= self.page_no {
+        while self.doc.pages.len() <= n {
             self.doc.pages.push(Page {
                 width: self.options.paper.width,
                 height: self.options.paper.height,
@@ -351,7 +359,13 @@ impl Lx310 {
             self.overscan_page = Some(self.page_no);
             self.note(offset, Vec::new(), why);
         }
-        if dots.is_empty() || !self.ensure_page(offset) {
+        let spill = std::mem::take(&mut self.spill);
+        self.push_dots(self.page_no, dots, offset);
+        self.push_dots(self.page_no + 1, spill, offset);
+    }
+
+    fn push_dots(&mut self, page: usize, dots: Vec<Dot>, offset: u64) {
+        if dots.is_empty() || !self.ensure_page_n(page, offset) {
             return;
         }
         let total: usize = self.doc.pages.iter().map(|p| p.dots.len()).sum();
@@ -367,19 +381,29 @@ impl Lx310 {
             return;
         }
         self.changes += dots.len() as u64;
-        self.doc.pages[self.page_no].dots.extend(dots);
+        self.doc.pages[page].dots.extend(dots);
     }
 
-    /// A dot at `(x_pos + dx, y_pos + dy)` if it falls on the printable area, else counted as dropped.
-    fn dot(&self, dx: i64, dy: i64, out: &mut Vec<Dot>, dropped: &mut u32) {
+    /// A dot at `(x_pos + dx, y_pos + dy)` (plus the top-of-form offset). Off the printable width
+    /// it is dropped; below the page it goes to the next form on continuous paper (the paper is
+    /// one strip) and is dropped on a single sheet.
+    fn dot(&mut self, dx: i64, dy: i64, out: &mut Vec<Dot>, dropped: &mut u32) {
         let x = i64::from(self.x0) + i64::from(self.x_pos) + dx;
-        let y = i64::from(self.y_pos) + dy;
+        let y = i64::from(self.y_pos) + i64::from(TOP_OFFSET) + dy;
+        let h = i64::from(self.options.paper.height);
         let in_x = x >= i64::from(self.x0) && x < i64::from(self.x0) + i64::from(self.printable);
-        let in_y = y >= 0 && y < i64::from(self.options.paper.height);
-        if in_x && in_y {
+        if !in_x || y < 0 {
+            *dropped += 1;
+        } else if y < h {
             out.push(Dot {
                 x: x as u32,
                 y: y as u32,
+                ink: 0,
+            });
+        } else if self.options.paper.is_continuous() && y < 2 * h {
+            self.spill.push(Dot {
+                x: x as u32,
+                y: (y - h) as u32,
                 ink: 0,
             });
         } else {
@@ -388,13 +412,19 @@ impl Lx310 {
     }
 
     fn add_text(&mut self, c: char, advance: u32, baseline: u32, offset: u64) {
-        if !self.ensure_page(offset) {
+        let x = self.x0 + self.x_pos;
+        let mut y = self.y_pos + TOP_OFFSET + baseline;
+        let line_y = self.y_pos;
+        let mut page = self.page_no;
+        let h = self.options.paper.height;
+        if y >= h && self.options.paper.is_continuous() {
+            // Baseline below the form: it prints on the next form (continuous strip).
+            y -= h;
+            page += 1;
+        }
+        if !self.ensure_page_n(page, offset) {
             return;
         }
-        let x = self.x0 + self.x_pos;
-        let y = self.y_pos + baseline;
-        let line_y = self.y_pos;
-        let page = self.page_no;
         if let Some(l) = self.last_run {
             if l.page == page && l.y == line_y && l.advance == advance && l.end_x == x {
                 if let Some(run) = self.doc.pages[page].text.get_mut(l.idx) {
@@ -486,7 +516,7 @@ impl Lx310 {
             self.note(
                 offset,
                 vec![code],
-                "código 128..159 tratado como controle (ESC 6 habilita impressão); ignorado",
+                "código 128..159 tratado como controle (ESC 7); ESC 6 habilita impressão; ignorado",
             );
             return;
         }
@@ -531,13 +561,16 @@ impl Lx310 {
                             } else {
                                 0
                             };
-                            let dx = ci as u32 * col_unit * mult + px + shear;
-                            self.dot(
-                                i64::from(dx),
-                                i64::from(r * ru + py),
-                                &mut dots,
-                                &mut dropped,
-                            );
+                            // Double width: every matrix column becomes `mult` adjacent columns.
+                            for k in 0..mult {
+                                let dx = (ci as u32 * mult + k) * col_unit + px + shear;
+                                self.dot(
+                                    i64::from(dx),
+                                    i64::from(r * ru + py),
+                                    &mut dots,
+                                    &mut dropped,
+                                );
+                            }
                         }
                     }
                 }
@@ -878,6 +911,7 @@ impl PrinterEngine for Lx310 {
         self.overscan_page = None;
         self.limit_notes = 0;
         self.diag_overflow = false;
+        self.spill.clear();
     }
 
     fn feed(&mut self, offset: u64, data: &[u8]) {
