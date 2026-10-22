@@ -19,10 +19,11 @@ use apple2_config::card::{
 };
 use apple2_config::Settings;
 use apple2_hostio::CaptureReceiver;
-use apple2_printer::archive::{self, Archive, JobState as ArchiveJobState, Manifest};
+use apple2_printer::archive::{self, Archive, JobState as ArchiveJobState};
 use apple2_printer::capture::CaptureEvent;
 use apple2_printer::document::PageDocument;
 use apple2_printer::engine::PrinterEngine;
+use apple2_printer::font::CharTable;
 use apple2_printer::lx310::{Lx310, Lx310Config};
 use apple2_printer::paper::{InkColor, Paper, PaperKind, RenderOptions, Ribbon};
 use apple2_printer::pdf::{self, PageSelection, PdfDate, PdfMeta};
@@ -32,7 +33,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -42,6 +43,8 @@ pub const ARCHIVE_ENV: &str = "APPLE2_RUST_PRINTER_ARCHIVE";
 pub const WAITING_AFTER: Duration = Duration::from_millis(1500);
 /// How often the UI re-reads the spool while something is happening.
 pub const POLL_PERIOD: Duration = Duration::from_millis(33);
+/// How long the card has to answer a close request before the spool closes the job itself.
+pub const CLOSE_FALLBACK: Duration = Duration::from_millis(1500);
 const MAX_MESSAGES: usize = 8;
 
 // ---------------------------------------------------------------------------------------------
@@ -81,6 +84,30 @@ pub fn render_options(spec: &PrinterSpec) -> RenderOptions {
             PrinterInk::Blue => InkColor::Blue,
             PrinterInk::Purple => InkColor::Purple,
         },
+        table: char_table(spec.table),
+        country: spec.country.min(12),
+    }
+}
+
+pub fn char_table(t: PrinterTable) -> CharTable {
+    match t {
+        PrinterTable::Pc437 => CharTable::Pc437,
+        PrinterTable::Pc850 => CharTable::Pc850,
+        PrinterTable::Pc860 => CharTable::Pc860,
+        PrinterTable::Brascii => CharTable::Brascii,
+        PrinterTable::Abicomp => CharTable::Abicomp,
+        PrinterTable::Italic => CharTable::Italic,
+    }
+}
+
+pub fn printer_table(t: CharTable) -> PrinterTable {
+    match t {
+        CharTable::Pc437 => PrinterTable::Pc437,
+        CharTable::Pc850 => PrinterTable::Pc850,
+        CharTable::Pc860 => PrinterTable::Pc860,
+        CharTable::Brascii => PrinterTable::Brascii,
+        CharTable::Abicomp => PrinterTable::Abicomp,
+        CharTable::Italic => PrinterTable::Italic,
     }
 }
 
@@ -96,8 +123,8 @@ pub fn store_setup(spec: &mut PrinterSpec, s: &PrintSetup) {
         InkColor::Blue => PrinterInk::Blue,
         InkColor::Purple => PrinterInk::Purple,
     };
-    spec.table = s.table;
-    spec.country = s.country.min(12);
+    spec.table = printer_table(s.options.table);
+    spec.country = s.options.country.min(12);
 }
 
 /// What the hub needs from the settings: the printer card, its look and its behaviour.
@@ -127,8 +154,6 @@ impl PrinterConfig {
                 machine: crate::factory::machine_label(settings.machine.model),
                 setup: PrintSetup {
                     options: render_options(p),
-                    table: p.table,
-                    country: p.country.min(12),
                 },
                 auto_open: p.auto_open_window,
             })
@@ -143,75 +168,8 @@ pub fn archive_root() -> Option<PathBuf> {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Engine with the default character table
-// ---------------------------------------------------------------------------------------------
-
-type TableCell = Arc<Mutex<(PrinterTable, u8)>>;
-
-fn table_id(t: PrinterTable) -> u8 {
-    match t {
-        PrinterTable::Italic => 0,
-        PrinterTable::Pc437 => 1,
-        PrinterTable::Pc850 => 3,
-        PrinterTable::Pc860 => 7,
-        PrinterTable::Brascii => 25,
-        PrinterTable::Abicomp => 26,
-    }
-}
-
-/// ESC sequences that make a freshly reset LX-310 start with the chosen table and international
-/// set. Empty for the printer's own defaults.
-pub fn table_preamble(table: PrinterTable, country: u8) -> Vec<u8> {
-    let mut b = Vec::new();
-    if table != PrinterTable::Pc437 {
-        // ESC ( t 3 0 d1 d2 d3: assign registered table d2/d3 to slot d1 (slot 1 is the active one).
-        b.extend_from_slice(&[0x1B, b'(', b't', 3, 0, 1, table_id(table), 0]);
-    }
-    if country != 0 {
-        b.extend_from_slice(&[0x1B, b'R', country.min(12)]);
-    }
-    b
-}
-
-/// An `Lx310` that starts each job with the table chosen in the settings (the program can still
-/// change it; ESC @ returns to the printer's own default).
-struct ConfiguredLx310 {
-    inner: Lx310,
-    table: TableCell,
-}
-
-impl PrinterEngine for ConfiguredLx310 {
-    fn begin(&mut self, options: RenderOptions) {
-        self.inner.begin(options);
-        let (t, c) = *self.table.lock().unwrap_or_else(|e| e.into_inner());
-        let pre = table_preamble(t, c);
-        if !pre.is_empty() {
-            self.inner.feed(0, &pre);
-            self.inner.take_revision();
-        }
-    }
-    fn feed(&mut self, offset: u64, data: &[u8]) {
-        self.inner.feed(offset, data);
-    }
-    fn document(&self) -> &PageDocument {
-        self.inner.document()
-    }
-    fn take_revision(&mut self) -> u64 {
-        self.inner.take_revision()
-    }
-    fn finish(&mut self) {
-        self.inner.finish();
-    }
-}
-
-fn engine_factory(table: TableCell) -> apple2_printer::spool::EngineFactory {
-    Box::new(move || {
-        Box::new(ConfiguredLx310 {
-            inner: Lx310::new(Lx310Config::default()),
-            table: table.clone(),
-        })
-    })
+fn engine_factory() -> apple2_printer::spool::EngineFactory {
+    Box::new(|| Box::new(Lx310::new(Lx310Config::default())))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -302,30 +260,12 @@ fn safe_id(id: &str) -> bool {
     !id.is_empty() && !id.contains(['/', '\\']) && id != "." && id != ".."
 }
 
-/// Reads a job's manifest straight from the archive folder (read only; the spool thread owns all
-/// writes). `None` when missing, unreadable or newer than this build understands.
-pub fn read_manifest(root: &Path, id: &str) -> Option<Manifest> {
-    if !safe_id(id) {
-        return None;
-    }
-    let path = root.join(id).join(archive::MANIFEST_FILE);
-    let len = std::fs::metadata(&path).ok()?.len();
-    if len > archive::MAX_MANIFEST_BYTES {
-        return None;
-    }
-    let bytes = std::fs::read(&path).ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    let value = archive::migrate_manifest_value(value).ok()?;
-    serde_json::from_value(value).ok()
-}
-
 /// Renders the first `total` raw bytes of an archived job with `options` (a worker thread job).
 pub fn render_job(
     root: &Path,
     id: &str,
     total: u64,
     options: RenderOptions,
-    table: (PrinterTable, u8),
 ) -> Result<PageDocument, String> {
     if !safe_id(id) {
         return Err(format!("identificador de trabalho inválido: {id}"));
@@ -333,11 +273,7 @@ pub fn render_job(
     let path = root.join(id).join(archive::RAW_FILE);
     let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut file = file.take(total);
-    let cell: TableCell = Arc::new(Mutex::new(table));
-    let mut engine = ConfiguredLx310 {
-        inner: Lx310::new(Lx310Config::default()),
-        table: cell,
-    };
+    let mut engine = Lx310::new(Lx310Config::default());
     engine.begin(options);
     let mut buf = vec![0u8; 16 * 1024];
     let mut offset = 0u64;
@@ -369,7 +305,7 @@ fn now_pdf_date() -> PdfDate {
 }
 
 /// Seed of the worn ribbon: the start of the raw bytes' SHA-256, so a job always looks the same.
-fn ribbon_seed(m: Option<&Manifest>) -> Option<u64> {
+fn ribbon_seed(m: Option<&JobSummary>) -> Option<u64> {
     let sha = m?.sha256.as_deref()?;
     u64::from_str_radix(sha.get(..16)?, 16).ok()
 }
@@ -426,6 +362,7 @@ enum Done {
         result: Result<usize, String>,
     },
     Raw {
+        job: String,
         path: PathBuf,
         result: Result<u64, String>,
     },
@@ -451,14 +388,16 @@ pub struct PrinterHub {
     spool: SpoolHandle,
     service: Option<SpoolService>,
     bridge: Bridge,
-    table: TableCell,
+    /// Asks the card to close a job ("Concluir" / "Cancelar").
+    closer: CaptureReceiver,
+    /// Job the user asked to close and when: if the card does not answer (emulation paused),
+    /// the spool closes it itself after [`CLOSE_FALLBACK`].
+    pending_close: Option<(u64, Instant)>,
     config: Option<PrinterConfig>,
     seen_opens: u64,
     seen_bytes: u64,
     last_byte: Option<Instant>,
     prev_snap: Option<Arc<Snapshot>>,
-    manifests: HashMap<String, (JobSummary, Manifest)>,
-    stale_manifests: Vec<String>,
     /// Newest live document of the active job.
     live: Option<(String, Arc<PageDocument>)>,
     /// Pages of archived versions already rendered.
@@ -469,8 +408,6 @@ pub struct PrinterHub {
     last_shown: Option<(String, Arc<PageDocument>)>,
     seen_notice: Option<String>,
     messages: VecDeque<Message>,
-    exports: HashMap<String, Vec<(u32, String)>>,
-    pending_records: Vec<(String, u32, PathBuf)>,
     done_tx: Sender<Done>,
     done_rx: Receiver<Done>,
     vm: PrinterViewModel,
@@ -497,10 +434,10 @@ impl PrinterHub {
     ) -> Result<PrinterHub, String> {
         let archive = Archive::open(&root).map_err(|e| format!("{}: {e}", root.display()))?;
         let initial = config.as_ref().map(|c| c.setup).unwrap_or_default();
-        let table: TableCell = Arc::new(Mutex::new((initial.table, initial.country)));
-        let spool = Spool::new(archive, engine_factory(table.clone()), initial.options);
+        let spool = Spool::new(archive, engine_factory(), initial.options);
         let (tx, rx) = channel::<CaptureEvent>();
         let service = SpoolService::spawn(spool, rx);
+        let closer = events.clone();
         let bridge = Bridge::spawn(events, tx, wake);
         let (done_tx, done_rx) = channel();
         let mut hub = PrinterHub {
@@ -508,14 +445,13 @@ impl PrinterHub {
             spool: service.handle(),
             service: Some(service),
             bridge,
-            table,
+            closer,
+            pending_close: None,
             config: None,
             seen_opens: 0,
             seen_bytes: 0,
             last_byte: None,
             prev_snap: None,
-            manifests: HashMap::new(),
-            stale_manifests: Vec::new(),
             live: None,
             rendered: HashMap::new(),
             rendering: None,
@@ -524,8 +460,6 @@ impl PrinterHub {
             last_shown: None,
             seen_notice: None,
             messages: VecDeque::new(),
-            exports: HashMap::new(),
-            pending_records: Vec::new(),
             done_tx,
             done_rx,
             vm: PrinterViewModel::default(),
@@ -543,8 +477,6 @@ impl PrinterHub {
     /// Settings changed (or the first configuration). `None`: no virtual printer card.
     pub fn configure(&mut self, config: Option<PrinterConfig>) {
         if let Some(c) = &config {
-            *self.table.lock().unwrap_or_else(|e| e.into_inner()) =
-                (c.setup.table, c.setup.country);
             self.spool.send(SpoolCommand::SetOptions(c.setup.options));
         }
         if self.config != config {
@@ -601,6 +533,18 @@ impl PrinterHub {
             self.last_byte = Some(now);
         }
         let snap = self.spool.snapshot();
+        if let Some((job, since)) = self.pending_close {
+            match snap.active.as_ref() {
+                Some(a) if a.capture_job == job => {
+                    if now.saturating_duration_since(since) >= CLOSE_FALLBACK {
+                        // The card did not answer (emulation paused): close at the spool.
+                        self.spool.send(SpoolCommand::FinishActive);
+                        self.pending_close = None;
+                    }
+                }
+                _ => self.pending_close = None,
+            }
+        }
         let snap_moved = self
             .prev_snap
             .as_ref()
@@ -660,44 +604,36 @@ impl PrinterHub {
                         format!("PDF salvo em {} ({pages} página(s))", path.display()),
                         false,
                     );
-                    self.exports
-                        .entry(job.clone())
-                        .or_default()
-                        .push((version, path.display().to_string()));
-                    self.pending_records.push((job, version.max(1), path));
+                    // Registered in the manifest right away (not only at shutdown).
+                    self.spool.send(SpoolCommand::RecordExport {
+                        job_id: job,
+                        version: version.max(1),
+                        path,
+                    });
                 }
                 Err(e) => self.message(format!("Falha ao salvar o PDF: {e}"), true),
             },
-            Done::Raw { path, result } => match result {
-                Ok(n) => self.message(
-                    format!("Bytes brutos salvos em {} ({n} bytes)", path.display()),
-                    false,
-                ),
+            Done::Raw { job, path, result } => match result {
+                Ok(n) => {
+                    self.message(
+                        format!("Bytes brutos salvos em {} ({n} bytes)", path.display()),
+                        false,
+                    );
+                    // Version 0 stands for the raw bytes (PDFs are versions 1 and up).
+                    self.spool.send(SpoolCommand::RecordExport {
+                        job_id: job,
+                        version: 0,
+                        path,
+                    });
+                }
                 Err(e) => self.message(format!("Falha ao salvar os bytes brutos: {e}"), true),
             },
         }
         self.dirty = true;
     }
 
-    /// Takes in what a new snapshot carries: manifests, live document, reprint result, notices.
+    /// Takes in what a new snapshot carries: live document, reprint result, notices.
     fn absorb(&mut self, snap: &Arc<Snapshot>) {
-        for id in std::mem::take(&mut self.stale_manifests) {
-            self.manifests.remove(&id);
-        }
-        let ids: std::collections::HashSet<&str> =
-            snap.jobs.iter().map(|j| j.id.as_str()).collect();
-        self.manifests.retain(|k, _| ids.contains(k.as_str()));
-        for j in &snap.jobs {
-            if j.damaged.is_some() {
-                continue;
-            }
-            let fresh = self.manifests.get(&j.id).is_some_and(|(s, _)| s == j);
-            if !fresh {
-                if let Some(m) = read_manifest(&self.root, &j.id) {
-                    self.manifests.insert(j.id.clone(), (j.clone(), m));
-                }
-            }
-        }
         if let Some(a) = &snap.active {
             self.live = Some((a.job_id.clone(), a.document.clone()));
             if let Some(e) = &a.storage_error {
@@ -832,10 +768,10 @@ impl PrinterHub {
     }
 
     fn entry(&self, j: &JobSummary) -> JobEntry {
-        let manifest = self.manifests.get(&j.id).map(|(_, m)| m);
         let state = match (j.state, &j.damaged) {
             (_, Some(_)) => JobState::Failed,
             (Some(ArchiveJobState::Active), _) => JobState::Receiving,
+            (Some(ArchiveJobState::Completed), _) if j.cancelled => JobState::Cancelled,
             (Some(ArchiveJobState::Completed), _) => JobState::Finished,
             _ => JobState::Failed,
         };
@@ -849,33 +785,37 @@ impl PrinterHub {
         JobEntry {
             id: j.id.clone(),
             title,
-            note: manifest.map(|m| m.note.clone()).unwrap_or_default(),
-            machine: manifest
-                .map(|m| m.origin.machine.clone())
+            note: j.note.clone(),
+            machine: j
+                .origin
+                .as_ref()
+                .map(|o| o.machine.clone())
                 .unwrap_or_default(),
-            slot: manifest.map_or(0, |m| m.origin.slot),
-            transport: manifest
-                .map(|m| transport_label(m.transport).to_string())
+            slot: j.origin.as_ref().map_or(0, |o| o.slot),
+            transport: j
+                .transport
+                .map(|t| transport_label(t).to_string())
                 .unwrap_or_default(),
             started: local_time(&j.started_at),
             pages: j.pages,
             state,
             active: j.state == Some(ArchiveJobState::Active),
             damaged: j.damaged.clone(),
-            versions: manifest
-                .map(|m| {
-                    m.versions
-                        .iter()
-                        .map(|v| VersionEntry {
-                            id: v.id,
-                            options: v.options,
-                            pages: v.pages,
-                            created: local_time(&v.created_at),
-                        })
-                        .collect()
+            versions: j
+                .versions
+                .iter()
+                .map(|v| VersionEntry {
+                    id: v.id,
+                    options: v.options,
+                    pages: v.pages,
+                    created: local_time(&v.created_at),
                 })
-                .unwrap_or_default(),
-            exports: self.exports.get(&j.id).cloned().unwrap_or_default(),
+                .collect(),
+            exports: j
+                .exports
+                .iter()
+                .map(|e| (e.version, e.path.clone()))
+                .collect(),
         }
     }
 
@@ -889,7 +829,7 @@ impl PrinterHub {
         let Some(sel) = selected.and_then(|i| jobs.get(i)) else {
             return Shown::default();
         };
-        let manifest = self.manifests.get(&sel.id).map(|(_, m)| m.clone());
+        let manifest = snap.jobs.iter().find(|j| j.id == sel.id).cloned();
         let default_opts = self
             .config
             .as_ref()
@@ -959,25 +899,24 @@ impl PrinterHub {
     fn start_render(
         &mut self,
         key: &(String, u32),
-        manifest: Option<&Manifest>,
+        manifest: Option<&JobSummary>,
         options: RenderOptions,
     ) {
         if self.rendering.as_ref() == Some(key) {
             return;
         }
         let Some(m) = manifest else { return };
-        if m.state == ArchiveJobState::Active {
+        if m.state != Some(ArchiveJobState::Completed) {
             return;
         }
         self.rendering = Some(key.clone());
         let (root, id, total) = (self.root.clone(), key.0.clone(), m.total_bytes);
         let version = key.1;
-        let table = *self.table.lock().unwrap_or_else(|e| e.into_inner());
         let tx = self.done_tx.clone();
         std::thread::Builder::new()
             .name("apple2-printer-render".into())
             .spawn(move || {
-                let result = render_job(&root, &id, total, options, table).map(Arc::new);
+                let result = render_job(&root, &id, total, options).map(Arc::new);
                 let _ = tx.send(Done::Rendered {
                     job: id,
                     version,
@@ -1005,26 +944,19 @@ impl PrinterHub {
                 if let Some(c) = &mut self.config {
                     c.setup = s;
                 }
-                *self.table.lock().unwrap_or_else(|e| e.into_inner()) = (s.table, s.country);
                 self.spool.send(SpoolCommand::SetOptions(s.options));
             }
             CenterEvent::FinishJob => {
-                self.spool.send(SpoolCommand::FinishActive);
+                self.close_on_card();
             }
             CenterEvent::CancelJob => {
-                if let Some(id) = self
-                    .prev_snap
-                    .as_ref()
-                    .and_then(|s| s.active.as_ref())
-                    .map(|a| a.job_id.clone())
-                {
-                    self.spool.send(SpoolCommand::FinishActive);
-                    self.spool.send(SpoolCommand::Delete { job_id: id });
-                    self.pick = None;
-                    self.live = None;
-                    self.last_shown = None;
+                // Cancel = close on the card like "Concluir" and mark the job as cancelled in the
+                // Arquivo. The bytes stay; nothing is deleted (use "Apagar trabalho" for that).
+                if let Some(id) = self.close_on_card() {
+                    self.spool.send(SpoolCommand::Cancel { job_id: id });
                     self.message(
-                        "Trabalho cancelado e removido do Arquivo de impressões.",
+                        "Trabalho cancelado: fechado na impressora e marcado como cancelado; \
+                         os bytes continuam no Arquivo de impressões.",
                         false,
                     );
                 }
@@ -1040,7 +972,6 @@ impl PrinterHub {
                     .send(SpoolCommand::SetTitle { job_id: job, title });
             }
             CenterEvent::SetNote { job, note } => {
-                self.stale_manifests.push(job.clone());
                 self.spool.send(SpoolCommand::SetNote { job_id: job, note });
             }
             CenterEvent::DeleteJob(job) => {
@@ -1049,7 +980,6 @@ impl PrinterHub {
                     self.pick = None;
                 }
                 self.last_shown = None;
-                self.exports.remove(&job);
                 self.spool.send(SpoolCommand::Delete { job_id: job });
             }
             CenterEvent::ExportPdf(_) | CenterEvent::SaveRaw { .. } => {}
@@ -1057,9 +987,27 @@ impl PrinterHub {
         self.dirty = true;
     }
 
+    /// Asks the card to close the active job as `User` (the next byte opens a new job). Returns the
+    /// Arquivo id of the job it applies to.
+    fn close_on_card(&mut self) -> Option<String> {
+        let (id, capture_job) = self
+            .prev_snap
+            .as_ref()
+            .and_then(|s| s.active.as_ref())
+            .map(|a| (a.job_id.clone(), a.capture_job))?;
+        self.closer.request_close(capture_job);
+        self.pending_close = Some((capture_job, Instant::now()));
+        Some(id)
+    }
+
+    /// The summary of a job in the latest snapshot the hub absorbed.
+    fn job_summary(&self, id: &str) -> Option<&JobSummary> {
+        self.prev_snap.as_ref()?.jobs.iter().find(|j| j.id == id)
+    }
+
     /// Saves a PDF of `req` to `path` on a worker thread. Title and note go to the manifest too.
     pub fn export_pdf(&mut self, req: PdfRequest, path: PathBuf) {
-        let manifest = self.manifests.get(&req.job).map(|(_, m)| m.clone());
+        let manifest = self.job_summary(&req.job).cloned();
         let current_title = self
             .vm
             .jobs
@@ -1116,7 +1064,7 @@ impl PrinterHub {
             date: Some(now_pdf_date()),
             apple2_model: manifest
                 .as_ref()
-                .map(|m| m.origin.machine.clone())
+                .and_then(|m| m.origin.as_ref().map(|o| o.machine.clone()))
                 .unwrap_or_default(),
             printer_profile: "Epson LX-310".into(),
             note: req.note.clone(),
@@ -1130,7 +1078,6 @@ impl PrinterHub {
             req.job.clone(),
             manifest.as_ref().map_or(0, |m| m.total_bytes),
         );
-        let table = *self.table.lock().unwrap_or_else(|e| e.into_inner());
         let tx = self.done_tx.clone();
         let range = req.range.clone();
         let report_version = req.version;
@@ -1139,7 +1086,7 @@ impl PrinterHub {
             .spawn(move || {
                 let doc = match live.or(cached) {
                     Some(d) => Ok(d),
-                    None => render_job(&root, &id, total, options, table).map(Arc::new),
+                    None => render_job(&root, &id, total, options).map(Arc::new),
                 };
                 let result = doc.and_then(|doc| {
                     export_pdf_blocking(&ExportJob {
@@ -1174,8 +1121,9 @@ impl PrinterHub {
                     .filter(|a| a.job_id == job)
                     .map(|a| a.bytes)
             })
-            .or_else(|| self.manifests.get(job).map(|(_, m)| m.total_bytes))
+            .or_else(|| self.job_summary(job).map(|j| j.total_bytes))
             .unwrap_or(u64::MAX);
+        let job_id = job.to_string();
         let src = self.root.join(job).join(archive::RAW_FILE);
         let tx = self.done_tx.clone();
         std::thread::Builder::new()
@@ -1192,7 +1140,11 @@ impl PrinterHub {
                         .map_err(|e| format!("{}: {e}", path.display()))?;
                     Ok(buf.len() as u64)
                 })();
-                let _ = tx.send(Done::Raw { path, result });
+                let _ = tx.send(Done::Raw {
+                    job: job_id,
+                    path,
+                    result,
+                });
             })
             .ok();
     }
@@ -1200,7 +1152,7 @@ impl PrinterHub {
     // ---- shutdown ---------------------------------------------------------------------------
 
     /// Ends the pipeline in order: everything the card queued reaches the spool, the open job is
-    /// closed as `Shutdown`, the spool thread stops and the exports are recorded in the manifests.
+    /// closed as `Shutdown` and the spool thread stops (exports were recorded in the manifest when made).
     /// Call after the emulation thread stopped.
     pub fn shutdown(mut self) {
         self.finish();
@@ -1212,11 +1164,7 @@ impl PrinterHub {
         }
         self.bridge.stop();
         if let Some(service) = self.service.take() {
-            if let Some(mut spool) = service.join() {
-                for (job, version, path) in std::mem::take(&mut self.pending_records) {
-                    let _ = spool.archive_mut().record_export(&job, version, &path);
-                }
-            }
+            let _ = service.join();
         }
     }
 }

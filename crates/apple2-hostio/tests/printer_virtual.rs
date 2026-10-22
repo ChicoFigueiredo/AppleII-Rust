@@ -373,3 +373,58 @@ fn auto_transport_keeps_8_bits_from_programs_writing_the_port() {
     let data = flatten(&rx.drain());
     assert_eq!(data, vec![0xC1, 0xFF]);
 }
+
+/// "Concluir trabalho" in the Central: the request reaches the card, which closes the job with
+/// `User`; the next byte opens a new job (instead of being "ignored" by the spool).
+#[test]
+fn a_user_close_request_closes_the_job_on_the_card_and_the_next_byte_opens_a_new_one() {
+    let mut m = Machine::new(MachineConfig::for_model(Model::Apple2eEnhanced));
+    let (tx, rx) = capture_channel();
+    let card = ParallelPrinterCard::virtual_only(PrinterOptions::default()).with_virtual(
+        tx,
+        origin(),
+        Transport::EightBit,
+    );
+    assert!(m.insert_card(1, Box::new(card)));
+    m.board_mut().write(IO, b'a');
+    let first = m
+        .card::<ParallelPrinterCard>(1)
+        .unwrap()
+        .virtual_job()
+        .unwrap();
+    // A request for another job (stale) does nothing.
+    rx.request_close(first + 99);
+    run_frames(&mut m, 2);
+    assert_eq!(
+        m.card::<ParallelPrinterCard>(1).unwrap().virtual_job(),
+        Some(first)
+    );
+    rx.request_close(first);
+    run_frames(&mut m, 2);
+    assert_eq!(
+        m.card::<ParallelPrinterCard>(1).unwrap().virtual_job(),
+        None
+    );
+    m.board_mut().write(IO, b'b');
+    let second = m
+        .card::<ParallelPrinterCard>(1)
+        .unwrap()
+        .virtual_job()
+        .unwrap();
+    assert_ne!(first, second);
+    m.reset();
+    let evs = rx.drain();
+    let closes: Vec<(u64, CloseReason)> = evs
+        .iter()
+        .filter_map(|e| match e {
+            CaptureEvent::Close { job, reason } => Some((*job, *reason)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        closes,
+        vec![(first, CloseReason::User), (second, CloseReason::Reset)]
+    );
+    // The bytes before the close were delivered first, in order.
+    assert_eq!(flatten(&evs), b"ab");
+}

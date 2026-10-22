@@ -185,3 +185,41 @@ fn reads_schema_v1_manifest() {
     assert_eq!(m.versions.len(), 1, "original version synthesised");
     assert!(a.verify(id).unwrap());
 }
+
+#[test]
+fn reads_schema_v2_manifest_without_table_country_or_cancelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = "20200102-000000-bbbbbb";
+    let jd = dir.path().join(id);
+    fs::create_dir(&jd).unwrap();
+    fs::write(jd.join("raw.bin"), b"abc").unwrap();
+    let mut options =
+        serde_json::to_value(apple2_printer::paper::RenderOptions::default()).unwrap();
+    let o = options.as_object_mut().unwrap();
+    o.remove("table");
+    o.remove("country");
+    let v2 = serde_json::json!({
+        "schema_version": 2,
+        "id": id,
+        "capture_job": 4,
+        "origin": {"machine": "Apple II+", "slot": 1},
+        "transport": "EightBit",
+        "profile": "Epson LX-310",
+        "options": options,
+        "started_at": "2020-01-02T00:00:00Z",
+        "total_bytes": 3,
+        "confirmed_offset": 3,
+        "state": "completed"
+    });
+    fs::write(jd.join("manifest.json"), v2.to_string()).unwrap();
+    let a = Archive::open(dir.path()).unwrap();
+    let m = a.manifest(id).expect("v2 manifest must load");
+    assert_eq!(m.schema_version, 3);
+    assert!(!m.cancelled);
+    assert_eq!(m.options.table, apple2_printer::font::CharTable::Pc437);
+    assert_eq!(m.options.country, 0);
+    assert_eq!(
+        m.versions[0].options.table,
+        apple2_printer::font::CharTable::Pc437
+    );
+}

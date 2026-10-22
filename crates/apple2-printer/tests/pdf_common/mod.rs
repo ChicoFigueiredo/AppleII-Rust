@@ -250,6 +250,7 @@ pub fn opts(kind: PaperKind, ribbon: Ribbon, ink: InkColor) -> RenderOptions {
         paper: Paper::preset(kind),
         ribbon,
         ink,
+        ..RenderOptions::default()
     }
 }
 
@@ -263,6 +264,7 @@ pub fn opts_sized(kind: PaperKind, w: u32, h: u32, ribbon: Ribbon, ink: InkColor
         },
         ribbon,
         ink,
+        ..RenderOptions::default()
     }
 }
 

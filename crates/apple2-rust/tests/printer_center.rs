@@ -119,6 +119,17 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
     let after = hub.view_model().revision;
     assert!(after <= rev + 2, "no redraw storm: {rev} -> {after}");
 
+    // The list shows a human title (first text line + date), not the archive id, even while
+    // the job is open (the real Lx310 fills the TextRun the title comes from).
+    let j0 = &hub.view_model().jobs[0];
+    // The typed line is echoed to the printer, so it comes first.
+    assert!(
+        j0.title.starts_with("]PRINT \"OLA, IMPRESSORA\" — "),
+        "{}",
+        j0.title
+    );
+    assert_ne!(j0.title, j0.id);
+
     // Concluir trabalho
     hub.handle(CenterEvent::FinishJob);
     assert!(wait_for(|| {
@@ -156,6 +167,17 @@ fn a_print_from_basic_reaches_the_view_model_and_opens_the_window_once() {
                 .iter()
                 .any(|m| m.text.starts_with("PDF salvo"))
     }));
+    // The export is in the manifest at once (summary and disk), long before shutdown.
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().jobs[0]
+            .exports
+            .iter()
+            .any(|(v, p)| *v >= 1 && p.ends_with("saida.pdf"))
+    }));
+    let on_disk =
+        std::fs::read_to_string(dir.join("archive").join(&job).join("manifest.json")).unwrap();
+    assert!(on_disk.contains("saida.pdf"), "{on_disk}");
     let bytes = std::fs::read(&pdf).unwrap();
     if let Some(keep) = std::env::var_os("APPLE2_CENTRAL_SMOKE_PDF") {
         std::fs::write(keep, &bytes).unwrap();
@@ -253,30 +275,184 @@ fn no_virtual_printer_means_no_button() {
 }
 
 #[test]
-fn the_default_table_and_country_change_what_a_job_prints() {
-    use apple2_config::card::PrinterTable;
-    use apple2_rust_shell::printer_hub::{render_job, table_preamble};
-    assert!(table_preamble(PrinterTable::Pc437, 0).is_empty());
-    assert!(!table_preamble(PrinterTable::Brascii, 2).is_empty());
+fn the_job_table_and_country_change_what_a_job_prints() {
+    use apple2_printer::font::CharTable;
+    use apple2_printer::paper::RenderOptions;
+    use apple2_rust_shell::printer_hub::render_job;
     let dir = temp_dir("table");
     std::fs::create_dir_all(dir.join("j")).unwrap();
     std::fs::write(dir.join("j/raw.bin"), b"[#]{|}@\r\n").unwrap();
-    let text = |t, c| {
-        let d = render_job(&dir, "j", 9, Default::default(), (t, c)).unwrap();
+    let text = |table, country| {
+        let o = RenderOptions {
+            table,
+            country,
+            ..RenderOptions::default()
+        };
+        let d = render_job(&dir, "j", 9, o).unwrap();
         d.pages[0]
             .text
             .iter()
             .map(|r| r.text.clone())
             .collect::<String>()
     };
-    assert_ne!(text(PrinterTable::Pc437, 0), text(PrinterTable::Pc437, 2));
-    assert!(render_job(
-        &dir,
-        "../x",
-        1,
-        Default::default(),
-        (PrinterTable::Pc437, 0)
-    )
-    .is_err());
+    assert_ne!(text(CharTable::Pc437, 0), text(CharTable::Pc437, 2));
+    assert!(render_job(&dir, "../x", 1, Default::default()).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn settings_table_and_country_become_render_options_and_back() {
+    use apple2_config::card::PrinterTable;
+    use apple2_printer::font::CharTable;
+    use apple2_rust_shell::printer_hub::{render_options, store_setup};
+    let spec = PrinterSpec {
+        table: PrinterTable::Abicomp,
+        country: 5,
+        ..PrinterSpec::default()
+    };
+    let o = render_options(&spec);
+    assert_eq!((o.table, o.country), (CharTable::Abicomp, 5));
+    let mut back = PrinterSpec::default();
+    store_setup(
+        &mut back,
+        &apple2_rust_shell::printer_model::PrintSetup { options: o },
+    );
+    assert_eq!((back.table, back.country), (PrinterTable::Abicomp, 5));
+}
+
+#[test]
+fn an_old_job_keeps_the_table_it_was_printed_with() {
+    use apple2_config::card::PrinterTable;
+    use apple2_printer::font::CharTable;
+    use apple2_rust_shell::printer_model::PrintSetup;
+    let spec = PrinterSpec {
+        table: PrinterTable::Brascii,
+        country: 2,
+        ..PrinterSpec::default()
+    };
+    let (mut emu, mut hub, dir, _) = start("oldtable", spec);
+    print_hello(&emu);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        page_text(&hub).contains("OLA, IMPRESSORA")
+    }));
+    hub.handle(CenterEvent::FinishJob);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_none() && !hub.view_model().shown.loading
+    }));
+    let mut now = hub.view_model().setup;
+    now.options.table = CharTable::Pc850;
+    now.options.country = 0;
+    hub.handle(CenterEvent::SetNextSetup(PrintSetup {
+        options: now.options,
+    }));
+    hub.poll(Instant::now());
+    let vm = hub.view_model();
+    assert_eq!(vm.setup.options.table, CharTable::Pc850);
+    let job = &vm.jobs[0];
+    assert_eq!(job.versions[0].options.table, CharTable::Brascii);
+    assert_eq!(job.versions[0].options.country, 2);
+    assert_eq!(vm.shown.options.table, CharTable::Brascii);
+    emu.shutdown();
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn concluding_a_job_closes_it_on_the_card_and_the_next_print_opens_a_new_one() {
+    use apple2_rust_shell::printer_model::JobState;
+    let (mut emu, mut hub, dir, _) = start("conclude", PrinterSpec::default());
+    print_hello(&emu);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        page_text(&hub).contains("OLA, IMPRESSORA")
+    }));
+    hub.handle(CenterEvent::FinishJob);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_none()
+            && hub.view_model().jobs[0].state == JobState::Finished
+    }));
+    // The card closed it with `User` (not the spool behind its back).
+    let id = hub.view_model().jobs[0].id.clone();
+    let m = std::fs::read_to_string(dir.join("archive").join(&id).join("manifest.json")).unwrap();
+    assert!(m.contains("\"close_reason\": \"User\""), "{m}");
+    // The program prints again: a new job, not "bytes ignored".
+    emu.send(Command::Paste("PRINT \"SEGUNDA\"\r".into()));
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().jobs.len() == 2 && page_text(&hub).contains("SEGUNDA")
+    }));
+    assert!(
+        !hub.view_model()
+            .messages
+            .iter()
+            .any(|m| m.text.contains("ignorado")),
+        "{:?}",
+        hub.view_model().messages
+    );
+    emu.shutdown();
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn cancelling_closes_marks_cancelled_and_deletes_nothing() {
+    use apple2_rust_shell::printer_model::JobState;
+    let (mut emu, mut hub, dir, _) = start("cancel", PrinterSpec::default());
+    print_hello(&emu);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        page_text(&hub).contains("OLA, IMPRESSORA")
+    }));
+    let id = hub.view_model().jobs[0].id.clone();
+    hub.handle(CenterEvent::CancelJob);
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_none()
+            && hub.view_model().jobs.first().map(|j| j.state) == Some(JobState::Cancelled)
+    }));
+    assert_eq!(hub.view_model().jobs.len(), 1, "the job is still listed");
+    let job_dir = dir.join("archive").join(&id);
+    let raw = std::fs::read(job_dir.join("raw.bin")).unwrap();
+    assert!(String::from_utf8_lossy(&raw).contains("OLA, IMPRESSORA"));
+    let m = std::fs::read_to_string(job_dir.join("manifest.json")).unwrap();
+    assert!(m.contains("\"cancelled\": true"), "{m}");
+    emu.shutdown();
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn if_the_card_never_answers_the_spool_closes_the_job_after_the_fallback() {
+    use apple2_printer::capture::{JobOrigin, Transport};
+    use apple2_rust_shell::printer_hub::CLOSE_FALLBACK;
+    let dir = temp_dir("fallback");
+    let (tx, rx) = apple2_hostio::capture_channel();
+    let mut hub = PrinterHub::start(dir.join("archive"), rx, None, Arc::new(|| {})).unwrap();
+    let job = tx.open(
+        JobOrigin {
+            machine: "Apple //e".into(),
+            slot: 1,
+        },
+        Transport::EightBit,
+    );
+    tx.bytes(job, 0, b"linha\n".to_vec());
+    assert!(wait_for(|| {
+        hub.poll(Instant::now());
+        hub.view_model().active_job.is_some()
+    }));
+    let t0 = Instant::now();
+    hub.handle(CenterEvent::FinishJob);
+    // Nobody runs the card: before the fallback nothing changes...
+    hub.poll(t0);
+    assert!(hub.view_model().active_job.is_some());
+    // ...after it the spool closes the job itself.
+    assert!(wait_for(|| {
+        hub.poll(t0 + CLOSE_FALLBACK + Duration::from_millis(1));
+        hub.view_model().active_job.is_none()
+    }));
+    hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
