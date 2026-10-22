@@ -522,6 +522,10 @@ impl Uthernet2 {
         let s = &mut self.sockets[i];
         let mut closed = false;
         let mut header = Vec::new();
+        let mut udp_datagram = match s.host {
+            HostSocket::Udp(_) => vec![0u8; 0x1_0000],
+            _ => Vec::new(),
+        };
         let n = match &mut s.host {
             HostSocket::Tcp(t) => match t.read(&mut buf) {
                 Ok(0) => {
@@ -542,15 +546,28 @@ impl Uthernet2 {
                     0
                 }
             },
-            HostSocket::Udp(u) => match u.recv_from(&mut buf) {
+            // Read into a buffer that fits any datagram and cut it to the free room here:
+            // Winsock fails a short read with WSAEMSGSIZE where Linux truncates (#82).
+            HostSocket::Udp(u) => match u.recv_from(&mut udp_datagram[..]) {
                 Ok((n, SocketAddr::V4(src))) => {
+                    let n = n.min(buf.len());
+                    buf[..n].copy_from_slice(&udp_datagram[..n]);
                     header.extend_from_slice(&src.ip().octets());
                     header.extend_from_slice(&src.port().to_be_bytes());
                     header.extend_from_slice(&(n as u16).to_be_bytes());
                     n
                 }
                 Ok(_) => 0,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => 0,
+                // Winsock reports an ICMP "port unreachable" from an earlier send_to
+                // as WSAECONNRESET; the socket is still usable (#82).
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::ConnectionReset
+                    ) =>
+                {
+                    0
+                }
                 Err(_) => {
                     closed = true;
                     0
