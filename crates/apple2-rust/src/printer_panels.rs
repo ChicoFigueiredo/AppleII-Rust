@@ -307,7 +307,12 @@ pub fn job_list(ui: &mut Ui, vm: &PrinterViewModel, events: &mut Vec<CenterEvent
         for (i, j) in vm.jobs.iter().enumerate() {
             let sel = vm.selected_job == Some(i);
             let text = format!("{} — {}", j.title, j.state.label());
-            if ui.selectable_label(sel, text).clicked() && !sel {
+            if ui
+                .selectable_label(sel, text)
+                .on_hover_text(format!("Id no Arquivo: {}", j.id))
+                .clicked()
+                && !sel
+            {
                 events.push(CenterEvent::SelectJob(j.id.clone()));
             }
         }
@@ -316,10 +321,12 @@ pub fn job_list(ui: &mut Ui, vm: &PrinterViewModel, events: &mut Vec<CenterEvent
 
 fn options_text(o: &RenderOptions) -> String {
     format!(
-        "{}, fita {}, {}",
+        "{}, fita {}, {}, {}/{}",
         paper_label(o.paper.kind),
         ribbon_label(o.ribbon).to_lowercase(),
-        ink_label(o.ink).to_lowercase()
+        ink_label(o.ink).to_lowercase(),
+        table_label(o.table),
+        COUNTRIES[usize::from(o.country.min(12))]
     )
 }
 
@@ -367,7 +374,12 @@ pub fn archive_tab(
                     ui.end_row();
                     for (i, j) in vm.jobs.iter().enumerate() {
                         let sel = vm.selected_job == Some(i);
-                        if ui.selectable_label(sel, &j.title).clicked() && !sel {
+                        if ui
+                            .selectable_label(sel, &j.title)
+                            .on_hover_text(format!("Id no Arquivo: {}", j.id))
+                            .clicked()
+                            && !sel
+                        {
                             events.push(CenterEvent::SelectJob(j.id.clone()));
                         }
                         ui.label(&j.started);
@@ -421,7 +433,10 @@ fn archive_detail(
     let edit = ui_state.edit.as_mut().expect("edit buffer just created");
     ui.horizontal(|ui| {
         ui.label("Título:");
-        ui.add(egui::TextEdit::singleline(&mut edit.title).desired_width(320.0));
+        ui.add(egui::TextEdit::singleline(&mut edit.title).desired_width(320.0))
+            .on_hover_text(
+                "Primeira linha impressa e data; edite à vontade. O id do trabalho fica ao lado.",
+            );
         let changed = edit.title.trim() != job.title && !edit.title.trim().is_empty();
         if button(ui, "Salvar título", changed, "O título não foi alterado.") {
             events.push(CenterEvent::SetTitle {
@@ -430,6 +445,7 @@ fn archive_detail(
             });
         }
     });
+    ui.weak(format!("Id no Arquivo: {}", job.id));
     ui.horizontal(|ui| {
         ui.label("Nota:");
         ui.add(
