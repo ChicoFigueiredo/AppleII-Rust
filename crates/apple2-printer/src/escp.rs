@@ -72,6 +72,12 @@ enum State {
         want: usize,
         data: Vec<u8>,
     },
+    /// ESC & 0 n m: the definitions of `left` characters are being consumed (and discarded).
+    UserChars {
+        nlq: bool,
+        left: usize,
+        cur: Vec<u8>,
+    },
 }
 
 /// How the byte after ESC is interpreted.
@@ -95,7 +101,7 @@ fn spec(b: u8) -> Spec {
         // Two parameters.
         b'$' | b'\\' | b'K' | b'L' | b'Y' | b'Z' | b'?' | b'e' | b'f' => Spec::Fixed(2),
         // Three parameters (graphics ones are followed by a payload).
-        b'*' | b'^' | b':' => Spec::Fixed(3),
+        b'*' | b'^' | b':' | b'&' => Spec::Fixed(3),
         b'(' => Spec::Paren,
         b'D' | b'B' => Spec::Delimited,
         _ => Spec::Unknown,
@@ -221,6 +227,8 @@ pub struct Parser {
     seq_start: u64,
     /// First bytes of the sequence in progress (diagnostics only).
     seq: Vec<u8>,
+    /// NLQ quality as last set by ESC x (ESC & data layout depends on it).
+    nlq: bool,
 }
 
 impl Default for Parser {
@@ -237,6 +245,7 @@ impl Parser {
             pos: 0,
             seq_start: 0,
             seq: Vec::new(),
+            nlq: false,
         }
     }
 
@@ -246,6 +255,7 @@ impl Parser {
         self.pos = 0;
         self.seq_start = 0;
         self.seq.clear();
+        self.nlq = false;
     }
 
     /// True while a multi-byte sequence is incomplete.
@@ -293,6 +303,15 @@ impl Parser {
                     offset: self.seq_start,
                     command: Self::tabs(cmd, values),
                 });
+            }
+            State::UserChars { left, .. } => {
+                self.diag(
+                    diags,
+                    &format!(
+                        "ESC &: definição de caracteres do usuário truncada no fim do fluxo ({left} caractere(s) faltando)"
+                    ),
+                );
+                self.unsupported(out);
             }
             State::GraphicsPayload {
                 density,
@@ -430,6 +449,36 @@ impl Parser {
                     self.state = State::Delimited { cmd, values };
                 }
             }
+            State::UserChars {
+                nlq,
+                mut left,
+                mut cur,
+            } => {
+                cur.push(b);
+                // Draft: a + 11 column bytes. NLQ: 0, a (width 1..12), 0, then 3 bytes per column.
+                let need = if nlq {
+                    if cur.len() < 2 {
+                        3
+                    } else {
+                        3 + 3 * usize::from(cur[1].min(12))
+                    }
+                } else {
+                    12
+                };
+                if cur.len() >= need {
+                    left -= 1;
+                    cur.clear();
+                }
+                if left == 0 {
+                    self.diag(
+                        diags,
+                        "ESC &: caractere do usuário não suportado (definição consumida e descartada)",
+                    );
+                    self.unsupported(out);
+                } else {
+                    self.state = State::UserChars { nlq, left, cur };
+                }
+            }
             State::GraphicsPayload {
                 density,
                 nine_pin,
@@ -553,16 +602,39 @@ impl Parser {
             self.graphics_start(cmd, p, out, diags);
             return;
         }
+        if cmd == b'&' {
+            if p[0] != 0 || p[1] > p[2] {
+                self.diag(
+                    diags,
+                    "ESC &: cabeçalho inválido (esperado NUL n m com n <= m): dados não consumidos",
+                );
+                self.unsupported(out);
+                return;
+            }
+            self.state = State::UserChars {
+                nlq: self.nlq,
+                left: usize::from(p[2] - p[1]) + 1,
+                cur: Vec::new(),
+            };
+            return;
+        }
         if cmd == b'$' && p[1] > 127 {
             self.diag(diags, "ESC $: nH deve estar entre 0 e 127");
             self.unsupported(out);
             return;
         }
         match build(cmd, p) {
-            Ok(Some(c)) => out.push(Parsed {
-                offset: self.seq_start,
-                command: c,
-            }),
+            Ok(Some(c)) => {
+                match c {
+                    Command::Nlq(v) => self.nlq = v,
+                    Command::Reset => self.nlq = false,
+                    _ => {}
+                }
+                out.push(Parsed {
+                    offset: self.seq_start,
+                    command: c,
+                });
+            }
             Ok(None) => {
                 self.diag(diags, "comando ESC/P reconhecido, sem suporte neste perfil");
                 self.unsupported(out);
@@ -674,6 +746,62 @@ mod tests {
         p.feed(0, data, &mut o, &mut d);
         p.finish(&mut o, &mut d);
         (o, d)
+    }
+
+    #[test]
+    fn esc_amp_consumes_nlq_definitions_exactly() {
+        // NLQ: two characters (width 2 -> 3 + 6 bytes; width 1 -> 3 + 3 bytes), data with ESC.
+        let mut d = vec![0x1B, b'x', 1, 0x1B, b'&', 0, 58, 59];
+        d.extend([0, 2, 0, 0x1B, 0x1B, 1, 2, 3, 4]);
+        d.extend([0, 1, 0, 0x0A, 0x0C, 0x1B]);
+        d.push(b'A');
+        let (o, dg) = run(&d);
+        assert_eq!(o.len(), 3, "{o:?}");
+        assert_eq!(
+            o[1].command,
+            Command::Unsupported {
+                bytes: d[3..8].to_vec()
+            }
+        );
+        assert_eq!(o[2].command, Command::Char(b'A'));
+        assert!(dg
+            .iter()
+            .any(|x| x.message.contains("caractere do usuário não suportado")));
+    }
+
+    #[test]
+    fn esc_amp_consumes_draft_definitions_exactly() {
+        // Draft (default): one character = a + 11 bytes.
+        let mut d = vec![0x1B, b'&', 0, 60, 60, 128];
+        d.extend([0x1B; 11]);
+        d.push(b'B');
+        let (o, _) = run(&d);
+        assert_eq!(o.len(), 2, "{o:?}");
+        assert_eq!(o[1].command, Command::Char(b'B'));
+    }
+
+    #[test]
+    fn esc_percent_is_recognised_with_one_parameter_and_reported() {
+        let (o, d) = run(&[0x1B, b'%', 1, b'A']);
+        assert_eq!(o.len(), 2);
+        assert!(matches!(o[0].command, Command::Unsupported { .. }));
+        assert_eq!(o[1].command, Command::Char(b'A'));
+        assert_eq!(d.len(), 1);
+    }
+
+    #[test]
+    fn esc_amp_split_anywhere_is_equivalent() {
+        let mut d = vec![0x1B, b'x', 1, 0x1B, b'&', 0, 61, 61, 0, 3, 0];
+        d.extend(0..9u8);
+        d.push(b'Z');
+        let (whole, _) = run(&d);
+        let mut p = Parser::default();
+        let (mut o, mut dg) = (Vec::new(), Vec::new());
+        for (i, b) in d.iter().enumerate() {
+            p.feed(i as u64, &[*b], &mut o, &mut dg);
+        }
+        p.finish(&mut o, &mut dg);
+        assert_eq!(o, whole);
     }
 
     #[test]

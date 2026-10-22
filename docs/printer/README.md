@@ -10,6 +10,7 @@ Documentos irmãos:
 - [arquivo-de-impressoes.md](arquivo-de-impressoes.md): pasta, manifesto, recuperação.
 - [printer-model-capabilities.md](printer-model-capabilities.md): matriz por Perfil de impressora.
 - [aceite.md](aceite.md): roteiro de aceite com AppleWorks, Print Shop e dBase II.
+- [matriz-de-testes.md](matriz-de-testes.md): estado de T-001 a T-030 e o teste que prova cada um.
 
 ## 1. Instalar a Generic Printer no slot 1
 
@@ -121,8 +122,10 @@ Estrutura e manifesto em [arquivo-de-impressoes.md](arquivo-de-impressoes.md).
 **Aproximação** (documentada, não copiada da Epson):
 
 - a **fonte matricial** (Draft e NLQ) é desenho próprio; os caracteres podem diferir dos da ROM da LX-310;
-- o **tamanho do ponto** (0,29 mm) e o desenho do **papel** (cor das faixas, furos) são estimados;
+- o **tamanho do ponto** (0,35 mm) e o desenho do **papel** (cor das faixas, furos) são estimados;
 - **ênfase**, **dupla batida**, **itálico** e **largura dupla** têm geometria aproximada onde o manual não dá números (itens **PARTIAL** do protocolo);
+- os **caracteres definidos pelo usuário** (`ESC &`, `ESC %`) não são impressos: a carga é consumida pelo comprimento exato, para não sair como lixo, e há um diagnóstico "caractere do usuário não suportado";
+- com **duas Cartas** de impressora (por exemplo nos slots 1 e 2), cada Trabalho carrega o slot de origem, que a Central mostra na lista; os bytes de uma Carta nunca entram no Trabalho da outra;
 - a **Fita usada** é um efeito visual determinístico, não uma medida de desgaste.
 
 ## 10. Limites

@@ -197,3 +197,76 @@ fn the_emulation_thread_exposes_the_events_through_the_handle() {
     ));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Two Generic Printer cards (slots 1 and 2) printing alternately through the same queue: every
+/// job has its own id and origin slot, and no byte of one card ever lands in the other's job,
+/// neither on the wire nor in the Arquivo de impressões.
+#[test]
+fn two_cards_printing_alternately_never_mix_their_jobs() {
+    use apple2_printer::archive::Archive;
+    use apple2_printer::lx310::{Lx310, Lx310Config};
+    use apple2_printer::paper::RenderOptions;
+    use apple2_printer::spool::Spool;
+    use std::collections::HashMap;
+
+    let dir = temp_dir("twocards");
+    let (tx, rx) = capture_channel();
+    let spec = spec_in(&dir, PrinterDestination::VirtualOnly);
+    let mut m = apple2_core::Machine::new(apple2_core::MachineConfig::for_model(
+        Model::Apple2eEnhanced,
+    ));
+    for slot in [1u8, 2] {
+        let card = printer_card_for(&spec, Model::Apple2eEnhanced, false, slot, Some(&tx));
+        assert!(m.insert_card(slot, Box::new(card)));
+    }
+    for i in 0..6 {
+        for (slot, ch) in [(1u8, b'A'), (2u8, b'B')] {
+            m.with_card(slot, |c, ctx| c.io_write(0, ch, ctx));
+            let _ = i;
+        }
+    }
+    let evs = rx.drain();
+
+    // Wire level: one job per slot, distinct ids, each carrying only its own letter.
+    let mut slot_of: HashMap<u64, u8> = HashMap::new();
+    for e in &evs {
+        if let CaptureEvent::Open { job, origin, .. } = e {
+            assert!(slot_of.insert(*job, origin.slot).is_none(), "id reused");
+        }
+    }
+    assert_eq!(slot_of.len(), 2);
+    let mut slots: Vec<u8> = slot_of.values().copied().collect();
+    slots.sort();
+    assert_eq!(slots, [1, 2]);
+    for e in &evs {
+        if let CaptureEvent::Bytes { job, data, .. } = e {
+            let want = if slot_of[job] == 1 { b'A' } else { b'B' };
+            assert!(data.iter().all(|&b| b == want), "mixed bytes in job {job}");
+        }
+    }
+
+    // Archive level: whatever the spool keeps for a job comes from a single origin.
+    let archive = Archive::open(dir.join("archive")).unwrap();
+    let mut spool = Spool::new(
+        archive,
+        Box::new(|| Box::new(Lx310::new(Lx310Config::default()))),
+        RenderOptions::default(),
+    );
+    for e in evs {
+        spool.handle(e);
+    }
+    spool.shutdown();
+    let snap = spool.snapshot_handle().get();
+    assert!(snap.jobs.len() >= 2);
+    let ids: std::collections::HashSet<_> = snap.jobs.iter().map(|j| j.id.clone()).collect();
+    assert_eq!(ids.len(), snap.jobs.len(), "archive ids are distinct");
+    for j in &snap.jobs {
+        let raw = std::fs::read(dir.join("archive").join(&j.id).join("raw.bin")).unwrap();
+        let slot = j.origin.as_ref().expect("origin recorded").slot;
+        let want = if slot == 1 { b'A' } else { b'B' };
+        // The spool keeps one active job at a time (a known limit, see the matrix), so a job may
+        // hold less than its card wrote, but never a byte of the other card.
+        assert!(raw.iter().all(|&b| b == want), "{raw:?}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
