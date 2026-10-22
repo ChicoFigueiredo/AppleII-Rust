@@ -14,6 +14,7 @@ use std::collections::VecDeque;
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -91,21 +92,50 @@ pub struct Snapshot {
     pub retention: Option<RetentionWarning>,
 }
 
-/// Read side of the published snapshots; holds the lock only to clone an `Arc`.
+/// How long after the last `get` the document keeps being copied for the preview.
+const WATCH_WINDOW_MS: u64 = 2_000;
+
+/// Read side of the published snapshots; holds the lock only to clone an `Arc`. Every read stamps
+/// the time, so the spool copies the (large) live document only while somebody is looking: with
+/// the window closed or the UI stuck, the job costs no copies at all.
 #[derive(Clone)]
-pub struct SnapshotHandle(Arc<Mutex<Arc<Snapshot>>>);
+pub struct SnapshotHandle {
+    cur: Arc<Mutex<Arc<Snapshot>>>,
+    base: Instant,
+    /// Milliseconds since `base` of the last read, plus one (0 = never read).
+    last_read: Arc<AtomicU64>,
+}
 
 impl SnapshotHandle {
+    fn new() -> SnapshotHandle {
+        SnapshotHandle {
+            cur: Arc::new(Mutex::new(Arc::new(Snapshot::default()))),
+            base: Instant::now(),
+            last_read: Arc::new(AtomicU64::new(0)),
+        }
+    }
     pub fn get(&self) -> Arc<Snapshot> {
-        match self.0.lock() {
+        self.last_read.store(
+            self.base.elapsed().as_millis() as u64 + 1,
+            Ordering::Relaxed,
+        );
+        match self.cur.lock() {
             Ok(g) => g.clone(),
             Err(p) => p.into_inner().clone(),
         }
     }
     fn set(&self, s: Arc<Snapshot>) {
-        match self.0.lock() {
+        match self.cur.lock() {
             Ok(mut g) => *g = s,
             Err(p) => *p.into_inner() = s,
+        }
+    }
+    /// True when somebody read a snapshot recently (or never yet: the first reader must see the
+    /// document).
+    fn watched(&self, window_ms: u64) -> bool {
+        match self.last_read.load(Ordering::Relaxed) {
+            0 => true,
+            t => (self.base.elapsed().as_millis() as u64 + 1).saturating_sub(t) <= window_ms,
         }
     }
 }
@@ -139,6 +169,10 @@ pub struct Spool {
     reprint: Option<ReprintView>,
     last_doc_publish: Instant,
     doc_interval: Duration,
+    /// Cost of the last document copy: the interval grows to keep copying under ~20% of the time.
+    last_copy: Duration,
+    watch_window: Duration,
+    jobs_cache: Vec<JobSummary>,
 }
 
 fn summary(e: &JobEntry) -> JobSummary {
@@ -231,7 +265,7 @@ impl Spool {
             factory,
             options,
             active: None,
-            snapshot: SnapshotHandle(Arc::new(Mutex::new(Arc::new(Snapshot::default())))),
+            snapshot: SnapshotHandle::new(),
             snap_rev: 0,
             notices: VecDeque::new(),
             doc: Arc::new(PageDocument::default()),
@@ -240,6 +274,9 @@ impl Spool {
             reprint: None,
             last_doc_publish: Instant::now(),
             doc_interval: Duration::from_millis(50),
+            last_copy: Duration::ZERO,
+            watch_window: Duration::from_millis(WATCH_WINDOW_MS),
+            jobs_cache: Vec::new(),
         };
         let events: Vec<String> = s
             .archive
@@ -286,6 +323,11 @@ impl Spool {
     /// Minimum time between document copies while bytes keep arriving (default 50 ms).
     pub fn set_document_interval(&mut self, d: Duration) {
         self.doc_interval = d;
+    }
+
+    /// How long after the last snapshot read the live document keeps being copied (default 2 s).
+    pub fn set_watch_window(&mut self, d: Duration) {
+        self.watch_window = d;
     }
 
     fn notice(&mut self, msg: String) {
@@ -491,9 +533,15 @@ impl Spool {
     }
 
     fn publish(&mut self, force: bool) {
-        if self.doc_dirty && (force || self.last_doc_publish.elapsed() >= self.doc_interval) {
+        let interval = self.doc_interval.max(self.last_copy * 4);
+        if self.doc_dirty
+            && (force || self.last_doc_publish.elapsed() >= interval)
+            && (force || self.snapshot.watched(self.watch_window.as_millis() as u64))
+        {
             if let Some(a) = &self.active {
+                let t = Instant::now();
                 self.doc = Arc::new(a.engine.document().clone());
+                self.last_copy = t.elapsed();
             }
             self.doc_dirty = false;
             self.last_doc_publish = Instant::now();
@@ -512,7 +560,22 @@ impl Spool {
             doc_revision: self.doc_rev,
             storage_error: a.storage_error.clone(),
         });
-        let mut jobs: Vec<JobSummary> = self.archive.jobs().iter().map(summary).collect();
+        // The list of the Arquivo only grows: rebuild it on forced publications (open, close and
+        // every user action); between them only the active job's row can have moved.
+        if force || self.jobs_cache.is_empty() {
+            self.jobs_cache = self.archive.jobs().iter().map(summary).collect();
+        } else if let Some(a) = &self.active {
+            if let Some(e) = self.archive.get(&a.id) {
+                if let Some(row) = self.jobs_cache.iter_mut().find(|j| j.id == a.id) {
+                    let title = std::mem::take(&mut row.title);
+                    *row = summary(e);
+                    if row.title.is_empty() {
+                        row.title = title;
+                    }
+                }
+            }
+        }
+        let mut jobs: Vec<JobSummary> = self.jobs_cache.clone();
         if let Some(v) = &active {
             // The title of an open job is only stored when it closes; show the live one.
             if let Some(j) = jobs.iter_mut().find(|j| j.id == v.job_id) {
