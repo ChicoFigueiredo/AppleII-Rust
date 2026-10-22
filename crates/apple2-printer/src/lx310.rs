@@ -12,9 +12,9 @@
 //! - Characters are printed at the advance of the active pitch (216, 180, 144 units for 10/12/15 cpi;
 //!   126 and 108 condensed), doubled by double width, plus ESC SP spacing.
 //!
-//! Glyph source: until `font` has glyphs (`font::glyph` returns `None`), the layout draws a
-//! deterministic placeholder cell (a hollow box) for printable codes, so positions, advances and
-//! attributes are testable; `Glyphs::PlaceholderOnly` forces it so goldens survive the real font.
+//! Glyph source: the matrix font (`font::glyph`); a code without a glyph draws a deterministic
+//! placeholder cell (a hollow box) and is reported, so positions, advances and attributes stay
+//! testable; `Glyphs::PlaceholderOnly` forces the box so goldens survive font retouching.
 
 use crate::command::{Command, Parsed, Pitch};
 use crate::document::{Diagnostic, Dot, Page, PageDocument, TextRun};
@@ -75,8 +75,12 @@ pub struct Lx310Config {
     pub max_diagnostics: usize,
     /// Pages one job may hold (blank pages included).
     pub max_pages: usize,
-    /// Dots one job may hold.
+    /// Dots one job may hold (memory guard against adversarial streams: 12 bytes per dot). A real
+    /// listing of hundreds of pages stays far below it; hitting it is announced once.
     pub max_dots: usize,
+    /// Dots one page may hold. A page cannot physically hold more than about 1.8 million
+    /// distinct positions, so this only stops streams that overstrike the same page forever.
+    pub max_dots_per_page: usize,
 }
 
 impl Default for Lx310Config {
@@ -87,7 +91,8 @@ impl Default for Lx310Config {
             auto_lf_on_cr: false,
             max_diagnostics: 10_000,
             max_pages: 5_000,
-            max_dots: 4_000_000,
+            max_dots: 64_000_000,
+            max_dots_per_page: 2_000_000,
         }
     }
 }
@@ -214,6 +219,10 @@ pub struct Lx310 {
     last_run: Option<LastRun>,
     overscan_page: Option<usize>,
     limit_notes: u8,
+    /// Dots held by the whole document (kept as a counter: summing the pages per push is O(pages)).
+    dot_total: usize,
+    /// Page that already got its "page full" note.
+    page_full_noted: Option<usize>,
     diag_overflow: bool,
     /// Dots of the line in progress that fell below a continuous form: they land on the next page.
     spill: Vec<Dot>,
@@ -283,6 +292,8 @@ impl Lx310 {
             last_run: None,
             overscan_page: None,
             limit_notes: 0,
+            dot_total: 0,
+            page_full_noted: None,
             diag_overflow: false,
             spill: Vec::new(),
             line_cur: HashMap::new(),
@@ -396,8 +407,7 @@ impl Lx310 {
         if dots.is_empty() || !self.ensure_page_n(page, offset) {
             return;
         }
-        let total: usize = self.doc.pages.iter().map(|p| p.dots.len()).sum();
-        if total.saturating_add(dots.len()) > self.config.max_dots {
+        if self.dot_total.saturating_add(dots.len()) > self.config.max_dots {
             if self.limit_notes & 2 == 0 {
                 self.limit_notes |= 2;
                 self.note(
@@ -408,6 +418,19 @@ impl Lx310 {
             }
             return;
         }
+        if self.doc.pages[page].dots.len().saturating_add(dots.len()) > self.config.max_dots_per_page
+        {
+            if self.page_full_noted != Some(page) {
+                self.page_full_noted = Some(page);
+                self.note(
+                    offset,
+                    Vec::new(),
+                    "limite de pontos da página atingido; o restante desta página foi descartado",
+                );
+            }
+            return;
+        }
+        self.dot_total += dots.len();
         self.changes += dots.len() as u64;
         self.doc.pages[page].dots.extend(dots);
     }
@@ -1023,6 +1046,8 @@ impl PrinterEngine for Lx310 {
         self.last_run = None;
         self.overscan_page = None;
         self.limit_notes = 0;
+        self.dot_total = 0;
+        self.page_full_noted = None;
         self.diag_overflow = false;
         self.spill.clear();
         self.line_cur.clear();

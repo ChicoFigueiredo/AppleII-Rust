@@ -55,7 +55,7 @@ fn diags(dir: &std::path::Path, s: &Spool) -> Vec<String> {
 }
 
 #[test]
-fn t017_dense_bitmap_1mib_keeps_every_byte_and_reports_the_dot_limit() {
+fn t017_dense_bitmap_1mib_keeps_every_byte() {
     for (cmd, cols) in [
         (&b"K"[..], 480usize),
         (&b"L"[..], 960),
@@ -76,11 +76,6 @@ fn t017_dense_bitmap_1mib_keeps_every_byte_and_reports_the_dot_limit() {
             Some(sha_hex(&data).as_str())
         );
         assert!(el.as_secs() < 60, "too slow: {el:?}");
-        // 1 MiB of full columns exceeds the default dot budget: the loss is announced.
-        if cmd == b"K" {
-            let d = diags(dir.path(), &s);
-            assert!(d.iter().any(|m| m.contains("limite de pontos")), "{d:?}");
-        }
     }
 }
 
@@ -180,4 +175,81 @@ fn t017_nobody_reading_the_snapshot_does_not_stall_or_grow_notices() {
     s.handle(bytes(1, 0, b"ok\r\n"));
     s.handle(close(1, CloseReason::Idle));
     assert_eq!(raw_of(dir.path(), &s), b"ok\r\n");
+}
+
+/// A BASIC listing: 72 columns x 60 lines per page, real font.
+fn listing(pages: usize) -> Vec<u8> {
+    let mut v = Vec::new();
+    for p in 0..pages {
+        for l in 0..60 {
+            let text = format!("{:>5} PRINT \"PAGINA {p} LINHA {l}\":GOTO 10 ", l * 10);
+            let line: String = text.chars().cycle().take(72).collect();
+            v.extend_from_slice(line.as_bytes());
+            v.extend_from_slice(b"\r\n");
+        }
+        v.push(0x0C);
+    }
+    v
+}
+
+/// A real job of 100 pages (432 KB of text) prints every page: the limits never blank a page.
+#[test]
+fn t017_basic_listing_of_100_pages_has_dots_on_every_page() {
+    let data = listing(100);
+    assert!(data.len() > 400_000);
+    let mut e = Lx310::new(Lx310Config::default());
+    apple2_printer::engine::PrinterEngine::begin(&mut e, RenderOptions::default());
+    let t = Instant::now();
+    for (i, c) in data.chunks(4096).enumerate() {
+        apple2_printer::engine::PrinterEngine::feed(&mut e, (i * 4096) as u64, c);
+    }
+    apple2_printer::engine::PrinterEngine::finish(&mut e);
+    println!("listing 100 pages: {:?}", t.elapsed());
+    let doc = apple2_printer::engine::PrinterEngine::document(&e);
+    let blank: Vec<usize> = doc
+        .pages
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.dots.is_empty())
+        .map(|(i, _)| i)
+        .collect();
+    assert!(doc.pages.len() >= 100);
+    assert!(blank.len() <= 1, "blank pages: {blank:?}"); // the trailing FF page may be empty
+    assert!(
+        !doc.diagnostics.iter().any(|d| d.message.contains("limite")),
+        "{:?}",
+        doc.diagnostics.last()
+    );
+}
+
+/// 300 pages of the same: still complete (the job budget is for adversarial input, not listings).
+#[test]
+fn t017_listing_of_300_pages_is_complete() {
+    let data = listing(300);
+    let mut e = Lx310::new(Lx310Config::default());
+    apple2_printer::engine::PrinterEngine::begin(&mut e, RenderOptions::default());
+    apple2_printer::engine::PrinterEngine::feed(&mut e, 0, &data);
+    let doc = apple2_printer::engine::PrinterEngine::document(&e);
+    assert!(doc.pages[..300].iter().all(|p| !p.dots.is_empty()));
+    assert!(!doc.diagnostics.iter().any(|d| d.message.contains("limite")));
+}
+
+/// The per-page limit stops one runaway page but never blanks the pages after it.
+#[test]
+fn t017_page_dot_limit_only_affects_that_page() {
+    use apple2_printer::engine::PrinterEngine;
+    let cfg = Lx310Config {
+        max_dots_per_page: 3_000,
+        ..Lx310Config::default()
+    };
+    let mut e = Lx310::new(cfg);
+    e.begin(RenderOptions::default());
+    let mut data = bitmap(b"K", 480, 0xFF, 20_000);
+    data.push(0x0C);
+    data.extend_from_slice(b"depois\r\n");
+    e.feed(0, &data);
+    let doc = e.document();
+    assert!(doc.pages[0].dots.len() <= 3_000);
+    assert!(doc.diagnostics.iter().any(|d| d.message.contains("limite de pontos da página")));
+    assert!(!doc.pages.last().unwrap().dots.is_empty(), "later page printed");
 }
