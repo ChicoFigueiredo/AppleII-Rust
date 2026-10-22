@@ -24,8 +24,8 @@ Os programas (AppleWorks, Print Shop, dBase II no CP/M) escolhem a impressora e 
 
 ## Central de Impressoras
 
-- Abre sozinha no primeiro byte impresso, sem tirar o foco do Apple II. A opção pode ser desligada nas opções da Carta, e o botão **Printer** da barra de ferramentas abre e fecha a janela.
-- Mostra o papel sendo preenchido, com zoom e navegação entre Páginas.
+- Abre sozinha no primeiro byte impresso, sem tirar o foco do Apple II. A opção pode ser desligada nas opções da Carta, e o botão **Printer** da barra de ferramentas abre (ou traz para a frente) a janela.
+- Mostra o papel sendo preenchido, com zoom e navegação entre Páginas, o estado da impressora e os botões **Salvar PDF…**, **Salvar RAW…**, **Concluir trabalho** e **Cancelar trabalho**. A aba **Arquivo de impressões** lista os Trabalhos guardados.
 - Fechar a janela não perde nada.
 - Sequências que a impressora não entende aparecem como diagnósticos, nunca em silêncio.
 
@@ -39,13 +39,13 @@ O `Printer.txt` é sempre de 7 bits.
 
 ## Papel, Fita e PDF
 
-- **Papel**: formulário contínuo zebrado (padrão), A4 ou Carta.
+- **Papel**: formulário contínuo zebrado verde (padrão) ou azul, contínuo liso, A4 ou Carta. Papel, Fita, Cor e Tabela valem para o próximo Trabalho.
 - **Fita**: nova (padrão) ou usada; muda só o visual.
 - **Salvar PDF**: pontos vetoriais mais texto invisível para busca e cópia, com metadados; folha de rosto opcional.
 
 ## Arquivo de impressões
 
-Cada impressão fica guardada na pasta de dados (`apple2-rust/impressoes`) com os bytes originais, título e nota. **Nada é apagado sozinho.** Reimprimir com outro Papel ou Fita cria uma nova versão sem mexer no original.
+Cada impressão fica guardada na pasta de dados (`apple2-rust/impressoes`) com os bytes originais, título e nota. **Nada é apagado sozinho.** Reimprimir (aba Arquivo de impressões) com outro Papel, Fita ou Cor cria uma nova versão sem mexer no original.
 
 ## O que é aproximação
 

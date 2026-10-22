@@ -11,7 +11,9 @@ use crate::joy::{mouse_to_paddle, JoyConfig};
 use crate::keymap::Mods;
 use crate::overlay::MouseState;
 use crate::pacing::Speed;
-use crate::printer_window::{self, PrinterViewModel, PrinterWindow, Route};
+use crate::printer_hub::{self, PrinterConfig, PrinterHub};
+use crate::printer_model::{CenterEvent, PrinterViewModel};
+use crate::printer_window::{self, PrinterWindow, Route};
 use crate::screenshot::{save_png, ScreenshotNamer};
 use crate::toolbar;
 use crate::ui::{UiEvent, UiState};
@@ -34,6 +36,8 @@ pub enum UserEvent {
     /// A termination signal (SIGINT/SIGTERM/SIGHUP, console close) asked to quit: leave the
     /// event loop so the emulation thread flushes the disks (see [`request_exit`]).
     Exit,
+    /// The virtual printer produced something the UI should look at (first byte, job end).
+    Printer,
 }
 
 static EXIT_PROXY: std::sync::OnceLock<EventLoopProxy<UserEvent>> = std::sync::OnceLock::new();
@@ -85,7 +89,13 @@ struct App {
     gpu: Option<Arc<GpuShared>>,
     /// Second native window (Printer Center); never receives emulator input.
     printer: PrinterWindow,
+    /// What the Central draws: a copy of the hub's view model (or the demo data).
     printer_vm: PrinterViewModel,
+    /// Spool, bridge and view model of the virtual printer; started once a Generic Printer that
+    /// feeds it exists. Declared after `emu` so the emulator stops first on drop.
+    hub: Option<PrinterHub>,
+    pending_type: Option<(String, Instant)>,
+    proxy: EventLoopProxy<UserEvent>,
     /// The main window has keyboard focus (decides whether an automatic opening gives it back).
     main_focused: bool,
     /// `APPLE2_RUST_PRINTER_DEMO=script`: scripted close / reopen smoke (stage, start, frames).
@@ -152,12 +162,13 @@ impl App {
             Some(a) => (Some(a.ring.clone()), a.sample_rate),
             None => (None, 48_000),
         };
+        let frame_proxy = proxy.clone();
         let emu = emu::spawn(
             settings.clone(),
             factory,
             ring,
             rate,
-            Box::new(move || drop(proxy.send_event(UserEvent::Frame))),
+            Box::new(move || drop(frame_proxy.send_event(UserEvent::Frame))),
         )?;
         if let Some(n) = startup_notice {
             emu.send(Command::Notice(n));
@@ -168,10 +179,9 @@ impl App {
         for p in open {
             emu.send(open_command(&p));
         }
-        if let Some(t) = type_text {
-            emu.send(Command::Paste(t));
-        }
-        Ok(App {
+        // Typed after the Apple II has booted (the keyboard buffer is cleared by the boot).
+        let pending_type = type_text.map(|t| (t, Instant::now() + Duration::from_millis(3000)));
+        let mut app = App {
             dump_window,
             exit_after_capture: false,
             bench_rx: None,
@@ -185,6 +195,9 @@ impl App {
             gpu: None,
             printer: PrinterWindow::default(),
             printer_vm: PrinterViewModel::default(),
+            hub: None,
+            pending_type,
+            proxy,
             main_focused: false,
             demo_script: None,
             quit: false,
@@ -212,7 +225,9 @@ impl App {
             joy_cursor: false,
             last_copied_seq: 0,
             scale_toggle: false,
-        })
+        };
+        app.sync_printer();
+        Ok(app)
     }
 
     fn mods(&self) -> Mods {
@@ -661,6 +676,7 @@ impl App {
                         self.ui.message = format!("Could not save settings: {e}");
                     }
                     self.emu.send(Command::ApplySettings(s));
+                    self.sync_printer();
                 }
                 UiEvent::ApplyLive(s) => {
                     // image changes of the Disk II / hard disk cards are applied to the running machine
@@ -672,6 +688,7 @@ impl App {
                         self.ui.message = format!("Could not save settings: {e}");
                     }
                     self.emu.send(Command::UpdateSettings(s));
+                    self.sync_printer();
                 }
                 UiEvent::Volume(v) => self.emu.send(Command::SetVolume(v)),
                 UiEvent::EjectDisk(d) => {
@@ -858,9 +875,143 @@ pub fn window_size(scale: u32, toolbar: bool) -> LogicalSize<f64> {
     )
 }
 
+/// A file name for a job title: letters, digits, space, dash and underscore only.
+pub fn file_stem_for(title: &str) -> String {
+    let s: String = title
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(60)
+        .collect();
+    let s = s.trim().to_string();
+    if s.is_empty() {
+        "impressao".into()
+    } else {
+        s
+    }
+}
+
 impl App {
+    /// Starts the virtual printer pipeline when a Generic Printer feeds it, and tells it about the
+    /// current settings (the toolbar button exists only while one does).
+    fn sync_printer(&mut self) {
+        let config = PrinterConfig::from_settings(&self.settings);
+        if self.hub.is_none() && config.is_some() {
+            let proxy = std::sync::Mutex::new(self.proxy.clone());
+            let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+                if let Ok(p) = proxy.lock() {
+                    let _ = p.send_event(UserEvent::Printer);
+                }
+            });
+            let root = printer_hub::archive_root()
+                .unwrap_or_else(|| std::env::temp_dir().join("apple2-rust-impressoes"));
+            let events = self.emu.printer_events();
+            let started = PrinterHub::start(root, events.clone(), config.clone(), wake.clone())
+                .or_else(|e| {
+                    let fallback = std::env::temp_dir().join("apple2-rust-impressoes");
+                    self.ui.message = format!(
+                        "Arquivo de impressões indisponível ({e}); usando {}",
+                        fallback.display()
+                    );
+                    PrinterHub::start(fallback, events, config.clone(), wake)
+                });
+            match started {
+                Ok(h) => self.hub = Some(h),
+                Err(e) => self.ui.message = format!("Impressora virtual indisponível: {e}"),
+            }
+        } else if let Some(h) = self.hub.as_mut() {
+            h.configure(config.clone());
+        }
+        if std::env::var_os(printer_window::DEMO_ENV).is_none() {
+            self.ui.printer_available = config.is_some();
+        }
+        self.poll_printer();
+    }
+
+    /// Reads the spool's state: view model, automatic opening, activity light.
+    fn poll_printer(&mut self) {
+        let Some(hub) = self.hub.as_mut() else {
+            return;
+        };
+        let p = hub.poll(Instant::now());
+        if p.activity {
+            self.ui.set_printer_activity(true);
+            if let Some(w) = &self.window {
+                w.request_redraw();
+            }
+        }
+        if p.auto_open {
+            self.printer.open(true);
+        }
+        if p.changed {
+            self.printer_vm = hub.view_model().clone();
+            self.printer.invalidate();
+        }
+    }
+
+    /// Requests the Central raised (buttons, forms). Dialogs for file names live here because
+    /// they need the main thread.
+    fn handle_printer_events(&mut self) {
+        for ev in self.printer.take_events() {
+            match ev {
+                CenterEvent::ExportPdf(req) => {
+                    let picked = rfd::FileDialog::new()
+                        .set_title("Salvar PDF")
+                        .set_file_name(format!("{}.pdf", file_stem_for(&req.title)))
+                        .add_filter("PDF", &["pdf"])
+                        .save_file();
+                    if let (Some(path), Some(hub)) = (picked, self.hub.as_mut()) {
+                        let path = if path.extension().is_none() {
+                            path.with_extension("pdf")
+                        } else {
+                            path
+                        };
+                        hub.export_pdf(req, path);
+                    }
+                }
+                CenterEvent::SaveRaw { job } => {
+                    let picked = rfd::FileDialog::new()
+                        .set_title("Salvar bytes brutos")
+                        .set_file_name(format!("{job}.prn"))
+                        .save_file();
+                    if let (Some(path), Some(hub)) = (picked, self.hub.as_mut()) {
+                        hub.save_raw(&job, path);
+                    }
+                }
+                CenterEvent::SetNextSetup(s) => {
+                    for c in self.settings.slots.0.iter_mut() {
+                        if let apple2_config::SlotCardSpec::GenericPrinter(p) = c {
+                            if p.destination.to_virtual() {
+                                printer_hub::store_setup(p, &s);
+                                break;
+                            }
+                        }
+                    }
+                    if let Err(e) = self.settings.save_default() {
+                        self.ui.message = format!("Could not save settings: {e}");
+                    }
+                    if let Some(hub) = self.hub.as_mut() {
+                        hub.handle(CenterEvent::SetNextSetup(s));
+                    }
+                }
+                other => {
+                    if let Some(hub) = self.hub.as_mut() {
+                        hub.handle(other);
+                    }
+                }
+            }
+        }
+        self.poll_printer();
+    }
+
     /// Creates / focuses the Printer Center when asked, and schedules its (rate-limited) redraws.
     fn drive_printer(&mut self, el: &ActiveEventLoop) {
+        self.poll_printer();
         if self.printer.is_open() {
             if let Some(shared) = self.gpu.clone() {
                 match self
@@ -883,7 +1034,24 @@ impl App {
                 }
             }
         }
-        match self.printer.drive(Instant::now()) {
+        let now = Instant::now();
+        if self.pending_type.as_ref().is_some_and(|(_, t)| now >= *t) {
+            if let Some((text, _)) = self.pending_type.take() {
+                self.emu.send(Command::Paste(text));
+            }
+        }
+        let hub_wake = self
+            .hub
+            .as_ref()
+            .and_then(|h| h.next_wake(now))
+            .into_iter()
+            .chain(self.pending_type.as_ref().map(|(_, t)| *t))
+            .min();
+        let wake = match (self.printer.drive(now), hub_wake) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        match wake {
             Some(t) => el.set_control_flow(ControlFlow::WaitUntil(t)),
             None => el.set_control_flow(ControlFlow::Wait),
         }
@@ -939,7 +1107,6 @@ impl App {
         if v == "script" {
             self.demo_script = Some((0, Instant::now(), 0));
         }
-        self.printer.dump = std::env::var_os("APPLE2_RUST_PRINTER_DUMP").map(PathBuf::from);
         self.printer.open(v == "auto");
     }
 
@@ -1011,12 +1178,17 @@ impl ApplicationHandler<UserEvent> for App {
         }
         self.window = Some(window);
         self.main_focused = true;
+        self.printer.dump = std::env::var_os("APPLE2_RUST_PRINTER_DUMP").map(PathBuf::from);
         self.start_printer_demo();
     }
 
     fn user_event(&mut self, el: &ActiveEventLoop, e: UserEvent) {
         if matches!(e, UserEvent::Exit) {
             el.exit();
+            return;
+        }
+        if matches!(e, UserEvent::Printer) {
+            self.drive_printer(el);
             return;
         }
         self.poll_gamepads();
@@ -1035,6 +1207,7 @@ impl ApplicationHandler<UserEvent> for App {
             Route::Printer => {
                 // Everything typed or clicked in the Printer Center stays there (R08).
                 self.printer.window_event(event, &self.printer_vm);
+                self.handle_printer_events();
                 return;
             }
             Route::Unknown => return,
@@ -1068,6 +1241,9 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             WindowEvent::CloseRequested => {
                 self.emu.shutdown();
+                // The card's last bytes are queued: the spool takes them, closes the job as
+                // Shutdown and stops, in that order.
+                self.hub = None;
                 self.printer.shutdown();
                 self.release_gpu();
                 el.exit();
