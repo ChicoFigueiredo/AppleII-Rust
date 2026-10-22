@@ -5,7 +5,10 @@
 use super::model::{self, SscForm};
 use super::pages::{browse_save, combo, group, path_row};
 use super::{HostLists, SettingsDialog, AUX};
-use apple2_config::card::{AyChip, HdcFirmware, SlotCardSpec, SoundSockets, Ssi263Chip};
+use apple2_config::card::{
+    AyChip, HdcFirmware, PrinterDestination, PrinterTransport, SlotCardSpec, SoundSockets,
+    Ssi263Chip,
+};
 use egui::{Context, Ui};
 
 const AY_CHIPS: [(AyChip, &str); 5] = [
@@ -26,6 +29,14 @@ const HDC_FW: [(HdcFirmware, &str); 4] = [
     (HdcFirmware::BlockMode2Devices, "Block mode (2 devices)"),
     (HdcFirmware::BlockMode4Devices, "Block mode (4 devices)"),
 ];
+
+fn destination_label(d: PrinterDestination) -> &'static str {
+    match d {
+        PrinterDestination::VirtualAndFile => "Virtual printer + file",
+        PrinterDestination::FileOnly => "File only",
+        PrinterDestination::VirtualOnly => "Virtual printer only",
+    }
+}
 
 fn title(spec: &SlotCardSpec) -> &'static str {
     match spec {
@@ -220,6 +231,29 @@ fn card_ui(ui: &mut Ui, spec: &mut SlotCardSpec, ssc: &mut Option<SscForm>, host
                         p.filename = Some(f);
                     }
                 }
+            });
+            group(ui, |ui| {
+                ui.strong("Virtual printer");
+                ui.horizontal(|ui| {
+                    ui.label("Send output to:");
+                    for d in PrinterDestination::ALL {
+                        ui.radio_value(&mut p.destination, d, destination_label(d));
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Transport:");
+                    ui.radio_value(&mut p.transport, PrinterTransport::EightBit, "8 bits");
+                    ui.radio_value(
+                        &mut p.transport,
+                        PrinterTransport::SevenBitAppleWin,
+                        "7 bits (AppleWin)",
+                    );
+                });
+                ui.checkbox(
+                    &mut p.auto_open_window,
+                    "Open the printer window at the first byte printed",
+                );
+                ui.weak("The file above (Printer.txt) always receives 7-bit, filtered text.");
             });
             group(ui, |ui| {
                 ui.strong("Advanced");

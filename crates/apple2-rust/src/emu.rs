@@ -14,6 +14,8 @@ use apple2_config::Settings;
 use apple2_core::Machine;
 use apple2_debugger::keys::{Key as DbgKey, KeyMods as DbgMods};
 use apple2_debugger::{Debugger, RunMode};
+use apple2_hostio::{CaptureReceiver, ParallelPrinterCard};
+use apple2_printer::capture::CloseReason;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -433,6 +435,12 @@ impl Emulator {
             RunMode::Stepping => self.debugger.run(&mut self.machine, cpf),
             RunMode::Debug => 0,
         };
+        // The video renderer steps the machine itself, so `Machine::run_frame` (which tells the
+        // cards how many cycles ran) is bypassed: do it here. The virtual printer needs it to
+        // deliver its bytes and to close an idle job (AppleWin's `CardManager::Update`).
+        if cycles > 0 {
+            self.machine.update_cards(cycles);
+        }
         let audio = self.mixer.produce_machine(&mut self.machine);
         let (drive, sector) = self.disks.guest_sector(&self.machine);
         self.sectors[drive.min(1)] = sector;
@@ -509,6 +517,8 @@ impl Emulator {
         // The new machine reopens the image files: the old one must write its pending track first
         // (AUD-C-030; AppleWin's EjectDisk -> FlushCurrentTrack).
         self.disks.flush(&mut self.machine);
+        // The new machine will not carry the old printer card: end its virtual job first.
+        self.close_virtual_printer(CloseReason::CardRemoved);
         // The cards hold the bus they were built with, so build everything again with one bus.
         let bus = AudioBus::new(self.audio_rate, settings.to_machine_config().video_standard);
         match self.backend.build_machine(&settings, &bus) {
@@ -537,6 +547,15 @@ impl Emulator {
                 }
             }
             Err(e) => self.say(format!("Cannot apply settings: {e}")),
+        }
+    }
+
+    /// Ends the virtual printer's open job (if any) with `reason`, delivering its pending bytes.
+    fn close_virtual_printer(&mut self, reason: CloseReason) {
+        for slot in 0..8u8 {
+            if let Some(c) = self.machine.card_mut::<ParallelPrinterCard>(slot) {
+                c.close_virtual(reason);
+            }
         }
     }
 
@@ -606,6 +625,8 @@ impl Emulator {
         self.mouse = self.backend.mouse_for(&machine, &self.settings);
         self.mixer = Mixer::new(&bus);
         self.bus = bus;
+        // The virtual job belongs to the machine being replaced (ADR 0008).
+        self.close_virtual_printer(CloseReason::StateLoaded);
         self.machine = machine;
         self.push_host_pads();
         self.video.reset();
@@ -833,10 +854,18 @@ impl Emulator {
 pub struct EmuHandle {
     pub tx: Sender<Command>,
     pub shared: Arc<Shared>,
+    printer_events: CaptureReceiver,
     join: Option<std::thread::JoinHandle<()>>,
 }
 
 impl EmuHandle {
+    /// The virtual printer's capture events (Open / Bytes / Close), in order, for the spool
+    /// service. Clones share one queue; draining never blocks the emulation thread. See
+    /// `apple2_hostio::printer_capture` for the no-silent-loss policy.
+    pub fn printer_events(&self) -> CaptureReceiver {
+        self.printer_events.clone()
+    }
+
     pub fn send(&self, c: Command) {
         let _ = self.tx.send(c);
     }
@@ -868,10 +897,12 @@ pub fn spawn(
     let (ready_tx, ready_rx) = mpsc::channel();
     let shared = Arc::new(Shared::default());
     let sh = shared.clone();
+    let (capture_tx, printer_events) = apple2_hostio::capture_channel();
     let join = std::thread::Builder::new()
         .name("emulation".into())
-        .spawn(
-            move || match Emulator::new(settings, factory(), audio_rate) {
+        .spawn(move || {
+            crate::factory::set_thread_capture(Some(capture_tx));
+            match Emulator::new(settings, factory(), audio_rate) {
                 Ok(mut emu) => {
                     emu.startup_state();
                     let _ = ready_tx.send(Ok(()));
@@ -880,13 +911,14 @@ pub fn spawn(
                 Err(e) => {
                     let _ = ready_tx.send(Err(e));
                 }
-            },
-        )
+            }
+        })
         .map_err(|e| e.to_string())?;
     ready_rx.recv().map_err(|e| e.to_string())??;
     Ok(EmuHandle {
         tx,
         shared,
+        printer_events,
         join: Some(join),
     })
 }

@@ -16,6 +16,8 @@ pcap = ["dep:pcap"]
 [dependencies]
 apple2-core = { path = "../apple2-core" }
 apple2-roms = { path = "../apple2-roms" }
+# Capture contract of the virtual printer (CaptureEvent, Transport); the crate has no I/O of its own.
+apple2-printer = { path = "../apple2-printer", default-features = false }
 serialport = { version = "4", default-features = false, optional = true }
 pcap = { version = "2", optional = true }
 # Portable list of network interfaces (Linux, macOS, Windows) when libpcap is not built in.

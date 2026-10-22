@@ -31,6 +31,7 @@ apple2-storage = { path = "../apple2-storage" }
 apple2-debugger = { path = "../apple2-debugger" }
 apple2-roms = { path = "../apple2-roms" }
 apple2-hostio = { path = "../apple2-hostio" }
+apple2-printer = { path = "../apple2-printer", default-features = false }
 apple2-savestate = { path = "../apple2-savestate" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde.workspace = true

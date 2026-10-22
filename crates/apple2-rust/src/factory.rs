@@ -11,20 +11,54 @@ use apple2_audio::ssi263::SsiType;
 use apple2_audio::{AudioBus, MockingboardCard, SamCard, Sockets, Variant};
 use apple2_cards::snesmax::ButtonMap;
 use apple2_cards::{DongleKind, HostClock, NoSlotClock, WallTime};
-use apple2_config::card::{AyChip, HdcFirmware, PrinterSpec, SoundSockets, Ssi263Chip};
+use apple2_config::card::{
+    AyChip, HdcFirmware, PrinterSpec, PrinterTransport, SoundSockets, Ssi263Chip,
+};
 use apple2_config::settings::DongleType;
 use apple2_config::{CardType, Settings, SlotCardSpec};
 use apple2_core::{Card, Machine, Model};
 use apple2_hostio::network::{NetworkBackend, NullNetwork};
 use apple2_hostio::printer::{PrinterEncoding, PrinterOptions};
 use apple2_hostio::serial::SerialBackend;
+use apple2_hostio::CaptureSender;
 use apple2_hostio::{
     FileSink, LoopbackSerial, ParallelPrinterCard, SuperSerialCard, TcpServerSerial, Uthernet1,
     Uthernet2,
 };
+use apple2_printer::capture::{JobOrigin, Transport};
 use apple2_storage::disk2::Disk2Card;
 use apple2_storage::hdd::{HardDiskCard, HdcFirmware as HddFirmware, HdcMode};
+use std::cell::RefCell;
 use std::path::PathBuf;
+
+thread_local! {
+    /// Where the virtual printer cards built on this thread deliver their capture events. The
+    /// emulation thread installs it once (see `emu::spawn`); both [`build_card`] paths (settings
+    /// and save-state load) run on that thread, so no plumbing through `Backend` is needed and
+    /// other threads (tests) are not affected. Without it a card keeps only the legacy file.
+    static CAPTURE: RefCell<Option<CaptureSender>> = const { RefCell::new(None) };
+}
+
+/// Sets (or clears) the capture queue for cards built on the current thread.
+pub fn set_thread_capture(tx: Option<CaptureSender>) {
+    CAPTURE.with(|c| *c.borrow_mut() = tx);
+}
+
+fn thread_capture() -> Option<CaptureSender> {
+    CAPTURE.with(|c| c.borrow().clone())
+}
+
+/// Machine name as the user sees it (stored in the job origin).
+pub fn machine_label(model: Model) -> String {
+    use crate::settings::model::{ModelChoice, CLONES};
+    match ModelChoice::of(model) {
+        ModelChoice::Clone => CLONES
+            .iter()
+            .find(|(m, _)| *m == model)
+            .map_or_else(|| format!("{model:?}"), |(_, n)| (*n).to_string()),
+        c => c.label().to_string(),
+    }
+}
 
 /// The host's local wall-clock time for the clock cards (`GetLocalTime`).
 pub struct SystemClock;
@@ -115,14 +149,45 @@ pub fn printer_options(spec: &PrinterSpec, model: Model, real_printer: bool) -> 
 }
 
 pub fn printer_card(spec: &PrinterSpec, model: Model, real_printer: bool) -> ParallelPrinterCard {
-    let path: PathBuf = spec
-        .filename
-        .clone()
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_PRINTER_FILE));
-    ParallelPrinterCard::new(
-        Box::new(FileSink::new(path)),
-        printer_options(spec, model, real_printer),
-    )
+    printer_card_for(spec, model, real_printer, 1, thread_capture().as_ref())
+}
+
+/// The Printer Card for `slot`: the legacy `Printer.txt` output and/or the virtual printer's
+/// capture path, per `spec.destination`. The virtual path needs `capture`; without one (no
+/// consumer exists) the card falls back to the legacy file alone so nothing is lost silently.
+pub fn printer_card_for(
+    spec: &PrinterSpec,
+    model: Model,
+    real_printer: bool,
+    slot: u8,
+    capture: Option<&CaptureSender>,
+) -> ParallelPrinterCard {
+    let options = printer_options(spec, model, real_printer);
+    let virtual_tx = capture.filter(|_| spec.destination.to_virtual());
+    let to_file = spec.destination.to_file() || virtual_tx.is_none();
+    let card = if to_file {
+        let path: PathBuf = spec
+            .filename
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_PRINTER_FILE));
+        ParallelPrinterCard::new(Box::new(FileSink::new(path)), options)
+    } else {
+        ParallelPrinterCard::virtual_only(options)
+    };
+    match virtual_tx {
+        Some(tx) => card.with_virtual(
+            tx.clone(),
+            JobOrigin {
+                machine: machine_label(model),
+                slot,
+            },
+            match spec.transport {
+                PrinterTransport::EightBit => Transport::EightBit,
+                PrinterTransport::SevenBitAppleWin => Transport::SevenBitAppleWin,
+            },
+        ),
+        None => card,
+    }
 }
 
 /// SSC back end: TCP server when a port is set, else the named host serial port (feature
@@ -241,10 +306,12 @@ pub fn build_card(
         SlotCardSpec::Phasor(k) => mb(Variant::Phasor, k),
         SlotCardSpec::MegaAudio(k) => mb(Variant::MegaAudio, k),
         SlotCardSpec::SdMusic(k) => mb(Variant::SdMusic, k),
-        SlotCardSpec::GenericPrinter(p) => Some(Box::new(printer_card(
+        SlotCardSpec::GenericPrinter(p) => Some(Box::new(printer_card_for(
             p,
             s.machine.model,
             s.misc.enable_dump_to_real_printer,
+            slot,
+            thread_capture().as_ref(),
         ))),
         SlotCardSpec::GenericHdd { firmware, images } => {
             let fw = match (s.misc.hdc_firmware_v1, s.misc.hdc_firmware_v2) {

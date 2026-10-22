@@ -11,6 +11,14 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use crate::printer_capture::CaptureSender;
+use apple2_printer::capture::{CloseReason, JobOrigin, Transport};
+
+/// Cycles between deliveries of the bytes accumulated for the virtual printer (about one frame).
+pub const VIRTUAL_FLUSH_CYCLES: u64 = 17_030;
+/// Accumulated bytes that force a delivery before the cycle count does.
+pub const VIRTUAL_FLUSH_BYTES: usize = 4096;
+
 /// Cycles AppleWin counts per idle-limit second (ParallelPrinter.cpp:105; not the real clock).
 pub const CYCLES_PER_IDLE_SECOND: u64 = 710_000;
 
@@ -323,8 +331,88 @@ pub struct PrinterSnapshot {
     pub is_open: bool,
 }
 
+/// The virtual printer's path out of the card (independent of the legacy file sink): the byte
+/// goes through the [`Transport`] only, with no unprintable filter and no Pravets conversion.
+/// Bytes are accumulated and handed over in blocks (see [`VIRTUAL_FLUSH_CYCLES`]).
+struct VirtualOutput {
+    tx: CaptureSender,
+    origin: JobOrigin,
+    transport: Transport,
+    job: Option<VirtualJob>,
+}
+
+struct VirtualJob {
+    id: u64,
+    /// Bytes of the job already handed to the queue.
+    delivered: u64,
+    pending: Vec<u8>,
+    inactivity: u64,
+    since_flush: u64,
+}
+
+impl VirtualOutput {
+    fn write(&mut self, value: u8) {
+        let byte = match self.transport {
+            Transport::EightBit => value,
+            Transport::SevenBitAppleWin => value & 0x7F,
+        };
+        let job = self.job.get_or_insert_with(|| VirtualJob {
+            id: self.tx.open(self.origin.clone(), self.transport),
+            delivered: 0,
+            pending: Vec::new(),
+            inactivity: 0,
+            since_flush: 0,
+        });
+        job.inactivity = 0;
+        job.pending.push(byte);
+        if job.pending.len() >= VIRTUAL_FLUSH_BYTES {
+            self.flush();
+        }
+    }
+
+    /// Any access to the card's I/O page keeps an open job alive (like the legacy counter); a read
+    /// never opens one (CA02).
+    fn touch(&mut self) {
+        if let Some(j) = &mut self.job {
+            j.inactivity = 0;
+        }
+    }
+
+    fn flush(&mut self) {
+        if let Some(j) = &mut self.job {
+            j.since_flush = 0;
+            if !j.pending.is_empty() {
+                let data = std::mem::take(&mut j.pending);
+                let n = data.len() as u64;
+                self.tx.bytes(j.id, j.delivered, data);
+                j.delivered += n;
+            }
+        }
+    }
+
+    fn close(&mut self, reason: CloseReason) {
+        self.flush();
+        if let Some(j) = self.job.take() {
+            self.tx.close(j.id, reason);
+        }
+    }
+
+    fn update(&mut self, cycles: u64, idle_cycles: u64) {
+        let Some(j) = &mut self.job else { return };
+        j.inactivity += cycles;
+        j.since_flush += cycles;
+        if j.inactivity > idle_cycles {
+            self.close(CloseReason::Idle);
+        } else if j.since_flush >= VIRTUAL_FLUSH_CYCLES {
+            self.flush();
+        }
+    }
+}
+
 pub struct ParallelPrinterCard {
-    sink: Box<dyn PrinterSink>,
+    /// The legacy file output (AppleWin's `Printer.txt`); `None` for a virtual-only card.
+    sink: Option<Box<dyn PrinterSink>>,
+    virtual_out: Option<VirtualOutput>,
     options: PrinterOptions,
     is_open: bool,
     inactivity: u64,
@@ -334,12 +422,50 @@ pub struct ParallelPrinterCard {
 impl ParallelPrinterCard {
     pub fn new(sink: Box<dyn PrinterSink>, options: PrinterOptions) -> Self {
         ParallelPrinterCard {
-            sink,
+            sink: Some(sink),
+            virtual_out: None,
             options,
             is_open: false,
             inactivity: 0,
             last_error: None,
         }
+    }
+
+    /// A card without the legacy file output: only the virtual printer receives the bytes.
+    pub fn virtual_only(options: PrinterOptions) -> Self {
+        let mut c = Self::new(Box::new(MemorySink::new()), options);
+        c.sink = None;
+        c
+    }
+
+    /// Adds the virtual printer's output (see the module docs of [`crate::printer_capture`]).
+    /// `origin` says where jobs come from; the byte reaches the queue as `transport` dictates.
+    pub fn with_virtual(
+        mut self,
+        tx: CaptureSender,
+        origin: JobOrigin,
+        transport: Transport,
+    ) -> Self {
+        self.virtual_out = Some(VirtualOutput {
+            tx,
+            origin,
+            transport,
+            job: None,
+        });
+        self
+    }
+
+    /// Ends the virtual job (if any) with `reason`, delivering the pending bytes first. The
+    /// emulator calls it with `CardRemoved` / `StateLoaded` before it replaces the machine.
+    pub fn close_virtual(&mut self, reason: CloseReason) {
+        if let Some(v) = &mut self.virtual_out {
+            v.close(reason);
+        }
+    }
+
+    /// Id of the open virtual job.
+    pub fn virtual_job(&self) -> Option<u64> {
+        self.virtual_out.as_ref()?.job.as_ref().map(|j| j.id)
     }
 
     /// Why the last attempt to open or write the print file failed, until one succeeds. The
@@ -351,12 +477,14 @@ impl ParallelPrinterCard {
 
     /// The print file name as configured (saved in save-states).
     pub fn filename(&self) -> Option<&Path> {
-        self.sink.path()
+        self.sink.as_ref().and_then(|s| s.path())
     }
 
     /// Redirects the output (`LoadSnapshot` restores the name saved by AppleWin, :255).
     pub fn set_filename(&mut self, path: PathBuf) {
-        self.sink.set_path(path);
+        if let Some(s) = &mut self.sink {
+            s.set_path(path);
+        }
     }
 
     pub fn options(&self) -> &PrinterOptions {
@@ -387,6 +515,8 @@ impl ParallelPrinterCard {
         self.options = s.options;
         self.options.convert_encoding = s.options.convert_encoding.map(|_| encoding);
         self.inactivity = s.inactivity;
+        // The virtual job belongs to the machine that was replaced (ADR 0008).
+        self.close_virtual(CloseReason::StateLoaded);
         if s.is_open {
             self.options.append = true;
             self.check_print();
@@ -396,8 +526,11 @@ impl ParallelPrinterCard {
     /// `CheckPrint` (:56-71): opens the job on first use and restarts the idle counter.
     fn check_print(&mut self) -> bool {
         self.inactivity = 0;
+        let Some(sink) = &mut self.sink else {
+            return false;
+        };
         if !self.is_open {
-            match self.sink.open(self.options.append) {
+            match sink.open(self.options.append) {
                 Ok(()) => {
                     self.is_open = true;
                     self.last_error = None;
@@ -416,7 +549,9 @@ impl ParallelPrinterCard {
     /// `ClosePrint` (:74-90).
     fn close_print(&mut self) {
         if self.is_open {
-            self.sink.close(self.options.dump_to_printer);
+            if let Some(sink) = &mut self.sink {
+                sink.close(self.options.dump_to_printer);
+            }
             self.is_open = false;
         }
         self.inactivity = 0;
@@ -441,11 +576,19 @@ impl Card for ParallelPrinterCard {
     }
 
     fn io_read(&mut self, _lo: u8, _ctx: &mut CardCtx) -> u8 {
+        if let Some(v) = &mut self.virtual_out {
+            v.touch();
+        }
         self.check_print();
         0xFF // status: always ready (:125)
     }
 
     fn io_write(&mut self, lo: u8, value: u8, _ctx: &mut CardCtx) {
+        if lo == 0 {
+            if let Some(v) = &mut self.virtual_out {
+                v.write(value);
+            }
+        }
         if !self.check_print() || lo != 0 {
             return;
         }
@@ -455,7 +598,8 @@ impl Card for ParallelPrinterCard {
         }
         // `c > 0x7F` keeps Cyrillic output when conversion is on (:149).
         if !self.options.filter_unprintable || c > 31 || c == 13 || c == 10 {
-            if let Err(e) = self.sink.write(c) {
+            let Some(sink) = &mut self.sink else { return };
+            if let Err(e) = sink.write(c) {
                 let msg = format!("Printer: write failed: {e}");
                 crate::diagnostics::report("printer-write", msg.clone());
                 self.last_error = Some(msg);
@@ -469,9 +613,14 @@ impl Card for ParallelPrinterCard {
 
     fn reset(&mut self, _power_cycle: bool, _ctx: &mut CardCtx) {
         self.close_print();
+        self.close_virtual(CloseReason::Reset);
     }
 
     fn update(&mut self, cycles: u64, _ctx: &mut CardCtx) {
+        let idle_cycles = self.options.idle_limit as u64 * CYCLES_PER_IDLE_SECOND;
+        if let Some(v) = &mut self.virtual_out {
+            v.update(cycles, idle_cycles);
+        }
         if !self.is_open {
             return;
         }
@@ -485,6 +634,7 @@ impl Card for ParallelPrinterCard {
 impl Drop for ParallelPrinterCard {
     fn drop(&mut self) {
         self.close_print();
+        self.close_virtual(CloseReason::Shutdown);
     }
 }
 
