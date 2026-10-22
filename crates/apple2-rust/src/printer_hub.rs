@@ -46,6 +46,8 @@ pub const POLL_PERIOD: Duration = Duration::from_millis(33);
 /// How long the card has to answer a close request before the spool closes the job itself.
 pub const CLOSE_FALLBACK: Duration = Duration::from_millis(1500);
 const MAX_MESSAGES: usize = 8;
+/// Largest raw job "Salvar RAW" copies (it is held in memory while the file is written).
+pub const MAX_RAW_COPY: u64 = 512 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------------------------
 // Settings <-> printer crate mapping
@@ -176,6 +178,10 @@ fn engine_factory() -> apple2_printer::spool::EngineFactory {
 // Bridge: capture queue -> spool, counting what the UI needs to know at once
 // ---------------------------------------------------------------------------------------------
 
+/// Bytes the bridge lets sit between the capture queue and the spool thread. Beyond it the bridge
+/// waits (never the CPU), the capture queue absorbs up to its own limit and only then drops, counted.
+pub const MAX_BRIDGE_BACKLOG: u64 = 32 * 1024 * 1024;
+
 #[derive(Default)]
 struct Counters {
     opens: AtomicU64,
@@ -191,14 +197,30 @@ struct Bridge {
 type Wake = Arc<dyn Fn() + Send + Sync>;
 
 impl Bridge {
-    fn spawn(rx: CaptureReceiver, tx: Sender<CaptureEvent>, wake: Wake) -> Bridge {
+    fn spawn(
+        rx: CaptureReceiver,
+        tx: Sender<CaptureEvent>,
+        wake: Wake,
+        consumed: Arc<AtomicU64>,
+        backlog_limit: u64,
+    ) -> Bridge {
         let counters = Arc::new(Counters::default());
         let c = counters.clone();
         let join = std::thread::Builder::new()
             .name("apple2-printer-bridge".into())
             .spawn(move || {
                 let mut last_wake = Instant::now() - Duration::from_secs(1);
-                let forward = |ev: CaptureEvent, last_wake: &mut Instant| -> bool {
+                let mut sent = 0u64;
+                let mut forward = |ev: CaptureEvent, last_wake: &mut Instant| -> bool {
+                    if let CaptureEvent::Bytes { data, .. } = &ev {
+                        // Back-pressure: the spool is behind (a long reprint on its thread).
+                        while sent.saturating_sub(consumed.load(Ordering::Relaxed)) > backlog_limit
+                            && !c.stop.load(Ordering::SeqCst)
+                        {
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        sent += data.len() as u64;
+                    }
                     let urgent = match &ev {
                         CaptureEvent::Open { .. } => {
                             c.opens.fetch_add(1, Ordering::SeqCst);
@@ -396,6 +418,7 @@ pub struct PrinterHub {
     config: Option<PrinterConfig>,
     seen_opens: u64,
     seen_bytes: u64,
+    seen_dropped: u64,
     last_byte: Option<Instant>,
     prev_snap: Option<Arc<Snapshot>>,
     /// Newest live document of the active job.
@@ -438,7 +461,13 @@ impl PrinterHub {
         let (tx, rx) = channel::<CaptureEvent>();
         let service = SpoolService::spawn(spool, rx);
         let closer = events.clone();
-        let bridge = Bridge::spawn(events, tx, wake);
+        let bridge = Bridge::spawn(
+            events,
+            tx,
+            wake,
+            service.consumed_bytes(),
+            MAX_BRIDGE_BACKLOG,
+        );
         let (done_tx, done_rx) = channel();
         let mut hub = PrinterHub {
             root,
@@ -450,6 +479,7 @@ impl PrinterHub {
             config: None,
             seen_opens: 0,
             seen_bytes: 0,
+            seen_dropped: 0,
             last_byte: None,
             prev_snap: None,
             live: None,
@@ -531,6 +561,16 @@ impl PrinterHub {
             out.activity = true;
             self.seen_bytes = bytes;
             self.last_byte = Some(now);
+        }
+        let dropped = self.closer.dropped_bytes();
+        if dropped != self.seen_dropped {
+            self.seen_dropped = dropped;
+            self.message(
+                format!(
+                    "A fila de impressão encheu: {dropped} byte(s) do Apple II não foram guardados (o Trabalho em andamento fica incompleto)"
+                ),
+                true,
+            );
         }
         let snap = self.spool.snapshot();
         if let Some((job, since)) = self.pending_close {
@@ -1008,6 +1048,13 @@ impl PrinterHub {
     /// Saves a PDF of `req` to `path` on a worker thread. Title and note go to the manifest too.
     pub fn export_pdf(&mut self, req: PdfRequest, path: PathBuf) {
         let manifest = self.job_summary(&req.job).cloned();
+        if let Some(why) = manifest.as_ref().and_then(|m| m.damaged.as_ref()) {
+            self.message(
+                format!("Falha ao salvar o PDF: o trabalho está danificado ({why})"),
+                true,
+            );
+            return;
+        }
         let current_title = self
             .vm
             .jobs
@@ -1110,6 +1157,19 @@ impl PrinterHub {
     /// Copies the job's raw printer bytes to `path` (worker thread).
     pub fn save_raw(&mut self, job: &str, path: PathBuf) {
         if !safe_id(job) {
+            self.message(
+                format!(
+                    "Falha ao salvar os bytes brutos: identificador de trabalho inválido: {job}"
+                ),
+                true,
+            );
+            return;
+        }
+        if let Some(why) = self.job_summary(job).and_then(|m| m.damaged.clone()) {
+            self.message(
+                format!("Falha ao salvar os bytes brutos: o trabalho está danificado ({why})"),
+                true,
+            );
             return;
         }
         let total = self
@@ -1132,6 +1192,15 @@ impl PrinterHub {
                 let result = (|| -> Result<u64, String> {
                     let f =
                         std::fs::File::open(&src).map_err(|e| format!("{}: {e}", src.display()))?;
+                    // The copy is built in memory: refuse a raw file no real job reaches.
+                    let size = f.metadata().map_or(0, |m| m.len().min(total));
+                    if size > MAX_RAW_COPY {
+                        return Err(format!(
+                            "{}: {size} bytes passam do limite de {} MiB para cópia",
+                            src.display(),
+                            MAX_RAW_COPY / (1024 * 1024)
+                        ));
+                    }
                     let mut buf = Vec::new();
                     f.take(total)
                         .read_to_end(&mut buf)
@@ -1201,4 +1270,63 @@ pub fn local_time(rfc3339: &str) -> String {
                 .to_string()
         })
         .unwrap_or_else(|_| rfc3339.to_string())
+}
+
+#[cfg(test)]
+mod bridge_tests {
+    use super::*;
+    use apple2_hostio::capture_channel;
+    use apple2_printer::capture::{CloseReason, JobOrigin, Transport};
+
+    /// A spool that stops consuming makes the bridge stop forwarding (bounded memory); the bytes
+    /// wait in the capture queue and flow again once the spool catches up. Nothing is lost.
+    #[test]
+    fn a_stalled_spool_holds_the_bridge_and_nothing_is_lost() {
+        let (txq, rx) = capture_channel();
+        let (tx, spool_rx) = channel::<CaptureEvent>();
+        let consumed = Arc::new(AtomicU64::new(0));
+        let mut bridge = Bridge::spawn(rx.clone(), tx, Arc::new(|| {}), consumed.clone(), 1000);
+        let origin = JobOrigin {
+            machine: "t".into(),
+            slot: 1,
+        };
+        let job = txq.open(origin, Transport::EightBit);
+        // Distinct events (each flush is separate: other jobs' bytes cannot merge).
+        let mut off = 0;
+        for _ in 0..50 {
+            txq.bytes(job, off, vec![b'a'; 400]);
+            off += 400;
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        let mut got = 0u64;
+        while let Ok(ev) = spool_rx.try_recv() {
+            if let CaptureEvent::Bytes { data, .. } = ev {
+                got += data.len() as u64;
+            }
+        }
+        assert!(
+            got <= 2_000,
+            "bridge forwarded {got} bytes to a stalled spool"
+        );
+        assert!(
+            rx.pending_bytes() > 0,
+            "the rest waits in the capture queue"
+        );
+        // The spool catches up: the rest flows, in order, complete.
+        let t = Instant::now();
+        while got < 20_000 && t.elapsed() < Duration::from_secs(10) {
+            consumed.store(got, Ordering::Relaxed);
+            while let Ok(ev) = spool_rx.try_recv() {
+                if let CaptureEvent::Bytes { data, .. } = ev {
+                    got += data.len() as u64;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(got, 20_000);
+        assert_eq!(rx.dropped_bytes(), 0);
+        txq.close(job, CloseReason::Idle);
+        bridge.stop();
+    }
 }

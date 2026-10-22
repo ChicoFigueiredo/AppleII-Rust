@@ -13,6 +13,7 @@ use crate::paper::RenderOptions;
 use std::collections::VecDeque;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -22,6 +23,8 @@ use std::time::{Duration, Instant};
 pub type EngineFactory = Box<dyn Fn() -> Box<dyn PrinterEngine> + Send>;
 
 const MAX_NOTICES: usize = 30;
+/// How long the followed job must be silent before another job's bytes take the preview.
+const FOCUS_QUIET: Duration = Duration::from_millis(500);
 const REPRINT_CHUNK: usize = 8 * 1024;
 const TITLE_CHARS: usize = 60;
 
@@ -91,21 +94,50 @@ pub struct Snapshot {
     pub retention: Option<RetentionWarning>,
 }
 
-/// Read side of the published snapshots; holds the lock only to clone an `Arc`.
+/// How long after the last `get` the document keeps being copied for the preview.
+const WATCH_WINDOW_MS: u64 = 2_000;
+
+/// Read side of the published snapshots; holds the lock only to clone an `Arc`. Every read stamps
+/// the time, so the spool copies the (large) live document only while somebody is looking: with
+/// the window closed or the UI stuck, the job costs no copies at all.
 #[derive(Clone)]
-pub struct SnapshotHandle(Arc<Mutex<Arc<Snapshot>>>);
+pub struct SnapshotHandle {
+    cur: Arc<Mutex<Arc<Snapshot>>>,
+    base: Instant,
+    /// Milliseconds since `base` of the last read, plus one (0 = never read).
+    last_read: Arc<AtomicU64>,
+}
 
 impl SnapshotHandle {
+    fn new() -> SnapshotHandle {
+        SnapshotHandle {
+            cur: Arc::new(Mutex::new(Arc::new(Snapshot::default()))),
+            base: Instant::now(),
+            last_read: Arc::new(AtomicU64::new(0)),
+        }
+    }
     pub fn get(&self) -> Arc<Snapshot> {
-        match self.0.lock() {
+        self.last_read.store(
+            self.base.elapsed().as_millis() as u64 + 1,
+            Ordering::Relaxed,
+        );
+        match self.cur.lock() {
             Ok(g) => g.clone(),
             Err(p) => p.into_inner().clone(),
         }
     }
     fn set(&self, s: Arc<Snapshot>) {
-        match self.0.lock() {
+        match self.cur.lock() {
             Ok(mut g) => *g = s,
             Err(p) => *p.into_inner() = s,
+        }
+    }
+    /// True when somebody read a snapshot recently (or never yet: the first reader must see the
+    /// document).
+    fn watched(&self, window_ms: u64) -> bool {
+        match self.last_read.load(Ordering::Relaxed) {
+            0 => true,
+            t => (self.base.elapsed().as_millis() as u64 + 1).saturating_sub(t) <= window_ms,
         }
     }
 }
@@ -123,13 +155,19 @@ struct ActiveJob {
     storage_error: Option<String>,
     last_pages: u32,
     last_diags: usize,
+    /// Card slot the job came from (one open job per slot).
+    slot: u8,
+    last_bytes_at: Instant,
 }
 
 pub struct Spool {
     archive: Archive,
     factory: EngineFactory,
     options: RenderOptions,
+    /// The job the preview follows ("foco de prévia").
     active: Option<ActiveJob>,
+    /// Other open jobs, one per card slot (several Generic Printers can print at once).
+    background: Vec<ActiveJob>,
     snapshot: SnapshotHandle,
     snap_rev: u64,
     notices: VecDeque<String>,
@@ -139,6 +177,10 @@ pub struct Spool {
     reprint: Option<ReprintView>,
     last_doc_publish: Instant,
     doc_interval: Duration,
+    /// Cost of the last document copy: the interval grows to keep copying under ~20% of the time.
+    last_copy: Duration,
+    watch_window: Duration,
+    jobs_cache: Vec<JobSummary>,
 }
 
 fn summary(e: &JobEntry) -> JobSummary {
@@ -231,7 +273,8 @@ impl Spool {
             factory,
             options,
             active: None,
-            snapshot: SnapshotHandle(Arc::new(Mutex::new(Arc::new(Snapshot::default())))),
+            background: Vec::new(),
+            snapshot: SnapshotHandle::new(),
             snap_rev: 0,
             notices: VecDeque::new(),
             doc: Arc::new(PageDocument::default()),
@@ -240,6 +283,9 @@ impl Spool {
             reprint: None,
             last_doc_publish: Instant::now(),
             doc_interval: Duration::from_millis(50),
+            last_copy: Duration::ZERO,
+            watch_window: Duration::from_millis(WATCH_WINDOW_MS),
+            jobs_cache: Vec::new(),
         };
         let events: Vec<String> = s
             .archive
@@ -288,6 +334,11 @@ impl Spool {
         self.doc_interval = d;
     }
 
+    /// How long after the last snapshot read the live document keeps being copied (default 2 s).
+    pub fn set_watch_window(&mut self, d: Duration) {
+        self.watch_window = d;
+    }
+
     fn notice(&mut self, msg: String) {
         if self.notices.len() >= MAX_NOTICES {
             self.notices.pop_front();
@@ -303,11 +354,34 @@ impl Spool {
                 origin,
                 transport,
             } => {
-                if let Some(prev) = self.active.as_ref().map(|a| a.capture_job) {
+                // One open job per card: an Open from a slot that still has one means the earlier
+                // job never closed.
+                let slot = origin.slot;
+                if let Some(prev) = self
+                    .active
+                    .as_ref()
+                    .filter(|a| a.slot == slot)
+                    .map(|a| a.capture_job)
+                {
                     self.notice(format!(
                         "trabalho {prev} sem fechamento; fechado como Reset ao abrir o {job}"
                     ));
                     self.finish_active(CloseReason::Reset);
+                }
+                if let Some(prev) = self
+                    .background
+                    .iter()
+                    .find(|a| a.slot == slot)
+                    .map(|a| a.capture_job)
+                {
+                    self.notice(format!(
+                        "trabalho {prev} sem fechamento; fechado como Reset ao abrir o {job}"
+                    ));
+                    self.finish_background(prev, CloseReason::Reset);
+                }
+                // The new job takes the preview; the one it replaces keeps printing in background.
+                if let Some(prev) = self.active.take() {
+                    self.background.push(prev);
                 }
                 self.open_job(NewJob {
                     capture_job: job,
@@ -319,12 +393,20 @@ impl Spool {
                 self.publish(true);
             }
             CaptureEvent::Bytes { job, offset, data } => {
-                self.on_bytes(job, offset, &data);
+                if self.active.as_ref().map(|a| a.capture_job) == Some(job) {
+                    self.on_bytes(job, offset, &data);
+                } else if let Some(i) = self.background.iter().position(|a| a.capture_job == job) {
+                    self.bytes_in_background(i, job, offset, &data);
+                } else {
+                    self.on_bytes(job, offset, &data);
+                }
                 self.publish(false);
             }
             CaptureEvent::Close { job, reason } => {
                 if self.active.as_ref().map(|a| a.capture_job) == Some(job) {
                     self.finish_active(reason);
+                } else if self.background.iter().any(|a| a.capture_job == job) {
+                    self.finish_background(job, reason);
                 } else {
                     self.notice(format!("Close do trabalho {job} ignorado (não está ativo)"));
                 }
@@ -335,6 +417,7 @@ impl Spool {
 
     fn open_job(&mut self, new: NewJob) {
         let capture_job = new.capture_job;
+        let slot = new.origin.slot;
         let options = new.options;
         let mut engine = (self.factory)();
         engine.begin(options);
@@ -366,6 +449,8 @@ impl Spool {
             storage_error,
             last_pages: 0,
             last_diags: 0,
+            slot,
+            last_bytes_at: Instant::now(),
         });
     }
 
@@ -378,6 +463,7 @@ impl Spool {
             ));
             return;
         };
+        a.last_bytes_at = Instant::now();
         let mut data = data;
         if offset < a.fed {
             let skip = ((a.fed - offset) as usize).min(data.len());
@@ -428,8 +514,68 @@ impl Spool {
         }
     }
 
-    /// Ends the active job (if any) with `reason`.
+    /// Ends the job the preview follows (if any) with `reason`; another open job, if there is
+    /// one, takes the preview.
     pub fn finish_active(&mut self, reason: CloseReason) {
+        self.finish_focus(reason);
+        if let Some(next) = self.background.pop() {
+            self.focus(next);
+        }
+    }
+
+    /// Makes `job` the one the preview follows (the document is copied once).
+    fn focus(&mut self, job: ActiveJob) {
+        self.doc = Arc::new(job.engine.document().clone());
+        self.doc_rev += 1;
+        self.doc_dirty = false;
+        self.active = Some(job);
+    }
+
+    /// Feeds bytes to an open job that is not the preview's. It takes the preview when the
+    /// current one has been quiet for half a second (alternating printers do not thrash it).
+    fn bytes_in_background(&mut self, i: usize, job: u64, offset: u64, data: &[u8]) {
+        let quiet = self
+            .active
+            .as_ref()
+            .is_none_or(|a| a.last_bytes_at.elapsed() >= FOCUS_QUIET);
+        let (rev, dirty) = (self.doc_rev, self.doc_dirty);
+        let focus = self.active.take();
+        self.active = Some(self.background.swap_remove(i));
+        self.on_bytes(job, offset, data);
+        let fed = self.active.take();
+        if quiet {
+            if let Some(f) = focus {
+                self.background.push(f);
+            }
+            if let Some(j) = fed {
+                self.focus(j);
+            }
+        } else {
+            self.doc_rev = rev;
+            self.doc_dirty = dirty;
+            self.active = focus;
+            if let Some(j) = fed {
+                self.background.push(j);
+            }
+        }
+    }
+
+    /// Closes an open job that is not the preview's, leaving the preview as it is.
+    fn finish_background(&mut self, job: u64, reason: CloseReason) {
+        let Some(i) = self.background.iter().position(|a| a.capture_job == job) else {
+            return;
+        };
+        let (doc, rev, dirty) = (self.doc.clone(), self.doc_rev, self.doc_dirty);
+        let focus = self.active.take();
+        self.active = Some(self.background.remove(i));
+        self.finish_focus(reason);
+        self.doc = doc;
+        self.doc_rev = rev;
+        self.doc_dirty = dirty;
+        self.active = focus;
+    }
+
+    fn finish_focus(&mut self, reason: CloseReason) {
         let Some(mut a) = self.active.take() else {
             return;
         };
@@ -481,7 +627,9 @@ impl Spool {
 
     /// Ends the active job as `Shutdown` and publishes (emulator exit).
     pub fn shutdown(&mut self) {
-        self.finish_active(CloseReason::Shutdown);
+        while self.active.is_some() || !self.background.is_empty() {
+            self.finish_active(CloseReason::Shutdown);
+        }
         self.publish(true);
     }
 
@@ -491,9 +639,15 @@ impl Spool {
     }
 
     fn publish(&mut self, force: bool) {
-        if self.doc_dirty && (force || self.last_doc_publish.elapsed() >= self.doc_interval) {
+        let interval = self.doc_interval.max(self.last_copy * 4);
+        if self.doc_dirty
+            && (force || self.last_doc_publish.elapsed() >= interval)
+            && (force || self.snapshot.watched(self.watch_window.as_millis() as u64))
+        {
             if let Some(a) = &self.active {
+                let t = Instant::now();
                 self.doc = Arc::new(a.engine.document().clone());
+                self.last_copy = t.elapsed();
             }
             self.doc_dirty = false;
             self.last_doc_publish = Instant::now();
@@ -512,7 +666,24 @@ impl Spool {
             doc_revision: self.doc_rev,
             storage_error: a.storage_error.clone(),
         });
-        let mut jobs: Vec<JobSummary> = self.archive.jobs().iter().map(summary).collect();
+        // The list of the Arquivo only grows: rebuild it on forced publications (open, close and
+        // every user action); between them only the active job's row can have moved.
+        if force || self.jobs_cache.is_empty() {
+            self.jobs_cache = self.archive.jobs().iter().map(summary).collect();
+        } else {
+            for a in self.active.iter().chain(self.background.iter()) {
+                if let Some(e) = self.archive.get(&a.id) {
+                    if let Some(row) = self.jobs_cache.iter_mut().find(|j| j.id == a.id) {
+                        let title = std::mem::take(&mut row.title);
+                        *row = summary(e);
+                        if row.title.is_empty() {
+                            row.title = title;
+                        }
+                    }
+                }
+            }
+        }
+        let mut jobs: Vec<JobSummary> = self.jobs_cache.clone();
         if let Some(v) = &active {
             // The title of an open job is only stored when it closes; show the live one.
             if let Some(j) = jobs.iter_mut().find(|j| j.id == v.job_id) {
@@ -733,6 +904,7 @@ impl SpoolHandle {
 /// The spool running on its own thread, fed by the card's channel.
 pub struct SpoolService {
     handle: SpoolHandle,
+    consumed: Arc<AtomicU64>,
     join: JoinHandle<Spool>,
 }
 
@@ -745,6 +917,8 @@ impl SpoolService {
             snapshot: spool.snapshot_handle(),
             commands: tx,
         };
+        let consumed = Arc::new(AtomicU64::new(0));
+        let counter = consumed.clone();
         let join = std::thread::Builder::new()
             .name("apple2-printer-spool".into())
             .spawn(move || {
@@ -755,7 +929,14 @@ impl SpoolService {
                         }
                     }
                     match events.recv_timeout(Duration::from_millis(20)) {
-                        Ok(ev) => spool.handle(ev),
+                        Ok(ev) => {
+                            let n = match &ev {
+                                CaptureEvent::Bytes { data, .. } => data.len() as u64,
+                                _ => 0,
+                            };
+                            spool.handle(ev);
+                            counter.fetch_add(n, Ordering::Relaxed);
+                        }
                         Err(RecvTimeoutError::Timeout) => spool.tick(),
                         Err(RecvTimeoutError::Disconnected) => break,
                     }
@@ -770,11 +951,20 @@ impl SpoolService {
                 spool
             })
             .expect("spawn spool thread");
-        SpoolService { handle, join }
+        SpoolService {
+            handle,
+            consumed,
+            join,
+        }
     }
 
     pub fn handle(&self) -> SpoolHandle {
         self.handle.clone()
+    }
+
+    /// Payload bytes the thread has finished with (feeds the bridge's back-pressure).
+    pub fn consumed_bytes(&self) -> Arc<AtomicU64> {
+        self.consumed.clone()
     }
 
     /// Waits for the thread to stop (send `Shutdown` or drop the event sender first).

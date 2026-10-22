@@ -419,3 +419,129 @@ fn cancel_marks_the_job_and_keeps_its_bytes() {
     let a = Archive::open(dir.path()).unwrap();
     assert!(a.manifest(&id).unwrap().cancelled);
 }
+
+fn open_slot(job: u64, slot: u8) -> CaptureEvent {
+    CaptureEvent::Open {
+        job,
+        origin: apple2_printer::capture::JobOrigin {
+            machine: "Apple //e".into(),
+            slot,
+        },
+        transport: apple2_printer::capture::Transport::EightBit,
+    }
+}
+
+/// Two Generic Printers (slots 1 and 2) printing at once: two complete jobs, no spurious Reset.
+#[test]
+fn two_slots_interleaved_make_two_complete_jobs() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut s, _) = spool_in(dir.path());
+    let a = lines(40);
+    let b: Vec<u8> = (0..40)
+        .flat_map(|i| format!("outra {i}\n").into_bytes())
+        .collect();
+    s.handle(open_slot(1, 1));
+    s.handle(open_slot(2, 2));
+    let (mut oa, mut ob) = (0usize, 0usize);
+    while oa < a.len() || ob < b.len() {
+        let ea = (oa + 23).min(a.len());
+        if oa < ea {
+            s.handle(bytes(1, oa as u64, &a[oa..ea]));
+            oa = ea;
+        }
+        let eb = (ob + 17).min(b.len());
+        if ob < eb {
+            s.handle(bytes(2, ob as u64, &b[ob..eb]));
+            ob = eb;
+        }
+        s.publish_now();
+    }
+    s.handle(close(2, CloseReason::Idle));
+    s.handle(close(1, CloseReason::Idle));
+    let snap = s.snapshot_handle().get();
+    assert_eq!(snap.jobs.len(), 2);
+    assert!(snap.active.is_none());
+    for j in &snap.jobs {
+        assert_eq!(j.state, Some(JobState::Completed));
+        assert_eq!(j.close_reason, Some(CloseReason::Idle), "no spurious Reset");
+        let raw = fs::read(dir.path().join(&j.id).join("raw.bin")).unwrap();
+        let want = if j.origin.as_ref().unwrap().slot == 1 {
+            &a
+        } else {
+            &b
+        };
+        assert_eq!(&raw, want);
+    }
+    assert!(
+        !snap
+            .notices
+            .iter()
+            .any(|n| n.contains("ignorados") || n.contains("sem fechamento")),
+        "{:?}",
+        snap.notices
+    );
+}
+
+/// The preview follows the last job opened; a quiet job gives it up, a busy one keeps it.
+#[test]
+fn preview_focus_follows_the_job_that_prints() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut s, _) = spool_in(dir.path());
+    s.handle(open_slot(1, 1));
+    s.handle(bytes(1, 0, b"um\n"));
+    s.handle(open_slot(2, 2));
+    s.publish_now();
+    assert_eq!(
+        s.snapshot_handle()
+            .get()
+            .active
+            .as_ref()
+            .unwrap()
+            .capture_job,
+        2
+    );
+    // Job 2 is still fresh: bytes of job 1 do not steal the preview.
+    s.handle(bytes(2, 0, b"dois\n"));
+    s.handle(bytes(1, 3, b"mais\n"));
+    s.publish_now();
+    assert_eq!(
+        s.snapshot_handle()
+            .get()
+            .active
+            .as_ref()
+            .unwrap()
+            .capture_job,
+        2
+    );
+    // After a quiet spell job 1 takes it.
+    std::thread::sleep(Duration::from_millis(600));
+    s.handle(bytes(1, 8, b"tres\n"));
+    s.publish_now();
+    let snap = s.snapshot_handle().get();
+    let act = snap.active.as_ref().unwrap();
+    assert_eq!(act.capture_job, 1);
+    assert_eq!(act.bytes, 13);
+    // Closing the followed job hands the preview to the other one.
+    s.handle(close(1, CloseReason::Idle));
+    assert_eq!(
+        s.snapshot_handle()
+            .get()
+            .active
+            .as_ref()
+            .unwrap()
+            .capture_job,
+        2
+    );
+    s.handle(close(2, CloseReason::Idle));
+    // Same slot again: the earlier job of that slot is closed as Reset.
+    s.handle(open_slot(3, 1));
+    s.handle(open_slot(4, 1));
+    let snap = s.snapshot_handle().get();
+    assert!(snap.notices.iter().any(|n| n.contains("sem fechamento")));
+    s.shutdown();
+    let snap = s.snapshot_handle().get();
+    assert!(snap
+        .jobs
+        .iter()
+        .all(|j| j.state == Some(JobState::Completed)));
+}
