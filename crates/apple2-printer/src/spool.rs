@@ -13,8 +13,8 @@ use crate::paper::RenderOptions;
 use std::collections::VecDeque;
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -796,6 +796,7 @@ impl SpoolHandle {
 /// The spool running on its own thread, fed by the card's channel.
 pub struct SpoolService {
     handle: SpoolHandle,
+    consumed: Arc<AtomicU64>,
     join: JoinHandle<Spool>,
 }
 
@@ -808,6 +809,8 @@ impl SpoolService {
             snapshot: spool.snapshot_handle(),
             commands: tx,
         };
+        let consumed = Arc::new(AtomicU64::new(0));
+        let counter = consumed.clone();
         let join = std::thread::Builder::new()
             .name("apple2-printer-spool".into())
             .spawn(move || {
@@ -818,7 +821,14 @@ impl SpoolService {
                         }
                     }
                     match events.recv_timeout(Duration::from_millis(20)) {
-                        Ok(ev) => spool.handle(ev),
+                        Ok(ev) => {
+                            let n = match &ev {
+                                CaptureEvent::Bytes { data, .. } => data.len() as u64,
+                                _ => 0,
+                            };
+                            spool.handle(ev);
+                            counter.fetch_add(n, Ordering::Relaxed);
+                        }
                         Err(RecvTimeoutError::Timeout) => spool.tick(),
                         Err(RecvTimeoutError::Disconnected) => break,
                     }
@@ -833,11 +843,20 @@ impl SpoolService {
                 spool
             })
             .expect("spawn spool thread");
-        SpoolService { handle, join }
+        SpoolService {
+            handle,
+            consumed,
+            join,
+        }
     }
 
     pub fn handle(&self) -> SpoolHandle {
         self.handle.clone()
+    }
+
+    /// Payload bytes the thread has finished with (feeds the bridge's back-pressure).
+    pub fn consumed_bytes(&self) -> Arc<AtomicU64> {
+        self.consumed.clone()
     }
 
     /// Waits for the thread to stop (send `Shutdown` or drop the event sender first).

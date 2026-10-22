@@ -250,6 +250,12 @@ fn t017_page_dot_limit_only_affects_that_page() {
     e.feed(0, &data);
     let doc = e.document();
     assert!(doc.pages[0].dots.len() <= 3_000);
-    assert!(doc.diagnostics.iter().any(|d| d.message.contains("limite de pontos da página")));
-    assert!(!doc.pages.last().unwrap().dots.is_empty(), "later page printed");
+    assert!(doc
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("limite de pontos da página")));
+    assert!(
+        !doc.pages.last().unwrap().dots.is_empty(),
+        "later page printed"
+    );
 }

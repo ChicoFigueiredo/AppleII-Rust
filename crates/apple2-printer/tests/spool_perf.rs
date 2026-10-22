@@ -93,14 +93,16 @@ fn first_stroke_latency_p95() {
         tx.send(bytes(job, 0, b"A")).unwrap();
         loop {
             let snap = h.snapshot();
-            let seen = snap
-                .active
-                .as_ref()
-                .is_some_and(|a| a.capture_job == job && a.document.pages.iter().any(|p| !p.dots.is_empty()));
+            let seen = snap.active.as_ref().is_some_and(|a| {
+                a.capture_job == job && a.document.pages.iter().any(|p| !p.dots.is_empty())
+            });
             if seen {
                 break;
             }
-            assert!(t.elapsed() < Duration::from_secs(5), "first stroke never shown");
+            assert!(
+                t.elapsed() < Duration::from_secs(5),
+                "first stroke never shown"
+            );
             std::thread::sleep(Duration::from_micros(200));
         }
         lat.push(t.elapsed().as_secs_f64() * 1000.0);
@@ -108,7 +110,10 @@ fn first_stroke_latency_p95() {
         std::thread::sleep(Duration::from_millis(15));
     }
     lat.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let (p50, p95) = (lat[lat.len() / 2], lat[(lat.len() as f64 * 0.95) as usize - 1]);
+    let (p50, p95) = (
+        lat[lat.len() / 2],
+        lat[(lat.len() as f64 * 0.95) as usize - 1],
+    );
     println!("primeiro traco: P50 {p50:.1} ms, P95 {p95:.1} ms");
     assert!(p95 < 250.0, "P95 {p95:.1} ms");
     drop(tx);

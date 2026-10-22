@@ -418,7 +418,8 @@ impl Lx310 {
             }
             return;
         }
-        if self.doc.pages[page].dots.len().saturating_add(dots.len()) > self.config.max_dots_per_page
+        if self.doc.pages[page].dots.len().saturating_add(dots.len())
+            > self.config.max_dots_per_page
         {
             if self.page_full_noted != Some(page) {
                 self.page_full_noted = Some(page);

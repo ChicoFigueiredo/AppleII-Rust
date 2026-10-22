@@ -260,3 +260,17 @@ fn a_damaged_job_cannot_be_exported_and_says_why() {
     hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A full capture queue is told to the user, with the count (HU-IMP-080: no silent loss).
+#[test]
+fn bytes_dropped_by_a_full_queue_become_a_visible_error() {
+    let dir = temp_dir("dropped");
+    let (tx, rx) = apple2_hostio::capture_channel_with_limit(16);
+    let mut hub = PrinterHub::start(dir.join("archive"), rx, None, Arc::new(|| {})).unwrap();
+    let job = tx.open(origin(), Transport::EightBit);
+    tx.bytes(job, 0, vec![b'x'; 1000]); // 984 bytes do not fit
+    tx.close(job, CloseReason::Idle);
+    expect_msg(&mut hub, true, "A fila de impressão encheu: 984 byte(s)");
+    hub.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}

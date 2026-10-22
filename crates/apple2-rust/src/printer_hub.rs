@@ -178,6 +178,10 @@ fn engine_factory() -> apple2_printer::spool::EngineFactory {
 // Bridge: capture queue -> spool, counting what the UI needs to know at once
 // ---------------------------------------------------------------------------------------------
 
+/// Bytes the bridge lets sit between the capture queue and the spool thread. Beyond it the bridge
+/// waits (never the CPU), the capture queue absorbs up to its own limit and only then drops, counted.
+pub const MAX_BRIDGE_BACKLOG: u64 = 32 * 1024 * 1024;
+
 #[derive(Default)]
 struct Counters {
     opens: AtomicU64,
@@ -193,14 +197,30 @@ struct Bridge {
 type Wake = Arc<dyn Fn() + Send + Sync>;
 
 impl Bridge {
-    fn spawn(rx: CaptureReceiver, tx: Sender<CaptureEvent>, wake: Wake) -> Bridge {
+    fn spawn(
+        rx: CaptureReceiver,
+        tx: Sender<CaptureEvent>,
+        wake: Wake,
+        consumed: Arc<AtomicU64>,
+        backlog_limit: u64,
+    ) -> Bridge {
         let counters = Arc::new(Counters::default());
         let c = counters.clone();
         let join = std::thread::Builder::new()
             .name("apple2-printer-bridge".into())
             .spawn(move || {
                 let mut last_wake = Instant::now() - Duration::from_secs(1);
-                let forward = |ev: CaptureEvent, last_wake: &mut Instant| -> bool {
+                let mut sent = 0u64;
+                let mut forward = |ev: CaptureEvent, last_wake: &mut Instant| -> bool {
+                    if let CaptureEvent::Bytes { data, .. } = &ev {
+                        // Back-pressure: the spool is behind (a long reprint on its thread).
+                        while sent.saturating_sub(consumed.load(Ordering::Relaxed)) > backlog_limit
+                            && !c.stop.load(Ordering::SeqCst)
+                        {
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        sent += data.len() as u64;
+                    }
                     let urgent = match &ev {
                         CaptureEvent::Open { .. } => {
                             c.opens.fetch_add(1, Ordering::SeqCst);
@@ -398,6 +418,7 @@ pub struct PrinterHub {
     config: Option<PrinterConfig>,
     seen_opens: u64,
     seen_bytes: u64,
+    seen_dropped: u64,
     last_byte: Option<Instant>,
     prev_snap: Option<Arc<Snapshot>>,
     /// Newest live document of the active job.
@@ -440,7 +461,13 @@ impl PrinterHub {
         let (tx, rx) = channel::<CaptureEvent>();
         let service = SpoolService::spawn(spool, rx);
         let closer = events.clone();
-        let bridge = Bridge::spawn(events, tx, wake);
+        let bridge = Bridge::spawn(
+            events,
+            tx,
+            wake,
+            service.consumed_bytes(),
+            MAX_BRIDGE_BACKLOG,
+        );
         let (done_tx, done_rx) = channel();
         let mut hub = PrinterHub {
             root,
@@ -452,6 +479,7 @@ impl PrinterHub {
             config: None,
             seen_opens: 0,
             seen_bytes: 0,
+            seen_dropped: 0,
             last_byte: None,
             prev_snap: None,
             live: None,
@@ -533,6 +561,16 @@ impl PrinterHub {
             out.activity = true;
             self.seen_bytes = bytes;
             self.last_byte = Some(now);
+        }
+        let dropped = self.closer.dropped_bytes();
+        if dropped != self.seen_dropped {
+            self.seen_dropped = dropped;
+            self.message(
+                format!(
+                    "A fila de impressão encheu: {dropped} byte(s) do Apple II não foram guardados (o Trabalho em andamento fica incompleto)"
+                ),
+                true,
+            );
         }
         let snap = self.spool.snapshot();
         if let Some((job, since)) = self.pending_close {
@@ -1232,4 +1270,63 @@ pub fn local_time(rfc3339: &str) -> String {
                 .to_string()
         })
         .unwrap_or_else(|_| rfc3339.to_string())
+}
+
+#[cfg(test)]
+mod bridge_tests {
+    use super::*;
+    use apple2_hostio::capture_channel;
+    use apple2_printer::capture::{CloseReason, JobOrigin, Transport};
+
+    /// A spool that stops consuming makes the bridge stop forwarding (bounded memory); the bytes
+    /// wait in the capture queue and flow again once the spool catches up. Nothing is lost.
+    #[test]
+    fn a_stalled_spool_holds_the_bridge_and_nothing_is_lost() {
+        let (txq, rx) = capture_channel();
+        let (tx, spool_rx) = channel::<CaptureEvent>();
+        let consumed = Arc::new(AtomicU64::new(0));
+        let mut bridge = Bridge::spawn(rx.clone(), tx, Arc::new(|| {}), consumed.clone(), 1000);
+        let origin = JobOrigin {
+            machine: "t".into(),
+            slot: 1,
+        };
+        let job = txq.open(origin, Transport::EightBit);
+        // Distinct events (each flush is separate: other jobs' bytes cannot merge).
+        let mut off = 0;
+        for _ in 0..50 {
+            txq.bytes(job, off, vec![b'a'; 400]);
+            off += 400;
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        let mut got = 0u64;
+        while let Ok(ev) = spool_rx.try_recv() {
+            if let CaptureEvent::Bytes { data, .. } = ev {
+                got += data.len() as u64;
+            }
+        }
+        assert!(
+            got <= 2_000,
+            "bridge forwarded {got} bytes to a stalled spool"
+        );
+        assert!(
+            rx.pending_bytes() > 0,
+            "the rest waits in the capture queue"
+        );
+        // The spool catches up: the rest flows, in order, complete.
+        let t = Instant::now();
+        while got < 20_000 && t.elapsed() < Duration::from_secs(10) {
+            consumed.store(got, Ordering::Relaxed);
+            while let Ok(ev) = spool_rx.try_recv() {
+                if let CaptureEvent::Bytes { data, .. } = ev {
+                    got += data.len() as u64;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(got, 20_000);
+        assert_eq!(rx.dropped_bytes(), 0);
+        txq.close(job, CloseReason::Idle);
+        bridge.stop();
+    }
 }
