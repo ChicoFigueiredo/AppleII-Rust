@@ -2,6 +2,14 @@
 
 ## Não lançado
 
+### Adicionado
+- **Impressora virtual Epson LX-310** (ADR 0008; guia em [docs/printer/README.md](docs/printer/README.md)): a Generic Printer do slot 1 entrega os bytes a uma impressora de 9 agulhas emulada (ESC/P, Draft e NLQ, gráficos de bit-image, tabelas PC437/PC850/PC860/BRASCII/ABICOMP). A **Central de Impressoras** abre sozinha no primeiro byte, mostra as Páginas ao vivo em papel contínuo zebrado (ou A4/Carta), com Fita nova ou usada, e **Salvar PDF** grava pontos vetoriais com camada de texto invisível e metadados. Cada Trabalho de impressão fica no **Arquivo de impressões** permanente (`apple2-rust/impressoes`), com os bytes brutos e reimpressão em versões; nada é apagado sozinho.
+- Transporte de 8 bits na impressora virtual (necessário para gráficos ESC K/L), com opção de 7 bits; o `Printer.txt` continua como no AppleWin (7 bits, filtrado). Destino configurável: virtual, arquivo ou ambos (padrão).
+- Testes de aceite sem interface gráfica (`crates/apple2-hostio/tests/printer_aceite_*.rs`) e roteiro com AppleWorks, Print Shop e dBase II ([docs/printer/aceite.md](docs/printer/aceite.md)). Capítulo "Impressora virtual" no manual (F1).
+
+### Corrigido
+- Com a janela aberta, o renderizador de vídeo contornava `Machine::run_frame` e nenhuma Carta recebia `update`: a Super Serial Card, as Uthernet e o limite de inatividade da impressora (que fecha o Trabalho) ficavam parados. A atualização das Cartas passa a ocorrer uma vez por quadro, também no passo a passo do depurador (commit c205910).
+
 ### Alterado
 - O programa passa a se chamar **apple2-rust** (ADR 0007): executável `apple2-rust`, crates `apple2-rust`, `apple2-rust-dap` e `apple2-rust-web`, pacotes `apple2-rust-<versão>-<plataforma>.*`, SBOM `apple2-rust-<versão>.cdx.json` e diretório de configuração `apple2-rust`. Não há alias `applewin`. O AppleWin segue como origem e oráculo, e a linha de comando, a importação de Registro/INI e o formato `.aws.yaml` continuam compatíveis.
 - `cargo run` na raiz do repositório abre o emulador.

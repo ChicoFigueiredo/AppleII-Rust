@@ -1,0 +1,2 @@
+pages=1 diagnostics=0
+page 1 size=20520x23760 dots=30 dots_hash=9faf848608f1f646
