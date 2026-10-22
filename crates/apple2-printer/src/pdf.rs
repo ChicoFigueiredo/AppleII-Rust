@@ -783,10 +783,6 @@ fn text_layer(c: &mut String, page: &Page, extra: &mut ExtraFont, report: &mut E
     }
     c.push_str("BT 3 Tr\n");
     for run in &page.text {
-        let size = run.height.max(1);
-        // Courier advances 0.6 em; Tc pads or squeezes to the printer's pitch.
-        let tc = f64::from(run.advance) - 0.6 * f64::from(size);
-        let _ = writeln!(c, "{} Tc", num(tc));
         // Split into segments of equal font so each is a single Tj.
         let mut seg: Vec<u8> = Vec::new();
         let mut seg_font = "FC";
@@ -804,7 +800,7 @@ fn text_layer(c: &mut String, page: &Page, extra: &mut ExtraFont, report: &mut E
                 },
             };
             if font != seg_font && !seg.is_empty() {
-                flush_segment(c, run, size, seg_font, seg_start, &seg);
+                flush_segment(c, run, seg_font, seg_start, &seg);
                 seg.clear();
             }
             if seg.is_empty() {
@@ -814,7 +810,7 @@ fn text_layer(c: &mut String, page: &Page, extra: &mut ExtraFont, report: &mut E
             seg.push(byte);
         }
         if !seg.is_empty() {
-            flush_segment(c, run, size, seg_font, seg_start, &seg);
+            flush_segment(c, run, seg_font, seg_start, &seg);
         }
     }
     c.push_str("ET\n");
@@ -823,19 +819,25 @@ fn text_layer(c: &mut String, page: &Page, extra: &mut ExtraFont, report: &mut E
 fn flush_segment(
     c: &mut String,
     run: &crate::document::TextRun,
-    size: u32,
     font: &str,
     start: u32,
     bytes: &[u8],
 ) {
     let x = u64::from(run.x) + u64::from(start) * u64::from(run.advance);
     let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
+    // Courier advances 0.6 em, so the em is sized to make that natural advance equal the
+    // printer's pitch (double width = bigger em). The layer is invisible, so only the geometry
+    // matters, and extractors see ordinary word spacing instead of Tc/Tz gaps.
+    let em = (f64::from(run.advance) / 0.6).max(1.0);
     // The page space is y-down, so the text matrix flips y back for upright glyphs.
-    let _ = writeln!(c, "/{font} {size} Tf 1 0 0 -1 {x} {} Tm <{hex}> Tj", run.y);
+    let _ = writeln!(
+        c,
+        "/{font} {} Tf 1 0 0 -1 {x} {} Tm <{hex}> Tj",
+        num(em),
+        run.y
+    );
 }
 
-// ---------------------------------------------------------------------------------------------
-// Cover sheet
 // ---------------------------------------------------------------------------------------------
 
 fn winansi_bytes(s: &str) -> String {
