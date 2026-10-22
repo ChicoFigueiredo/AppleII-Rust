@@ -183,8 +183,8 @@ fn gh790_d1_and_h1_set_the_starting_directories_but_d2_and_h2_do_not() {
         "-h1",
         "/hdone/a.hdv",
     ]);
-    assert_eq!(s.storage.disk_dir, Some("/one".into()));
-    assert_eq!(s.storage.hdv_dir, Some("/hdone".into()));
+    assert_eq!(s.storage.disk_dir, Some(abs("/one")));
+    assert_eq!(s.storage.hdv_dir, Some(abs("/hdone")));
 }
 
 // ---- #398 #469 #689 #876 #1187: command-line switches ---------------------------------------
