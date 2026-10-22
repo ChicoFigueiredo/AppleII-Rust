@@ -203,7 +203,11 @@ fn a_symlink_as_destination_is_replaced_never_followed() {
     }));
     std::thread::sleep(Duration::from_millis(300));
     hub.poll(Instant::now());
-    assert_eq!(std::fs::read(&secret).unwrap(), b"SEGREDO", "outside file written");
+    assert_eq!(
+        std::fs::read(&secret).unwrap(),
+        b"SEGREDO",
+        "outside file written"
+    );
     still_alive(&mut hub, &tx);
     hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);
@@ -242,8 +246,16 @@ fn a_damaged_job_cannot_be_exported_and_says_why() {
     }));
     hub.export_pdf(req("20260101-000000-aaaaaa"), dir.join("d.pdf"));
     hub.save_raw("20260101-000000-aaaaaa", dir.join("d.bin"));
-    expect_msg(&mut hub, true, "Falha ao salvar o PDF: o trabalho está danificado");
-    expect_msg(&mut hub, true, "Falha ao salvar os bytes brutos: o trabalho está danificado");
+    expect_msg(
+        &mut hub,
+        true,
+        "Falha ao salvar o PDF: o trabalho está danificado",
+    );
+    expect_msg(
+        &mut hub,
+        true,
+        "Falha ao salvar os bytes brutos: o trabalho está danificado",
+    );
     assert!(!dir.join("d.pdf").exists() && !dir.join("d.bin").exists());
     hub.shutdown();
     let _ = std::fs::remove_dir_all(dir);

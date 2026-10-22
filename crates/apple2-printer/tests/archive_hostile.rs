@@ -14,8 +14,8 @@ fn closed_job(root: &Path) -> (String, serde_json::Value) {
     let id = a.start_job(new_job(1)).unwrap();
     a.append(&id, b"abc\r\n").unwrap();
     a.finish_job(&id, CloseReason::User).unwrap();
-    let json = serde_json::from_slice(&fs::read(root.join(&id).join("manifest.json")).unwrap())
-        .unwrap();
+    let json =
+        serde_json::from_slice(&fs::read(root.join(&id).join("manifest.json")).unwrap()).unwrap();
     (id, json)
 }
 
@@ -104,7 +104,10 @@ fn future_schema_and_wrong_shapes_are_damaged_with_a_reason() {
         e => panic!("{e:?}"),
     }
     // The raw bytes are still there, untouched: damaged is a label, not a deletion.
-    assert_eq!(fs::read(dir.path().join(&id).join("raw.bin")).unwrap(), b"abc\r\n");
+    assert_eq!(
+        fs::read(dir.path().join(&id).join("raw.bin")).unwrap(),
+        b"abc\r\n"
+    );
     for bad in [
         serde_json::json!({"schema_version": 3, "id": id, "options": "x"}),
         serde_json::json!({"schema_version": 3, "id": id, "versions": [1, 2]}),

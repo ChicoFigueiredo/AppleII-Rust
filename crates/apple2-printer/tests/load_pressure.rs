@@ -56,7 +56,11 @@ fn diags(dir: &std::path::Path, s: &Spool) -> Vec<String> {
 
 #[test]
 fn t017_dense_bitmap_1mib_keeps_every_byte_and_reports_the_dot_limit() {
-    for (cmd, cols) in [(&b"K"[..], 480usize), (&b"L"[..], 960), (&b"*\x00"[..], 960)] {
+    for (cmd, cols) in [
+        (&b"K"[..], 480usize),
+        (&b"L"[..], 960),
+        (&b"*\x00"[..], 960),
+    ] {
         let dir = tempfile::tempdir().unwrap();
         let mut s = lx_spool(dir.path(), Lx310Config::default());
         let data = bitmap(cmd, cols, 0xFF, 1 << 20);
@@ -67,7 +71,10 @@ fn t017_dense_bitmap_1mib_keeps_every_byte_and_reports_the_dot_limit() {
         let snap = s.snapshot_handle().get();
         assert_eq!(snap.jobs[0].state, Some(JobState::Completed));
         assert_eq!(snap.jobs[0].total_bytes, data.len() as u64);
-        assert_eq!(snap.jobs[0].sha256.as_deref(), Some(sha_hex(&data).as_str()));
+        assert_eq!(
+            snap.jobs[0].sha256.as_deref(),
+            Some(sha_hex(&data).as_str())
+        );
         assert!(el.as_secs() < 60, "too slow: {el:?}");
         // 1 MiB of full columns exceeds the default dot budget: the loss is announced.
         if cmd == b"K" {
@@ -155,10 +162,7 @@ fn t017_page_limit_is_a_visible_diagnostic_and_raw_stays_whole() {
     let snap = s.snapshot_handle().get();
     assert!(snap.jobs[0].pages <= 50);
     let d = diags(dir.path(), &s);
-    assert!(
-        d.iter().any(|m| m.contains("limite de páginas")),
-        "{d:?}"
-    );
+    assert!(d.iter().any(|m| m.contains("limite de páginas")), "{d:?}");
 }
 
 /// Nobody reads the snapshot (UI blocked): the spool keeps going and the notices stay bounded.

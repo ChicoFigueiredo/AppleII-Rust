@@ -1120,7 +1120,9 @@ impl PrinterHub {
     pub fn save_raw(&mut self, job: &str, path: PathBuf) {
         if !safe_id(job) {
             self.message(
-                format!("Falha ao salvar os bytes brutos: identificador de trabalho inválido: {job}"),
+                format!(
+                    "Falha ao salvar os bytes brutos: identificador de trabalho inválido: {job}"
+                ),
                 true,
             );
             return;

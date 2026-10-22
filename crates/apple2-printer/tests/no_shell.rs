@@ -5,11 +5,11 @@
 //! `apple2-hostio/src/printer.rs` (`FileSink::close`), acts on the path the user configured and is
 //! never reached from the virtual path.
 mod common;
+use apple2_printer::archive::Archive;
 use apple2_printer::capture::CloseReason;
 use apple2_printer::lx310::{Lx310, Lx310Config};
 use apple2_printer::paper::RenderOptions;
 use apple2_printer::spool::{EngineFactory, Spool};
-use apple2_printer::archive::Archive;
 use common::*;
 use std::path::{Path, PathBuf};
 
@@ -30,10 +30,22 @@ fn virtual_printer_sources_never_spawn_processes() {
     let mut files = Vec::new();
     rs_files(&root.join("apple2-printer/src"), &mut files);
     files.push(root.join("apple2-hostio/src/printer_capture.rs"));
-    for f in ["printer_hub.rs", "printer_window.rs", "printer_model.rs", "printer_panels.rs"] {
+    for f in [
+        "printer_hub.rs",
+        "printer_window.rs",
+        "printer_model.rs",
+        "printer_panels.rs",
+    ] {
         files.push(root.join("apple2-rust/src").join(f));
     }
-    let banned = ["process::Command", "Command::new", "std::process::", "ShellExecute", "xdg-open", "libc::system"];
+    let banned = [
+        "process::Command",
+        "Command::new",
+        "std::process::",
+        "ShellExecute",
+        "xdg-open",
+        "libc::system",
+    ];
     for f in &files {
         let text = std::fs::read_to_string(f).unwrap();
         for (n, line) in text.lines().enumerate() {
@@ -54,13 +66,16 @@ fn virtual_printer_sources_never_spawn_processes() {
 fn shell_looking_bytes_are_just_printed_and_touch_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let f: EngineFactory = Box::new(|| Box::new(Lx310::new(Lx310Config::default())));
-    let mut s = Spool::new(Archive::open(dir.path()).unwrap(), f, RenderOptions::default());
+    let mut s = Spool::new(
+        Archive::open(dir.path()).unwrap(),
+        f,
+        RenderOptions::default(),
+    );
     let sentinel = dir.path().join("pwned");
     let p = sentinel.display();
-    let mut payload = format!(
-        "; touch {p}\r\n$(touch {p})\r\n`touch {p}`\r\n| touch {p}\r\n& touch {p}\r\n"
-    )
-    .into_bytes();
+    let mut payload =
+        format!("; touch {p}\r\n$(touch {p})\r\n`touch {p}`\r\n| touch {p}\r\n& touch {p}\r\n")
+            .into_bytes();
     payload.extend_from_slice(b"\x1b@\x1b!\xff\x1b\x1b(\x1bP\x1b%\x1b[\x00\x1b|\r\n");
     s.handle(open(1));
     s.handle(bytes(1, 0, &payload));

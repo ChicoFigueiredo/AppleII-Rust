@@ -109,13 +109,11 @@ fn io_write_budget_virtual_plus_file_is_within_2x_of_legacy() {
     let (tx, rx) = capture_channel();
     m.insert_card(
         1,
-        Box::new(
-            ParallelPrinterCard::virtual_only(opts).with_virtual(
-                tx,
-                origin(),
-                Transport::EightBit,
-            ),
-        ),
+        Box::new(ParallelPrinterCard::virtual_only(opts).with_virtual(
+            tx,
+            origin(),
+            Transport::EightBit,
+        )),
     );
     let mut virt = measure(m, || drop(rx.drain()), batches, batch);
 
@@ -137,7 +135,11 @@ fn io_write_budget_virtual_plus_file_is_within_2x_of_legacy() {
     println!("legado (arquivo):   P50 {l50:.1}  P95 {l95:.1}");
     println!("virtual (so fila):  P50 {v50:.1}  P95 {v95:.1}");
     println!("virtual + arquivo:  P50 {b50:.1}  P95 {b95:.1}");
-    println!("razao virtual+arquivo / legado: P50 {:.2}x  P95 {:.2}x", b50 / l50, b95 / l95);
+    println!(
+        "razao virtual+arquivo / legado: P50 {:.2}x  P95 {:.2}x",
+        b50 / l50,
+        b95 / l95
+    );
     let _ = std::fs::remove_dir_all(&dir);
     assert!(b50 <= 2.0 * l50, "P50 {b50:.1} > 2x {l50:.1}");
     assert!(b95 <= 2.0 * l95, "P95 {b95:.1} > 2x {l95:.1}");
