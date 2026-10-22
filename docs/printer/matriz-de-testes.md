@@ -41,4 +41,4 @@ Os caminhos são relativos a `crates/`; `lx310_*`, `escp_*`, `spool_*`, `pdf_*`,
 
 PASS: 25. PARTIAL: 2 (T-007 e T-015; no parecer eram PASS com ressalva). FAIL: 0. BLOCKED: 1 (T-025). N/A: 2 (T-024 e T-030). Total 30.
 
-Evidência que falta para passar de PASS a aceite: latência P95 da prévia no Windows e no macOS (no Linux, P95 199 ms até a tela), T-025 nativo, aceite com AppleWorks, Print Shop e dBase II ([aceite.md](aceite.md); BLOCKED sem discos), Windows e macOS.
+Evidência que falta para passar de PASS a aceite: latência P95 da prévia no Windows e no macOS (no Linux, P95 199 ms até a tela), T-025 nativo, aceite com AppleWorks e Print Shop ([aceite.md](aceite.md); BLOCKED sem discos). dBase II no CP/M da Z80 SoftCard: PASS automatizado (`apple2-hostio/tests/printer_aceite_dbase2.rs`, só com o disco do dono), Windows e macOS.

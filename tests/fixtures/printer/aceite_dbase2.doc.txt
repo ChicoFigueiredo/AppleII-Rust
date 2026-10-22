@@ -1,0 +1,9 @@
+pages=1 diagnostics=0
+page 1 size=20520x23760 dots=3724 dots_hash=e711a65b9069f5b1
+  text x=1620 y=927 ". ? \"RELATORIO DBASE II\""
+  text x=1620 y=1287 "RELATORIO DBASE II "
+  text x=1620 y=1647 ". LIST"
+  text x=1620 y=2007 "00001  MARIA SILVA  CAMPINAS     123.45 "
+  text x=1620 y=2367 "00002  JOAO LIMA    CURITIBA       9.90 "
+  text x=1620 y=2727 "00003  ANA COSTA    RECIFE      1500.00 "
+  text x=1620 y=3087 ". SET PRINT OFF"

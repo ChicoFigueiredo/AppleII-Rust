@@ -207,10 +207,12 @@ dependencies = [
 name = "apple2-hostio"
 version = "0.1.0"
 dependencies = [
+ "apple2-cards",
  "apple2-core",
  "apple2-cpu",
  "apple2-printer",
  "apple2-roms",
+ "apple2-storage",
  "if-addrs",
  "pcap",
  "serialport",
