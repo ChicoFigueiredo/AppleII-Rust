@@ -240,7 +240,7 @@ pub fn pattern_page(w: u32, h: u32) -> Page {
 
 pub fn doc_of(pages: Vec<Page>) -> PageDocument {
     PageDocument {
-        pages,
+        pages: pages.into_iter().map(std::sync::Arc::new).collect(),
         ..Default::default()
     }
 }

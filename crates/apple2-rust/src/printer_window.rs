@@ -948,7 +948,7 @@ pub fn demo_view_model(pages: usize) -> PrinterViewModel {
                 }
             }
         }
-        doc.pages.push(page);
+        doc.pages.push(std::sync::Arc::new(page));
     }
     let entry = |n: u32, state: JobState| JobEntry {
         id: format!("demo-{n}"),

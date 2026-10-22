@@ -39,7 +39,7 @@ Meta da especificação: <= 2x o legado. Atendida com folga (o teste falha acima
 Não há perda silenciosa em nenhum ponto:
 
 - **Bytes brutos**: sempre gravados por inteiro (SHA-256 conferido), independentemente dos limites do motor; os limites só decidem o que vira desenho.
-- **Limites do motor** (`Lx310Config`): 5.000 Páginas, **2.000.000 pontos por Página** (uma Página física não comporta mais de ~1,8 milhão de posições; o limite só para quem sobrescreve a mesma Página sem fim e **nunca apaga as Páginas seguintes**), **64.000.000 pontos por Trabalho** (proteção de memória contra entrada adversarial: 12 bytes por ponto, ~768 MiB; uma listagem real de 300 Páginas fica bem abaixo (226 MB de RSS no teste)) e 10.000 diagnósticos. Ao atingir um limite, **uma** nota visível por limite (por Página, no caso do limite de Página) vai para o manifesto e a Central. Antes, um limite de 4 milhões de pontos por Trabalho deixava em branco a partir da Página 73 uma listagem de 100 Páginas (defeito corrigido).
+- **Limites do motor** (`Lx310Config`): 5.000 Páginas, **2.000.000 pontos por Página** (uma Página física não comporta mais de ~1,8 milhão de posições; o limite só para quem sobrescreve a mesma Página sem fim e **nunca apaga as Páginas seguintes**), **64.000.000 pontos por Trabalho** (proteção de memória contra entrada adversarial: 12 bytes por ponto, ~768 MiB no motor, e **o pico total medido é 769 MiB** (teste `memory_peak`, ver "Memória de pior caso"); uma listagem real de 300 Páginas fica bem abaixo (226 MB de RSS no teste)) e 10.000 diagnósticos. Ao atingir um limite, **uma** nota visível por limite (por Página, no caso do limite de Página) vai para o manifesto e a Central. Antes, um limite de 4 milhões de pontos por Trabalho deixava em branco a partir da Página 73 uma listagem de 100 Páginas (defeito corrigido).
 - **Prévia barata**: o Spool só copia o documento vivo (`Arc<PageDocument>`) para a prévia **enquanto alguém lê o snapshot** (janela de 2 s depois da última leitura): janela fechada ou UI travada = zero cópias. Lendo, o intervalo entre cópias é o maior entre 50 ms e 4x o custo da cópia anterior, de modo que copiar nunca passa de ~20% da thread (teste: 1.041 eventos, 3 a 6 cópias). A lista do Arquivo só é remontada em eventos de abrir/fechar e ações do usuário; entre eles só a linha do Trabalho ativo é atualizada. Proposta ainda aberta (mudança de contrato em `document.rs`): `Vec<Arc<Page>>` para compartilhar as Páginas já fechadas e copiar só a em construção.
 - **UI bloqueada**: o snapshot é publicado sem ninguém lendo; as notas ficam limitadas a 30 e nada cresce com o tempo.
 - **Consumidor lento**: duas camadas, ambas com teto e contagem.
@@ -63,3 +63,14 @@ Não há perda silenciosa em nenhum ponto:
 
 - O caminho virtual (Carta -> fila de captura -> Spool -> `Lx310` -> PDF/Central) trata todo byte como dado. Nenhum arquivo dele inicia processo ou shell; o teste `crates/apple2-printer/tests/no_shell.rs` varre esses fontes (printer, `printer_capture.rs`, hub, janela, modelo e painéis da Central) e falha se aparecer `process::Command`, `Command::new`, `xdg-open` e afins. Outro teste imprime `; $(...) \`...\` | &` e sequências ESC estranhas e confere que nada é criado e que o `raw.bin` é idêntico.
 - O único ponto do repositório que chama um processo por causa de impressão é o **legado** `dump_to_printer` ("copy file prn" do AppleWin): `crates/apple2-hostio/src/printer.rs`, `FileSink::close`, **só Windows**, copia o arquivo do caminho que o **usuário** configurou. O conteúdo impresso não entra na linha de comando e a Impressora virtual nunca o aciona (opção separada, no caminho do `Printer.txt`).
+
+## Memória de pior caso
+
+Fluxo ESC L denso de 16,5 MB (900 colunas cheias por linha, 4.096 bytes por evento, leitor consultando o snapshot a cada evento, fechamento pelo usuário), até o limite de 64 M pontos por Trabalho. Medido como `VmHWM` do processo de teste (`cargo test --release -p apple2-printer --test memory_peak -- --ignored --nocapture`, Linux):
+
+| | Pico de RSS |
+|---|---|
+| Antes (`Vec<Page>`: motor + cópia da prévia + clone ao fechar) | 2.079 MiB |
+| Depois (`Vec<Arc<Page>>`) | 769 MiB |
+
+O documento passou a guardar `Arc<Page>` (serde `rc`, serialização idêntica): a cópia da prévia e o clone ao fechar o Trabalho só copiam ponteiros; só a Página em andamento é duplicada (no máximo 2 M pontos, ~24 MiB) quando o motor escreve nela depois de publicada (`Arc::make_mut`). O teto documentado do Trabalho é, portanto, o do motor: 64 M pontos x 12 bytes = 768 MiB, mais a fila de captura (até 256 MiB) e a ponte (32 MiB) que são contadas à parte. O teste falha se o pico passar de 850 MiB.

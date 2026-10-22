@@ -301,9 +301,10 @@ fn t009_esc_star_payload_with_esc_and_lf_respects_density() {
         let c3: Vec<_> = all.iter().filter(|p| p.0 == X0 + 3 * step).collect();
         assert_eq!(c1.len(), 8, "m={m}");
         // 0x1B 0x0A would be a bare ESC and a line feed; as data they are ordinary columns
-        // (0x1B: 4 pins, 0x0A: 2 pins). ESC Y/Z (m = 2, 3) ignore a dot right after a printed one.
+        // (0x1B: 4 pins, 0x0A: 2 pins). ESC Y/Z (m = 2, 3) ignore a dot right after a printed
+        // one: 0x1B follows the printed 0xFF (all ignored); 0x0A follows a column that printed nothing.
         if m == 2 || m == 3 {
-            assert_eq!((c2.len(), c3.len()), (0, 0), "m={m}");
+            assert_eq!((c2.len(), c3.len()), (0, 2), "m={m}");
         } else {
             assert_eq!((c2.len(), c3.len()), (4, 2), "m={m}");
         }
